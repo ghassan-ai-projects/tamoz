@@ -32,7 +32,7 @@ module Tamoz
           api_key = environment_value(environment, credential_name)
           endpoint = explicit_api_base || profile_endpoint(profile_role) ||
             environment_value(environment, api_base_name(name)) || descriptor.fetch(:default_base)
-          ensure_credential!(api_key, name, profile_role:)
+          ensure_credential!(api_key, name, profile_role:, credential_name:)
           ensure_endpoint!(endpoint, name)
           safety = normalize_safety(safety)
           configuration = configuration_document(
@@ -144,15 +144,18 @@ module Tamoz
           settings["base_url"] || settings["api_base"]
         end
 
-        def ensure_credential!(value, provider, profile_role:)
+        def ensure_credential!(value, provider, profile_role:, credential_name:)
           return if !value.to_s.empty? || provider == "ollama"
 
-          raise_credential_unavailable(profile_role, credential_env_key(provider))
+          raise_credential_unavailable(profile_role, credential_name)
         end
 
+        # The refusal names the role and the reference (DR-5 D1): the operator
+        # pinned a specific credential, so the generic provider key is noise.
         def raise_credential_unavailable(profile_role, name)
           if profile_role
-            raise ProfileRoleUnavailableError, "model_role/credential_unavailable: #{name}"
+            raise ProfileRoleUnavailableError,
+                  "model_role/credential_unavailable: #{profile_role.name} (#{name})"
           end
 
           raise ModelCallError.new(code: "credential_unavailable")

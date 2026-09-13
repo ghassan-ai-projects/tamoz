@@ -155,6 +155,7 @@ task :test_parallel, [:mode] do |_task, args|
   parallel = all - (SERIAL_TESTS & all)
 
   workers = [Etc.nprocessors - 1, 1].max
+  CiBudget.parallel_workers = workers
   # Longest-processing-time-first bin packing: heaviest file into the lightest
   # shard, repeatedly. Simple, and close enough to optimal that the run is
   # bounded by the single slowest FILE rather than by an unlucky shard.
@@ -430,7 +431,7 @@ module CiBudget
   BUDGET_SECONDS = 60.0
 
   class << self
-    attr_accessor :started_at
+    attr_accessor :started_at, :parallel_workers
   end
 end
 
@@ -449,7 +450,14 @@ task ci: [:ci_budget_start, 'design:validate', 'adr:validate', :syntax, :test_fa
   warn "    evidence, scorecard gates). Run `rake ci_full` before committing anything"
   warn "    touching durability, MCP, packaging or the committed evidence artifacts."
   puts format("ci wall clock: %.1fs (budget %.0fs)", elapsed, CiBudget::BUDGET_SECONDS)
-  unless elapsed <= CiBudget::BUDGET_SECONDS
+  if elapsed <= CiBudget::BUDGET_SECONDS
+    next
+  elsif (CiBudget.parallel_workers || 1) < 2
+    # The budget tunes a developer machine's parallel gate. A single-worker
+    # runner executes the same suite serially — the wall clock measures that
+    # hardware, not suite creep, so failing here would be noise.
+    warn "ci: budget not enforced — the run had a single worker."
+  else
     abort(format("ci BUDGET EXCEEDED: %.1fs > %.0fs — the everyday gate got slow again. " \
                  "Run `rake test_profile`, refresh TEST_WEIGHTS and re-lane the tail.",
                  elapsed, CiBudget::BUDGET_SECONDS))

@@ -361,8 +361,13 @@ module Tamoz
 
           directory = parent
         end
-      rescue SystemCallError
-        nil
+      rescue SystemCallError => error
+        # Containment is a fail-closed boundary: if the ancestor walk cannot
+        # complete (permission, missing inode), we cannot assert the profile is
+        # outside its canonical_root, so we refuse rather than silently admit it.
+        raise ValidationError,
+              "#{path}: cannot verify the profile lives outside its canonical_root " \
+              "#{canonical_root.inspect}: #{error.message}"
       end
 
       # Where the operator config tree is, and how a requested profile resolves

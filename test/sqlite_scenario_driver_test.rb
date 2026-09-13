@@ -502,8 +502,9 @@ class SQLiteScenarioDriverTest < Minitest::Test
           selector:,
           registry: boundary_registry
         )
-        result = subprocess_runner.capture(
-          scenario_child_command(
+        result = SQLiteHarnessInputs.subprocess_runner.capture(
+          SQLiteHarnessInputs.child_command(
+            suite: 'scenario driver',
             layout:,
             scenario_id: scenario.fetch("id"),
             scenario_reference:,
@@ -574,53 +575,6 @@ class SQLiteScenarioDriverTest < Minitest::Test
         subject:
       )
     end
-  end
-
-  def subprocess_runner
-    Tamoz::Evals::Harness::SubprocessRunner.new(
-      root: ROOT,
-      environment: {},
-      output_limit_bytes: 4_096,
-      termination_grace_ms: 200
-    )
-  end
-
-  def scenario_child_command(
-    layout:,
-    scenario_id:,
-    scenario_reference:,
-    selector:,
-    database_path:
-  )
-    descriptor = layout.descriptor
-    script = <<~RUBY
-      require "tamoz/evals/runner"
-      require "tamoz/sqlite"
-      harness = Tamoz::Evals::Harness
-      control = harness.const_get(:SQLiteSelectorControl, false)
-      registry = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
-      require "support/sqlite_harness_inputs"
-      scenarios = SQLiteHarnessInputs.registry
-      driver = SQLiteHarnessInputs.driver
-      layout = control.attach!(
-        directory: #{descriptor.fetch("directory").inspect},
-        device: #{descriptor.fetch("device")},
-        inode: #{descriptor.fetch("inode")}
-      )
-      stopper = control.stopper(
-        layout: layout,
-        scenario: #{scenario_reference.inspect},
-        selector: #{selector.inspect},
-        registry: registry
-      )
-      driver.run(
-        scenario_id: #{scenario_id.inspect},
-        path: #{database_path.inspect},
-        observer: stopper
-      )
-      abort "SQLite scenario selector returned"
-    RUBY
-    [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-I", ROOT.join("test").to_s, "-e", script]
   end
 
   def raw_row(path, sql)

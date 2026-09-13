@@ -91,12 +91,20 @@ class SchedulerConsumerTest < Minitest::Test
     assert_equal "scorecard report is missing required fields", summary.fetch("reason")
   end
 
-  # The default command is `tamoz-eval-runner`, which is not on PATH in every
-  # deployment. `Open3.capture3` answers that with Errno::ENOENT — the one
-  # failure in this method that must return a fail-closed hash.
+  # The default command is `tamoz-eval-runner`. Whether that binary is
+  # installed is deployment luck, so the test pins PATH to an empty directory:
+  # the resolver must fail closed into the unavailable classification instead
+  # of running whatever binary the developer machine happens to have.
   def test_consumer_fails_closed_when_the_scorecard_binary_is_missing
     consumer = Scheduler::ScorecardSummaryConsumer.new(input_manifest: "/tmp/manifest.json")
-    summary = consumer.run
+    summary = nil
+    Dir.mktmpdir do |empty_directory|
+      path_was = ENV.fetch("PATH", nil)
+      ENV["PATH"] = empty_directory
+      summary = consumer.run
+    ensure
+      path_was ? ENV["PATH"] = path_was : ENV.delete("PATH")
+    end
 
     assert_equal false, summary.fetch("ok")
     assert_equal "scorecard command unavailable", summary.fetch("reason")

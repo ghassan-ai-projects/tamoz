@@ -151,16 +151,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   end
 
   def insert_prompt!(store, reference:, status: 'inactive', expires_at: now + 900)
-    store.__send__(:transaction, 'test.prompt.insert') do |tx|
-      tx.execute('test.prompt.insert', <<~SQL, prompt_binds(prompt_wire(reference:, status:, expires_at:)))
-        INSERT INTO tamoz_comms_approval_prompts (
-          reference_digest, surface_id, surface_revision, thread_id,
-          occurrence_id, interrupt_digest, required_evidence,
-          correspondent_id, conversation_id, prompt_receipt, status,
-          created_at_ms, activated_at_ms, consumed_at_ms, expires_at_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      SQL
-    end
+    store.insert_prompt(prompt_wire(reference:, status:, expires_at:))
   end
 
   # MIG-9 (ADR-049 INV-C): the prompt pins its required_evidence and the
@@ -176,21 +167,6 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 'chat_bound', row.fetch('required_evidence')
       refute_nil adapter
     end
-  end
-
-  def prompt_binds(wire)
-    [
-      wire.fetch('reference_digest'), wire['surface_id'], wire['surface_revision'],
-      wire.fetch('thread_id'), wire.fetch('occurrence_id'), wire.fetch('interrupt_digest'),
-      wire.fetch('required_evidence'),
-      wire.fetch('correspondent_id'), wire.fetch('conversation_id'), wire['prompt_receipt'],
-      wire.fetch('status'), ms(wire.fetch('created_at')), ms(wire['activated_at']),
-      ms(wire['consumed_at']), ms(wire.fetch('expires_at'))
-    ]
-  end
-
-  def ms(value)
-    value && (Time.parse(value).utc.to_r * 1000).to_i
   end
 
   def decision_wire(direction: 'deny')
@@ -1021,7 +997,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         WHERE request_id = ?
       SQL
     end
-    store.__send__(:cancellation_outcome, observed: true, settled: row.fetch(0))
+    store.cancellation_outcome(observed: true, settled: row.fetch(0))
   end
 
   def cancellation_stamps(store, request_id)

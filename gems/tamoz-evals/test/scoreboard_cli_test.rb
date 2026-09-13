@@ -15,83 +15,93 @@ class ScoreboardCLITest < Minitest::Test
   )
 
   def test_scoreboard_command_refuses_the_existing_unaccepted_real_run
-    Dir.mktmpdir('scoreboard-cli') do |directory|
-      stdout, stderr, status = Open3.capture3(
-        RbConfig.ruby, SCOREBOARD_SCRIPT.to_s,
-        '--manifest', EXISTING_MANIFEST.to_s,
-        '--report', Pathname.new(directory).join('does-not-exist.json').to_s,
-        '--scoreboard', Pathname.new(directory).join('scoreboard.json').to_s,
-        chdir: ROOT.to_s
-      )
+    RunnerInputs.with_manifest do |input_manifest|
+      Dir.mktmpdir('scoreboard-cli') do |directory|
+        stdout, stderr, status = Open3.capture3(
+          RbConfig.ruby, SCOREBOARD_SCRIPT.to_s,
+          '--manifest', EXISTING_MANIFEST.to_s,
+          '--report', Pathname.new(directory).join('does-not-exist.json').to_s,
+          '--scoreboard', Pathname.new(directory).join('scoreboard.json').to_s,
+          '--input-manifest', input_manifest,
+          chdir: ROOT.to_s
+        )
 
-      refute_predicate status, :success?
-      assert_empty stdout
-      assert_includes stderr, 'controls_passed must be true'
+        refute_predicate status, :success?
+        assert_empty stdout
+        assert_includes stderr, 'controls_passed must be true'
+      end
     end
   end
 
   def test_scoreboard_command_is_deterministic_and_idempotent
-    Dir.mktmpdir('scoreboard-cli') do |directory|
-      root = Pathname.new(directory)
-      manifest_path = write_manifest(root, artifact_root: 'real-provider/2026-08-21T120000Z-run')
-      report_path = write_report(root.join('report.json'))
-      scoreboard_path = root.join('scoreboard.json')
-      args = [
-        RbConfig.ruby, SCOREBOARD_SCRIPT.to_s,
-        '--manifest', manifest_path.to_s, '--report', report_path.to_s,
-        '--scoreboard', scoreboard_path.to_s, '--artifact-base', root.to_s
-      ]
+    RunnerInputs.with_manifest do |input_manifest|
+      Dir.mktmpdir('scoreboard-cli') do |directory|
+        root = Pathname.new(directory)
+        manifest_path = write_manifest(root, artifact_root: 'real-provider/2026-08-21T120000Z-run')
+        report_path = write_report(root.join('report.json'))
+        scoreboard_path = root.join('scoreboard.json')
+        args = [
+          RbConfig.ruby, SCOREBOARD_SCRIPT.to_s,
+          '--manifest', manifest_path.to_s, '--report', report_path.to_s,
+          '--scoreboard', scoreboard_path.to_s, '--artifact-base', root.to_s,
+          '--input-manifest', input_manifest
+        ]
 
-      first_stdout, first_stderr, first_status = Open3.capture3(*args, chdir: ROOT.to_s)
-      first_bytes = scoreboard_path.binread
-      second_stdout, second_stderr, second_status = Open3.capture3(*args, chdir: ROOT.to_s)
+        first_stdout, first_stderr, first_status = Open3.capture3(*args, chdir: ROOT.to_s)
+        first_bytes = scoreboard_path.binread
+        second_stdout, second_stderr, second_status = Open3.capture3(*args, chdir: ROOT.to_s)
 
-      assert_predicate first_status, :success?, first_stderr
-      assert_predicate second_status, :success?, second_stderr
-      assert_equal 'appended', JSON.parse(first_stdout).fetch('status')
-      assert_equal 'already_present', JSON.parse(second_stdout).fetch('status')
-      assert_equal first_bytes, scoreboard_path.binread
-      assert_equal 1, JSON.parse(File.read(scoreboard_path)).fetch('entries').length
+        assert_predicate first_status, :success?, first_stderr
+        assert_predicate second_status, :success?, second_stderr
+        assert_equal 'appended', JSON.parse(first_stdout).fetch('status')
+        assert_equal 'already_present', JSON.parse(second_stdout).fetch('status')
+        assert_equal first_bytes, scoreboard_path.binread
+        assert_equal 1, JSON.parse(File.read(scoreboard_path)).fetch('entries').length
+      end
     end
   end
 
   def test_regression_gate_fails_without_reviewed_note_and_passes_for_stable_values
-    Dir.mktmpdir('scoreboard-regression') do |directory|
-      root = Pathname.new(directory)
-      scoreboard_path = root.join('scoreboard.json')
-      prior_root = 'real-provider/2026-08-20T120000Z-prior'
-      current_root = 'real-provider/2026-08-21T120000Z-current'
-      write_manifest(root, artifact_root: prior_root, score: 800)
-      prior_directory = root.join(prior_root)
-      FileUtils.mkdir_p(prior_directory)
-      intervals = Tamoz::Evals::Benchmark::Scoreboard::AXES.to_h do |axis|
-        [axis, { 'low' => 700, 'high' => 900 }]
+    RunnerInputs.with_manifest do |input_manifest|
+      Dir.mktmpdir('scoreboard-regression') do |directory|
+        root = Pathname.new(directory)
+        scoreboard_path = root.join('scoreboard.json')
+        prior_root = 'real-provider/2026-08-20T120000Z-prior'
+        current_root = 'real-provider/2026-08-21T120000Z-current'
+        write_manifest(root, artifact_root: prior_root, score: 800)
+        prior_directory = root.join(prior_root)
+        FileUtils.mkdir_p(prior_directory)
+        intervals = Tamoz::Evals::Benchmark::Scoreboard::AXES.to_h do |axis|
+          [axis, { 'low' => 700, 'high' => 900 }]
+        end
+        File.write(prior_directory.join('intervals.json'), JSON.generate('axis_intervals' => intervals))
+
+        append_entry(root, scoreboard_path, prior_root, 800)
+        current_manifest = write_manifest(root, artifact_root: current_root, score: 600)
+        append_entry(root, scoreboard_path, current_root, 600)
+
+        _stdout, stderr, status = Open3.capture3(
+          RbConfig.ruby, REGRESSION_SCRIPT.to_s, '--scoreboard', scoreboard_path.to_s,
+          '--manifest', current_manifest.to_s, '--artifact-base', root.to_s,
+          '--input-manifest', input_manifest, chdir: ROOT.to_s
+        )
+
+        refute_predicate status, :success?
+        assert_includes stderr, 'unacknowledged scoreboard regression'
+
+        stable_scoreboard = root.join('stable.json')
+        stable_current = write_manifest(root, artifact_root: 'real-provider/2026-08-21T120000Z-stable', score: 800)
+        append_entry(root, stable_scoreboard, prior_root, 800)
+        append_entry(root, stable_scoreboard, 'real-provider/2026-08-21T120000Z-stable', 800)
+        stdout, stderr, status = Open3.capture3(
+          RbConfig.ruby, REGRESSION_SCRIPT.to_s, '--scoreboard', stable_scoreboard.to_s,
+          '--manifest', stable_current.to_s, '--artifact-base', root.to_s,
+          '--input-manifest', input_manifest, chdir: ROOT.to_s
+        )
+
+        assert_predicate status, :success?, stderr
+        assert_equal 'passed', JSON.parse(stdout).fetch('status')
       end
-      File.write(prior_directory.join('intervals.json'), JSON.generate('axis_intervals' => intervals))
-
-      append_entry(root, scoreboard_path, prior_root, 800)
-      current_manifest = write_manifest(root, artifact_root: current_root, score: 600)
-      append_entry(root, scoreboard_path, current_root, 600)
-
-      _stdout, stderr, status = Open3.capture3(
-        RbConfig.ruby, REGRESSION_SCRIPT.to_s, '--scoreboard', scoreboard_path.to_s,
-        '--manifest', current_manifest.to_s, '--artifact-base', root.to_s, chdir: ROOT.to_s
-      )
-
-      refute_predicate status, :success?
-      assert_includes stderr, 'unacknowledged scoreboard regression'
-
-      stable_scoreboard = root.join('stable.json')
-      stable_current = write_manifest(root, artifact_root: 'real-provider/2026-08-21T120000Z-stable', score: 800)
-      append_entry(root, stable_scoreboard, prior_root, 800)
-      append_entry(root, stable_scoreboard, 'real-provider/2026-08-21T120000Z-stable', 800)
-      stdout, stderr, status = Open3.capture3(
-        RbConfig.ruby, REGRESSION_SCRIPT.to_s, '--scoreboard', stable_scoreboard.to_s,
-        '--manifest', stable_current.to_s, '--artifact-base', root.to_s, chdir: ROOT.to_s
-      )
-
-      assert_predicate status, :success?, stderr
-      assert_equal 'passed', JSON.parse(stdout).fetch('status')
     end
   end
 

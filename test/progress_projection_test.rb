@@ -114,24 +114,14 @@ class ProgressProjectionTest < Minitest::Test
     resolved.fetch('request_id')
   end
 
-  def drain_row(store, delivery_id, now: Time.utc(2026, 8, 10, 12, 1, 0))
+  def drain_row(store, delivery_id, status: 'succeeded', receipt: { 'message_id' => CARD_MESSAGE_ID },
+                now: Time.utc(2026, 8, 10, 12, 1, 0))
     assert_equal :claimed, store.claim_delivery(
       delivery_id:, owner: 'drainer', fence: 7, claim_expires_at: now + 30, now:
     )
     assert_equal :marked, store.mark_delivery_send_started(delivery_id:, owner: 'drainer', fence: 7, now:)
     assert_equal :marked, store.mark_delivery(
-      delivery_id:, owner: 'drainer', fence: 7, status: 'succeeded',
-      receipt: { 'message_id' => CARD_MESSAGE_ID }, now:
-    )
-  end
-
-  def drain_row_without_receipt(store, delivery_id, now: Time.utc(2026, 8, 10, 12, 1, 0))
-    assert_equal :claimed, store.claim_delivery(
-      delivery_id:, owner: 'drainer', fence: 7, claim_expires_at: now + 30, now:
-    )
-    assert_equal :marked, store.mark_delivery_send_started(delivery_id:, owner: 'drainer', fence: 7, now:)
-    assert_equal :marked, store.mark_delivery(
-      delivery_id:, owner: 'drainer', fence: 7, status: 'failed', receipt: nil, now:
+      delivery_id:, owner: 'drainer', fence: 7, status:, receipt:, now:
     )
   end
 
@@ -141,8 +131,8 @@ class ProgressProjectionTest < Minitest::Test
   # has bound a platform message id, every successor milestone is built as
   # edit_message targeting THAT id, read store-side from the receipt.
   def test_first_milestone_sends_a_card_and_receipt_bound_successors_edit_it
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       assert_equal :accepted, sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
@@ -179,12 +169,12 @@ class ProgressProjectionTest < Minitest::Test
   # A request whose first card never got a delivery receipt keeps ordinary
   # sends: without a bound message there is nothing honest to edit.
   def test_successors_stay_sends_while_no_card_receipt_exists
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       assert_equal :accepted, sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
-      drain_row_without_receipt(store, milestone_rows(store).first.fetch('delivery_id'))
+      drain_row(store, milestone_rows(store).first.fetch('delivery_id'), status: 'failed', receipt: nil)
       assert_equal :accepted, sink.push(milestone_event('request.waiting', sequence: 2, phase: 'waiting'))
 
       live = milestone_rows(store).find { |row| row.fetch('status') == 'pending' }
@@ -200,8 +190,8 @@ class ProgressProjectionTest < Minitest::Test
   # ---------------------------------------------------------------- the seam
 
   def test_milestone_kinds_project_a_human_safe_control_card
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       assert_equal :accepted, sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
@@ -229,8 +219,8 @@ class ProgressProjectionTest < Minitest::Test
   end
 
   def test_unknown_milestone_phase_uses_generic_human_safe_copy
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       sink.push(milestone_event('request.running', sequence: 1, phase: 'provider_secret'))
@@ -245,8 +235,8 @@ class ProgressProjectionTest < Minitest::Test
   # The slow-request ladder at the seam: every committed fact projects in
   # order onto ONE live row, and the terminal projection lands after it.
   def test_slow_request_ladder_coalesces_milestones_then_projects_terminal_last
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       ladder = [
@@ -277,8 +267,8 @@ class ProgressProjectionTest < Minitest::Test
   end
 
   def test_terminal_projection_releases_the_reservation_after_milestones
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
       request_id = admitted_request_id(store)
 
@@ -300,8 +290,8 @@ class ProgressProjectionTest < Minitest::Test
   # UPDATED in place; once the drainer has claimed it, the next milestone
   # inserts a fresh row — a bounded stream, not an unbounded edit log.
   def test_pending_milestones_coalesce_in_place_and_post_claim_milestones_insert
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       assert_equal :accepted, sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
@@ -335,8 +325,8 @@ class ProgressProjectionTest < Minitest::Test
   # past the bound, with no pending row left to coalesce into, further
   # milestones are dropped rather than rewritten onto delivered history.
   def test_a_hundred_milestones_stay_bounded_and_delivered_rows_stay_immutable
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       delivered = {}
@@ -377,8 +367,8 @@ class ProgressProjectionTest < Minitest::Test
   # Invariant 11 with an explicit regression fence: progress/control rows
   # NEVER become model context, even when their send succeeded.
   def test_succeeded_progress_never_enters_conversation_history_but_terminal_does
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
@@ -403,8 +393,8 @@ class ProgressProjectionTest < Minitest::Test
   end
 
   def test_unbound_threads_and_unknown_kinds_stay_nil_safe
-    with_engine do |sink, adapter, _checkpoints|
-      store = adapter.bind_comms_store(_checkpoints)
+    with_engine do |sink, adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
       bind_thread_to_conversation(store)
 
       assert_nil sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed',
@@ -439,8 +429,7 @@ class ProgressProjectionTest < Minitest::Test
       store = runtime.adapter.bind_comms_store(runtime.checkpoints)
       bind_thread_to_conversation(store)
       runtime.bind_thread_profile('tg.ops.abc', 'trusted')
-      runtime.instance_variable_set(
-        :@delivery_sink,
+      runtime.install_delivery_sink(
         RecordingSink.new(Comms::OutboxDeliverySink.new(adapter: runtime.adapter,
                                                         checkpoints: runtime.checkpoints))
       )
@@ -486,10 +475,10 @@ class ProgressProjectionTest < Minitest::Test
   def test_recovery_emits_its_milestone_from_the_committed_recovery_fact
     with_runtime do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
-      with_channel_worker(rt, factory: crashing_factory(after: :claim)) do |runtime, _worker, _store|
+      with_channel_worker(rt, factory: crashing_factory(after: :claim)) do |runtime, worker, _store|
         rt.cli(%W[queue add --task Read\ note.txt --thread tg.ops.abc], factory: read_only_factory)
 
-        assert_raises(CrashingModel::Killed) { _worker.poll_once }
+        assert_raises(CrashingModel::Killed) { worker.poll_once }
 
         claimed = recorded_milestones(runtime).find { |event| event.fetch(:kind) == 'request.claimed' }
 
@@ -498,8 +487,7 @@ class ProgressProjectionTest < Minitest::Test
         second_directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
         second_runtime = Tamoz::Agent::WorkerRuntime.open(second_directory, model_factory: read_only_factory)
         begin
-          second_runtime.instance_variable_set(
-            :@delivery_sink,
+          second_runtime.install_delivery_sink(
             RecordingSink.new(Comms::OutboxDeliverySink.new(adapter: second_runtime.adapter,
                                                             checkpoints: second_runtime.checkpoints))
           )

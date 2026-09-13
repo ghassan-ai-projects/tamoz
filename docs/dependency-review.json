@@ -44,6 +44,20 @@
   },
   "runtime": [
     {
+      "name": "base64",
+      "version": "0.3.0",
+      "licenses": [
+        "Ruby",
+        "BSD-2-Clause"
+      ],
+      "homepage": "https://github.com/ruby/base64",
+      "required_by": [
+        "tamoz-evals-runner ~> 0.2"
+      ],
+      "direct": true,
+      "exception": null
+    },
+    {
       "name": "bigdecimal",
       "version": "4.1.2",
       "licenses": [
@@ -51,6 +65,30 @@
         "BSD-2-Clause"
       ],
       "homepage": "https://github.com/ruby/bigdecimal",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "faraday",
+      "version": "2.14.3",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://lostisland.github.io/faraday",
+      "required_by": [
+        "tamoz-mcp ~> 2.0"
+      ],
+      "direct": true,
+      "exception": null
+    },
+    {
+      "name": "faraday-net_http",
+      "version": "3.4.4",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/lostisland/faraday-net_http",
       "required_by": [],
       "direct": false,
       "exception": null
@@ -104,12 +142,35 @@
       "exception": null
     },
     {
+      "name": "json",
+      "version": "2.21.2",
+      "licenses": [
+        "Ruby"
+      ],
+      "homepage": "https://github.com/ruby/json",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
       "name": "json_schemer",
       "version": "2.5.0",
       "licenses": [
         "MIT"
       ],
       "homepage": "https://github.com/davishmcclurg/json_schemer",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "logger",
+      "version": "1.7.0",
+      "licenses": [
+        "Ruby",
+        "BSD-2-Clause"
+      ],
+      "homepage": "https://github.com/ruby/logger",
       "required_by": [],
       "direct": false,
       "exception": null
@@ -147,7 +208,7 @@
       ],
       "homepage": "https://github.com/ruby/net-http",
       "required_by": [
-        "tamoz-agent-kernel >= 0.5"
+        "tamoz-agent-kernel ~> 0.5"
       ],
       "direct": true,
       "exception": null
@@ -360,17 +421,6 @@
       "exception": null
     },
     {
-      "name": "json",
-      "version": "2.21.2",
-      "licenses": [
-        "Ruby"
-      ],
-      "homepage": "https://github.com/ruby/json",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
       "name": "language_server-protocol",
       "version": "3.17.0.5",
       "licenses": [
@@ -388,18 +438,6 @@
         "MIT"
       ],
       "homepage": "https://github.com/standardrb/lint_roller",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "logger",
-      "version": "1.7.0",
-      "licenses": [
-        "Ruby",
-        "BSD-2-Clause"
-      ],
-      "homepage": "https://github.com/ruby/logger",
       "required_by": [],
       "direct": false,
       "exception": null

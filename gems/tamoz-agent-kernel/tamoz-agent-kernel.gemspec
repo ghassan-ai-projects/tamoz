@@ -14,6 +14,6 @@ TamozGemspec.build(
   dependencies: [
     ['tamoz-core', "= #{Tamoz::Agent::Kernel::VERSION}"],
     ['tamoz-tools', "= #{Tamoz::Agent::Kernel::VERSION}"],
-    ['net-http', '>= 0.5']
+    ['net-http', '~> 0.5']
   ]
 )

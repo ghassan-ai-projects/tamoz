@@ -7,7 +7,7 @@ module Tamoz
     # The bounded, read-only continuation branch of the durable Session graph.
     # Every model and capability boundary remains owned by SessionEffects; this
     # collaborator only validates protocol data and returns checkpoint updates.
-    # rubocop:disable Metrics/ClassLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/ParameterLists
+    # rubocop:disable Metrics/ClassLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     # The graph-node methods keep each durable transition visible and ordered;
     # splitting one transition across helper objects would obscure its checkpoint
     # boundary and make the protocol harder to audit.
@@ -215,6 +215,14 @@ module Tamoz
           next_node: 'adaptive_decide'
         }
       end
+
+      # The optional detail fields a lifecycle event may carry. Declared so the
+      # keyword splat below still refuses a typo'd key instead of letting it
+      # reach the record.
+      LIFECYCLE_DETAIL_KEYS = %i[
+        iteration sub_operation effect_key attempt_number
+        capability_id source_id provenance truncated
+      ].freeze
 
       private
 
@@ -513,24 +521,21 @@ module Tamoz
         update
       end
 
-      def lifecycle_event(
-        state, context, event_type, effect_state:, iteration: nil, sub_operation: nil,
-        effect_key: nil, attempt_number: nil, capability_id: nil, source_id: nil,
-        provenance: nil, truncated: nil
-      )
+      def lifecycle_event(state, context, event_type, effect_state:, **details)
+        unknown = details.keys - LIFECYCLE_DETAIL_KEYS
+        raise ArgumentError, "unknown lifecycle detail: #{unknown.join(', ')}" unless unknown.empty?
+
         fields = {
           event_type:, sequence: state.fetch(:lifecycle_events, []).length,
           request_id: context.request_id, thread_id: context.thread_id || state.dig(:session, 'session_id'),
           execution_id: context.execution_id, phase: state.fetch(:phase), effect_state:,
           delivery_state: 'pending'
         }
-        {
-          iteration:, sub_operation:, effect_key:, logical_key: effect_key,
-          attempt_number:, capability_id:, source_id:, provenance:, truncated:
-        }.each { |key, value| fields[key] = value unless value.nil? }
-        SessionRecords.build('lifecycle_event', **fields)
+        supplied = details.compact
+        supplied[:logical_key] = supplied[:effect_key] if supplied.key?(:effect_key)
+        SessionRecords.build('lifecycle_event', **fields, **supplied)
       end
     end
-    # rubocop:enable Metrics/ClassLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/ParameterLists
+    # rubocop:enable Metrics/ClassLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
   end
 end

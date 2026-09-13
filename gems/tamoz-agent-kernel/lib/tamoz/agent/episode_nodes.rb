@@ -225,12 +225,12 @@ module Tamoz
         parameters.merge!(entry.presets.fetch("default", {}))
         build_compensating_intent(
           type: entry.type, risk_class: entry.risk_class,
-          episode:, snapshot:, compensates: nil,
+          episode:, compensates: nil,
           reason: "no compensation within the ceiling", now:, parameters:
         )
       end
 
-      def build_compensating_intent(type:, risk_class:, episode:, snapshot:, compensates:, reason:, now: Time.now.utc, parameters: nil)
+      def build_compensating_intent(type:, risk_class:, episode:, compensates:, reason:, now: Time.now.utc, parameters: nil)
         identity = String(episode.fetch("episode_id")) + "." + String(episode.fetch("attempt_id")) + "." +
                    String(episode.fetch("fence")) + "." + type
         # The compensates command id is part of the intent identity — two
@@ -302,25 +302,30 @@ module Tamoz
       # untrusted evidence with memory:<digest> ids.
       def build_frame(state, _context)
         wire = state.fetch(:wire)
-        snapshot = state.fetch(:snapshot)
-        catalog = verified_diagnosis_catalog(wire)
         IntentCatalog.verify_wire(
           wire.fetch("intent_catalog_json"),
           wire.fetch("intent_catalog_sha256")
         )
         skills = verified_skills(wire)
-        memory = memory_entries(state)
-        frame = @frame_builder_factory.call(
-          catalog, wire.fetch("objective", "")
+        frame = assemble_frame(state, skills:, memory: memory_entries(state))
+        {"frame" => frame_projection(frame), "skill_set_digest" => skills.digest}
+      end
+
+      # The catalog-verify + frame_builder.build assembly shared by build_frame
+      # and rebuild_frame; callers pass the verified skills and the build extras
+      # that differ between them (memory, tool_results, repair_directive).
+      def assemble_frame(state, skills:, **extras)
+        wire = state.fetch(:wire)
+        @frame_builder_factory.call(
+          verified_diagnosis_catalog(wire), wire.fetch("objective", "")
         ).build(
-          snapshot:,
+          snapshot: state.fetch(:snapshot),
           prompt: wire.fetch("prompt", ""),
           prompt_version: wire.fetch("prompt_version", ""),
           prompt_sha256: wire["prompt_sha256"],
           skills: skills.refs,
-          memory:
+          **extras
         )
-        {"frame" => frame_projection(frame), "skill_set_digest" => skills.digest}
       end
 
       # The ONLY model-calling node. Journals the call under the logical call
@@ -420,18 +425,8 @@ module Tamoz
       # section. Same inputs → same frame bytes → the next reason call's
       # logical key is deterministic.
       def rebuild_frame(state, _context)
-        wire = state.fetch(:wire)
-        snapshot = state.fetch(:snapshot)
-        catalog = verified_diagnosis_catalog(wire)
-        skills = verified_skills(wire)
-        frame = @frame_builder_factory.call(
-          catalog, wire.fetch("objective", "")
-        ).build(
-          snapshot:,
-          prompt: wire.fetch("prompt", ""),
-          prompt_version: wire.fetch("prompt_version", ""),
-          prompt_sha256: wire["prompt_sha256"],
-          skills: skills.refs,
+        frame = assemble_frame(
+          state, skills: verified_skills(state.fetch(:wire)),
           memory: memory_entries(state),
           tool_results: Array(state.fetch(:tool_results, [])),
           repair_directive: state[:repair_directive]
@@ -565,7 +560,7 @@ module Tamoz
 
           build_compensating_intent(
             type: target_type, risk_class: target.risk_class,
-            episode:, snapshot:, compensates: judgement.fetch("command_id"),
+            episode:, compensates: judgement.fetch("command_id"),
             reason: judgement.fetch("reason"), now:
           )
         end

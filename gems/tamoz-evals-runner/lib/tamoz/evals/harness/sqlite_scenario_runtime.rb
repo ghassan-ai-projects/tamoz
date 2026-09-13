@@ -640,7 +640,10 @@ module Tamoz
           unless required.all? { |key| @identifiers[key].is_a?(String) }
             raise ExecutionError, "SQLite scenario runtime identifiers are invalid"
           end
-          unless @preparers.values.all? { |value| value.is_a?(String) }
+          # Fail fast at construction if a catalog id maps to a preparer this
+          # class does not implement, so a manifest typo is a named ExecutionError
+          # here rather than a NoMethodError far away at dispatch time.
+          unless @preparers.values.all? { |value| value.is_a?(String) && respond_to?(value.to_sym, true) }
             raise ExecutionError, "SQLite scenario preparers are invalid"
           end
         rescue KeyError, TypeError

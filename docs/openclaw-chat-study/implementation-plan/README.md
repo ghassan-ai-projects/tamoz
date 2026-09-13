@@ -28,7 +28,7 @@ Read in this order:
 
 The communication benchmark — the measurement that turns "feels responsive" into
 a verifiable, longitudinal claim — is designed in
-[../benchmark-protocol/](../benchmark-protocol/README.md): protocol, scenario
+[documentation/benchmark/openclaw-chat-study/](../../../documentation/benchmark/openclaw-chat-study/README.md): protocol, scenario
 catalog, scoring, and a phased plan built on the existing composition-test seams.
 
 ## Delivery tracks and dependency order

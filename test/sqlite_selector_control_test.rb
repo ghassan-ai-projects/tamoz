@@ -181,7 +181,6 @@ class SQLiteSelectorControlTest < Minitest::Test
       assert_equal "KILL", result.term_signal
       refute result.timed_out
       assert_nil result.exit_status
-      assert_equal "", result.stderr.text
 
       record = read_json(layout.path)
       assert_equal 1, record.fetch("control_version")

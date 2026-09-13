@@ -197,4 +197,23 @@ class ObservabilityRuntimeTest < Minitest::Test
     assert_equal :estimated, signal.attributes.fetch(:cost_basis)
     assert_equal 'operator', signal.attributes.fetch(:pricing_source)
   end
+
+  def test_fanout_maps_a_raising_child_to_its_method_fallback_not_a_crash
+    raising = Class.new do
+      def record(_signal) = raise 'boom'
+      def health = raise 'boom'
+      def flush(deadline_ms:) = raise 'boom'
+      def close = raise 'boom'
+    end.new
+    healthy = Observability::Recorder::Memory.new
+    fanout = Observability::Recorder::Fanout.new([raising, healthy])
+
+    # flush must not surface the guard sentinel through Integer() (regression:
+    # a raising child previously crashed with TypeError instead of counting 0).
+    assert_equal 0, fanout.flush(deadline_ms: 10)
+    # health reports the child as unavailable rather than injecting :dropped.
+    assert_equal({'enabled' => false, 'error' => 'unavailable'}, fanout.health.fetch('0'))
+    assert_equal true, fanout.health.fetch('1').fetch('enabled')
+    assert_nil fanout.close
+  end
 end

@@ -204,7 +204,7 @@ module Tamoz
             content = if response.respond_to?(:content)
                         Tamoz::Agent::ModelCallProjection.from_response(response).fetch("content")
                       else
-                        String(response)
+                        response
                       end
             {"output" => content}
           end

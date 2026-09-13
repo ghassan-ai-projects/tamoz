@@ -36,13 +36,7 @@ class CommsGatewayTest < Minitest::Test
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
       begin
-        definition = Tamoz.graph(name: 'gateway', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'gateway.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
+        checkpoints = gateway_graph('gateway').compile(checkpointer: adapter).checkpointer
         appended = []
         # The gateway binds its own store, so the capture rides the adapter:
         # every appended delivery wire is recorded for reply-targeting proofs.
@@ -511,14 +505,6 @@ class CommsGatewayTest < Minitest::Test
                           .reverse.find { |text| text.start_with?('Work status:') }
 
       assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
-
-      warn({ status_reply:, rows: store.outbox_rows(surface_id: 'telegram-ops',
-                                                     statuses: %w[pending claimed succeeded failed unknown])
-        .map { |r| "#{r['kind']}:#{r['status']}:#{r['text'][0, 45].inspect}" } }.inspect)
-      stx = store.conversation_status(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
-      warn("agg=#{stx['task_state']} open=#{stx['open_requests']}")
-
-      assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
       refute_match(/State: accepted/, status_reply)
     end
   end
@@ -966,13 +952,18 @@ class CommsGatewayTest < Minitest::Test
   private
 
   def build_checkpoints(adapter)
-    definition = Tamoz.graph(name: 'gateway-2', version: '1') do
+    gateway_graph('gateway-2').compile(checkpointer: adapter).checkpointer
+  end
+
+  # The single-node gateway graph both harness paths compile; `name` keys the
+  # graph and its node implementation so the two callers stay distinct.
+  def gateway_graph(name)
+    Tamoz.graph(name:, version: '1') do
       state :ready, default: true
-      node(:finish, implementation_name: 'gateway-2.finish', version: '1') { |_s, _c| { ready: true } }
+      node(:finish, implementation_name: "#{name}.finish", version: '1') { |_s, _c| { ready: true } }
       edge Tamoz::START, :finish
       edge :finish, Tamoz::END
     end
-    definition.compile(checkpointer: adapter).checkpointer
   end
 
   # A scripted session-controls seam for gateway-level control tests: the

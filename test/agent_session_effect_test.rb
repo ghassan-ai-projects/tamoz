@@ -315,48 +315,66 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
-  # The production McpSourceBuilder mapping is the one that feeds the dispatcher:
-  # an MCP ambiguous outcome becomes Tamoz::EffectUnknownError (not a repairable
-  # ToolError), so the terminal-unknown completion above is reached in production.
-  def test_mcp_source_builder_maps_ambiguous_outcome_to_effect_unknown
-    mapped = Tamoz::Agent::McpSourceBuilder.allocate.send(
-      :map_mcp_error, Tamoz::Mcp::AmbiguousOutcomeError.new("sent before transport failure")
-    )
-    assert_instance_of Tamoz::EffectUnknownError, mapped
-    refute_kind_of Tamoz::Agent::ToolError, mapped
-  end
-
+  # The production dispatch outcome is what the session records: a typed
+  # remote MCP outcome keeps its provenance and redacts secrets before
+  # anything is journalled.
   def test_typed_remote_outcome_keeps_provenance_and_redacts_before_journaling
-    observation = Data.define(:server_id, :text, :truncated).new(
-      server_id: "remote-server",
-      text: "answer sk-live-12345678",
-      truncated: true
-    )
-    outcome = Data.define(:status, :observation, :interrupt, :denial).new(
-      status: :succeeded, observation:, interrupt: nil, denial: nil
-    )
-    effects = Tamoz::Agent::SessionEffects.allocate
+    Dir.mktmpdir("tamoz-remote-outcome") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      begin
+        app = base_definition.compile(checkpointer: adapter)
+        request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
+        observation = Data.define(:server_id, :text, :truncated).new(
+          server_id: "remote-server",
+          text: "answer sk-live-12345678",
+          truncated: true
+        )
+        outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+          status: :succeeded, observation:, interrupt: nil, denial: nil
+        )
+        effects = Tamoz::Agent::SessionEffects.new(
+          configuration: dispatch_configuration(FixedOutcome.new(outcome), directory)
+        )
 
-    payload = effects.send(:result_payload, outcome)
+        receipt = dispatch_remote(effects, app, request, "owner.remote")
 
-    assert_equal "remote-server", payload.fetch("source_id")
-    assert_equal "remote_untrusted", payload.fetch("provenance")
-    assert payload.fetch("truncated")
-    assert_includes payload.fetch("output"), "[REDACTED]"
-    refute_includes payload.fetch("output"), "sk-live-12345678"
+        assert_equal :succeeded, receipt.status
+        assert_equal "remote-server", receipt.value.fetch("source_id")
+        assert_equal "remote_untrusted", receipt.value.fetch("provenance")
+        assert receipt.value.fetch("truncated")
+        assert_includes receipt.value.fetch("output"), "[REDACTED]"
+        refute_includes receipt.value.fetch("output"), "sk-live-12345678"
+      ensure
+        adapter&.close
+      end
+    end
   end
 
+  # A denial becomes a failed dispatch whose persisted error detail is the
+  # redacted reason, never the raw provider text.
   def test_mcp_denial_reason_is_redacted_before_being_persisted
-    denial = { 'reason' => 'provider rejected OPENAI_API_KEY=sk-live-12345678' }
-    outcome = Data.define(:status, :observation, :interrupt, :denial).new(
-      status: :denied, observation: nil, interrupt: nil, denial:
-    )
-    effects = Tamoz::Agent::SessionEffects.allocate
+    Dir.mktmpdir("tamoz-remote-denial") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      begin
+        app = base_definition.compile(checkpointer: adapter)
+        request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
+        denial = { "reason" => "provider rejected OPENAI_API_KEY=sk-live-12345678" }
+        outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+          status: :denied, observation: nil, interrupt: nil, denial:
+        )
+        effects = Tamoz::Agent::SessionEffects.new(
+          configuration: dispatch_configuration(FixedOutcome.new(outcome), directory)
+        )
 
-    error = assert_raises(Tamoz::Agent::ToolError) { effects.send(:result_payload, outcome) }
+        receipt = dispatch_remote(effects, app, request, "owner.denial")
 
-    assert_includes error.message, '[REDACTED]'
-    refute_includes error.message, 'sk-live-12345678'
+        assert_equal :failed, receipt.status
+        assert_includes receipt.error.fetch("message"), "[REDACTED]"
+        refute_includes receipt.error.fetch("message"), "sk-live-12345678"
+      ensure
+        adapter&.close
+      end
+    end
   end
 
   # --- filesystem reconciler ------------------------------------------------
@@ -520,6 +538,44 @@ class AgentSessionEffectTest < Minitest::Test
 
   SessionModelConfiguration = Data.define(:model, :model_call_safety, :profile, :toolbox, :mcp)
 
+  # A capabilities fake whose dispatch returns one fixed typed outcome, so the
+  # MCP outcome path is exercised without a live server.
+  class FixedOutcome
+    def initialize(outcome)
+      @outcome = outcome
+    end
+
+    def execute(_context, _tool, _arguments)
+      @outcome
+    end
+  end
+
+  def dispatch_configuration(capabilities, root)
+    ToolDispatchConfiguration.new(
+      model: nil,
+      model_call_safety: :idempotent,
+      profile: nil,
+      toolbox: Tamoz::Agent::Toolbox.new(root:),
+      mcp: nil,
+      capabilities:
+    )
+  end
+
+  def dispatch_remote(effects, app, request, owner)
+    with_writer(app.checkpointer, owner) do |writer|
+      context = Tamoz::Context.new(
+        run_id: owner, execution_id: request.execution_id,
+        request_id: "request.#{owner}", task_id: "task.remote", effects: writer.effects
+      )
+      step = { "tool" => "mcp:server/read", "arguments" => {} }
+      intent = {
+        "tool" => "mcp:server/read", "operation" => "tool.mcp:server/read",
+        "safety" => "read_only", "plan_digest" => "sha256:#{'c' * 64}"
+      }
+      effects.dispatch(context, intent, step, iteration: 0, sub_operation: 0)
+    end
+  end
+
   def replayable_model(transport)
     Class.new do
       attr_reader :calls
@@ -632,15 +688,12 @@ class AgentSessionEffectTest < Minitest::Test
   end
 
   def read_transitions(adapter, key)
-    adapter.__send__(:read, operation: "test.transitions") do |tx|
-      tx.rows(
-        "test.transitions",
-        <<~SQL,
-          SELECT transition, actor FROM tamoz_effect_transitions
-          WHERE effect_key = ? ORDER BY transition_index
-        SQL
-        [key]
-      )
-    end
+    database = SQLite3::Database.new(adapter.path)
+    database.execute(
+      "SELECT transition, actor FROM tamoz_effect_transitions " \
+      "WHERE effect_key = ? ORDER BY transition_index", [key]
+    )
+  ensure
+    database&.close
   end
 end

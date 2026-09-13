@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/comms_gateway_harness'
 require 'delegate'
 require 'securerandom'
 
@@ -11,14 +12,11 @@ require 'securerandom'
 # SQLite runtime database; the CLI half drives the real argv dispatch.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength, Metrics/ClassLength
 class ContextControlExposureTest < Minitest::Test
+  include CommsGatewayHarness
+
   Comms = Tamoz::Comms
   Records = Tamoz::Agent::SessionRecords
 
-  SURFACE_ID = 'telegram-ops'
-  BOT_ID = 7_463_512_990
-  CONVERSATION_ID = 'telegram:chat:22222222'
-  CORRESPONDENT_ID = 'telegram:user:11111111'
-  NOW = Time.utc(2026, 8, 10, 12, 0, 0)
   TURN_TEXT = 'make the header blue'
   LONG_TEXT = "repaint the whole page #{'x' * 1500}"
   VOLATILE_FIELDS = %w[thread_id checkpoint_id sequence audit_digest].freeze
@@ -156,42 +154,36 @@ class ContextControlExposureTest < Minitest::Test
     end
   end
 
-  # A controls builder that crashes (a missing credential, a boot failure)
-  # costs one bounded unavailable reply — the serve loop answers again on
-  # the next pass instead of dying.
-  def test_a_crashing_controls_builder_answers_unavailable_and_the_loop_survives
+  # The CLI wires no controls source (controls are worker-owned), so control
+  # commands cost one bounded unavailable reply — the serve loop answers
+  # again on the next pass instead of dying.
+  def test_a_missing_controls_source_answers_unavailable_and_the_loop_survives
     with_dual_surface do |surface|
-      crashing = Tamoz::Agent::CLICommsShared::ChannelControlsSource.new(
-        workspace_root: surface.workspace,
-        adapter: surface.adapter,
-        artifact_store: surface.adapter.bind_artifact_store(tenant: 'channel:controls'),
-        model_builder: -> { raise StandardError, 'model boot failed' }
-      )
       gateway = Comms::Gateway.new(
         adapter: surface.adapter, checkpoints: surface.checkpoints, transport: surface.transport,
-        descriptor:, poller_owner: 'exposure:crash', controls: crashing
+        descriptor:, poller_owner: 'exposure:crash', controls: nil
       )
       surface.admit(101, TURN_TEXT)
 
       assert_equal Comms::Gateway::CONTROLS_UNAVAILABLE_REPLY,
-                   drive(gateway, surface.transport, '/think high', 400)
+                   drive(gateway, surface.store, surface.transport, '/think high', 400)
       assert_equal Comms::Gateway::CONTROLS_UNAVAILABLE_REPLY,
-                   drive(gateway, surface.transport, '/usage', 401),
+                   drive(gateway, surface.store, surface.transport, '/usage', 401),
                    'the loop survives and keeps answering bounded replies'
     end
   end
 
   private
 
-  def drive(gateway, transport, text, id)
-    transport.batch([ExposureUpdate.message(id, text)])
+  def drive(gateway, store, transport, text, id)
+    transport.batch([update(id, text:)])
     unless gateway.serve_once(now: NOW + id, drain: false) == :served
       raise "command #{id} did not serve"
     end
 
     row = nil
-    gateway.instance_variable_get(:@store).outbox_rows(surface_id: SURFACE_ID,
-                                                       statuses: %w[pending claimed succeeded]).each do |candidate|
+    store.outbox_rows(surface_id: SURFACE_ID,
+                      statuses: %w[pending claimed succeeded]).each do |candidate|
       row = candidate if candidate.fetch('reply_to') == id + 10_000
     end
     row && row.fetch('text')
@@ -283,13 +275,15 @@ class ContextControlExposureTest < Minitest::Test
 
   Surface = Struct.new(:gateway, :transport, :store, :session, :recorded, :checkpoints,
                        :workspace, :session_dir, :adapter, keyword_init: true) do
+    include CommsGatewayHarness
+
     def admit(id, text)
-      transport.batch([ExposureUpdate.message(id, text)])
+      transport.batch([update(id, text:)])
       raise "admission returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
     end
 
     def command(text, id)
-      transport.batch([ExposureUpdate.message(id, text)])
+      transport.batch([update(id, text:)])
       raise "command returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
 
       reply_for(id)
@@ -346,7 +340,7 @@ class ContextControlExposureTest < Minitest::Test
       File.write(File.join(workspace, 'app.rb'), "value = 1\n")
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
       begin
-        checkpoints = graph_definition.compile(checkpointer: adapter).checkpointer
+        checkpoints = graph_definition('exposure').compile(checkpointer: adapter).checkpointer
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         store.bind_correspondent(binding_wire, now: NOW)
@@ -417,78 +411,12 @@ class ContextControlExposureTest < Minitest::Test
     end
   end
 
-  module ExposureUpdate
-    module_function
-
-    def message(id, text)
-      { 'update_id' => id,
-        'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
-                       'chat' => { 'id' => 22_222_222, 'type' => 'private' },
-                       'from' => { 'id' => 111_111_11 }, 'text' => text } }
-    end
-  end
-
-  class ScriptedTransport
-    def batch(updates) = (@updates = updates)
-
-    def poll(next_offset:, limit:, timeout_s:)
-      ids = @updates.map { |update| update.fetch('update_id') }
-      { updates: @updates.map { |update| normalize(update) }, next_offset: ids.max && (ids.max + 1) }
-    end
-
-    def deliver(_delivery)
-      { 'message_id' => 1, 'date' => 1 }
-    end
-
-    def normalize(update)
-      Comms::InboundEnvelope.new(
-        surface_id: SURFACE_ID, surface_revision: 1,
-        update_id: update.fetch('update_id'),
-        raw_payload_hash: Digest::SHA256.hexdigest(JSON.generate(update)),
-        parser_version: 1,
-        kind: update.dig('message', 'text').start_with?('/') ? 'command' : 'text',
-        correspondent_id: CORRESPONDENT_ID,
-        conversation_id: CONVERSATION_ID,
-        message_id: update.dig('message', 'message_id'),
-        text: update.dig('message', 'text'),
-        observed_time: Time.at(update.dig('message', 'date')).utc
-      ).wire
-    end
-  end
-
-  def descriptor
-    @descriptor ||= Comms::SurfaceDescriptor.build(
-      surface_id: SURFACE_ID, revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-                   poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: BOT_ID, bot_username: 'ops_bot' },
-      admission: { direct: 'allowlist', correspondents: [CORRESPONDENT_ID] },
-      threading: 'conversation', profile_id: 'ops',
-      approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
-      limits: { max_inbound_bytes: 8192, max_open_requests: 50,
-                max_denial_prompts_per_request: 4, outbox_capacity: 500,
-                control_capacity: 200, per_chat_messages_per_s: 30.0,
-                global_messages_per_s: 100.0 }
-    )
-  end
-
   def binding_wire
     Comms::Binding.new(
       surface_id: SURFACE_ID, surface_revision: 1,
       correspondent_id: CORRESPONDENT_ID, conversation_id: CONVERSATION_ID,
       bound_at: NOW, bound_by: 'operator:test'
     ).wire
-  end
-
-  def graph_definition
-    Tamoz.graph(name: 'exposure', version: '1') do
-      state :ready, default: true
-      node(:finish, implementation_name: 'exposure.finish', version: '1') { |_s, _c| { ready: true } }
-      edge Tamoz::START, :finish
-      edge :finish, Tamoz::END
-    end
   end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength, Metrics/ClassLength

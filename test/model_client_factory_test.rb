@@ -26,7 +26,8 @@ class ModelClientFactoryTest < Minitest::Test
 
       assert_includes names, credential
       assert_includes names, "#{provider.upcase}_API_BASE"
-      assert_equal endpoint, Factory::DESCRIPTORS.fetch(provider).fetch(:default_base)
+      base = Factory::DESCRIPTORS.fetch(provider).fetch(:default_base)
+      endpoint ? assert_equal(endpoint, base) : assert_nil(base)
     end
   end
 
@@ -50,7 +51,10 @@ class ModelClientFactoryTest < Minitest::Test
   end
 
   def test_factory_rejects_an_api_base_name_as_a_profile_credential
-    error = assert_raises(Tamoz::Agent::ModelCallError) do
+    # A credential_ref naming an API-base variable is a malformed role
+    # reference, so it fails typed (ProfileRoleUnavailableError), matching the
+    # DR-5 D1 taxonomy in tamoz-agent-kernel errors.rb.
+    error = assert_raises(Tamoz::Agent::ProfileRoleUnavailableError) do
       Factory.build(
         provider: 'ollama', model: 'local-model',
         profile_role: role(
@@ -61,7 +65,7 @@ class ModelClientFactoryTest < Minitest::Test
       )
     end
 
-    assert_equal 'credential_reference_invalid', error.code
+    assert_includes error.message, 'credential_reference_invalid'
   end
 
   def test_factory_binds_profile_and_explicit_endpoint_configuration_without_secret
@@ -87,29 +91,23 @@ class ModelClientFactoryTest < Minitest::Test
   end
 
   def test_factory_uses_the_profile_credential_at_the_http_boundary
-    secret = 'profile-credential-sentinel'
-    transport = Factory.build(
-      provider: 'openai', model: 'gpt-test',
-      profile_role: role(credential_ref: {'kind' => 'env', 'name' => 'TAMOZ_MODEL_SECRET'}),
-      environment: {'TAMOZ_MODEL_SECRET' => secret}
-    )
-    observed_headers = nil
-    response = Net::HTTPOK.new('1.1', '200', 'OK')
-    response.instance_variable_set(
-      :@body,
-      JSON.generate(
-        'choices' => [{'message' => {'content' => '{"ok":true}'}}]
+    Dir.mktmpdir('tamoz-factory') do |dir|
+      endpoint = LocalModelEndpoint.new(
+        mode: :fixture, responses: ['{"ok":true}'], log_path: File.join(dir, 'boundary.jsonl')
+      ).start
+      transport = Factory.build(
+        provider: 'openai', model: 'gpt-test',
+        profile_role: role(credential_ref: {"kind" => "env", "name" => "TAMOZ_MODEL_SECRET"}),
+        explicit_api_base: endpoint.base_url,
+        environment: {'TAMOZ_MODEL_SECRET' => 'profile-credential-sentinel'}
       )
-    )
 
-    transport.stub(:post_completion_request, lambda { |_body, headers:|
-      observed_headers = headers
-      response
-    }) do
       transport.generate(stage: :plan, system: 'system', prompt: 'prompt')
-    end
 
-    assert_equal "Bearer #{secret}", observed_headers['Authorization']
+      assert_equal 'Bearer profile-credential-sentinel', endpoint.observed.last.fetch('authorization')
+    ensure
+      endpoint&.stop
+    end
   end
 
   def test_factory_built_transport_crosses_the_real_http_boundary

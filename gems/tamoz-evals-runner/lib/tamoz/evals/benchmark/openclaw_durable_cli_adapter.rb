@@ -274,7 +274,8 @@ module Tamoz
             provider:, profile_role: nil, environment: @env
           )
         rescue Tamoz::Agent::ModelCallError
-          raise CredentialUnavailable, "provider_credential_unavailable:#{provider}"
+          raise CredentialUnavailable,
+                "provider_credential_unavailable:#{Tamoz::Agent::Providers::ENV_KEYS.fetch(provider.to_sym)}"
         end
 
         def initialize_runtime!

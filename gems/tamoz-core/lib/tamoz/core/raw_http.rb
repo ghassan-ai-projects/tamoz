@@ -10,6 +10,12 @@ module Tamoz
       module_function
 
       def read_request(client)
+        read_full_request(client).last
+      end
+
+      # Returns [headers, body] — for consumers that must observe what arrived
+      # (the local model endpoint logs the Authorization header).
+      def read_full_request(client)
         client.gets
         headers = {}
         while (line = client.gets) && line != "\r\n"
@@ -17,7 +23,7 @@ module Tamoz
           headers[key.downcase.strip] = value.strip if value
         end
         length = headers.fetch("content-length", "0").to_i
-        length.positive? ? client.read(length) : ""
+        [headers, length.positive? ? client.read(length) : ""]
       end
 
       def write_response(client, body, status:, reason: nil)

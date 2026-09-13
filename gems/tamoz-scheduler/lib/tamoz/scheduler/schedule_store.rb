@@ -63,11 +63,6 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Extend the lease on a claimed occurrence. Stale fences fail closed.
-      def renew_occurrence_lease(id, fence:, lease_for:)
-        raise NotImplementedError
-      end
-
       # Record terminal delivery/execution state for an occurrence. Delivery
       # and execution have DISTINCT statuses: `enqueued` is never reported as
       # execution success (hard zero: no false green).

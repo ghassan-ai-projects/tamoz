@@ -425,7 +425,8 @@ class ApprovalEngineTest < Minitest::Test
     assert_equal :ask, decision.verdict
     assert_includes decision.grant_offer.scopes, :session
 
-    eng.resolve(decision_id: decision.id, answer: :approve, scope: :session)
+    grant = eng.resolve(decision_id: decision.id, answer: :approve, scope: :session)
+    assert_equal :session, grant.scope
 
     second = eng.build_request(
       tool: 'create_file', argv: ['b.rb', 'hi'],
@@ -435,8 +436,6 @@ class ApprovalEngineTest < Minitest::Test
     assert_equal :allow, next_decision.verdict
     assert_equal 'engine.grant_hit', next_decision.rule_id
 
-    rows = eng.grant_store.instance_variable_get(:@grants)
-    assert_equal 1, rows.size
-    assert_equal :session, rows.first.scope
+    assert_equal 1, eng.grant_store.size
   end
 end

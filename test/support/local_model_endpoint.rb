@@ -88,14 +88,14 @@ class LocalModelEndpoint
   private
 
   def handle(client)
-    request_bytes = Tamoz::Core::RawHttp.read_request(client)
+    headers, request_bytes = Tamoz::Core::RawHttp.read_full_request(client)
     return if request_bytes.nil?
 
     if @mode == :fixture
       content = @responses[@index] || @responses.last
       @index += 1
       envelope = fixture_envelope(content)
-      append_log(request_bytes:, response_bytes: envelope)
+      append_log(request_bytes:, response_bytes: envelope, authorization: headers["authorization"])
       Tamoz::Core::RawHttp.write_response(client, envelope, status: 200)
     else
       status, body = forward(request_bytes)
@@ -134,7 +134,7 @@ class LocalModelEndpoint
     )
   end
 
-  def append_log(request_bytes:, response_bytes:, upstream_status: nil)
+  def append_log(request_bytes:, response_bytes:, upstream_status: nil, authorization: nil)
     entry = {
       "request_digest" => digest(request_bytes),
       "response_digest" => digest(response_bytes),
@@ -142,6 +142,7 @@ class LocalModelEndpoint
       "response_bytes" => response_bytes.bytesize
     }
     entry["upstream_status"] = upstream_status if upstream_status
+    entry["authorization"] = authorization if authorization
     File.open(@log_path, "a") { |file| file.puts(JSON.generate(entry)) }
   end
 

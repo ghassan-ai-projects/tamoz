@@ -107,6 +107,23 @@ class StreamEpisodeReplayTest < Minitest::Test
                  "the same decision is reconstructed"
   end
 
+  def test_gate2_wire_projection_is_replay_identical_including_stamps
+    deliver("replay", fence: 1)
+    @endpoint.stop
+    deliver("replay", fence: 2)
+
+    first_parts, first_receipts = projected_parts(fence: 1)
+    second_parts, _second_receipts = projected_parts(fence: 2)
+    refute_empty first_parts, "a produced episode projects its receipts"
+    assert_equal first_parts, second_parts,
+                 "the same journal rows project identical wire parts, stamps included"
+
+    record = fetch_journal_record(first_receipts.first.fetch("effect_key"))
+    succeeded = record.attempts.find { |attempt| attempt.status == :succeeded }
+    assert_equal succeeded.completed_at_ms / 1000.0, first_parts.first.emitted_at,
+                 "emitted_at is the journal attempt's completion time, not a live clock"
+  end
+
   def test_gate1_ambiguous_in_flight_attempt_stays_unknown_on_redispatch
     # Step 1: a broken-catalog delivery creates the thread + checkpoint with
     # zero model calls (the base the journal lease checks need).
@@ -131,6 +148,28 @@ class StreamEpisodeReplayTest < Minitest::Test
   end
 
   private
+
+  # The wire projection over a run's journal-verified receipts — the seam the
+  # runner feeds the stream adapter from.
+  def projected_parts(fence:)
+    request = wire_request("replay", fence:)
+    envelope = Stream::EpisodeRequestEnvelope.new(request, @composition.fetch(:runner).worker)
+    receipts = terminal_state("replay", fence:).fetch(:model_receipts)
+    parts = Stream::EpisodeModelEventProjection.new(
+      @composition.fetch(:app).durable_runner
+    ).parts(envelope:, receipts:)
+    [parts, receipts]
+  end
+
+  def fetch_journal_record(effect_key)
+    store = @composition.fetch(:app).checkpointer
+    store.open_writer(
+      thread_id: "episode.replay-replay", namespace: ["acme"],
+      owner_id: "replay-stamp-check", ttl: store.writer_ttl
+    ) do |writer|
+      writer.effects.fetch(effect_key)
+    end
+  end
 
   # The deterministic tool-result projection the loop's second frame embeds —
   # computed identically by the real EpisodeToolCall + StubEvidenceTool.
@@ -185,8 +224,15 @@ class StreamEpisodeReplayTest < Minitest::Test
       snapshot:, prompt: AquacultureDomain::PROMPT,
       prompt_version: "1.0", tool_results:
     )
-    transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: @endpoint.base_url, model: "local-model", provider: "ollama"
+    # The logical key binds the factory-computed provider configuration
+    # digest, so the seed transport must be built exactly like the live one.
+    profile = Tamoz::Agent::Profile.preview_source(
+      File.join(@composition.fetch(:directory), "profile.yml")
+    ).document
+    resolved = Tamoz::Agent::ModelCall.resolve_role(profile, "fast")
+    transport = Tamoz::Agent::ModelClientFactory.build(
+      provider: resolved.provider, model: resolved.model, profile_role: resolved,
+      environment: ENV, explicit_api_base: @endpoint.base_url
     )
     request_bytes = transport.build_request(system: frame.system, prompt: frame.user)
     Tamoz::Agent::ModelCall::LogicalCallKey.new(

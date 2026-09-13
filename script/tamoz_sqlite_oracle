@@ -23,10 +23,11 @@ module TamozSQLiteOracle
   # the outbox reply_to column, 19 -> 20 bounds conflict amplification to
   # one anchor row per update_id, and 20 -> 21 rebuilds tamoz_comms_requests
   # with the cancellation timeline stamps (Phase 2 visible cancellation).
-  # The oracle is a second, independent read-only verifier: it
+  # 21 -> 22 adds the request-local ownership columns (tamoz_comms_outbox,
+  # tamoz_effects). The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 21
+  SCHEMA_VERSION = 22
   MIGRATION_1_CHECKSUM =
     "d27658b46031e0484dac3ab1a37364b125b01c4a2dbc8a72f3be71e2771c8814"
   MIGRATION_2_CHECKSUM =
@@ -93,6 +94,8 @@ module TamozSQLiteOracle
     "82e37eac8f412d313a7bf25269bdb1491e9d17756f2fe96130a90a84c0938da5"
   MIGRATION_21_CHECKSUM =
     "4e707e99afae10d1d28cf47b3bef6194299b7f75e344ad8b0b99ff3f9ed1471c"
+  MIGRATION_22_CHECKSUM =
+    "d1880639971be7acc487bebdebfde4b4d527accfed71fa2953a7e67fe4971386"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -827,7 +830,8 @@ module TamozSQLiteOracle
         [18, MIGRATION_18_CHECKSUM],
         [19, MIGRATION_19_CHECKSUM],
         [20, MIGRATION_20_CHECKSUM],
-        [21, MIGRATION_21_CHECKSUM]
+        [21, MIGRATION_21_CHECKSUM],
+        [22, MIGRATION_22_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

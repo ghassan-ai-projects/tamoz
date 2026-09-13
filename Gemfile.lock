@@ -37,7 +37,7 @@ PATH
   remote: gems/tamoz-agent-kernel
   specs:
     tamoz-agent-kernel (0.1.0.alpha.1)
-      net-http (>= 0.5)
+      net-http (~> 0.5)
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 
@@ -133,6 +133,7 @@ PATH
   remote: gems/tamoz-evals-runner
   specs:
     tamoz-evals-runner (0.1.0.alpha.1)
+      base64 (~> 0.2)
       tamoz-agent (= 0.1.0.alpha.1)
       tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-agent-cli (= 0.1.0.alpha.1)
@@ -176,6 +177,7 @@ PATH
   remote: gems/tamoz-mcp
   specs:
     tamoz-mcp (0.1.0.alpha.1)
+      faraday (~> 2.0)
       mcp (~> 1.1)
       tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
@@ -236,6 +238,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     ast (2.4.3)
+    base64 (0.3.0)
     bigdecimal (4.1.2)
     concurrent-ruby (1.3.8)
     docile (1.4.1)
@@ -269,6 +272,12 @@ GEM
       dry-inflector (~> 1.0)
       dry-logic (~> 1.4)
       zeitwerk (~> 2.6)
+    faraday (2.14.3)
+      faraday-net_http (>= 2.0, < 3.5)
+      json
+      logger
+    faraday-net_http (3.4.4)
+      net-http (~> 0.5)
     google-protobuf (4.35.1)
       bigdecimal
       rake (~> 13.3)
@@ -410,6 +419,7 @@ DEPENDENCIES
 
 CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
+  base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
   bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
   bundler (4.0.12) sha256=7f8b757d28dfb636e7b24fba2344ac6dd13b5b24f4b46d62573d483f211825ac
   concurrent-ruby (1.3.8) sha256=b2f1be836e968ccc78ccfce277ea79c72a88633f22306782c16ff23fb415d1e1
@@ -422,6 +432,8 @@ CHECKSUMS
   dry-logic (1.6.0) sha256=da6fedbc0f90fc41f9b0cc7e6f05f5d529d1efaef6c8dcc8e0733f685745cea2
   dry-schema (1.16.0) sha256=cd3aaeabc0f1af66ec82a29096d4c4fb92a0a58b9dae29a22b1bbceb78985727
   dry-types (1.9.1) sha256=baebeecdb9f8395d6c9d227b62011279440943e3ef2468fe8ccc1ba11467f178
+  faraday (2.14.3) sha256=1882247e6766615c8220b4392bf1d27f6ebb63d8e28267587cef1fb0bf37f278
+  faraday-net_http (3.4.4) sha256=0e78af151747ed1b00f33e25973b4bc220d7f16c00c39676817c8b12331eb588
   google-protobuf (4.35.1) sha256=a3a6471331d918f58dfa4d014a8f6286f0af2cf4840216bde52fcf2ea3fe3726
   google-protobuf (4.35.1-arm64-darwin) sha256=d9c957df04fa89c749fa9a72a7b383eb4296efc9b2303dc6fd6fbe39c698ad6b
   google-protobuf (4.35.1-x86_64-linux-gnu) sha256=c786439087512a3fbd199e9897d265b855f951d4027e218ea55e858d45969edd

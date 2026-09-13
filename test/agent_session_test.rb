@@ -21,6 +21,10 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
+  ToolPolicy = Data.define(:allow_changes, :checks) do
+    def self.default = new(allow_changes: false, checks: {})
+  end
+
   def test_session_requires_a_durable_checkpointer
     error = assert_raises(Tamoz::ConfigurationError) do
       Tamoz::Agent::Session.new(
@@ -178,8 +182,7 @@ class AgentSessionTest < Minitest::Test
         model: repair_model(digest),
         root:,
         adapter:,
-        allow_changes: true,
-        checks: {"answer" => check_argv},
+        tools: ToolPolicy.new(allow_changes: true, checks: {"answer" => check_argv}),
         approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "unattended")
       )
 
@@ -223,8 +226,7 @@ class AgentSessionTest < Minitest::Test
         model: repair_model(digest),
         root:,
         adapter:,
-        allow_changes: true,
-        checks: {"answer" => check_argv},
+        tools: ToolPolicy.new(allow_changes: true, checks: {"answer" => check_argv}),
         approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "unattended")
       )
 
@@ -256,8 +258,7 @@ class AgentSessionTest < Minitest::Test
         model: repair_model(digest),
         root:,
         adapter:,
-        allow_changes: true,
-        checks: {"answer" => check_argv}
+        tools: ToolPolicy.new(allow_changes: true, checks: {"answer" => check_argv})
       )
 
       paused = session.start("set value to 2", thread: "session.req", request_id: "request.a")
@@ -324,10 +325,10 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
-  def build_session(model:, root:, adapter:, allow_changes: false, checks: {}, **options)
+  def build_session(model:, root:, adapter:, tools: ToolPolicy.default, **options)
     Tamoz::Agent::Session.new(
       model:,
-      toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes:, checks:),
+      toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: tools.allow_changes, checks: tools.checks),
       checkpointer: adapter,
       **options
     )
@@ -432,8 +433,7 @@ class AgentSessionTest < Minitest::Test
       state = latest.state.merge(
         plan_versions: latest.state.fetch(:plan_versions) + [future]
       )
-      session.app.__send__(
-        :append_checkpoint,
+      session.app.append_checkpoint(
         writer:,
         thread:,
         namespace: [],

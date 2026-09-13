@@ -6,6 +6,8 @@ module Tamoz
   module Evals
     module Harness
       class SQLiteTraceRecorder
+        include Tamoz::Evals::ShapeValidation
+
         VERSION = 1
         MAX_EVENTS = 256
         MAX_OPERATIONS = 32
@@ -470,15 +472,6 @@ module Tamoz
           end
         end
 
-        def validate_exact_hash(value, keys, name:)
-          unless value.is_a?(Hash) &&
-                 value.length == keys.length &&
-                 keys.all? { |key| value.key?(key) }
-            raise ExecutionError, "#{name} shape is invalid"
-          end
-          value
-        end
-
         def identifier(value, name:, maximum:)
           text = bounded_utf8(value, name:, maximum:)
           unless text.match?(ID_PATTERN)
@@ -497,16 +490,6 @@ module Tamoz
             raise ExecutionError, "subject version is invalid"
           end
           text.freeze
-        end
-
-        def bounded_utf8(value, name:, maximum:)
-          unless value.is_a?(String) &&
-                 value.valid_encoding? &&
-                 !value.empty? &&
-                 value.bytesize <= maximum
-            raise ExecutionError, "#{name} is invalid"
-          end
-          value.dup.freeze
         end
 
         def digest_value(value, name:)
@@ -535,20 +518,6 @@ module Tamoz
           raise ExecutionError, "#{name} is invalid"
         end
 
-        def deeply_frozen?(value)
-          return false unless value.frozen?
-
-          case value
-          when Hash
-            value.all? do |key, entry|
-              deeply_frozen?(key) && deeply_frozen?(entry)
-            end
-          when Array
-            value.all? { |entry| deeply_frozen?(entry) }
-          else
-            true
-          end
-        end
 
         private_constant :ATTEMPT_CLASSES, :DEFINITION, :DEFINITION_DIGEST,
                          :EVENT_FIELDS, :GIT_OBJECT_PATTERN,

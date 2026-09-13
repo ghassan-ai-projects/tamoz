@@ -12,6 +12,32 @@ class AgentProfileMachineryTest < Minitest::Test
   ProfileRoleUnavailableError = Tamoz::Agent::ProfileRoleUnavailableError
   READ_ONLY_TOOLS = %w[read_file list_directory search_text].freeze
 
+  # One profile fixture: what goes into the document (workspace, tools,
+  # profile_id, budgets, model_roles) and where the file lands (config_home,
+  # path, name, mode). Both write_profile and profile_document read it, so the
+  # fixture is the single description of a test profile.
+  ProfileFixture = Struct.new(
+    :workspace, :config_home, :path, :name, :mode, :tools, :profile_id, :budgets, :model_roles
+  ) do
+    def initialize(workspace:, config_home: nil, path: nil, name: nil, mode: 0o600,
+                   tools: READ_ONLY_TOOLS, profile_id: "test-profile", budgets: {},
+                   model_roles: nil)
+      super(workspace, config_home, path, name, mode, tools, profile_id, budgets, model_roles)
+    end
+
+    # A non-0600 file is a repository suggestion: evidence only, never authority.
+    def suggestion? = mode != 0o600
+
+    def destination
+      return path if path
+
+      directory = File.join(config_home, "profiles")
+      FileUtils.mkdir_p(directory, mode: 0o700)
+      File.chmod(0o700, directory)
+      File.join(directory, name || "#{profile_id}.yaml")
+    end
+  end
+
   class ScriptedModel
     def initialize(**responses)
       @responses = responses.transform_values(&:dup)
@@ -91,11 +117,11 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_session_record_records_post_override_roles_and_budgets
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, digest = write_profile(
+      path, digest = write_profile(ProfileFixture.new(
         workspace:, config_home:,
         budgets: {"steps" => 10, "cost_usd" => 0.5},
         model_roles: {"primary" => {"provider" => "ollama", "model" => "gpt-5"}}
-      )
+      ))
       out = StringIO.new
       err = StringIO.new
       status = run_cli(
@@ -140,10 +166,10 @@ class AgentProfileMachineryTest < Minitest::Test
     # before the adapter exists).
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, = write_profile(
+      path, = write_profile(ProfileFixture.new(
         workspace:, config_home:,
         model_roles: {"primary" => {"provider" => "ollama", "model" => "gpt-5"}}
-      )
+      ))
       err = StringIO.new
       status = run_cli(
         ["--profile", path, "ask", "read note.txt"],
@@ -177,7 +203,7 @@ class AgentProfileMachineryTest < Minitest::Test
   # DR5-03: profile_id == "legacy" is refused at load; the sentinel semantics in
   # cli.rb are unchanged (a session record marker, not a loadable profile id).
   def test_legacy_profile_id_refused_at_load
-    document = profile_document("profile_id" => "legacy")
+    document = profile_document(ProfileFixture.new(workspace: @workspace, profile_id: "legacy"))
     path = File.join(@dir, "legacy.yaml")
     File.write(path, Psych.dump(document))
     File.chmod(0o600, path)
@@ -227,7 +253,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_unavailable_credential_ref_is_typed_and_leaves_no_partial_session
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      broken, = write_profile(
+      broken, = write_profile(ProfileFixture.new(
         workspace:, config_home:, name: "broken.yaml",
         model_roles: {
           "primary" => {
@@ -236,7 +262,7 @@ class AgentProfileMachineryTest < Minitest::Test
             "credential_ref" => {"kind" => "env", "name" => "TAMOZ_DOES_NOT_EXIST_XYZ"}
           }
         }
-      )
+      ))
 
       without_env_keys("OPENAI_API_KEY", "TAMOZ_DOES_NOT_EXIST_XYZ") do
         err = StringIO.new
@@ -268,7 +294,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_referenced_credential_unset_fails_typed_even_with_the_generic_key_set
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      broken, = write_profile(
+      broken, = write_profile(ProfileFixture.new(
         workspace:, config_home:, name: "broken.yaml",
         model_roles: {
           "primary" => {
@@ -277,7 +303,7 @@ class AgentProfileMachineryTest < Minitest::Test
             "credential_ref" => {"kind" => "env", "name" => "TAMOZ_DOES_NOT_EXIST_XYZ"}
           }
         }
-      )
+      ))
 
       # The GENERIC key is set; only the ref-named key is absent. Pre-fix this
       # silently started the session on the generic key (critic DR5-05 corner).
@@ -322,7 +348,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_budgets_recorded_or_empty_sentinel
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, = write_profile(workspace:, config_home:)
+      path, = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -337,7 +363,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_profile_roles_construction_refuses_non_plain_values
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, = write_profile(workspace:, config_home:)
+      path, = write_profile(ProfileFixture.new(workspace:, config_home:))
       profile = Profile.load(path, env: {"TAMOZ_CONFIG_HOME" => config_home})
       dummy = Object.new
       def dummy.generate(**) = "{}"
@@ -371,7 +397,9 @@ class AgentProfileMachineryTest < Minitest::Test
   # --- R3: consumption recording ----------------------------------------------
 
   # DR5-07: codec v2 round-trips consumed_by/consumed_at; v1 files read and are
-  # never rewritten on read; a v1-only reader refuses a v2 file typed.
+  # never rewritten on read; a document the codec does not accept — an
+  # out-of-range schema_version, an entry with a key dropped — is refused typed
+  # rather than partially loaded.
   def test_registry_codec_v2_round_trip_and_v1_forward_read
     path = File.join(@dir, "transitions.yaml")
     registry = Profile::TransitionRegistry.new(path:)
@@ -420,12 +448,37 @@ class AgentProfileMachineryTest < Minitest::Test
     )
     assert_equal 2, Psych.load_file(v1_path).fetch("schema_version")
 
-    # A v1-only reader (an older binary) refuses the v2 file typed — never a
-    # partial load, never a silent key drop.
+    # The written file is v2, not v1: an older v1-only binary would see a
+    # schema_version outside its accepted set. That binary is not constructible
+    # from here (the accepted set is a constant of the shipped codec), so what
+    # is pinned below is the REFUSAL MECHANISM it would take, exercised on this
+    # codec: an unaccepted schema_version, and an entry with a key dropped, are
+    # both typed AdoptionError — never a partial load, never a silent key drop.
     v2_data = Psych.load_file(path)
     refute_equal 1, v2_data.fetch("schema_version")
     assert_equal Profile::TransitionRegistry::REGISTRY_SCHEMA_VERSION,
                  v2_data.fetch("schema_version")
+
+    unsupported_path = File.join(@dir, "unsupported.yaml")
+    File.write(unsupported_path, Psych.dump(v2_data.merge("schema_version" => 99)))
+    File.chmod(0o600, unsupported_path)
+    assert_raises(Profile::AdoptionError) do
+      Profile::TransitionRegistry.new(path: unsupported_path).candidates("th")
+    end
+
+    # A v2 entry with consumed_at dropped is neither the v1 key set nor the v2
+    # one: refused, never read as a half-consumed entry.
+    dropped_path = File.join(@dir, "dropped.yaml")
+    File.write(dropped_path, Psych.dump(
+      "schema_version" => 2,
+      "transitions" => {"th" => [{"profile_id" => "p", "from_digest" => digest_of("a"),
+                                  "to_digest" => digest_of("b"), "reason" => "operator_activate",
+                                  "consumed_by" => "request.42"}]}
+    ))
+    File.chmod(0o600, dropped_path)
+    assert_raises(Profile::AdoptionError) do
+      Profile::TransitionRegistry.new(path: dropped_path).candidates("th")
+    end
   end
 
   # DR5-08 / DR5-A3: ONE flocked critical section — concurrent consumers
@@ -562,14 +615,14 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_consumed_by_is_the_actual_executing_request_id
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, = write_profile(workspace:, config_home:)
+      path, = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
         factory: read_factory, session: "th"
       )
 
-      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      _, second_digest = write_profile(ProfileFixture.new(workspace:, config_home:, tools: %w[read_file]))
       assert_equal 0, run_cli(
         ["--profile", path, "profile", "activate", "--thread", "th", "--digest", second_digest],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -616,14 +669,14 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_loser_falls_through_to_pinned_replay_and_burned_entry_stays
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, first_digest = write_profile(workspace:, config_home:)
+      path, first_digest = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
         factory: read_factory, session: "th"
       )
 
-      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      _, second_digest = write_profile(ProfileFixture.new(workspace:, config_home:, tools: %w[read_file]))
       assert_equal 0, run_cli(
         ["--profile", path, "profile", "activate", "--thread", "th", "--digest", second_digest],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -686,7 +739,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_dead_candidates_surfaced_and_consumed_entries_excluded
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, digest_a = write_profile(workspace:, config_home:)
+      path, digest_a = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -696,13 +749,13 @@ class AgentProfileMachineryTest < Minitest::Test
       # Candidate A->B recorded, then superseded by A->C which is consumed, then
       # the profile moves to D. A->B is now dead on both ends; A->C is consumed
       # and must not nag; C->D is the live candidate.
-      _, digest_b = write_profile(workspace:, config_home:, budgets: {"steps" => 1})
+      _, digest_b = write_profile(ProfileFixture.new(workspace:, config_home:, budgets: {"steps" => 1}))
       assert_equal 0, run_cli(
         ["--profile", path, "profile", "activate", "--thread", "th", "--digest", digest_b],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
         factory: read_factory
       )
-      _, digest_c = write_profile(workspace:, config_home:, budgets: {"steps" => 2})
+      _, digest_c = write_profile(ProfileFixture.new(workspace:, config_home:, budgets: {"steps" => 2}))
       assert_equal 0, run_cli(
         ["--profile", path, "profile", "activate", "--thread", "th", "--digest", digest_c],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -715,7 +768,7 @@ class AgentProfileMachineryTest < Minitest::Test
       )
       assert_equal digest_c, session_record(session_dir, "th").fetch("profile_digest")
 
-      _, digest_d = write_profile(workspace:, config_home:, budgets: {"steps" => 3})
+      _, digest_d = write_profile(ProfileFixture.new(workspace:, config_home:, budgets: {"steps" => 3}))
       assert_equal 0, run_cli(
         ["--profile", path, "profile", "activate", "--thread", "th", "--digest", digest_d],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -741,14 +794,14 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_resume_never_consumes_a_candidate
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, first_digest = write_profile(workspace:, config_home:)
+      path, first_digest = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
         factory: read_factory, session: "th"
       )
 
-      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      _, second_digest = write_profile(ProfileFixture.new(workspace:, config_home:, tools: %w[read_file]))
       assert_equal 0, run_cli(
         ["--profile", path, "profile", "activate", "--thread", "th", "--digest", second_digest],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -794,7 +847,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_ref_named_credential_resolves_identically_on_pinned_replay
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, = write_profile(
+      path, = write_profile(ProfileFixture.new(
         workspace:, config_home:,
         model_roles: {
           "primary" => {
@@ -802,7 +855,7 @@ class AgentProfileMachineryTest < Minitest::Test
             "credential_ref" => {"kind" => "env", "name" => "TAMOZ_OPENAI_API_KEY"}
           }
         }
-      )
+      ))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -817,7 +870,8 @@ class AgentProfileMachineryTest < Minitest::Test
 
       pinned = Profile.from_authority(snapshot)
       captured = []
-      stub_model_factory_into(captured) do
+      ref_key = ->(kwargs) { kwargs.fetch(:environment).fetch("TAMOZ_OPENAI_API_KEY") }
+      stub_model_factory(captured, select: ref_key) do
         cli = new_cli(env: {"TAMOZ_OPENAI_API_KEY" => "sk-ref-value",
                             "OPENAI_API_KEY" => "sk-generic-value"})
         built = cli.send(:build_model, {assume_model_exists: true}, profile: pinned)
@@ -833,7 +887,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_replay_surface_comes_from_snapshot_not_the_current_file
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, first_digest = write_profile(workspace:, config_home:)
+      path, first_digest = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -843,7 +897,7 @@ class AgentProfileMachineryTest < Minitest::Test
       # Replace the current profile with a malicious one (same id, narrowed
       # surface, different digest). The pinned session must replay the ORIGINAL
       # surface — the file influences nothing.
-      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      _, second_digest = write_profile(ProfileFixture.new(workspace:, config_home:, tools: %w[read_file]))
       refute_equal first_digest, second_digest
 
       prompts = []
@@ -867,7 +921,7 @@ class AgentProfileMachineryTest < Minitest::Test
   def test_existing_pinned_authority_gate_is_the_resume_stop
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, first_digest = write_profile(workspace:, config_home:)
+      path, first_digest = write_profile(ProfileFixture.new(workspace:, config_home:))
       assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
@@ -875,7 +929,7 @@ class AgentProfileMachineryTest < Minitest::Test
       )
 
       FileUtils.rm_f(File.join(config_home, "adoption.yaml"))
-      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      _, second_digest = write_profile(ProfileFixture.new(workspace:, config_home:, tools: %w[read_file]))
       refute_equal first_digest, second_digest
 
       err = StringIO.new
@@ -921,7 +975,7 @@ class AgentProfileMachineryTest < Minitest::Test
       suggestion_dir = File.join(workspace, ".tamoz")
       FileUtils.mkdir_p(suggestion_dir)
       suggestion = File.join(suggestion_dir, "suggested-profile.yaml")
-      write_profile(workspace:, config_home:, path: suggestion, mode: 0o644)
+      write_profile(ProfileFixture.new(workspace:, config_home:, path: suggestion, mode: 0o644))
 
       err = StringIO.new
       status = run_cli(
@@ -940,26 +994,15 @@ class AgentProfileMachineryTest < Minitest::Test
     Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:)
   end
 
-  # Replaces the factory for the duration of the block, recording every
-  # call's kwargs into `capture` (an Array) and returning a plain struct that
-  # answers model/provider like the real class.
-  def stub_model_factory(capture)
+  # Replaces the factory for the duration of the block, appending one entry per
+  # call to `capture` (an Array) and returning a plain struct that answers
+  # model/provider like the real class. `select` picks what is recorded: the
+  # whole kwargs hash by default, or one derived value (DR5-14 records the
+  # environment value the factory was handed, read back as captured[0]).
+  def stub_model_factory(capture, select: nil)
     original = Tamoz::Agent::ModelClientFactory.method(:build)
     Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build) do |**kwargs|
-      capture << kwargs
-      Struct.new(:model, :provider).new(kwargs[:model], kwargs[:provider].to_sym)
-    end
-    yield
-  ensure
-    Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build, original)
-  end
-
-  # Single-value variant for DR5-14: captures the selected environment value
-  # passed to the factory into `captured[0]`.
-  def stub_model_factory_into(captured)
-    original = Tamoz::Agent::ModelClientFactory.method(:build)
-    Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build) do |**kwargs|
-      captured[0] = kwargs.fetch(:environment).fetch("TAMOZ_OPENAI_API_KEY")
+      capture << (select ? select.call(kwargs) : kwargs)
       Struct.new(:model, :provider).new(kwargs[:model], kwargs[:provider].to_sym)
     end
     yield
@@ -977,8 +1020,7 @@ class AgentProfileMachineryTest < Minitest::Test
   end
 
   def load_profile(model_roles = nil)
-    doc = profile_document
-    doc["model_roles"] = model_roles if model_roles
+    doc = profile_document(ProfileFixture.new(workspace: @workspace, model_roles:))
     path = File.join(@dir, "profile.yaml")
     File.write(path, Psych.dump(doc))
     File.chmod(0o600, path)
@@ -1000,15 +1042,30 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  def write_profile(
-    workspace:, config_home:, path: nil, mode: 0o600, activate: true, budgets: {},
-    tools: READ_ONLY_TOOLS, profile_id: "test-profile", name: nil, model_roles: nil
-  )
-    digest = catalog_digest(workspace:, tools:)
+  # Writes the fixture's document and returns [path, canonical digest].
+  # `activate` is the one thing that is NOT a property of the file: it is the
+  # operator action taken afterwards, so it stays an explicit parameter.
+  def write_profile(fixture, activate: true)
+    path = fixture.destination
+    File.write(path, Psych.dump(profile_document(fixture)))
+    File.chmod(fixture.mode, path)
+    suggestion = fixture.suggestion?
+    digest = Profile.preview(path, suggestion:).canonical_digest
+    if activate && !suggestion
+      Profile::AdoptionRegistry.new(env: {"TAMOZ_CONFIG_HOME" => fixture.config_home})
+                               .activate(fixture.profile_id, digest)
+    end
+    [path, digest]
+  end
+
+  # The only place a profile document is built.
+  def profile_document(fixture)
+    workspace = fixture.workspace
+    tools = fixture.tools
     document = {
       "profile" => {
         "schema_version" => 1,
-        "profile_id" => profile_id,
+        "profile_id" => fixture.profile_id,
         "profile_version" => "1.0",
         "canonical_root" => workspace
       },
@@ -1019,47 +1076,14 @@ class AgentProfileMachineryTest < Minitest::Test
         "default_check_safety" => "read_only",
         "graph_version" => "1",
         "behavior_version" => "1.0",
-        "tool_catalog_digest" => digest
+        "tool_catalog_digest" => catalog_digest(workspace:, tools:)
       }
     }
+    budgets = fixture.budgets
     document["budgets"] = budgets unless budgets.empty?
+    model_roles = fixture.model_roles
     document["model_roles"] = model_roles if model_roles
-    if path.nil?
-      directory = File.join(config_home, "profiles")
-      FileUtils.mkdir_p(directory, mode: 0o700)
-      File.chmod(0o700, directory)
-      path = File.join(directory, name || "#{profile_id}.yaml")
-    end
-    File.write(path, Psych.dump(document))
-    File.chmod(mode, path)
-    suggestion = mode != 0o600
-    digest = Profile.preview(path, suggestion:).canonical_digest
-    if activate && !suggestion
-      Profile::AdoptionRegistry.new(env: {"TAMOZ_CONFIG_HOME" => config_home})
-                               .activate(profile_id, digest)
-    end
-    [path, digest]
-  end
-
-  def profile_document(profile_fields = {})
-    profile = {
-      "schema_version" => 1,
-      "profile_id" => "test-profile",
-      "profile_version" => "1.0",
-      "canonical_root" => @workspace
-    }.merge(profile_fields)
-    {
-      "profile" => profile,
-      "roots" => {"workspace" => @workspace},
-      "tools" => {"allowed" => READ_ONLY_TOOLS},
-      "policy" => {
-        "allow_changes" => false,
-        "default_check_safety" => "read_only",
-        "graph_version" => "1",
-        "behavior_version" => "1.0",
-        "tool_catalog_digest" => catalog_digest(workspace: @workspace, tools: READ_ONLY_TOOLS)
-      }
-    }
+    document
   end
 
   def catalog_digest(workspace:, tools:)

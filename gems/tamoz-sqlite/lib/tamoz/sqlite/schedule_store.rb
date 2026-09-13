@@ -26,6 +26,17 @@ module Tamoz
       REQUEST_DELIVERY = "queue"
       REQUEST_NAMESPACE = [].freeze
       ENQUEUE_CONTEXT_DOMAIN = "tamoz.sqlite.scheduler.enqueue.v1\n"
+      # Reduces tamoz_schedules `s` to each schedule's latest live revision.
+      # Shared by list_schedules and materialize_due so the two cannot drift.
+      LATEST_REVISION_JOIN = <<~SQL
+        JOIN (
+          SELECT schedule_id, MAX(revision) AS revision
+          FROM tamoz_schedules
+          WHERE deleted = 0
+          GROUP BY schedule_id
+        ) latest ON latest.schedule_id = s.schedule_id
+                 AND latest.revision = s.revision
+      SQL
       # Durable in-flight state for one schedule, from the occurrence rows.
       OccurrenceState = Data.define(:non_terminal, :pending)
 
@@ -103,13 +114,7 @@ module Tamoz
             <<~SQL,
               SELECT s.revision, s.definition_digest, s.payload, s.enabled
               FROM tamoz_schedules s
-              JOIN (
-                SELECT schedule_id, MAX(revision) AS revision
-                FROM tamoz_schedules
-                WHERE deleted = 0
-                GROUP BY schedule_id
-              ) latest ON latest.schedule_id = s.schedule_id
-                       AND latest.revision = s.revision
+              #{LATEST_REVISION_JOIN}
               WHERE s.deleted = 0
               ORDER BY s.schedule_id COLLATE BINARY
               LIMIT ?
@@ -169,13 +174,7 @@ module Tamoz
             <<~SQL,
               SELECT s.schedule_id, s.revision, s.definition_digest, s.payload, s.enabled
               FROM tamoz_schedules s
-              JOIN (
-                SELECT schedule_id, MAX(revision) AS revision
-                FROM tamoz_schedules
-                WHERE deleted = 0
-                GROUP BY schedule_id
-              ) latest ON latest.schedule_id = s.schedule_id
-                       AND latest.revision = s.revision
+              #{LATEST_REVISION_JOIN}
               WHERE s.enabled = 1 AND s.deleted = 0
               ORDER BY s.schedule_id COLLATE BINARY
               LIMIT ?
@@ -480,29 +479,6 @@ module Tamoz
       end
 
       public
-
-      def renew_occurrence_lease(id, fence:, lease_for:)
-        now = now_ms
-        changed = nil
-        @adapter.__send__(:transaction, operation: "schedule.renew") do |tx|
-          tx.execute(
-            "schedule.renew.update",
-            <<~SQL,
-              UPDATE tamoz_occurrences
-              SET fence = ?, updated_at_ms = ?
-              WHERE occurrence_id = ? AND fence = ?
-                AND state IN ('claimed', 'enqueued', 'running')
-            SQL
-            [fence, now, id, fence]
-          )
-          changed = tx.changes
-        end
-        if changed.zero?
-          raise Tamoz::Scheduler::LeaseLostError,
-                "occurrence lease was lost or already completed"
-        end
-        nil
-      end
 
       # P13-B (design §10): the delivery→execution handoff. Delivery is
       # `enqueued` (the request committed); the consumer acknowledges the

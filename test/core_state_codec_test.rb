@@ -27,7 +27,7 @@ class CoreStateCodecTest < Minitest::Test
 
   def test_registered_value_round_trip_and_legacy_decoder
     codec = Tamoz::StateCodec.new
-                            .with_registration(
+                            .add_registration(
                               tag: "test.point",
                               version: 1,
                               klass: Point,
@@ -36,7 +36,7 @@ class CoreStateCodecTest < Minitest::Test
                               immutability: ->(point) { point.frozen? },
                               encode: false
                             )
-                            .with_registration(
+                            .add_registration(
                               tag: "test.point",
                               version: 2,
                               klass: Point,
@@ -60,7 +60,7 @@ class CoreStateCodecTest < Minitest::Test
 
   def test_unknown_registration_is_rejected_before_any_decoder_runs
     calls = 0
-    codec = Tamoz::StateCodec.new.with_registration(
+    codec = Tamoz::StateCodec.new.add_registration(
       tag: "test.point",
       version: 1,
       klass: Point,
@@ -95,7 +95,7 @@ class CoreStateCodecTest < Minitest::Test
         @value = value
       end
     end
-    codec = Tamoz::StateCodec.new.with_registration(
+    codec = Tamoz::StateCodec.new.add_registration(
       tag: "test.mutable",
       version: 1,
       klass: mutable_class,
@@ -126,9 +126,9 @@ class CoreStateCodecTest < Minitest::Test
       decoder: ->(payload) { mutable_class.new(payload) }
     }
 
-    assert_raises(ArgumentError) { Tamoz::StateCodec.new.with_registration(**attributes) }
+    assert_raises(ArgumentError) { Tamoz::StateCodec.new.add_registration(**attributes) }
 
-    codec = Tamoz::StateCodec.new.with_registration(
+    codec = Tamoz::StateCodec.new.add_registration(
       **attributes,
       immutability: ->(value) { value.frozen? && value.values.frozen? }
     )
@@ -146,10 +146,10 @@ class CoreStateCodecTest < Minitest::Test
     }
 
     assert_raises(Tamoz::ConfigurationError) do
-      Tamoz::StateCodec.new.with_registration(**base, klass: String)
+      Tamoz::StateCodec.new.add_registration(**base, klass: String)
     end
     assert_raises(Tamoz::ConfigurationError) do
-      Tamoz::StateCodec.new.with_registration(**base, klass: Tamoz::Secret)
+      Tamoz::StateCodec.new.add_registration(**base, klass: Tamoz::Secret)
     end
   end
 

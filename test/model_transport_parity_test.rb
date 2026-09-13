@@ -48,15 +48,10 @@ class ModelTransportParityTest < Minitest::Test
     body = '{"error":"provider-secret-sentinel"}'
     response = Net::HTTPInternalServerError.new('1.1', '503', 'Service Unavailable')
     response.instance_variable_set(:@body, body)
-    transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: 'https://example.test/v1', model: 'model', provider: 'openai',
-      api_key: 'provider-secret-sentinel'
-    )
+    transport = replaying_transport(response, api_key: 'provider-secret-sentinel')
 
     error = assert_raises(Tamoz::Agent::ModelCallError) do
-      transport.stub(:post_completion_request, response) do
-        transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-      end
+      transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
     end
 
     assert_equal 'http_failure', error.code
@@ -69,17 +64,10 @@ class ModelTransportParityTest < Minitest::Test
     response = Net::HTTPBadGateway.new('1.1', '502', 'Bad Gateway')
     response.instance_variable_set(:@body, '{}')
     calls = 0
-    transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: 'https://example.test/v1', model: 'model', provider: 'openai'
-    )
+    transport = replaying_transport(response) { calls += 1 }
 
     assert_raises(Tamoz::Agent::ModelCallError) do
-      transport.stub(:post_completion_request, lambda { |_body, headers:|
-        calls += 1
-        response
-      }) do
-        transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-      end
+      transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
     end
 
     assert_equal 1, calls
@@ -115,6 +103,23 @@ class ModelTransportParityTest < Minitest::Test
   end
 
   private
+
+  # The transports freeze at construction, so the HTTP boundary is overridden
+  # on an anonymous subclass instead of patched per instance. The response is
+  # marked pre-read: a hand-built Net::HTTP response has no socket to stream
+  # from.
+  def replaying_transport(response, api_key: nil, &on_request)
+    response.instance_variable_set(:@read, true)
+    transport_class = Class.new(Tamoz::Agent::EpisodeModelTransport) do
+      define_method(:post_completion_request) do |_body, headers:|
+        on_request&.call
+        response
+      end
+    end
+    transport_class.new(
+      endpoint: 'https://example.test/v1', model: 'model', provider: 'openai', api_key:
+    )
+  end
 
   def with_endpoint(responses)
     Dir.mktmpdir('tamoz-transport') do |dir|

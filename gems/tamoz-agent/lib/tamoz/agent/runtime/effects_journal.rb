@@ -109,6 +109,8 @@ module Tamoz
           end
         end
 
+        def records = @records.values.freeze
+
         private
 
         # A terminal receipt replays its recorded status; the dispatcher projects

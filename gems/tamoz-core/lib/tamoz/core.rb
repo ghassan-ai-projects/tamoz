@@ -164,6 +164,21 @@ module Tamoz
       end
     end
 
+    # Deep MUTABLE copy for JSON-shaped values — the counterpart of deep_freeze
+    # for the paths that must go on mutating the result. Keys and strings are
+    # duplicated so the copy shares no mutable state with the original, and key
+    # types are preserved (unlike deep_freeze, which stringifies and freezes).
+    # Homed here so the circuit record and the stream decision builder share one
+    # implementation instead of hand-rolling a spelling each.
+    def deep_dup(value)
+      case value
+      when Hash then value.to_h { |key, entry| [deep_dup(key), deep_dup(entry)] }
+      when Array then value.map { |entry| deep_dup(entry) }
+      when String then value.dup
+      else value
+      end
+    end
+
     # Strict JSON-object parse for untrusted model documents: accepts an already
     # parsed Hash (symbol keys normalized to strings), strips a markdown fence,
     # and refuses non-object documents. Homed here so durable-memory

@@ -51,9 +51,15 @@ class RequirementsManifestTest < Minitest::Test
   end
 
   def test_every_accepted_adr_has_a_row
-    adr_ids = File.read(
-      ROOT.join("docs", "design-v0.1", "DECISIONS.md"), encoding: Encoding::UTF_8
-    ).scan(/^### (ADR-\d+) —/).flatten
+    adr_ids = Dir[ROOT.join("documentation", "adr", "adr-*.md")].sort.filter_map do |path|
+      text = File.read(path, encoding: Encoding::UTF_8)
+      header = text.match(/\A# (ADR-\d+) — /)
+      next unless header
+
+      status = text.match(/^\*\*Status:\*\*\s*(.+?)\.?\s*$/)&.[](1)
+      # Retired and Proposed ADRs decide nothing; only accepted ADRs get rows.
+      header[1] if status&.start_with?("Accepted")
+    end
 
     refute_empty adr_ids
     assert_equal adr_ids.sort, requirements.filter_map { |row|

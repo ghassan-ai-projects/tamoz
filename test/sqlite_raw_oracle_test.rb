@@ -120,50 +120,62 @@ class SQLiteRawOracleTest < Minitest::Test
     end
   end
 
-  def test_digest_canonical_json_relation_foreign_key_and_schema_fail_closed
+  def test_a_tampered_payload_digest_fails_closed
     Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
-      digest_path = File.join(directory, "digest.db")
-      trace_scenario("request.enqueue-new", digest_path)
-      mutate(digest_path) do |database|
+      path = File.join(directory, "digest.db")
+      trace_scenario("request.enqueue-new", path)
+      mutate(path) do |database|
         database.execute(
           "UPDATE tamoz_requests SET payload_digest = ?",
           ["sha256:#{"0" * 64}"]
         )
       end
       assert_invalid(
-        oracle("request.enqueue-new", digest_path),
+        oracle("request.enqueue-new", path),
         "digest_invalid"
       )
+    end
+  end
 
-      canonical_path = File.join(directory, "canonical.db")
-      trace_scenario("request.enqueue-new", canonical_path)
-      mutate(canonical_path) do |database|
+  def test_non_canonical_json_evidence_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
+      path = File.join(directory, "canonical.db")
+      trace_scenario("request.enqueue-new", path)
+      mutate(path) do |database|
         database.execute(
           "UPDATE tamoz_request_transitions SET evidence = ?",
           [SQLite3::Blob.new('{"kind":"enqueue","kind":"enqueue"}')]
         )
       end
       assert_invalid(
-        oracle("request.enqueue-new", canonical_path),
+        oracle("request.enqueue-new", path),
         "json_invalid"
       )
+    end
+  end
 
-      unicode_path = File.join(directory, "unicode.db")
-      trace_scenario("request.enqueue-new", unicode_path)
-      mutate(unicode_path) do |database|
+  def test_unnormalized_unicode_evidence_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
+      path = File.join(directory, "unicode.db")
+      trace_scenario("request.enqueue-new", path)
+      mutate(path) do |database|
         database.execute(
           "UPDATE tamoz_request_transitions SET evidence = ?",
           [SQLite3::Blob.new(JSON.generate({"kind" => "e\u0301nqueue"}))]
         )
       end
       assert_invalid(
-        oracle("request.enqueue-new", unicode_path),
+        oracle("request.enqueue-new", path),
         "json_invalid"
       )
+    end
+  end
 
-      relation_path = File.join(directory, "relation.db")
-      trace_scenario("request.claim-turn", relation_path)
-      mutate(relation_path) do |database|
+  def test_a_duplicated_transition_index_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
+      path = File.join(directory, "relation.db")
+      trace_scenario("request.claim-turn", path)
+      mutate(path) do |database|
         database.execute(
           <<~SQL
             UPDATE tamoz_request_transitions
@@ -173,13 +185,17 @@ class SQLiteRawOracleTest < Minitest::Test
         )
       end
       assert_invalid(
-        oracle("request.claim-turn", relation_path),
+        oracle("request.claim-turn", path),
         "relation_invalid"
       )
+    end
+  end
 
-      foreign_path = File.join(directory, "foreign.db")
-      trace_scenario("checkpoint.commit-fork", foreign_path)
-      mutate(foreign_path, foreign_keys: false) do |database|
+  def test_a_dangling_checkpoint_parent_fails_foreign_keys
+    Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
+      path = File.join(directory, "foreign.db")
+      trace_scenario("checkpoint.commit-fork", path)
+      mutate(path, foreign_keys: false) do |database|
         database.execute(
           <<~SQL
             UPDATE tamoz_checkpoints
@@ -188,30 +204,38 @@ class SQLiteRawOracleTest < Minitest::Test
           SQL
         )
       end
-      result = oracle("checkpoint.commit-fork", foreign_path)
+      result = oracle("checkpoint.commit-fork", path)
       assert_invalid(result, "foreign_key_invalid")
       assert_equal "ok", result.fetch("integrity")
       assert_equal "failed", result.fetch("foreign_keys")
+    end
+  end
 
-      schema_path = File.join(directory, "schema.db")
-      trace_scenario("lease.acquire-new", schema_path)
-      mutate(schema_path) do |database|
+  def test_a_future_schema_version_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
+      path = File.join(directory, "schema.db")
+      trace_scenario("lease.acquire-new", path)
+      mutate(path) do |database|
         database.execute(
           "PRAGMA user_version = #{Tamoz::SQLite::Migrator::CURRENT_VERSION + 1}"
         )
       end
       assert_invalid(
-        oracle("lease.acquire-new", schema_path),
+        oracle("lease.acquire-new", path),
         "schema_invalid"
       )
+    end
+  end
 
-      missing_schema_path = File.join(directory, "missing-schema.db")
-      trace_scenario("lease.acquire-new", missing_schema_path)
-      mutate(missing_schema_path) do |database|
+  def test_a_dropped_migration_table_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-invalid") do |directory|
+      path = File.join(directory, "missing-schema.db")
+      trace_scenario("lease.acquire-new", path)
+      mutate(path) do |database|
         database.execute("DROP TABLE tamoz_schema_migrations")
       end
       assert_invalid(
-        oracle("lease.acquire-new", missing_schema_path),
+        oracle("lease.acquire-new", path),
         "schema_invalid"
       )
     end
@@ -228,7 +252,7 @@ class SQLiteRawOracleTest < Minitest::Test
         wire = JSON.parse(payload)
         wire[6] = "completed"
         changed = JSON.generate(wire)
-        digest = wire_digest(
+        digest = sqlite_wire.digest(
           changed,
           domain: "tamoz.sqlite.checkpoint_payload"
         )
@@ -249,37 +273,45 @@ class SQLiteRawOracleTest < Minitest::Test
     end
   end
 
-  def test_response_error_pending_outcome_schema_and_row_bounds_fail_closed
+  def test_a_tampered_response_digest_fails_closed
     Dir.mktmpdir("tamoz-sqlite-oracle-bounds") do |directory|
-      response_path = File.join(directory, "response.db")
-      trace_scenario("checkpoint.commit-turn", response_path)
-      mutate(response_path) do |database|
+      path = File.join(directory, "response.db")
+      trace_scenario("checkpoint.commit-turn", path)
+      mutate(path) do |database|
         database.execute(
           "UPDATE tamoz_requests SET response_digest = ?",
           ["sha256:#{"0" * 64}"]
         )
       end
       assert_invalid(
-        oracle("checkpoint.commit-turn", response_path),
+        oracle("checkpoint.commit-turn", path),
         "digest_invalid"
       )
+    end
+  end
 
-      error_path = File.join(directory, "error.db")
-      trace_scenario("checkpoint.commit-failed", error_path)
-      mutate(error_path) do |database|
+  def test_a_tampered_terminal_error_digest_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-bounds") do |directory|
+      path = File.join(directory, "error.db")
+      trace_scenario("checkpoint.commit-failed", path)
+      mutate(path) do |database|
         database.execute(
           "UPDATE tamoz_requests SET terminal_error_digest = ?",
           ["sha256:#{"0" * 64}"]
         )
       end
       assert_invalid(
-        oracle("checkpoint.commit-failed", error_path),
+        oracle("checkpoint.commit-failed", path),
         "digest_invalid"
       )
+    end
+  end
 
-      pending_path = File.join(directory, "pending.db")
-      trace_scenario("checkpoint.writes-new", pending_path)
-      mutate(pending_path) do |database|
+  def test_a_tampered_pending_write_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-bounds") do |directory|
+      path = File.join(directory, "pending.db")
+      trace_scenario("checkpoint.writes-new", path)
+      mutate(path) do |database|
         payload = database.get_first_value(
           "SELECT payload FROM tamoz_pending_writes WHERE write_index = 0"
         )
@@ -295,30 +327,38 @@ class SQLiteRawOracleTest < Minitest::Test
           SQL
           [
             SQLite3::Blob.new(changed),
-            wire_digest(changed, domain: "tamoz.sqlite.pending_write")
+            sqlite_wire.digest(changed, domain: "tamoz.sqlite.pending_write")
           ]
         )
       end
       assert_invalid(
-        oracle("checkpoint.writes-new", pending_path),
+        oracle("checkpoint.writes-new", path),
         "digest_invalid"
       )
+    end
+  end
 
-      checksum_path = File.join(directory, "checksum.db")
-      trace_scenario("lease.acquire-new", checksum_path)
-      mutate(checksum_path) do |database|
+  def test_a_wrong_migration_checksum_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-bounds") do |directory|
+      path = File.join(directory, "checksum.db")
+      trace_scenario("lease.acquire-new", path)
+      mutate(path) do |database|
         database.execute(
           "UPDATE tamoz_schema_migrations SET checksum = 'wrong'"
         )
       end
       assert_invalid(
-        oracle("lease.acquire-new", checksum_path),
+        oracle("lease.acquire-new", path),
         "schema_invalid"
       )
+    end
+  end
 
-      rows_path = File.join(directory, "rows.db")
-      trace_scenario("lease.acquire-new", rows_path)
-      mutate(rows_path) do |database|
+  def test_row_count_over_the_limit_fails_closed
+    Dir.mktmpdir("tamoz-sqlite-oracle-bounds") do |directory|
+      path = File.join(directory, "rows.db")
+      trace_scenario("lease.acquire-new", path)
+      mutate(path) do |database|
         database.transaction do
           256.times do |index|
             database.execute(
@@ -334,7 +374,7 @@ class SQLiteRawOracleTest < Minitest::Test
         end
       end
       assert_invalid(
-        oracle("lease.acquire-new", rows_path),
+        oracle("lease.acquire-new", path),
         "relation_invalid"
       )
     end
@@ -567,9 +607,10 @@ class SQLiteRawOracleTest < Minitest::Test
     database&.close
   end
 
-  def wire_digest(bytes, domain:)
-    prefix = "#{domain}\0v1\0".b
-    "sha256:#{Digest::SHA256.hexdigest(prefix + bytes.b)}"
+  # The production wire-digest rule (Wire is a private constant in
+  # Tamoz::SQLite): the version is derived, never hand-spelled.
+  def sqlite_wire
+    Tamoz::SQLite.const_get(:Wire, false)
   end
 
   def database_bytes(path)
@@ -591,8 +632,9 @@ class SQLiteRawOracleTest < Minitest::Test
       selector:,
       registry: boundary_registry
     )
-    result = subprocess_runner.capture(
-      scenario_child_command(
+    result = SQLiteHarnessInputs.subprocess_runner.capture(
+      SQLiteHarnessInputs.child_command(
+        suite: 'oracle',
         layout:,
         scenario_id:,
         scenario_reference:,
@@ -604,57 +646,5 @@ class SQLiteRawOracleTest < Minitest::Test
       intervention:
     )
     assert intervention.verify_result!(result)
-  end
-
-  def subprocess_runner
-    Tamoz::Evals::Harness::SubprocessRunner.new(
-      root: ROOT,
-      environment: {},
-      output_limit_bytes: 4_096,
-      termination_grace_ms: 200
-    )
-  end
-
-  def scenario_child_command(
-    layout:,
-    scenario_id:,
-    scenario_reference:,
-    selector:,
-    database_path:
-  )
-    descriptor = layout.descriptor
-    script = <<~RUBY
-      require "tamoz/evals/runner"
-      require "tamoz/sqlite"
-      require "support/sqlite_harness_inputs"
-      harness = Tamoz::Evals::Harness
-      control = harness.const_get(:SQLiteSelectorControl, false)
-      registry = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
-      scenarios = SQLiteHarnessInputs.registry
-      driver = harness.const_get(:SQLiteScenarioDriver, false).new(
-        scenario_registry: scenarios,
-        boundary_registry: registry,
-        definition: SQLiteHarnessInputs.driver_definition,
-        runtime_inputs: SQLiteHarnessInputs.runtime_inputs
-      )
-      layout = control.attach!(
-        directory: #{descriptor.fetch("directory").inspect},
-        device: #{descriptor.fetch("device")},
-        inode: #{descriptor.fetch("inode")}
-      )
-      stopper = control.stopper(
-        layout: layout,
-        scenario: #{scenario_reference.inspect},
-        selector: #{selector.inspect},
-        registry: registry
-      )
-      driver.run(
-        scenario_id: #{scenario_id.inspect},
-        path: #{database_path.inspect},
-        observer: stopper
-      )
-      abort "SQLite oracle selector returned"
-    RUBY
-    [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", script]
   end
 end

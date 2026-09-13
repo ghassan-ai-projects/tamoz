@@ -93,7 +93,7 @@ module Tamoz
       freeze
     end
 
-    def with_registration(**attributes)
+    def add_registration(**attributes)
       self.class.new(
         registrations: [*@registrations, Registration.new(**attributes)],
         max_bytes:,
@@ -144,6 +144,19 @@ module Tamoz
       raise SensitiveValueError, "#{path}: Tamoz::Secret is not serializable" if value.is_a?(Secret)
 
       case value
+      when Array
+        encode_array(value, state:, depth:, path:)
+      when Hash
+        encode_hash(value, state:, depth:, path:)
+      when NilClass, TrueClass, FalseClass, Integer, Float, String, Symbol
+        encode_scalar(value, path:)
+      else
+        encode_registered(value, state:, depth:, path:)
+      end
+    end
+
+    def encode_scalar(value, path:)
+      case value
       when NilClass
         ["nil"]
       when TrueClass, FalseClass
@@ -158,20 +171,18 @@ module Tamoz
         ["string", encode_string(value, path:)]
       when Symbol
         raise UnsupportedValueError, "#{path}: symbol values are unsupported"
-      when Array
-        encode_container(value, state:, path:) do
-          count_items!(value.length, state:, path:)
-          [
-            "array",
-            value.each_with_index.map do |entry, index|
-              encode_node(entry, state:, depth: depth + 1, path: "#{path}[#{index}]")
-            end
-          ]
-        end
-      when Hash
-        encode_hash(value, state:, depth:, path:)
-      else
-        encode_registered(value, state:, depth:, path:)
+      end
+    end
+
+    def encode_array(value, state:, depth:, path:)
+      encode_container(value, state:, path:) do
+        count_items!(value.length, state:, path:)
+        [
+          "array",
+          value.each_with_index.map do |entry, index|
+            encode_node(entry, state:, depth: depth + 1, path: "#{path}[#{index}]")
+          end
+        ]
       end
     end
 
@@ -253,6 +264,19 @@ module Tamoz
       end
 
       case node.first
+      when "array"
+        validate_array_node!(node, state:, depth:, path:)
+      when "object"
+        validate_object_node!(node, state:, depth:, path:)
+      when "registered"
+        validate_registered_node!(node, state:, depth:, path:)
+      else
+        validate_scalar_node!(node, path:)
+      end
+    end
+
+    def validate_scalar_node!(node, path:)
+      case node.first
       when "nil"
         require_shape!(node, 1, path:)
       when "boolean"
@@ -272,12 +296,6 @@ module Tamoz
       when "string"
         require_shape!(node, 2, path:)
         validate_wire_string!(node.fetch(1), path:)
-      when "array"
-        validate_array_node!(node, state:, depth:, path:)
-      when "object"
-        validate_object_node!(node, state:, depth:, path:)
-      when "registered"
-        validate_registered_node!(node, state:, depth:, path:)
       else
         raise CheckpointCorruptionError, "#{path}: unknown encoded node #{node.first.inspect}"
       end
@@ -288,7 +306,7 @@ module Tamoz
       entries = node.fetch(1)
       raise CheckpointCorruptionError, "#{path}: array payload must be an array" unless entries.is_a?(Array)
 
-      count_items_for_load!(entries.length, state:, path:)
+      count_items!(entries.length, state:, path:, error: CheckpointCorruptionError)
       entries.each_with_index do |entry, index|
         validate_node!(entry, state:, depth: depth + 1, path: "#{path}[#{index}]")
       end
@@ -299,7 +317,7 @@ module Tamoz
       entries = node.fetch(1)
       raise CheckpointCorruptionError, "#{path}: object payload must be an array" unless entries.is_a?(Array)
 
-      count_items_for_load!(entries.length, state:, path:)
+      count_items!(entries.length, state:, path:, error: CheckpointCorruptionError)
       keys = entries.each_with_index.map do |entry, index|
         unless entry.is_a?(Array) && entry.length == 2
           raise CheckpointCorruptionError, "#{path}[#{index}]: object entry is invalid"
@@ -410,19 +428,13 @@ module Tamoz
       raise CheckpointCorruptionError, "#{path}: invalid #{node.first.inspect} node shape"
     end
 
-    def count_items!(count, state:, path:)
+    # The same total-items ceiling on both paths; only the raised class differs
+    # (a limit on encode, a corruption signal on load of untrusted bytes).
+    def count_items!(count, state:, path:, error: StateLimitError)
       state[:items] += count
       return if state.fetch(:items) <= max_collection_items
 
-      raise StateLimitError, "#{path}: collections exceed #{max_collection_items} total items"
-    end
-
-    def count_items_for_load!(count, state:, path:)
-      state[:items] += count
-      return if state.fetch(:items) <= max_collection_items
-
-      raise CheckpointCorruptionError,
-            "#{path}: collections exceed #{max_collection_items} total items"
+      raise error, "#{path}: collections exceed #{max_collection_items} total items"
     end
 
     def validate_registrations!

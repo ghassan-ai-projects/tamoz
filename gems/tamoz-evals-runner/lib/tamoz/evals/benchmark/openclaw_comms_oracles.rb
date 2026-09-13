@@ -185,18 +185,23 @@ module Tamoz
             sequences.max == pushed_sequences.max
         end
 
+        # Milestones are human-safe cards: the text binds to the request
+        # reference and carries the Now/Next copy, never the raw phase token.
         def milestone_text_off_format?(facts)
           milestone_rows(facts).any? do |row|
             reference = row['milestone_facts'].fetch('request_ref')
             phase = row['milestone_facts'].fetch('phase')
-            row['text'] != "#{reference}: #{phase}"
+            text = row['text']
+            !text.start_with?("#{reference} ·") ||
+              !text.include?('Now:') || !text.include?('Next:') ||
+              text.match?(/\b#{Regexp.escape(phase)}\b/i)
           end
         end
 
         # C5 ----------------------------------------------------------------
 
         COMMAND_SIGNATURES = {
-          'help' => ['Commands: /help'],
+          'help' => ['Example: send a task'],
           'status' => ['Work status:'],
           'new' => ['New conversation started'],
           'cancel' => ['No running request to cancel', 'Cancellation requested'],
@@ -208,7 +213,8 @@ module Tamoz
           'usage' => ['Usage: requests '],
           'context' => ['Context: fragments visible '],
           'think' => ['Reasoning depth set to '],
-          'verbose' => ['Answer verbosity set to ']
+          'verbose' => ['Answer verbosity set to '],
+          'answer' => ['Usage: /answer']
         }.freeze
 
         def c5(facts, conversation:)
@@ -271,9 +277,11 @@ module Tamoz
         def c7(facts, conversation:)
           waiting = milestone_rows(facts).any? { |row| row['milestone_facts'].fetch('phase') == 'waiting' }
           prompt = rows_of_kind(facts, 'approval_request').first
-          named = prompt&.dig('text').to_s.include?('needs your approval')
+          # Card copy names the reason ("Approval required: …") and the denial
+          # verdict ("Denied") — the semantic anchors the gate exists for.
+          named = prompt&.dig('text').to_s.include?('Approval required')
           consumed = facts['prompt_consumed'] == true
-          denied_terminal = rows_of_kind(facts, 'answer').any? { |row| row['text'].to_s.start_with?('Denied') } ||
+          denied_terminal = rows_of_kind(facts, 'answer').any? { |row| row['text'].to_s.include?('Denied') } ||
                             rows_of_kind(facts, 'failed').length >= 1
           effect_ran = facts['effects'].any? { |row| row['operation'].include?('apply_patch') && row['status'] == 'succeeded' }
           authority = authority_stability_score(facts)

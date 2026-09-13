@@ -18,6 +18,7 @@ TamozGemspec.build(
   description: "Explicit-input harnesses, benchmarks, scorecards, and treatment runners.",
   executable: "tamoz-eval-runner",
   dependencies: [
+    ["base64", "~> 0.2"],
     ["tamoz-evals", "= #{Tamoz::Evals::VERSION}"],
     ["tamoz-core", "= #{Tamoz::Core::VERSION}"],
     ["tamoz-agent", "= #{Tamoz::Agent::VERSION}"],

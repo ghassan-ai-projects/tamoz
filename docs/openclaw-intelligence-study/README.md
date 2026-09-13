@@ -24,7 +24,7 @@ the acceptance bar and the phased slices derived from 04/05/06.
 
 The intelligence benchmark — the measurement that turns perception into a
 verifiable, longitudinal claim — is designed in
-[benchmark-protocol/](benchmark-protocol/README.md): protocol, mission catalog,
+[documentation/benchmark/openclaw-intelligence-study/](../../documentation/benchmark/openclaw-intelligence-study/README.md): protocol, mission catalog,
 scoring, and a phased plan built on the existing `tamoz-evals` gem.
 
 ## Working hypothesis

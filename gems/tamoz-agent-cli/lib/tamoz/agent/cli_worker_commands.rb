@@ -361,6 +361,10 @@ module Tamoz
             @err.puts "tamoz: no paused approval for #{request_id.inspect}"
             next 1
           end
+          if entry["approval_state"] == "unavailable"
+            @err.puts "tamoz: approval state for #{request_id.inspect} is unavailable; retry once the session view is reachable"
+            next 1
+          end
 
           direction = deny ? :deny : :approve
           record = record_approval(runtime, entry, direction:)
@@ -505,7 +509,11 @@ module Tamoz
         runtime.open_occurrences(limit: 500).filter_map do |record|
           thread_id = record.fetch(:thread_id)
           view = session_view(runtime, thread_id)
-          next unless view && view.status == :paused && !view.interrupts.empty?
+          # A view that could not be computed is surfaced as unavailable, never
+          # dropped: silently omitting it would make `approve` answer "no paused
+          # approval" for a thread that may well be waiting on the operator.
+          next unavailable_approval(record) if view.nil?
+          next unless view.status == :paused && !view.interrupts.empty?
 
           {
             "thread_id" => thread_id,
@@ -521,6 +529,17 @@ module Tamoz
             end
           }
         end
+      end
+
+      # A paused-approval row whose live view could not be computed. It keeps the
+      # thread visible so the operator learns the approval state is unknown
+      # rather than absent; `approve` refuses to act on it.
+      def unavailable_approval(record)
+        {
+          "thread_id" => record.fetch(:thread_id),
+          "request_id" => record.fetch(:occurrence_id),
+          "approval_state" => "unavailable"
+        }
       end
 
       def session_status(runtime)
@@ -701,8 +720,13 @@ module Tamoz
           "drops" => inventory.fetch("drops", 0),
           "policy_digest" => Tamoz::Observability::ContentPolicy::NONE.digest
         }
-      rescue StandardError
-        {"files" => 0, "bytes" => 0, "drops" => 0, "policy_digest" => nil}
+      rescue StandardError => error
+        # A broken journal is not an empty one: report it unavailable rather
+        # than fabricating zero counters the operator would read as "no drops".
+        {
+          "files" => "unavailable", "bytes" => "unavailable", "drops" => "unavailable",
+          "error" => error.message, "policy_digest" => nil
+        }
       end
 
       def emit_line(line)

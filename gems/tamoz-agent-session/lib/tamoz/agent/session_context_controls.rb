@@ -31,14 +31,13 @@ module Tamoz
       RESETTABLE_ZERO_CHANNELS = %i[step_cursor repair_attempt provider_ambiguity adaptive_iteration].freeze
 
       ContextControlProjection = Data.define(
-        :control, :thread_id, :successor_thread_id, :generation, :checkpoint_id, :sequence, :record
+        :control, :thread_id, :generation, :checkpoint_id, :sequence, :record
       ) do
         def document
           {
             'control' => control,
             'thread_id' => thread_id,
             'generation' => generation,
-            'successor_thread_id' => successor_thread_id,
             'checkpoint_id' => checkpoint_id,
             'sequence' => sequence,
             'preferences' => record['preferences'],
@@ -82,13 +81,6 @@ module Tamoz
         :model_call_safety, :model, :profile, :toolbox, :mcp, keyword_init: true
       )
 
-      def next_generation_thread(thread_id)
-        match = /\A(.+)\.g(\d+)\z/.match(String(thread_id))
-        return "#{match[1]}.g#{Integer(match[2]) + 1}" if match
-
-        "#{thread_id}.g2"
-      end
-
       def generation_of(thread_id)
         match = /\A.+\.g(\d+)\z/.match(String(thread_id))
         return Integer(match[1]) if match
@@ -108,16 +100,7 @@ module Tamoz
         found = controls.reverse.find { |record| %w[reset compact].include?(record.fetch('control')) }
         found&.fetch('truncated_fragments', nil)
       end
-      module_function :next_generation_thread, :generation_of, :last_preference,
-                      :visible_fragment_offset
-
-      # /new — the session-side counterpart of the comms generation bump: one
-      # audit record closes the CURRENT generation and names the successor the
-      # caller addresses next. Nothing on the old thread is deleted.
-      def new_generation(thread:, request_id:, successor: nil)
-        successor ||= SessionContextControls.next_generation_thread(thread)
-        apply_control(thread:, request_id:, control: 'new', fields: { successor_thread: String(successor) })
-      end
+      module_function :generation_of, :last_preference, :visible_fragment_offset
 
       # /reset — SAME generation, fresh episode state: clears the accumulated
       # prompt-context channels, records the durable-transcript prefix that
@@ -125,8 +108,7 @@ module Tamoz
       # in durable audit history, and continues budget accounting untouched.
       def reset_episode(thread:, request_id:)
         fields = lambda do |source, _writer|
-          total = SessionPlanningContext.conversation_history(app_for_thread(thread).checkpointer,
-                                                              thread_id: thread).length
+          total = conversation_history_for(thread).length
           {
             truncated_fragments: total,
             cleared_channels: resettable_channels(source.state)
@@ -165,9 +147,7 @@ module Tamoz
       # so a replay returns the recorded receipt.
       def compact_transcript(thread:, request_id:)
         guard_state!(thread)
-        conversation = SessionPlanningContext.conversation_history(
-          app_for_thread(thread).checkpointer, thread_id: thread
-        )
+        conversation = conversation_history_for(thread)
         fields = lambda do |source, writer|
           observations = verbose_input(source, conversation)
           before_digest = SessionRecords.digest('input' => observations)
@@ -206,9 +186,7 @@ module Tamoz
         state = read_control_state!(thread)
         controls = Array(state[:context_controls])
         session_record = state[:session].is_a?(Hash) ? state[:session] : {}
-        total = SessionPlanningContext.conversation_history(
-          app_for_thread(thread).checkpointer, thread_id: thread
-        ).length
+        total = conversation_history_for(thread).length
         ContextProjection.new(
           thread_id: String(thread),
           generation: generation_of(thread),
@@ -228,6 +206,14 @@ module Tamoz
       end
 
       private
+
+      # The durable conversation history for `thread`, read through that thread's
+      # own app checkpointer.
+      def conversation_history_for(thread)
+        SessionPlanningContext.conversation_history(
+          app_for_thread(thread).checkpointer, thread_id: thread
+        )
+      end
 
       def validate_preference(name, value, allowed)
         unless value.is_a?(String) && allowed.include?(value)
@@ -286,7 +272,7 @@ module Tamoz
           checkpoint = commit_control(writer, app, source, candidate)
         end
         ContextControlProjection.new(
-          control:, thread_id: String(thread), successor_thread_id: record['successor_thread'],
+          control:, thread_id: String(thread),
           generation: generation_of(thread), checkpoint_id: checkpoint.id,
           sequence: checkpoint.sequence, record:
         )

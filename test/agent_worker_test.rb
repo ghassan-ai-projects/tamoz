@@ -248,27 +248,47 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  # A restart must RE-PARK a paused clarification with its typed reason, not
+  # re-claim or fail it: the parked occurrence still owes the thread its
+  # settle, and only a human answer resumes it. The typed reason is asserted
+  # on the first park only — a repark emits no event, so the restart pass is
+  # judged by `worker.stopped`'s parked count alone.
   def test_a_restart_reparks_a_clarification_with_its_typed_reason
-    runtime = Struct.new(:path) do
-      def pending_decision(*) = nil
-    end.new('/tmp/tamoz-worker-test')
-    interrupt = Struct.new(:task_id, :call_index, :descriptor).new(
-      'task', 0, { 'kind' => 'clarify' }
-    )
-    view = Struct.new(:status, :interrupts).new(:paused, [interrupt])
-    worker = Tamoz::Agent::Worker.new(
-      runtime:, session_builder: ->(_thread_id) {}, emitter: ->(_event) {}, once: true
-    )
-    entry = { thread_id: 'clarify-thread', head_request_id: 'clarify-occurrence' }
+    with_runtime do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.cli(%W[queue add --task Read\ note.txt --thread clarify-thread], factory: clarify_factory)
+      assert_equal 0, rt.cli(%w[worker --once --json], factory: clarify_factory), rt.err
 
-    result = worker.send(
-      :resume_paused_entry, entry, nil,
-      thread_id: 'clarify-thread', occurrence_id: 'clarify-occurrence', view:
-    )
+      paused = rt.events.find { |event| event["event"] == "request.paused" }
+      refute_nil paused, "the clarification must pause the first pass"
+      assert_equal "clarification_required", paused.fetch("reason")
 
-    assert_equal Tamoz::Agent::Worker::PARKED, result
-    assert_equal 'clarification_required',
-                 worker.parked.fetch('clarify-thread').fetch(:signature).last
+      before = rt.events.length
+      assert_equal 0, rt.cli(%w[worker --once --json], factory: clarify_factory), rt.err
+      restarted = rt.events[before..]
+
+      refute restarted.any? { |event| event["event"] == "request.claimed" },
+             "a restart must not re-claim the paused clarification"
+      refute restarted.any? { |event| event["event"] == "request.failed" },
+             "a restart must not fail the paused clarification"
+      stopped = restarted.find { |event| event["event"] == "worker.stopped" }
+      assert_equal 1, stopped.fetch("parked"), "the restart re-parked the clarification"
+    end
+  end
+
+  # A review that asks for human input instead of accepting or revising.
+  def clarify_factory
+    lambda do |_options|
+      ScriptedModel.new(
+        plan: [plan_step("read_file", {"path" => "note.txt"})],
+        review: [
+          {"decision" => "needs_input", "layer" => "semantic", "review_id" => "rv1",
+           "issues" => ["Which file did you mean — note.txt or other.txt?"],
+           "rationale" => "ambiguous request"}
+        ],
+        verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+      )
+    end
   end
 
   def test_worker_emits_structured_json_events_for_a_completed_request
@@ -342,21 +362,79 @@ class AgentWorkerTest < Minitest::Test
   # The idle sleep must never be handed a negative interval. The window is one
   # clock read wide, so a single pass almost always wins it — and a worker
   # polling once a second loses it eventually, dying hours later with an
-  # ArgumentError that names nothing about where it came from.
+  # ArgumentError that names nothing about where it came from. Driven through
+  # the public run loop: every read poll_once makes gets a constant
+  # pre-deadline time, and the crossing pair is served only to the reads made
+  # inside CancellationToken#wait — so the sleep path itself must consume the
+  # crossing, survive the pass, and let the loop idle again.
   def test_the_idle_sleep_never_goes_negative_when_the_clock_crosses_the_deadline
-    worker = Tamoz::Agent::Worker.new(
-      runtime: nil, session_builder: ->(_thread) {}, emitter: ->(_event) {},
-      poll_interval: 1.0
-    )
-    # now() for the deadline, then a reading BEFORE it, then one PAST it: the
-    # deadline is crossed in exactly the window between the test and the sleep.
-    readings = [0.0, 0.5, 2.0, 2.0, 2.0]
-    clock = Object.new
-    clock.define_singleton_method(:now) { readings.shift || 2.0 }
+    with_runtime do |rt|
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        worker = Tamoz::Agent::Worker.new(
+          runtime:,
+          session_builder: ->(thread_id) { runtime.session_for(thread_id) },
+          emitter: ->(_event) {},
+          poll_interval: 1.0
+        )
+        clock = SleepCrossingClock.new
+        # If the sleep path stops consulting the token, the crossing is never
+        # consumed and the loop would spin forever; the watchdog turns that
+        # hang into the failed assertion below.
+        watchdog = Thread.new do
+          sleep 5
+          worker.stop!("idle-sleep test watchdog")
+        end
+        begin
+          with_monotonic_clock(clock) do
+            assert_raises(ClockExhausted) { worker.run }
+          end
+          assert clock.crossed_in_wait?,
+                 "the deadline crossing must be consumed by CancellationToken#wait, " \
+                 "not by poll_once's store reads"
+        ensure
+          watchdog.kill
+        end
+      ensure
+        runtime.close
+      end
+    end
+  end
 
-    with_monotonic_clock(clock) do
-      assert_equal :due, worker.send(:sleep_until_due),
-                   "the idle sleep raised instead of finding the deadline passed"
+  class ClockExhausted < StandardError; end
+
+  # Serves a constant pre-deadline time to every reader outside the token's
+  # wait, hands the wait itself the crossing pair (the deadline read at 0.0,
+  # then a reading past the deadline that read just produced), and stops the
+  # loop on any further read. crossed_in_wait? can only become true from a
+  # read made inside CancellationToken#wait, which is what pins the crossing
+  # to the sleep path.
+  class SleepCrossingClock
+    PRE_DEADLINE = 0.0
+    PAST_DEADLINE = 2.0
+
+    attr_reader :crossed_in_wait
+
+    def initialize
+      @wait_reads = 0
+      @crossed_in_wait = false
+    end
+
+    def crossed_in_wait? = @crossed_in_wait
+
+    def now
+      raise ClockExhausted, "clock read after the crossing was consumed" if @crossed_in_wait
+
+      return PRE_DEADLINE unless caller_locations.any? { |location| location.path.end_with?("cancellation_token.rb") }
+
+      @wait_reads += 1
+      return PRE_DEADLINE if @wait_reads == 1
+
+      @crossed_in_wait = true
+      PAST_DEADLINE
     end
   end
 
@@ -545,9 +623,6 @@ class AgentWorkerTest < Minitest::Test
       assert_equal 0, rt.cli(%W[approve #{approval} --json]), rt.err
       rt.cli(%w[worker --once --json], factory: read_only_factory)
 
-      if ENV['TAMOZ_DEBUG']
-        warn('DIAG ev=' + rt.events.map { |e| [e['event'], e['reason']].compact.join(':') }.inspect)
-      end
       completed = rt.events.select { |event| event["event"] == "request.completed" }
       assert_equal 2, completed.length, "both the approved turn and the queued message must complete"
       assert_equal 1, rt.events.count { |event| event["event"] == "request.paused" },

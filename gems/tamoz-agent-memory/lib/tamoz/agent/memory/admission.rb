@@ -34,14 +34,28 @@ module Tamoz
         ].freeze
 
         # Typed result value, never an exception (invariant 17).
-        AdmissionResult = Data.define(:record, :accepted, :rejected, :reason) do
-          def initialize(record: nil, accepted: false, rejected: false, reason: nil)
-            super(record:, accepted:, rejected:, reason:)
+        # `stored` reports whether the record was durably persisted. Acceptances
+        # are always stored (append raises on failure). A rejection whose durable
+        # write failed is still returned as the verdict, but with `stored: false`
+        # so the caller can see the audit record did not land — it is never a
+        # silent loss.
+        AdmissionResult = Data.define(:record, :accepted, :rejected, :reason, :stored) do
+          def initialize(record: nil, accepted: false, rejected: false, reason: nil, stored: true)
+            super(record:, accepted:, rejected:, reason:, stored:)
           end
 
           def accepted? = accepted
           def rejected? = rejected
+          def stored? = stored
         end
+
+        # The owner fast-path request as one value, so the structural-negative
+        # check and the record builder read the same fields instead of each
+        # taking a parallel keyword list.
+        OwnerRequest = Data.define(
+          :statement, :owner, :authority, :layer, :klass,
+          :scopes, :sensitivity, :epistemic_kind, :now
+        )
 
         def initialize(engine)
           @engine = engine
@@ -90,9 +104,11 @@ module Tamoz
                                 klass: :preference, scopes:, sensitivity: :internal,
                                 epistemic_kind: :reported,
                                 contradiction_check: nil, now: nil)
-          negatives = owner_request_negatives(
-            statement:, authority:, layer:, klass:, epistemic_kind:
+          request = OwnerRequest.new(
+            statement:, owner:, authority:, layer:, klass:,
+            scopes:, sensitivity:, epistemic_kind:, now:
           )
+          negatives = owner_request_negatives(request)
           unless negatives.empty?
             return AdmissionResult.new(
               rejected: true,
@@ -100,10 +116,7 @@ module Tamoz
             )
           end
 
-          record = build_owner_request_record(
-            statement:, owner:, authority:, layer:, klass:,
-            scopes:, sensitivity:, epistemic_kind:, now:
-          )
+          record = build_owner_request_record(request)
           conflict = contradiction_check && contradiction_check.call(record)
           if conflict
             return AdmissionResult.new(
@@ -153,14 +166,15 @@ module Tamoz
         # The fast path's structural negatives, in refusal-string order: what
         # an owner request may not do even when authorized. Empty means the
         # request may proceed to admission.
-        def owner_request_negatives(statement:, authority:, layer:, klass:, epistemic_kind:)
+        def owner_request_negatives(request)
+          statement = request.statement
           negatives = []
-          negatives << "owner_request_cannot_label_observed" if epistemic_kind == :observed
-          negatives << "owner_request_cannot_create_wisdom" if layer == :wisdom
-          negatives << "owner_request_cannot_grant_capability" if klass == :constraint && statement.match?(/approv|allowed_tools|permission/i)
+          negatives << "owner_request_cannot_label_observed" if request.epistemic_kind == :observed
+          negatives << "owner_request_cannot_create_wisdom" if request.layer == :wisdom
+          negatives << "owner_request_cannot_grant_capability" if request.klass == :constraint && statement.match?(/approv|allowed_tools|permission/i)
           negatives << "secret_contrary_to_policy" if Surface.secret_shaped?(statement)
-          negatives << "authority_must_be_owner" if authority.to_s != "owner"
-          unless %i[reported prescribed].include?(epistemic_kind)
+          negatives << "authority_must_be_owner" if request.authority.to_s != "owner"
+          unless %i[reported prescribed].include?(request.epistemic_kind)
             negatives << "owner_request_must_be_reported_or_prescribed"
           end
           negatives
@@ -168,30 +182,31 @@ module Tamoz
 
         # The Knowledge record an authorized owner request enters as: always
         # :active, actor = owner, provenance keyed to the statement digest.
-        def build_owner_request_record(statement:, owner:, authority:, layer:, klass:,
-                                       scopes:, sensitivity:, epistemic_kind:, now:)
+        def build_owner_request_record(request)
+          statement = request.statement
+          observed_at = (request.now || Time.now).to_i
           MemoryRecord.new(
             memory_id: MemoryRecordDigest.identity(statement),
             record_version: 1,
-            layer:,
-            klass: klass == :constraint ? :constraint : :preference,
+            layer: request.layer,
+            klass: request.klass == :constraint ? :constraint : :preference,
             state: :active,
             statement:,
-            epistemic_kind:,
+            epistemic_kind: request.epistemic_kind,
             source_refs: [{
               "identity" => "owner-request",
               "digest" => Digest::SHA256.hexdigest(statement),
-              "observed_at" => (now || Time.now).to_i
+              "observed_at" => observed_at
             }],
-            owner:,
-            actor: owner,
-            scopes:,
-            sensitivity:,
+            owner: request.owner,
+            actor: request.owner,
+            scopes: request.scopes,
+            sensitivity: request.sensitivity,
             disclosure_policy: "default",
-            valid_from: (now || Time.now).to_i,
+            valid_from: observed_at,
             created_by: {"surface" => "owner_fast_path"},
             compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
-            transition: transition("owner", "owner fast path admission", evidence: {"authority" => authority.to_s}),
+            transition: transition("owner", "owner fast path admission", evidence: {"authority" => request.authority.to_s}),
             created_at_ms: @engine.now_ms
           )
         end
@@ -220,8 +235,8 @@ module Tamoz
             transition: transition(actor || owner, "rejected at admission", evidence: {"gate" => "episode"}),
             created_at_ms: @engine.now_ms
           )
-          store_rejected(record)
-          AdmissionResult.new(record:, rejected: true, reason: "unbounded_statement")
+          stored = store_rejected(record)
+          AdmissionResult.new(record:, rejected: true, reason: "unbounded_statement", stored:)
         end
 
         def admit(record, gate:, evidence:)
@@ -237,8 +252,8 @@ module Tamoz
           unless reason.nil?
             rejected = rejected_version(record, reason,
                                         transition_message: "rejected at admission", gate:, evidence:)
-            store_rejected(rejected)
-            return AdmissionResult.new(record: rejected, rejected: true, reason:)
+            stored = store_rejected(rejected)
+            return AdmissionResult.new(record: rejected, rejected: true, reason:, stored:)
           end
 
           activated = record.with(
@@ -434,13 +449,16 @@ module Tamoz
           )
         end
 
+        # Persist a rejection's audit record. Returns true on success, false if
+        # the durable write failed. A storage failure does not fabricate a
+        # durable rejection and does not raise (the verdict still stands and the
+        # candidate was not admitted); the caller learns of it through
+        # AdmissionResult#stored?, so the loss is reported, not silent.
         def store_rejected(record)
           append(record)
+          true
         rescue StandardError
-          # A rejected admission is durable evidence, but a storage failure
-          # must not fabricate a durable rejection. The rejection is still the
-          # returned value; the operator sees the storage failure.
-          nil
+          false
         end
       end
 

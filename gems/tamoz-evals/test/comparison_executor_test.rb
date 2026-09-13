@@ -54,6 +54,7 @@ class ComparisonExecutorTest < Minitest::Test
         '--manifest', manifest_path.to_s,
         '--report-out', report_path.to_s,
         '--artifact-base', root.to_s,
+        '--input-manifest', write_input_manifest(root).to_s,
         chdir: ROOT.to_s
       )
 
@@ -77,6 +78,7 @@ class ComparisonExecutorTest < Minitest::Test
         '--manifest', manifest_path.to_s,
         '--report-out', report_path.to_s,
         '--artifact-base', root.to_s,
+        '--input-manifest', write_input_manifest(root).to_s,
         chdir: ROOT.to_s
       )
 
@@ -133,6 +135,42 @@ class ComparisonExecutorTest < Minitest::Test
   end
 
   private
+
+  # The cells script reads the benchmark protocol through a runner input
+  # manifest whose documents must live OUTSIDE the package roots, so the
+  # protocol is copied into the (external) tmpdir and descriptor'd there.
+  def write_input_manifest(root)
+    descriptor = lambda do |path|
+      { 'path' => path.to_s, 'sha256' => Digest::SHA256.file(path).hexdigest }
+    end
+    protocol_path = root.join('protocol.json')
+    FileUtils.cp(ROOT.join('documentation', 'benchmark', 'BENCHMARK_PROTOCOL.json'), protocol_path)
+    filler = root.join('input.txt')
+    File.write(filler, '{}')
+    filler_descriptor = descriptor.call(filler)
+
+    document = {
+      'manifest_version' => Tamoz::Evals::Runner::InputManifest::VERSION,
+      'external_root' => root.to_s,
+      'corpus_definitions' => {
+        'agent_smoke' => filler_descriptor, 'agent_memory' => filler_descriptor,
+        'agent_memory_repository' => filler_descriptor
+      },
+      'scripted_model' => { 'adapter' => filler_descriptor, 'responses' => filler_descriptor },
+      'mcp_server' => { 'path' => filler.to_s, 'sha256' => filler_descriptor.fetch('sha256'), 'args' => [] },
+      'openclaw' => {
+        'fixture_factory_loader' => filler_descriptor, 'protocol' => descriptor.call(protocol_path),
+        'catalog' => filler_descriptor, 'mission' => filler_descriptor
+      },
+      'scenarios' => {
+        'scenario_definitions' => filler_descriptor, 'sqlite_graph' => filler_descriptor,
+        'limits' => filler_descriptor, 'registry' => filler_descriptor
+      }
+    }
+    path = root.join('input-manifest.json')
+    File.write(path, JSON.generate(document))
+    path
+  end
 
   def protocol
     read_json(ROOT.join('documentation', 'benchmark', 'BENCHMARK_PROTOCOL.json'))

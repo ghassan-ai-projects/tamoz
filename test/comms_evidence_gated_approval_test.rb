@@ -13,6 +13,22 @@ require_relative 'test_helper'
 class CommsEvidenceGatedApprovalTest < Minitest::Test
   Comms = Tamoz::Comms
 
+  # The gateway plus the transport it was built on, so no test reaches into
+  # the Gateway for its transport.
+  Harness = Data.define(:gateway, :transport) do
+    def serve_once(now:)
+      gateway.serve_once(now:)
+    end
+  end
+
+  # The callback's bound context — exactly what the binding oracles vary.
+  PressBinding = Data.define(:correspondent_id, :surface_id, :surface_revision, :message_id) do
+    def initialize(correspondent_id: 111_111_11, surface_id: 'telegram-ops',
+                   surface_revision: 1, message_id: 2001)
+      super
+    end
+  end
+
   def with_engine
     Dir.mktmpdir('tamoz-evidence') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
@@ -56,10 +72,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # decision in front of the worker.
   def test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "approve:#{reference}", update_id: 60)
+      press(harness, "approve:#{reference}", update_id: 60)
 
       decision = pending(adapter, prompt)
       approve_reached_worker = !decision.nil? && decision.fetch('direction') == 'approve'
@@ -75,10 +91,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # prompt stays ACTIVE — a refusal never consumes it.
   def test_a_refused_approve_records_a_durable_refusal_and_leaves_the_prompt_active
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "approve:#{reference}", update_id: 70)
+      press(harness, "approve:#{reference}", update_id: 70)
 
       rows = inbound_dispositions(adapter)
       refusal = rows.find { |row| row[1] == 'insufficient_evidence' }
@@ -97,11 +113,11 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # deny the same prompt — the refusal did not burn the single-use reference.
   def test_a_deny_after_a_refused_approve_still_succeeds
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "approve:#{reference}", update_id: 70)
-      press(gateway, "deny:#{reference}", update_id: 71)
+      press(harness, "approve:#{reference}", update_id: 70)
+      press(harness, "deny:#{reference}", update_id: 71)
 
       decision = pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 4))
 
@@ -114,10 +130,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # creates no decision.
   def test_a_cross_correspondent_press_is_refused
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "approve:#{reference}", update_id: 80, correspondent_id: 222_222_22)
+      press(harness, "approve:#{reference}", update_id: 80, bound: PressBinding.new(correspondent_id: 222_222_22))
 
       decision = pending(adapter, prompt)
 
@@ -133,10 +149,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # succeeds. Deny is fail-safe and unconditional for the bound correspondent.
   def test_the_equivalent_deny_still_succeeds
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "deny:#{reference}", update_id: 61)
+      press(harness, "deny:#{reference}", update_id: 61)
 
       decision = pending(adapter, prompt)
 
@@ -149,11 +165,11 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # approve decision. Absent or ambiguous evidence never approves.
   def test_expired_evidence_never_approves
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store, ttl_s: 1)
 
       # Press well after the TTL window.
-      press(gateway, "approve:#{reference}", update_id: 62, now: Time.utc(2026, 8, 10, 12, 30, 0))
+      press(harness, "approve:#{reference}", update_id: 62, now: Time.utc(2026, 8, 10, 12, 30, 0))
 
       decision = pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 30, 1))
       approve_reached_worker = !decision.nil? && decision.fetch('direction') == 'approve'
@@ -187,10 +203,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # compares against the pinned value, not against the transport.
   def test_an_approve_on_a_prompt_built_from_a_chat_bound_decision_is_granted
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store, required_evidence: :chat_bound)
 
-      press(gateway, "approve:#{reference}", update_id: 63)
+      press(harness, "approve:#{reference}", update_id: 63)
 
       decision = pending(adapter, prompt)
 
@@ -204,8 +220,8 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # key to a prompt, and there is no prompt here.
   def test_an_approve_on_an_unknown_reference_never_approves
     with_engine do |adapter, checkpoints|
-      _store, gateway = boot(adapter, checkpoints)
-      press(gateway, "approve:#{'0' * 32}", update_id: 90)
+      _store, harness = boot(adapter, checkpoints)
+      press(harness, "approve:#{'0' * 32}", update_id: 90)
 
       decision_store = adapter.bind_comms_decision_store
       rows = decision_store.each_decision(thread_id: 'tg.ops.abc')
@@ -221,7 +237,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # transport pressed).
   def test_an_approve_is_granted_when_the_requirement_meets_chat_bound_evidence
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
       store.__send__(:transaction, operation: 'test.prompt.repin') do |txn|
@@ -230,7 +246,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
         SQL
       end
 
-      press(gateway, "approve:#{reference}", update_id: 95)
+      press(harness, "approve:#{reference}", update_id: 95)
 
       decision = pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 4))
 
@@ -244,11 +260,11 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # decision.
   def test_a_cross_surface_press_is_refused
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "approve:#{reference}", update_id: 96,
-                                             surface_id: 'telegram-other', surface_revision: 3)
+      press(harness, "approve:#{reference}", update_id: 96,
+                                             bound: PressBinding.new(surface_id: 'telegram-other', surface_revision: 3))
 
       decision = pending(adapter, prompt)
 
@@ -265,10 +281,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # pinned at activation) is refused with a durable binding refusal.
   def test_a_cross_message_press_is_refused
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, "approve:#{reference}", update_id: 97, message_id: 9009)
+      press(harness, "approve:#{reference}", update_id: 97, bound: PressBinding.new(message_id: 9009))
 
       decision = pending(adapter, prompt)
 
@@ -285,16 +301,15 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # the loser resolves as nothing.
   def test_competing_presses_of_one_prompt_yield_at_most_one_decision
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, _prompt = active_prompt(store)
 
-      transport = gateway.instance_variable_get(:@transport)
-      transport.batch([
+      harness.transport.batch([
         callback_update("deny:#{reference}", 110),
         callback_update("deny:#{reference}", 111)
       ])
-      transport.receipt = { 'message_id' => 1, 'date' => 1 }
-      gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
+      harness.transport.receipt = { 'message_id' => 1, 'date' => 1 }
+      harness.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
 
       decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
 
@@ -309,16 +324,15 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
   # decision, and it is the deny (INV-A wins over a weak approve).
   def test_an_approve_and_a_deny_in_one_batch_yield_exactly_one_decision
     with_engine do |adapter, checkpoints|
-      store, gateway = boot(adapter, checkpoints)
+      store, harness = boot(adapter, checkpoints)
       reference, _prompt = active_prompt(store)
 
-      transport = gateway.instance_variable_get(:@transport)
-      transport.batch([
+      harness.transport.batch([
         callback_update("approve:#{reference}", 120),
         callback_update("deny:#{reference}", 121)
       ])
-      transport.receipt = { 'message_id' => 1, 'date' => 1 }
-      gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
+      harness.transport.receipt = { 'message_id' => 1, 'date' => 1 }
+      harness.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
 
       decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
 
@@ -351,7 +365,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     gateway = Tamoz::Comms::Gateway.new(
       adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
     )
-    [store, gateway]
+    [store, Harness.new(gateway:, transport:)]
   end
 
   def active_prompt(store, ttl_s: 900, required_evidence: :filesystem_operator)
@@ -369,21 +383,15 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     [reference, prompt]
   end
 
-  # rubocop:disable Metrics/ParameterLists -- the callback's bound context
-  # (correspondent + surface) is exactly what the binding oracles vary.
-  def press(gateway, data, update_id:, correspondent_id: 111_111_11,
-            surface_id: 'telegram-ops', surface_revision: 1, message_id: 2001,
-            now: Time.utc(2026, 8, 10, 12, 0, 2))
-    transport = gateway.instance_variable_get(:@transport)
-    unless surface_id == 'telegram-ops' && surface_revision == 1
-      transport = ScriptedTransport.new(surface_id:, surface_revision:)
-      gateway.instance_variable_set(:@transport, transport)
-    end
-    transport.batch([callback_update(data, update_id, correspondent_id:, message_id:)])
+  def press(harness, data, update_id:, bound: PressBinding.new, now: Time.utc(2026, 8, 10, 12, 0, 2))
+    transport = harness.transport
+    transport.bind_surface(surface_id: bound.surface_id, surface_revision: bound.surface_revision)
+    transport.batch([callback_update(data, update_id,
+                                     correspondent_id: bound.correspondent_id,
+                                     message_id: bound.message_id)])
     transport.receipt = { 'message_id' => 1, 'date' => 1 }
-    gateway.serve_once(now:)
+    harness.serve_once(now:)
   end
-  # rubocop:enable Metrics/ParameterLists
 
   def pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 3))
     adapter.bind_comms_decision_store.pending_decision_for(
@@ -415,6 +423,12 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     attr_accessor :receipt
 
     def initialize(surface_id: 'telegram-ops', surface_revision: 1)
+      bind_surface(surface_id:, surface_revision:)
+    end
+
+    # The surface a press arrives on is a property of the inbound update, so
+    # the fake varies it in place rather than being swapped out.
+    def bind_surface(surface_id:, surface_revision:)
       @surface_id = surface_id
       @surface_revision = surface_revision
     end

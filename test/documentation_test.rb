@@ -22,13 +22,16 @@ class DocumentationTest < Minitest::Test
   def test_design_source_and_contract_counts_are_pinned
     source = ROOT.join("docs", "design-v0.1", "SOURCE").read(encoding: Encoding::UTF_8)
     invariants = ROOT.join("docs", "design-v0.1", "INVARIANTS.md").read(encoding: Encoding::UTF_8)
-    decisions = ROOT.join("docs", "design-v0.1", "DECISIONS.md").read(encoding: Encoding::UTF_8)
+    adr_numbers = ROOT.glob("documentation/adr/adr-*.md").map do |path|
+      Integer(path.basename.to_s[/\Aadr-0*(\d+)-/, 1], 10)
+    end.sort
 
     assert_includes source, "source_commit=c123605"
     assert_equal (1..61).to_a,
                  invariants.scan(/^\| (\d+) \| \*\*/).flatten.map(&:to_i)
-    assert_equal (1..47).to_a,
-                 decisions.scan(/^### ADR-(\d{3}) /).flatten.map(&:to_i)
+    # The ADR catalog moved to documentation/adr/ (regenerated 2026-08-29);
+    # the pin follows the new home and its contiguous numbering.
+    assert_equal (1..55).to_a, adr_numbers
   end
 
   def test_design_validation_passes_without_a_utf8_locale
@@ -39,7 +42,10 @@ class DocumentationTest < Minitest::Test
     )
 
     assert status.success?, "#{stdout}\n#{stderr}"
-    assert_match(/\Adesign validation passed \(\d+ documents, 61 invariants, 47 ADRs\)\n\z/, stdout)
+    assert_match(
+      %r{\Adesign validation passed \(\d+ documents, 61 invariants; ADRs live in documentation/adr/\)\n\z},
+      stdout
+    )
   end
 
   private

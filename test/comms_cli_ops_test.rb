@@ -237,25 +237,17 @@ class CommsCliOpsTest < Minitest::Test
     end
   end
 
-  # The gateway's controls seam is crash-safe: a builder that raises (a
-  # missing model credential, a boot failure) answers nil — the bounded
-  # CONTROLS_UNAVAILABLE_REPLY path — and keeps answering on later calls.
-  def test_a_raising_controls_builder_answers_nil_and_stays_safe
-    Dir.mktmpdir('tamoz-controls-source') do |directory|
-      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
-      begin
-        source = Tamoz::Agent::CLICommsShared::ChannelControlsSource.new(
-          workspace_root: File.join(directory, 'workspace'),
-          adapter:,
-          artifact_store: adapter.bind_artifact_store(tenant: 'channel:controls'),
-          model_builder: -> { raise StandardError, 'model boot failed' }
-        )
+  # Context controls are worker-owned (7638961): the CLI's controls seam is
+  # model-free and answers nil, so every gateway control command takes the
+  # bounded CONTROLS_UNAVAILABLE_REPLY path by construction.
+  def test_the_cli_controls_seam_is_model_free_and_answers_nil
+    with_rt do |rt|
+      cli = Tamoz::Agent::CLI.new(
+        out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {}
+      )
 
-        assert_nil source.call('thread.controls'), 'the raising builder maps to nil'
-        assert_nil source.call('thread.controls'), 'the seam survives and answers again'
-      ensure
-        adapter&.close
-      end
+      assert_nil cli.send(:comms_controls_source, rt.dir, nil, {}),
+                 'the CLI wires no controls source; controls belong to the worker'
     end
   end
 

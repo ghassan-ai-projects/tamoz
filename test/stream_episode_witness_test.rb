@@ -232,10 +232,9 @@ class StreamEpisodeWitnessTest < Minitest::Test
   def test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store
     adapter = @composition.fetch(:adapter)
     store = adapter.bind_artifact_store(tenant: "acme")
-    runner = @composition.fetch(:runner)
-    runner.instance_variable_set(:@artifact_store, store)
+    runner = runner_with_artifact_store(@composition, store)
 
-    _events, terminal, _state = run_episode("synthetic")
+    _events, terminal, _state = run_episode("synthetic", runner:)
     assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
 
     prompt = AquacultureDomain::PROMPT
@@ -332,8 +331,7 @@ class StreamEpisodeWitnessTest < Minitest::Test
     composition = EpisodeComposition.build(endpoint: gateway.base_url, gateway: gateway)
     adapter = composition.fetch(:adapter)
     store = adapter.bind_artifact_store(tenant: "acme")
-    runner = composition.fetch(:runner)
-    runner.instance_variable_set(:@artifact_store, store)
+    runner = runner_with_artifact_store(composition, store)
     begin
       wire = EpisodeComposition.wire_request(episode_id: "witness-failed")
       events = []
@@ -369,9 +367,10 @@ class StreamEpisodeWitnessTest < Minitest::Test
     stream = Tamoz::Stream::EpisodeStream.new(envelope, worker_name: "tamoz")
     adapter = Tamoz::Stream::EpisodeStreamAdapter.new(stream)
     error = begin
-      @composition.fetch(:runner).send(
-        :emit_model_events, adapter, {model_receipts: receipts}, envelope
-      )
+      parts = Tamoz::Stream::EpisodeModelEventProjection.new(
+        @composition.fetch(:app).durable_runner
+      ).parts(envelope:, receipts:)
+      parts.each { |part| adapter.emit_stream_part(part) }
       nil
     rescue Tamoz::Stream::StreamError => caught
       caught
@@ -379,10 +378,18 @@ class StreamEpisodeWitnessTest < Minitest::Test
     [error, stream]
   end
 
-  def run_episode(suffix)
+  def runner_with_artifact_store(composition, store)
+    Stream::EpisodeRunner.new(
+      durable_runner: composition.fetch(:app).durable_runner,
+      worker: composition.fetch(:runner).worker,
+      artifact_store: store
+    )
+  end
+
+  def run_episode(suffix, runner: @composition.fetch(:runner))
     wire = EpisodeComposition.wire_request(episode_id: "witness-#{suffix}")
     events = []
-    @composition.fetch(:runner).run(wire).each { |event| events << event }
+    runner.run(wire).each { |event| events << event }
     terminal = events.map(&:terminal).compact.last
     state = nil
     if terminal&.status == :TERMINAL_STATUS_PRODUCED

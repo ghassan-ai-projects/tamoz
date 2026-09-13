@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/comms_gateway_harness'
 
 # Phase 1 wave B (plan 02, work items 3 and 4) — command registry parity and
 # the truthful status surface: every name in Commands::KNOWN answers through a
@@ -10,13 +11,10 @@ require_relative 'test_helper'
 # /redirect and /whoami behave exactly as the grammar advertises.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength, Metrics/ClassLength
 class CommsCommandParityTest < Minitest::Test
+  include CommsGatewayHarness
+
   Comms = Tamoz::Comms
 
-  SURFACE_ID = 'telegram-ops'
-  BOT_ID = 7_463_512_990
-  CONVERSATION_ID = 'telegram:chat:22222222'
-  CORRESPONDENT_ID = 'telegram:user:11111111'
-  NOW = Time.utc(2026, 8, 10, 12, 0, 0)
   NOT_AVAILABLE = 'That command is not available on this channel.'
   UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
   AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
@@ -25,8 +23,8 @@ class CommsCommandParityTest < Minitest::Test
     assert_equal %w[help status new cancel redirect whoami start reset compact usage context think verbose answer],
                  Comms::Commands::KNOWN
 
-    with_gateway do |gateway, transport, _store, _adapter, checkpoints|
-      admit_turn(gateway, transport, 101)
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      admit_turn(gateway, transport, store, 101)
 
       replies = Comms::Commands::KNOWN.map do |word|
         parsed = Comms::Commands.parse("/#{word}")
@@ -50,12 +48,12 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_an_unknown_command_still_gets_typed_unknown_command_and_never_model_input
-    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+    with_gateway do |gateway, transport, store, adapter, checkpoints|
       transport.batch([update(1, text: '/eval rm -rf /')])
 
       assert_equal :served, gateway.serve_once(now: NOW, drain: false)
 
-      assert_equal [%w[ignored unknown_command]], inbound_dispositions(store, 1)
+      assert_equal [%w[ignored unknown_command]], inbound_dispositions(adapter, 1)
       assert_empty all_request_rows(checkpoints), 'an unknown slash command never becomes a turn'
       assert_equal 'Unknown command.', last_reply
     end
@@ -88,9 +86,9 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_status_aggregate_renders_bounded_human_copy_with_all_refs_and_queue_facts
-    with_gateway do |gateway, transport, _store, _adapter, checkpoints|
-      admit_turn(gateway, transport, 101)
-      admit_turn(gateway, transport, 102, now: NOW + 5)
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      admit_turn(gateway, transport, store, 101)
+      admit_turn(gateway, transport, store, 102, now: NOW + 5)
       active_ref = derived_ref(update(102))
 
       reply = drive_command(gateway, transport, '/status', id: 103)
@@ -111,7 +109,7 @@ class CommsCommandParityTest < Minitest::Test
 
   def test_status_by_reference_resolves_one_request_and_refuses_bounded
     with_gateway do |gateway, transport, store|
-      admit_turn(gateway, transport, 101)
+      admit_turn(gateway, transport, store, 101)
       first_ref = derived_ref(update(101))
 
       reply = drive_command(gateway, transport, "/status #{first_ref}", id: 102)
@@ -127,7 +125,7 @@ class CommsCommandParityTest < Minitest::Test
                    drive_command(gateway, transport, '/status not-a-reference', id: 104),
                    'a malformed reference gets the same bounded refusal'
 
-      force_request_status(store, :ambiguous_ref)
+      stub_request_status(store, :ambiguous_ref)
       assert_equal AMBIGUOUS_REF_REPLY,
                    drive_command(gateway, transport, "/status #{first_ref}", id: 105)
     ensure
@@ -137,7 +135,7 @@ class CommsCommandParityTest < Minitest::Test
 
   def test_status_by_reference_renders_a_failed_request_in_bounded_human_copy
     with_gateway do |gateway, transport, store|
-      admit_turn(gateway, transport, 101)
+      admit_turn(gateway, transport, store, 101)
       ref = "r#{'f' * 10}"
       stub_request_status(
         store,
@@ -164,8 +162,8 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_status_diagnostics_require_an_explicit_flag_and_reject_extra_arguments
-    with_gateway do |gateway, transport, _store, _adapter, _checkpoints|
-      admit_turn(gateway, transport, 101)
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
+      admit_turn(gateway, transport, store, 101)
       reference = derived_ref(update(101))
 
       aggregate = drive_command(gateway, transport, '/status --diagnostic', id: 102)
@@ -188,14 +186,14 @@ class CommsCommandParityTest < Minitest::Test
       assert_equal 'No conversation is bound for this channel yet; send a message first.',
                    drive_command(gateway, transport, '/new', id: 90)
 
-      old_thread = admit_turn(gateway, transport, 101)
+      old_thread = admit_turn(gateway, transport, store, 101)
       old_ref = derived_ref(update(101))
 
       assert_equal 'New conversation started; earlier history stays in the audit record.',
                    drive_command(gateway, transport, '/new', id: 91)
       assert_equal 1, store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
 
-      new_thread = admit_turn(gateway, transport, 102, now: NOW + 5)
+      new_thread = admit_turn(gateway, transport, store, 102, now: NOW + 5)
 
       refute_equal old_thread, new_thread, 'the next admission lands on the new generation\'s thread'
       assert_equal 1, checkpoints.request_history(thread_id: new_thread).length
@@ -221,8 +219,8 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_redirect_enqueues_the_durable_task_replacement_for_the_referenced_request
-    with_gateway do |gateway, transport, _store, _adapter, checkpoints|
-      thread = admit_turn(gateway, transport, 101)
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      thread = admit_turn(gateway, transport, store, 101)
       ref = derived_ref(update(101))
 
       reply = drive_command(gateway, transport, "/redirect #{ref} invert the priority instead", id: 102)
@@ -240,7 +238,7 @@ class CommsCommandParityTest < Minitest::Test
 
   def test_redirect_refuses_each_typed_case_bounded
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
-      thread = admit_turn(gateway, transport, 101)
+      thread = admit_turn(gateway, transport, store, 101)
       ref = derived_ref(update(101))
       usage = 'Usage: /redirect r<reference> <new task>'
 
@@ -251,7 +249,7 @@ class CommsCommandParityTest < Minitest::Test
       assert_equal UNKNOWN_REF_REPLY,
                    drive_command(gateway, transport, '/redirect r0000000000 some task', id: 204)
 
-      force_request_status(store, :ambiguous_ref)
+      stub_request_status(store, :ambiguous_ref)
       assert_equal AMBIGUOUS_REF_REPLY,
                    drive_command(gateway, transport, "/redirect #{ref} some task", id: 205)
       restore_request_status(store)
@@ -267,14 +265,14 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_whoami_names_the_bound_context_and_confers_nothing
-    with_gateway do |gateway, transport, store, _adapter, checkpoints|
-      before = request_row_count(store)
+    with_gateway do |gateway, transport, store, adapter, checkpoints|
+      before = request_row_count(adapter)
 
       assert_equal "You are #{CORRESPONDENT_ID} in conversation #{CONVERSATION_ID} " \
                    "on surface #{SURFACE_ID}.",
                    drive_command(gateway, transport, '/whoami', id: 301)
-      assert_equal before, request_row_count(store), '/whoami admits no work'
-      assert_equal 0, approval_prompt_rows(store), '/whoami touches no approval machinery'
+      assert_equal before, request_row_count(adapter), '/whoami admits no work'
+      assert_equal 0, approval_prompt_rows(adapter), '/whoami touches no approval machinery'
       assert_empty all_request_rows(checkpoints)
     end
   end
@@ -288,7 +286,7 @@ class CommsCommandParityTest < Minitest::Test
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
       begin
         capture.clear
-        checkpoints = graph_definition.compile(checkpointer: adapter).checkpointer
+        checkpoints = graph_definition('parity').compile(checkpointer: adapter).checkpointer
         bind_capture_hook!(adapter)
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
@@ -351,94 +349,26 @@ class CommsCommandParityTest < Minitest::Test
     assert_match(/\A#{Regexp.escape(prefix)}/, text, message)
   end
 
-  def descriptor
-    @descriptor ||= Comms::SurfaceDescriptor.build(
-      surface_id: SURFACE_ID, revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-                   poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: BOT_ID, bot_username: 'ops_bot' },
-      admission: { direct: 'allowlist', correspondents: [CORRESPONDENT_ID] },
-      threading: 'conversation', profile_id: 'ops',
-      approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
-      limits: { max_inbound_bytes: 8192, max_open_requests: 50,
-                max_denial_prompts_per_request: 4, outbox_capacity: 500,
-                control_capacity: 200, per_chat_messages_per_s: 30.0,
-                global_messages_per_s: 100.0 }
-    )
-  end
-
-  def graph_definition
-    Tamoz.graph(name: 'parity', version: '1') do
-      state :ready, default: true
-      node(:finish, implementation_name: 'parity.finish', version: '1') { |_s, _c| { ready: true } }
-      edge Tamoz::START, :finish
-      edge :finish, Tamoz::END
-    end
-  end
-
-  def update(id, text: 'first turn')
-    { 'update_id' => id,
-      'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
-                     'chat' => { 'id' => 22_222_222, 'type' => 'private' },
-                     'from' => { 'id' => 111_111_11 }, 'text' => text } }
-  end
-
   # Every delivery row the gateway appends lands here, so assertions read the
   # exact wires without re-deriving outbox filters.
   def capture = (@parity_capture ||= [])
 
   def last_reply = capture.last.fetch('text')
 
-  class ScriptedTransport
-    def batch(updates) = (@updates = updates)
-
-    def poll(next_offset:, limit:, timeout_s:)
-      ids = @updates.map { |update| update.fetch('update_id') }
-      { updates: @updates.map { |update| normalize(update) }, next_offset: ids.max && (ids.max + 1) }
-    end
-
-    def deliver(delivery)
-      (@sent ||= []) << delivery
-      { 'message_id' => 1, 'date' => 1 }
-    end
-
-    def deliveries = @sent || []
-
-    def normalize(update)
-      Comms::InboundEnvelope.new(
-        surface_id: SURFACE_ID, surface_revision: 1,
-        update_id: update.fetch('update_id'),
-        raw_payload_hash: Digest::SHA256.hexdigest(JSON.generate(update)),
-        parser_version: 1,
-        kind: update.dig('message', 'text').start_with?('/') ? 'command' : 'text',
-        correspondent_id: CORRESPONDENT_ID,
-        conversation_id: CONVERSATION_ID,
-        message_id: update.dig('message', 'message_id'),
-        text: update.dig('message', 'text'),
-        observed_time: Time.at(update.dig('message', 'date')).utc
-      ).wire
-    end
-  end
-
   # ===== helpers =====
 
-  def admit_turn(gateway, transport, id, now: NOW)
+  def admit_turn(gateway, transport, store, id, now: NOW)
     transport.batch([update(id)])
     outcome = gateway.serve_once(now:, drain: false)
 
     raise "admission of update #{id} returned #{outcome.inspect}" unless outcome == :served
 
     Comms::Admission.thread_id(SURFACE_ID, CONVERSATION_ID,
-                               generation: current_generation(gateway))
+                               generation: current_generation(store))
   end
 
-  def current_generation(gateway)
-    gateway.instance_variable_get(:@store)
-           .conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
-  rescue KeyError
-    0
+  def current_generation(store)
+    store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
   end
 
   def drive_command(gateway, transport, text, id:)
@@ -461,10 +391,8 @@ class CommsCommandParityTest < Minitest::Test
     )
   end
 
-  def force_request_status(store, forced)
-    store.define_singleton_method(:request_status) { |*_arguments, **_keywords| forced }
-  end
-
+  # One seam for both statuses under test: a forced decision symbol and a
+  # hand-built projection are the same override with different payloads.
   def stub_request_status(store, projection)
     store.define_singleton_method(:request_status) { |*_arguments, **_keywords| projection }
   end
@@ -492,23 +420,31 @@ class CommsCommandParityTest < Minitest::Test
     end
   end
 
-  def request_row_count(store)
-    store.__send__(:read, 'test.parity.request.count') do |txn|
-      txn.scalar('test.parity.request.count', 'SELECT COUNT(*) FROM tamoz_comms_requests').to_i
-    end
+  # Durable-row reads over the committed database file: the inbound
+  # disposition and prompt tables have no store-level reader, so the audit
+  # assertions go straight to the rows the run committed.
+  def request_row_count(adapter)
+    scalar_over_database(adapter, 'SELECT COUNT(*) FROM tamoz_comms_requests')
   end
 
-  def inbound_dispositions(store, update_id)
-    store.__send__(:read, 'test.parity.inbound.read') do |txn|
-      txn.rows('test.parity.inbound.read',
-               'SELECT disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?', [update_id])
-    end
+  def inbound_dispositions(adapter, update_id)
+    database = SQLite3::Database.new(adapter.path)
+    database.execute(
+      'SELECT disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?', [update_id]
+    )
+  ensure
+    database&.close
   end
 
-  def approval_prompt_rows(store)
-    store.__send__(:read, 'test.parity.prompts') do |txn|
-      txn.scalar('test.parity.prompts', 'SELECT COUNT(*) FROM tamoz_comms_approval_prompts').to_i
-    end
+  def approval_prompt_rows(adapter)
+    scalar_over_database(adapter, 'SELECT COUNT(*) FROM tamoz_comms_approval_prompts')
+  end
+
+  def scalar_over_database(adapter, sql)
+    database = SQLite3::Database.new(adapter.path)
+    database.execute(sql).first&.first.to_i
+  ensure
+    database&.close
   end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength, Metrics/ClassLength

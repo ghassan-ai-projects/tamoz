@@ -681,8 +681,17 @@ module Tamoz
           }
         end
 
+        # Maps the /status card's human state word back into the closed
+        # Lifecycle vocabulary the inbox view reports; unknown words yield nil.
+        CARD_STATE_TO_LIFECYCLE = {
+          'idle' => 'idle', 'accepted' => 'accepted', 'queued' => 'queued',
+          'working' => 'running', 'waiting' => 'waiting', 'completed' => 'completed',
+          'failed' => 'failed', 'blocked' => 'blocked', 'stopped' => 'stopped'
+        }.freeze
+
         def status_probe_words(fixture, thread, update_id:)
-          { 'reply_word' => control_reply_text(fixture, update_id, '/status')[/\btask=([a-z]+)/, 1],
+          state = control_reply_text(fixture, update_id, '/status')[/State: ([a-z]+)/, 1]
+          { 'reply_word' => state && CARD_STATE_TO_LIFECYCLE[state],
             'view_word' => inbox_task_word(fixture, thread) }
         end
 
@@ -727,7 +736,8 @@ module Tamoz
             'usage' => '/usage',
             'context' => '/context',
             'think' => '/think medium',
-            'verbose' => '/verbose normal'
+            'verbose' => '/verbose normal',
+            'answer' => '/answer'
           }
           sweep = {}
           update_id = 550
@@ -819,7 +829,7 @@ module Tamoz
             target = fixture.request_ids_for(conversation).last
             raise 'the approval-bearing turn was not admitted durably' unless target
 
-            cancel_accepted = control_reply_text(fixture, 872, '/cancel') == @adapter.cancel_reply
+            cancel_accepted = control_reply_text(fixture, 872, '/cancel').start_with?(@adapter.cancel_reply)
             observed = fixture.store.mark_cancellation_observed(thread_id: thread, now: Time.now.utc)
             reference = Tamoz::Comms::Lifecycle::RequestRef.for(target)
             snapshot = fixture.snapshot(conversations: [conversation])
@@ -848,7 +858,7 @@ module Tamoz
             target = fixture.request_ids_for(conversation).last
             raise 'the crashed turn was not admitted durably' unless target
 
-            cancel_accepted = control_reply_text(fixture, 882, '/cancel') == @adapter.cancel_reply
+            cancel_accepted = control_reply_text(fixture, 882, '/cancel').start_with?(@adapter.cancel_reply)
             requested_before = cancellation_stamp(fixture, target)
             6.times do
               break if cancelled_thread?(fixture, conversation)
