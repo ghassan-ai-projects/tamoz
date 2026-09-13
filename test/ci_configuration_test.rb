@@ -12,9 +12,12 @@ class CIConfigurationTest < Minitest::Test
     job = workflow.fetch("jobs").fetch("test")
 
     # 57ca1d1 pinned CI to a single precompiled-gem Ruby; the workflow no
-    # longer carries a version matrix.
+    # longer carries a version matrix. The workflow reads .ruby-version by
+    # name: the sealed-build fingerprint binds the exact Ruby version and
+    # patchlevel, so a floating "3.3" would regenerate the committed protocol
+    # pins under a different Ruby than the one that produced them.
     setup = job.fetch("steps").find { |step| step.fetch("uses", "").start_with?("ruby/setup-ruby@") }
-    assert_equal "3.3", setup.dig("with", "ruby-version")
+    assert_equal ".ruby-version", setup.dig("with", "ruby-version")
     assert_nil job["strategy"]
     assert_equal 15, job.fetch("timeout-minutes")
     assert_equal({"contents" => "read"}, workflow.fetch("permissions"))
