@@ -44,7 +44,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 042 | agent_session_effect_test.rb | done | public SessionEffects#dispatch probes; ambiguous-MCP mapping asserted via McpSourceBuilder in the CLI suite; redaction asserted on persisted detail |
 | 044 | agent_skills_adversarial_test.rb | done | A-20 compiles clean vs hostile skills trees (epoch asserted unequal first); tautologies + dead fetch removed |
 | 045 | cancellation_visibility_test.rb | done | real Gateway over the shared harness; /status via serve_once, replies from outbox_rows; white-box observe_cancellation folded black-box |
-| 047 | agent_worker_test.rb | done | repark via worker --once stop report; idle sleep via public run + scripted clock; TAMOZ_DEBUG gone |
+| 047 | agent_worker_test.rb | done | repark via worker --once stop report; idle sleep via public run, crossing served only inside CancellationToken#wait and asserted there (mutation-proven); TAMOZ_DEBUG gone |
 | 049 | approval_policy_document_test.rb | done | MINIMAL_POLICY + deep-merge builder replaces 13 heredocs; digest test renamed to say what it proves |
 | 051 | subprocess_runner.rb | todo | SIZE |
 | 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |

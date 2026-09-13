@@ -163,11 +163,27 @@ class CancellationVisibilityTest < Minitest::Test
         assert_nil stamps.fetch('observed_at_ms'),
                   'a settled ordinary turn is not a cancellation observation'
 
+        # The plain redirect is enqueued BEFORE the cancellation exists, so the
+        # inbox (FIFO by enqueue sequence) consumes it while the timeline is
+        # requested-but-unobserved — the only state where a misclassified stamp
+        # would actually land in the store. Consumed after the genuine cancel,
+        # first-write-wins would hide any misclassification.
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'g' * 63 + '1', operation: :redirect,
+          payload: { 'task' => 'Read note.txt' }, delivery: :redirect
+        )
+
         requested_at = (Time.now.to_r * 1000).to_i
         assert_equal :requested, store.request_cancellation(
           thread_id: THREAD, request_id: 'cancel-claim', payload: CANCEL_PAYLOAD,
           now: Time.at(requested_at / 1000.0)
         )
+
+        assert worker.poll_once
+
+        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        assert_nil stamps.fetch('observed_at_ms'),
+                  'a redirect without a cancel task is not an observation'
 
         runtime.checkpoints.enqueue_request(
           thread_id: THREAD, request_id: 'e' * 63 + '1', operation: :redirect,
@@ -183,21 +199,11 @@ class CancellationVisibilityTest < Minitest::Test
         history = runtime.checkpoints.request_history(thread_id: THREAD)
         assert_equal 1, history.count { |request| request.operation == :turn },
                      'no second turn ran behind the cancel'
-        redirect = history.find { |request| request.operation == :redirect }
+        redirect = history.find { |request| request.request_id == 'cancel-claim' }
         assert redirect.terminal?, 'the consumed cancel redirect is terminal'
 
         view = runtime.session_for(THREAD).view(thread: THREAD)
         assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
-
-        runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'g' * 63 + '1', operation: :redirect,
-          payload: { 'task' => 'Read note.txt' }, delivery: :redirect
-        )
-        assert worker.poll_once
-
-        stamps = cancellation_stamps(store, 'c' * 63 + '1')
-        assert_equal observed, stamps.fetch('observed_at_ms'),
-                     'a redirect without a cancel task is not an observation'
 
         runtime.checkpoints.enqueue_request(
           thread_id: THREAD, request_id: 'h' * 63 + '1', operation: :redirect,

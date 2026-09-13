@@ -250,7 +250,9 @@ class AgentWorkerTest < Minitest::Test
 
   # A restart must RE-PARK a paused clarification with its typed reason, not
   # re-claim or fail it: the parked occurrence still owes the thread its
-  # settle, and only a human answer resumes it.
+  # settle, and only a human answer resumes it. The typed reason is asserted
+  # on the first park only — a repark emits no event, so the restart pass is
+  # judged by `worker.stopped`'s parked count alone.
   def test_a_restart_reparks_a_clarification_with_its_typed_reason
     with_runtime do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
@@ -361,8 +363,10 @@ class AgentWorkerTest < Minitest::Test
   # clock read wide, so a single pass almost always wins it — and a worker
   # polling once a second loses it eventually, dying hours later with an
   # ArgumentError that names nothing about where it came from. Driven through
-  # the public run loop: the scripted clock crosses the deadline exactly once,
-  # and the loop must survive that pass and idle again.
+  # the public run loop: every read poll_once makes gets a constant
+  # pre-deadline time, and the crossing pair is served only to the reads made
+  # inside CancellationToken#wait — so the sleep path itself must consume the
+  # crossing, survive the pass, and let the loop idle again.
   def test_the_idle_sleep_never_goes_negative_when_the_clock_crosses_the_deadline
     with_runtime do |rt|
       runtime = Tamoz::Agent::WorkerRuntime.open(
@@ -376,16 +380,23 @@ class AgentWorkerTest < Minitest::Test
           emitter: ->(_event) {},
           poll_interval: 1.0
         )
-        # now() for the deadline, then a reading BEFORE it, then one PAST it: the
-        # deadline is crossed in exactly the window between the test and the
-        # sleep. Any further read stops the loop — the pass under test already
-        # happened.
-        readings = [0.0, 0.5, 2.0]
-        clock = Object.new
-        clock.define_singleton_method(:now) { readings.shift || raise(ClockExhausted) }
-
-        with_monotonic_clock(clock) do
-          assert_raises(ClockExhausted) { worker.run }
+        clock = SleepCrossingClock.new
+        # If the sleep path stops consulting the token, the crossing is never
+        # consumed and the loop would spin forever; the watchdog turns that
+        # hang into the failed assertion below.
+        watchdog = Thread.new do
+          sleep 5
+          worker.stop!("idle-sleep test watchdog")
+        end
+        begin
+          with_monotonic_clock(clock) do
+            assert_raises(ClockExhausted) { worker.run }
+          end
+          assert clock.crossed_in_wait?,
+                 "the deadline crossing must be consumed by CancellationToken#wait, " \
+                 "not by poll_once's store reads"
+        ensure
+          watchdog.kill
         end
       ensure
         runtime.close
@@ -394,6 +405,38 @@ class AgentWorkerTest < Minitest::Test
   end
 
   class ClockExhausted < StandardError; end
+
+  # Serves a constant pre-deadline time to every reader outside the token's
+  # wait, hands the wait itself the crossing pair (the deadline read at 0.0,
+  # then a reading past the deadline that read just produced), and stops the
+  # loop on any further read. crossed_in_wait? can only become true from a
+  # read made inside CancellationToken#wait, which is what pins the crossing
+  # to the sleep path.
+  class SleepCrossingClock
+    PRE_DEADLINE = 0.0
+    PAST_DEADLINE = 2.0
+
+    attr_reader :crossed_in_wait
+
+    def initialize
+      @wait_reads = 0
+      @crossed_in_wait = false
+    end
+
+    def crossed_in_wait? = @crossed_in_wait
+
+    def now
+      raise ClockExhausted, "clock read after the crossing was consumed" if @crossed_in_wait
+
+      return PRE_DEADLINE unless caller_locations.any? { |location| location.path.end_with?("cancellation_token.rb") }
+
+      @wait_reads += 1
+      return PRE_DEADLINE if @wait_reads == 1
+
+      @crossed_in_wait = true
+      PAST_DEADLINE
+    end
+  end
 
   # Swaps the process clock for a scripted one, and always puts it back.
   def with_monotonic_clock(clock)
