@@ -787,9 +787,7 @@
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/approval_policy_document_test.rb#test_bundled_base_loads_and_validates",
-      "supporting_tests": [
-        "test/approval_policy_document_test.rb#test_digest_changes_on_content_edit"
-      ],
+      "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
