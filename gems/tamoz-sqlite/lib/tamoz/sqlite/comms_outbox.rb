@@ -23,11 +23,14 @@ module Tamoz
       # further milestones replace the newest live row instead of growing.
       MILESTONE_BOUND = 32
 
-      # Per-conversation FIFO: a pending successor is ineligible while an earlier
-      # same-conversation delivery is `unknown` (its send crossed the transport
-      # boundary but is not yet resolved), so a later part cannot be delivered
-      # before an ambiguous predecessor is decided. (created_at_ms, delivery_id)
-      # is the deterministic predecessor order; resolving it unblocks the row.
+      # Per-request FIFO: a pending part is ineligible while an earlier part of
+      # the same request is `unknown` (its send crossed the transport boundary
+      # but is not yet resolved), so a later part cannot be delivered before an
+      # ambiguous predecessor is decided. Rows of one render share a
+      # `created_at_ms` and `delivery_id` is a content digest, so only `rowid`
+      # orders them by append. A NULL `request_id` never matches here, which
+      # keeps control replies and other requests draining; resolving the
+      # predecessor unblocks the row.
       CLAIM_DELIVERY_SQL = <<~SQL
         UPDATE tamoz_comms_outbox
         SET status = 'claimed', claim_owner = ?, claim_fence = ?, claim_expires_at_ms = ?
@@ -39,10 +42,9 @@ module Tamoz
           SELECT 1 FROM tamoz_comms_outbox AS pred
           WHERE pred.surface_id = tamoz_comms_outbox.surface_id
             AND pred.conversation_id = tamoz_comms_outbox.conversation_id
+            AND pred.request_id = tamoz_comms_outbox.request_id
             AND pred.status = 'unknown'
-            AND (pred.created_at_ms < tamoz_comms_outbox.created_at_ms
-                 OR (pred.created_at_ms = tamoz_comms_outbox.created_at_ms
-                     AND pred.delivery_id < tamoz_comms_outbox.delivery_id))
+            AND pred.rowid < tamoz_comms_outbox.rowid
         )
       SQL
 

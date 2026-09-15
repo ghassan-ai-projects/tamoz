@@ -704,30 +704,43 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
-  # Per-conversation FIFO: while an earlier same-conversation delivery is
-  # `unknown`, a later one must not be claimed and sent out of order; a different
-  # conversation is unaffected; resolving the predecessor unblocks it (F12-REL-01).
-  def test_an_unknown_predecessor_blocks_only_its_own_conversations_successor
+  # Per-request FIFO: while an earlier part of the same request is `unknown`, a
+  # later part must not be claimed and sent out of order. Another request in the
+  # same conversation and a different conversation stay drainable, and resolving
+  # the predecessor unblocks the row (F12-REL-01).
+  def test_an_unknown_predecessor_blocks_only_later_parts_of_its_own_request
     with_engine do |store|
       store.deploy_surface(descriptor.wire, now:)
-      part_a = delivery(part_index: 0, part_count: 2, content_digest: 'a' * 64).merge('delivery_id' => 'part-a')
-      part_b = delivery(part_index: 1, part_count: 2, content_digest: 'd' * 64).merge('delivery_id' => 'part-b')
-      elsewhere = delivery(conversation_id: 'telegram:chat:33333333', content_digest: 'c' * 64)
-      other = elsewhere.merge('delivery_id' => 'other')
-      store.append_delivery(part_a, surface_id: 'telegram-ops', capacity: 500, now:)
-      store.append_delivery(part_b, surface_id: 'telegram-ops', capacity: 500, now: now + 1)
-      store.append_delivery(other, surface_id: 'telegram-ops', capacity: 500, now: now + 2)
+      # A render's parts share one millisecond and their content-addressed
+      # delivery ids run opposite to append order, so only rowid orders them.
+      first = delivery(part_index: 0, part_count: 2, content_digest: 'a' * 64).merge('delivery_id' => 'part-z')
+      second = delivery(part_index: 1, part_count: 2, content_digest: 'd' * 64).merge('delivery_id' => 'part-a')
+      peer = delivery(content_digest: 'c' * 64).merge('delivery_id' => 'peer-request')
+      other = delivery(conversation_id: 'telegram:chat:33333333',
+                       content_digest: 'e' * 64).merge('delivery_id' => 'other-conversation')
+      store.append_delivery(
+        first, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: 'req-multipart', now:
+      )
+      store.append_delivery(
+        second, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: 'req-multipart', now:
+      )
+      store.append_delivery(
+        peer, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: 'req-peer', now:
+      )
+      store.append_delivery(other, surface_id: 'telegram-ops', capacity: 500, now:)
 
-      claim_and_mark!(store, 'part-a', 'unknown')
+      claim_and_mark!(store, 'part-z', 'unknown')
 
-      assert_equal :not_claimable, claim_row(store, 'part-b'),
-                   'a successor is blocked while its predecessor is unknown'
-      assert_equal :claimed, claim_row(store, 'other'),
+      assert_equal :not_claimable, claim_row(store, 'part-a'),
+                   'a later part of the same request is blocked while its predecessor is unknown'
+      assert_equal :claimed, claim_row(store, 'peer-request'),
+                   'another request in the same conversation is not blocked'
+      assert_equal :claimed, claim_row(store, 'other-conversation'),
                    'a different conversation is not blocked'
 
-      assert_equal :resolved, store.resolve_delivery(delivery_id: 'part-a', status: 'succeeded', now: now + 3)
-      assert_equal :claimed, claim_row(store, 'part-b'),
-                   'resolving the predecessor unblocks the successor'
+      assert_equal :resolved, store.resolve_delivery(delivery_id: 'part-z', status: 'succeeded', now: now + 1)
+      assert_equal :claimed, claim_row(store, 'part-a'),
+                   'resolving the predecessor unblocks the later part'
     end
   end
 
