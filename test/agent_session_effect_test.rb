@@ -377,6 +377,33 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
+  # An MCP elicitation (input_required) must not be repaired as a tool failure:
+  # it settles terminally as :unknown so the run stops with the server's
+  # question instead of livelocking the repair loop (F09-SEC-02).
+  def test_mcp_interrupt_settles_terminal_unknown_instead_of_a_repairable_failure
+    Dir.mktmpdir("tamoz-remote-interrupt") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      begin
+        app = base_definition.compile(checkpointer: adapter)
+        request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
+        interrupt = { "kind" => "elicitation", "prompt" => "which environment?" }
+        outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+          status: :interrupt, observation: nil, interrupt:, denial: nil
+        )
+        effects = Tamoz::Agent::SessionEffects.new(
+          configuration: dispatch_configuration(FixedOutcome.new(outcome), directory)
+        )
+
+        receipt = dispatch_remote(effects, app, request, "owner.interrupt")
+
+        assert_equal :unknown, receipt.status
+        assert_includes receipt.error.fetch("message"), "operator input"
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
   # --- filesystem reconciler ------------------------------------------------
 
   def test_filesystem_reconciler_maps_observations_to_exactly_one_disposition
