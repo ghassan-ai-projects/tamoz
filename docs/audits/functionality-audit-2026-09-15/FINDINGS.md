@@ -38,8 +38,19 @@ owed.
 | ID | Row | Severity | Confidence | Owning seam | Challenge |
 |---|---|---|---|---|---|
 | A01-COR-01 | A01 | minor | high | `apps/tamoz-agent/app.json` namespace | DEMOTED — inert metadata, no consumer |
+| A01-MNT-01 | A01 | info | high | `apps/tamoz-agent/app.json#format_version` | OPEN — metadata is written and unread |
+| A01-MNT-02 | A01 | minor | high | `apps/tamoz-agent/README.md` documentation surface | OPEN — page is outside the documentation check |
+| E03-ERR-01 | E03 | minor | high | `tamoz-evals-runner` CLI terminal flags | OPEN — `--help` exits usage error |
+| E04-COR-01 | E04 | minor | high | `bin/tamoz-chat-probe` probe dispatch | OPEN — unknown probe exits zero |
+| E04-MNT-01 | E04 | info | high | `bin/tamoz-chat-probe` harness cleanup | OPEN — no ensure around a raising probe |
+| E04-MNT-02 | E04 | info | medium | `bin/tamoz-chat-probe` probe key list | OPEN — keys are not checked against findings |
+| E05-MNT-01 | E05 | info | high | `bin/tamoz-chat-sim` wrapper coverage | OPEN — wrapper has no dedicated test |
 | E08-REL-01 | E08 | major | high | `bin/tamoz-stream-subscriber` reconnect loop | UPHELD — bounded cursor does not prevent retry waste |
+| E08-MNT-01 | E08 | info | high | `bin/tamoz-stream-subscriber` approval-relay path | OPEN — cwd resolution is implicit |
+| E08-MNT-02 | E08 | info | high | `bin/tamoz-stream-subscriber` launcher coverage | OPEN — no launcher test |
 | E09-REL-01 | E09 | major | high | `bin/tamoz-stream-worker` trap context | UPHELD — exit 134 is not asserted |
+| E09-MNT-01 | E09 | info | high | `bin/tamoz-stream-worker` option validation order | OPEN — invalid socket/port is checked late |
+| E09-MNT-02 | E09 | info | high | `test/stream_worker_server_test.rb` launcher assertion | OPEN — exit status is discarded |
 | F01-COR-01 | F01 | info | high | `tamoz-core` `jcs.rb#integer_to_s` | DEMOTED — exemption is pinned as intended |
 | F01-SEC-01 | F01 | minor | high | `tamoz-core` `error.rb#DisclosableMessage` | REFUTED — no reachable leak; test gap remains |
 | F02-SEC-01 | F02 | minor | high | `tamoz-cancellation` `process_group.rb#signal` | DEMOTED — no reachable unsafe caller |
@@ -126,6 +137,16 @@ owed.
 | R01-GATE-02 | R01 | major | high | `script/release_rehearsal:157` runs `ci` not `ci_full` | UPHELD — script and plan disagree |
 | R01-GATE-04 | R01 | major | high | `Rakefile:425` `quality` aggregate is enola-only | MERGED into R01-GATE-01 — same gate composition root cause |
 | S01-BEN-01 | S01 | major | high | nine unbounded `Open3.capture*` call sites | UPHELD — seven scripts, nine call sites |
+| S01-GEN-01 | S01 | minor | high | `script/adr_graph.rb`, `script/adr_traceability.rb` generated artifacts | OPEN — no verify counterpart |
+| S01-GEN-02 | S01 | minor | high | `Rakefile:274-280` fixture refresh | OPEN — two fixture generators are omitted |
+| S01-GEN-03 | S01 | minor | high | stdout-only benchmark/protocol generators | OPEN — redirected artifacts have no recorded command |
+| S01-QUAL-01 | S01 | minor | high | `script/regenerate_quality_baseline` artifact provenance | OPEN — committed baseline tree state is not reconciled |
+| S01-BEN-02 | S01 | minor | high | `script/autonomy_scorecard` artifact write | OPEN — non-strict red runs overwrite the artifact |
+| S01-CONF-01 | S01 | minor | high | `script/capture_phase2_receipt` command evidence | OPEN — PID temp path prevents reproducibility |
+| S01-ADR-01 | S01 | minor | medium | `script/adr_verify.rb` absence context window | OPEN — fixed window can invert citation polarity |
+| S01-ADR-02 | S01 | minor | medium | ADR state classifiers | OPEN — scripts derive retirement differently |
+| S02-SEC-01 | S02 | minor | medium | `scripts/start-tamoz-comms.sh` child environment | OPEN — whole `.env` is exported to both children |
+| S02-REL-03 | S02 | minor | medium | `scripts/start-tamoz-comms.sh#stop_all` process match | OPEN — `--stop` may leave a worker alive |
 
 ## Coordinator dispositions
 
@@ -236,6 +257,15 @@ owed.
   minor observability finding at the worker seam. F15 recorder/trace findings
   and F16 exporter findings remain their existing owners and are carried without
   double-counting.
+- **App, executable, support, and Rakefile disposition.** The grouped item-level
+  reports in `analyses/apps-and-entry-points.md` and `analyses/scripts-and-rake.md`
+  were reconciled against the live files. A01's `Tamoz::App` namespace claim is
+  demoted to minor because the manifest is inert; E08/E09 and S01/R01 majors
+  retain their independent challenge outcomes. E03/E04 and the S01/S02 minor
+  observations are accepted as open at their existing seams; info items remain
+  documented limitations. `R01-GATE-04` is merged into `R01-GATE-01`, and the
+  nested `script/quality/coverage_totals.rb` file is included in the support
+  inventory. The coordinator adds no duplicate cross-flow finding.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,

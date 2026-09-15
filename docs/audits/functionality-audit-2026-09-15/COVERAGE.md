@@ -10,15 +10,15 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 | Surface | Inventory | Scanner pass | Analyst report present | Six-lens complete | Synthesis complete |
 |---|---:|---:|---:|---:|---:|
 | Gem responsibilities | 27/27 | 27/27 | 27/27 | 27/27 | 6/27 |
-| Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
-| Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 0/9 |
-| Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 46/46 | 0/46 item-level | 0/46 item-level | 0/46 |
-| Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
+| Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
+| Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 |
+| Support scripts (`script/` 45 entries + nested quality file + `scripts/` 1 file) | 47/47 | 47/47 | 47/47 item-level | 47/47 item-level | 47/47 |
+| Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
 | Cross-gem flows | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 |
 
 No functionality row has met the closure bar at this checkpoint. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
-app, nine executable surfaces, 46 support-script files, and the Rakefile. The
+app, nine executable surfaces, 47 support-script files, and the Rakefile. The
 complete cross-flow scanner pass is recorded in
 `analyses/crossflow-scanner-pass.md`; analyst reports and scanner leads remain
 separate gates. The filesystem currently contains
@@ -118,23 +118,24 @@ row that it invokes.
 
 | ID | Surface | Role | State |
 |---|---|---|---|
-| A01 | `apps/tamoz-agent/` (`README.md`, `app.json`) | Reference application metadata and usage | MAPPED; scanner complete; review pending |
-| E01 | `gems/tamoz-agent-cli/exe/tamoz` | Installed `tamoz` command | MAPPED; scanner complete; review pending |
-| E02 | `gems/tamoz-evals/exe/tamoz-eval` | Installed evaluation command | MAPPED; scanner complete; review pending |
-| E03 | `gems/tamoz-evals-runner/exe/tamoz-eval-runner` | Installed evaluation runner command | MAPPED; scanner complete; review pending |
-| E04 | `bin/tamoz-chat-probe` | Chat finding probe harness | MAPPED; scanner complete; review pending |
-| E05 | `bin/tamoz-chat-sim` | Chat simulation harness | MAPPED; scanner complete; review pending |
-| E06 | `bin/tamoz-eval` | Repository evaluation wrapper | MAPPED; scanner complete; review pending |
-| E07 | `bin/tamoz-eval-runner` | Repository runner wrapper | MAPPED; scanner complete; review pending |
-| E08 | `bin/tamoz-stream-subscriber` | Stream subscriber launcher | MAPPED; scanner complete; review pending |
-| E09 | `bin/tamoz-stream-worker` | Supervised stream worker launcher | MAPPED; scanner complete; review pending |
-| S01 | `script/` (45 files) | ADR, benchmark, fixture, quality, conformance, release, and runtime tools | MAPPED by inventory; 45 item reviews pending |
-| S02 | `scripts/start-tamoz-comms.sh` | Comms process launcher | MAPPED; scanner complete; review pending |
-| R01 | `Rakefile` | Repository task and gate composition | MAPPED; scanner complete; review pending |
+| A01 | `apps/tamoz-agent/` (`README.md`, `app.json`) | Reference application metadata and usage | SYNTHESIZED; IMPROVE; metadata findings dispositioned |
+| E01 | `gems/tamoz-agent-cli/exe/tamoz` | Installed `tamoz` command | SYNTHESIZED; PASS |
+| E02 | `gems/tamoz-evals/exe/tamoz-eval` | Installed evaluation command | SYNTHESIZED; PASS as wrapper; F26 guard carried |
+| E03 | `gems/tamoz-evals-runner/exe/tamoz-eval-runner` | Installed evaluation runner command | SYNTHESIZED; PASS threshold; E03-ERR-01 minor open |
+| E04 | `bin/tamoz-chat-probe` | Chat finding probe harness | SYNTHESIZED; IMPROVE; E04-COR-01 minor open |
+| E05 | `bin/tamoz-chat-sim` | Chat simulation harness | SYNTHESIZED; PASS with info limitation |
+| E06 | `bin/tamoz-eval` | Repository evaluation wrapper | SYNTHESIZED; PASS |
+| E07 | `bin/tamoz-eval-runner` | Repository runner wrapper | SYNTHESIZED; PASS |
+| E08 | `bin/tamoz-stream-subscriber` | Stream subscriber launcher | SYNTHESIZED; IMPROVE; E08-REL-01 major open |
+| E09 | `bin/tamoz-stream-worker` | Supervised stream worker launcher | SYNTHESIZED; IMPROVE; E09-REL-01 major open |
+| S01 | `script/` (46 tracked files, 45 top-level entries) | ADR, benchmark, fixture, quality, conformance, release, and runtime tools | SYNTHESIZED item-level; IMPROVE; S01-BEN-01 major + seven minors open |
+| S02 | `scripts/start-tamoz-comms.sh` | Comms process launcher | SYNTHESIZED; IMPROVE; two minors open |
+| R01 | `Rakefile` | Repository task and gate composition | SYNTHESIZED; IMPROVE; R01-GATE-01/02 open; GATE-04 merged |
 
-Before this surface group can close, `S01` must be expanded to one row per
-script and each script must have its own source path, caller, evidence, and
-disposition. The aggregate count is an inventory aid only.
+The grouped surface synthesis is in
+`analyses/entry-support-synthesis.md`. `S01` has one disposition row for each
+of its 45 top-level entries plus the nested `quality/coverage_totals.rb`; the
+aggregate row is no longer being used as a substitute for item-level coverage.
 
 ## Cross-gem flow inventory
 

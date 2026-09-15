@@ -53,7 +53,10 @@ finding was independently re-reviewed before it was accepted into the index.
 CF01–CF13 now have direct end-to-end reports. CF03, CF04, CF05, CF06, CF07,
 CF08, CF09, CF10, CF11, CF12, and CF13 carry existing authority, reliability,
 replay, control-routing, observability, and release-evidence findings without
-double-counting them.
+double-counting them. The app, executable, support-script, and Rakefile rows
+also have item-level coordinator synthesis in
+`analyses/entry-support-synthesis.md`; the remaining synthesis queue is the
+21 gem rows not yet reconciled in a dedicated coordinator wave.
 
 The audit is complete only when [BAR.md](BAR.md) is satisfied. Documentation
 may make the audit bar and evidence clearer; with no implementation in scope,

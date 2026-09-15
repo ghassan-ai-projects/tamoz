@@ -18,7 +18,9 @@ reconciled JSON counters both yield 193 finding records. `rollup.py` reports
 those counters and is read-only.
 
 All 27 gem IDs now have a standalone JSON row record. All 27 gem reports and
-the app/executable rows have a scalability assessment. Eight rows retain an
+the app/executable rows have a scalability assessment. The app, nine executable
+surfaces, 47 support files, and the Rakefile now have item-level coordinator
+synthesis in `analyses/entry-support-synthesis.md`. Eight rows retain an
 explicit sustained-load measurement gap in
 [analyses/scalability-lens-review.md](analyses/scalability-lens-review.md), but
 the lens itself is no longer unreviewed. The remaining cross-flow analyst,
@@ -47,6 +49,7 @@ support-script, and synthesis gates keep the overall audit incomplete.
 | CF11 — healing/improvement/promotion | `analyses/CF11-healing-improvement.md` and `.json` | `analyses/challenge-healing.md`, `review-f20-rel02.md`, and `challenge-improvement-tools-kernel.md` | IMPROVE; all three lead proposals duplicate challenged F20/F23 findings; no new count |
 | CF12 — observability/OTLP | `analyses/CF12-observability-otel.md` and `.json` | existing `challenge-observability.md` and `challenge-comms-otel-schedule.md` | IMPROVE; CF12-OBS-01 accepted as one new minor; F15/F16 findings carried without duplicate count |
 | CF13 — evaluation/release evidence | `analyses/CF13-evaluation-release.md` and `.json` | existing `challenge-f26-evidence.md`, `challenge-core-telegram-evals.md`, and `challenge-session-stream-gates.md` | IMPROVE; no new machine-counted finding; F26/F27/S01/R01 evidence findings carried without duplicate count |
+| Apps/entry/support/Rakefile | `analyses/entry-support-synthesis.md` plus item reports | `analyses/challenge-core-telegram-evals.md` and `analyses/challenge-session-stream-gates.md` | Grouped synthesis complete; A01/E03/E04/S01/S02 minors and E08/E09/R01 majors dispositioned; no new cross-flow count |
 
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
@@ -65,10 +68,9 @@ existing release-evidence and gate-composition findings without a second count.
 
 ## Remaining work
 
-1. Complete coordinator synthesis for the app, executable, support-script,
-   Rakefile, and remaining gem rows; the standalone scanner pass and CF01–CF13
-   direct flow reviews are complete, and an analyst report alone does not close
-   a row.
+1. Complete coordinator synthesis for the 21 remaining gem rows; the standalone
+   scanner pass, item-level app/support review, and CF01–CF13 direct flow reviews
+   are complete, and an analyst report alone does not close a row.
 2. Preserve explicit throughput evidence gaps for the eight rows listed in
    `analyses/scalability-lens-review.md`; run bounded load/soak work only when
    deployment-level throughput evidence is required.
