@@ -6,14 +6,14 @@
 | Code baseline | branch `audit-15-09`, commit `582ae5566de1ae073aea82b69bb2bbf444494d3b` |
 | Mode | Read-only functionality audit; no implementation requested |
 | Package state | Documentation and analyst/challenge reports are in the shared audit folder; production code, tests, and configuration remain untouched |
-| Closure | No row is closed; cross-flow scanning, item-level support review, and synthesis remain pending under [BAR.md](BAR.md) |
+| Closure | CF01 has a complete PASS review; cross-flow analyst coverage, item-level support review, and overall synthesis remain pending under [BAR.md](BAR.md) |
 
 ## Filesystem evidence snapshot
 
-The current shared folder contains 29 JSON analyst records expanding to 40 row
-surfaces: all 27 gem responsibilities, the app and executable surfaces, and
-the aggregate script/Rakefile rows. The declared row counters are 33
-`IMPROVE` and 7 `PASS`. Direct parsing of the `findings` arrays and the
+The current shared folder contains 30 JSON analyst records expanding to 41 row
+surfaces: all 27 gem responsibilities, the app and executable surfaces, the
+aggregate script/Rakefile rows, and CF01. The declared row counters are 33
+`IMPROVE` and 8 `PASS`. Direct parsing of the `findings` arrays and the
 reconciled JSON counters both yield 188 finding records. `rollup.py` reports
 those counters and is read-only.
 
@@ -21,8 +21,8 @@ All 27 gem IDs now have a standalone JSON row record. All 27 gem reports and
 the app/executable rows have a scalability assessment. Eight rows retain an
 explicit sustained-load measurement gap in
 [analyses/scalability-lens-review.md](analyses/scalability-lens-review.md), but
-the lens itself is no longer unreviewed. Scanner and cross-flow gates still
-keep every row incomplete.
+the lens itself is no longer unreviewed. The remaining cross-flow analyst,
+support-script, and synthesis gates keep the overall audit incomplete.
 
 ## Completed coordinator waves
 
@@ -34,6 +34,7 @@ keep every row incomplete.
 | F20 — healing | `analyses/F20-agent-healing.md` and `.json` | `analyses/challenge-healing.md` + `analyses/review-f20-rel02.md` | Critical repetition proposal demoted to major; F20-REL-02 and F20-SEC-01 remain major/open |
 | F25 — runtime | `analyses/F25-agent-runtime.md` and `.json` | `analyses/challenge-f25-runtime.md` | Two major findings remain open: cancellation projection and inert accepted budgets |
 | F26 — evals evidence | `analyses/F26-evals.md` and `.json` | `analyses/challenge-f26-evidence.md` | Two major findings and one minor generator gap remain open; stale-artifact ownership narrowed |
+| CF01 — load isolation | `analyses/CF01-load-isolation.md` and `.json` | none required; no critical/major finding | PASS after 22-run dependency isolation contract |
 
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
