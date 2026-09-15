@@ -993,8 +993,10 @@ module Tamoz
         thread_id = request.thread_id
         profile_id = @runtime.thread_profile(thread_id)
         # Bind before rebinding: a lazy session build stamps the live global
-        # rev onto this key, which would silently discard the switch.
-        @runtime.session_for_profile(profile_id)
+        # rev onto this key, which would silently discard the switch. Go through
+        # session_for so the bound profile digest is validated, not a widened
+        # on-disk profile.
+        @runtime.session_for(thread_id)
 
         @runtime.checkpoints.open_writer(
           thread_id: thread_id,
