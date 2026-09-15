@@ -8,15 +8,18 @@ disagree about, or a hop whose owner is nobody. A gem's own finding is marked
 "duplicate of X, boundary owner Y" and is not counted.
 
 > **Coordinator note (2026-09-15):** This file is the bounded analyst lead for
-> CF09–CF11. CF09's coordinator synthesis is now
+> CF09–CF11. CF09 and CF10 now have coordinator syntheses in
 > [`CF09-stream-learning.md`](CF09-stream-learning.md) and its machine record is
-> [`CF09-stream-learning.json`](CF09-stream-learning.json). That synthesis
-> corrects the lead's CF09 count: the missing automatic layer/trust allowlist is
+> [`CF09-stream-learning.json`](CF09-stream-learning.json), and
+> [`CF10-memory-lifecycle.md`](CF10-memory-lifecycle.md) plus
+> [`CF10-memory-lifecycle.json`](CF10-memory-lifecycle.json). Those syntheses
+> correct the lead's CF09 count: the missing automatic layer/trust allowlist is
 > the new major, the recall join is a minor, and the “two human gates” item is an
 > information-level duplicate of the existing promotion finding. The lead's
 > verbatim-content observation remains carried as `F19-SEC-01`; it is not counted
-> again. CF10 and CF11 remain lead material until their own coordinator reports
-> are written.
+> again. CF10 retains only the missing worker retention caller as a new boundary
+> major; its receipt observation is carried under F19. CF11 remains lead material
+> until its own coordinator report is written.
 
 ## Scope and source map
 

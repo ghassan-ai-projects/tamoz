@@ -1,0 +1,63 @@
+{
+  "row": "CF10",
+  "surface": "memory admission, retrieval, deletion, consolidation, and transitions",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 1, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "CF10-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "the retention pass has no production caller, so the flow's delete-to-purge bound is never enforced",
+      "seam": "tamoz-agent worker maintenance/sweep → tamoz-sqlite MemoryStore#purge_expired",
+      "citations": [
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:373-391",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:484-529",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:77-98",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/limits.rb:20",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:887-915"
+      ],
+      "five_whys": true,
+      "recommendation": "Invoke the existing MemoryStore#purge_expired pass from the tamoz-agent maintenance/sweep seam using the worker clock and retain its receipt; do not add a second purge implementation.",
+      "disposition": "accepted open major boundary finding; F19-DEL-01 is carried for the component symptom and corrected mechanism"
+    }
+  ],
+  "carried_forward_findings": [
+    "F19-DEL-01", "F19-SEC-01", "F19-REL-01", "CF09-SEC-01", "CF09-OBS-01"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/memory_engine_test.rb", "runs": 26, "assertions": 164, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_store_test.rb", "runs": 16, "assertions": 112, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_treatment_profile_test.rb", "runs": 14, "assertions": 218, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_repository_adapter_test.rb", "runs": 10, "assertions": 104, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_session_integration_test.rb", "runs": 4, "assertions": 24, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/improvement_candidate_test.rb", "runs": 14, "assertions": 284, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_improvement_lifecycle_test.rb", "runs": 6, "assertions": 13, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_skills_memory_test.rb", "runs": 12, "assertions": 49, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "probes": [
+    {"path": "/tmp/f19c_probe_delete.rb", "claim": "delete-time receipt reports removal while the deleted version and plaintext remain"},
+    {"path": "/tmp/f19c_probe_sweep_real.rb", "claim": "the real retention pass removes versions, heads, and index rows for an agent-deleted record"}
+  ],
+  "blind_spots": [
+    "mixed expired/pending batch behavior was not exercised",
+    "sensitive-record deletion and protection-codec behavior were not probed",
+    "no production consolidation caller or evals-runner second engine was traced end to end",
+    "no multi-process maintenance, long-lived growth, or real provider run was used"
+  ],
+  "coordinator_flags": [
+    "CF10 direct review completed without subagent delegation per owner request",
+    "the F19 deleted:false mechanism is refuted; the missing worker caller is the surviving boundary defect",
+    "CF10-OBS-01 receipt lead is a duplicate of F19 deletion-receipt findings and is excluded from counts",
+    "carried findings are excluded from CF10 counts to avoid double-counting"
+  ]
+}

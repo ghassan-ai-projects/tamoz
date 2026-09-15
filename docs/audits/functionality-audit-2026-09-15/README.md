@@ -34,10 +34,10 @@ dispositions, and blind spots are recorded in [COVERAGE.md](COVERAGE.md).
 
 ## Current synthesis checkpoint
 
-The shared audit package now contains 38 JSON analyst records expanding to 49
+The shared audit package now contains 39 JSON analyst records expanding to 50
 row surfaces: all 27 gem responsibilities, the reference app and executable
-surfaces, the aggregate script/Rakefile rows, and CF01–CF09. The current analyst
-snapshot has 41 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
+surfaces, the aggregate script/Rakefile rows, and CF01–CF10. The current analyst
+snapshot has 42 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
 assessment; eight retain explicit sustained-load measurement gaps documented in
 `analyses/scalability-lens-review.md`. The standalone scanner passes cover every
 gem/app/executable/support/Rakefile inventory and CF01–CF13; cross-flow analyst
@@ -50,7 +50,7 @@ challenge records. Their coordinator dispositions are recorded in
 [CHECKPOINT.md](CHECKPOINT.md). The package remains read-only: reports identify
 production gaps but do not implement fixes. The challenger-added F20-REL-02
 finding was independently re-reviewed before it was accepted into the index.
-CF01–CF09 now have direct end-to-end reports; CF03, CF04, CF05, CF06, CF07, CF08, and CF09 carry
+CF01–CF10 now have direct end-to-end reports; CF03, CF04, CF05, CF06, CF07, CF08, CF09, and CF10 carry
 existing authority, reliability, replay, and control-routing findings without
 double-counting them.
 

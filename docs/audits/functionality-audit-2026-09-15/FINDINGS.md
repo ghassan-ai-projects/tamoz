@@ -60,6 +60,7 @@ owed.
 | CF09-SEC-01 | CF09 | major | high | `tamoz-agent-memory` `Retrieval#recall` automatic layer/trust allowlist | UPHELD — active Experience and reported Knowledge reach automatic planning |
 | CF09-OBS-01 | CF09 | minor | high | `tamoz-agent-session` `SessionPlanningContext#add_memory_context` | UPHELD — no admission-to-plan recall correlation |
 | CF09-MNT-01 | CF09 | info | high | episode admission versus behavior promotion vocabulary | DEMOTED/DUPLICATE — F23-SEC-01 owns the unbound promotion gate |
+| CF10-REL-01 | CF10 | major | high | `tamoz-agent` worker maintenance → `MemoryStore#purge_expired` | UPHELD — working retention pass has no production caller |
 | F10-SEC-01 | F10 | major | high | `script/websearch_adapter#load_provider` | UPHELD — exact-host contract applies |
 | F10-SEC-03 | F10 | info | medium | `tamoz-agent-capabilities` MCP/websearch configuration | MERGED into CF05-SEC-01 — documentation/contract axis |
 | CF05-SEC-01 | CF05 | info | medium | `CapabilityBinding#admission_set` and profile/runtime authority contract | DEMOTED — verified behavior, unresolved documentation contract; see `challenge-profile-authority.md` |
@@ -219,6 +220,13 @@ owed.
   statement is demoted to an information duplicate of `F23-SEC-01`; episode
   admission is automatic by design. `F19-SEC-01`, `F19-OBS-01`, `F19-REL-01`,
   `F23-SEC-01`, and the stream notes are carried without double-counting.
+- **CF10 memory/lifecycle disposition.** The direct source trace and retention
+  probes uphold `CF10-REL-01` as an open major boundary finding: the existing
+  retention pass removes the record from versions, heads, and index rows, but
+  no production worker or maintenance caller invokes it. `F19-DEL-01` remains
+  the owning component symptom with its `deleted: false` mechanism corrected;
+  the flow counts only the missing worker caller. The deletion-receipt and
+  transition-recovery leads are carried under F19 without duplicate counts.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
