@@ -110,10 +110,11 @@ owed.
 | F23-SEC-01 | F23 | major | high | `evaluation_report.rb#assert_human_gate!` | DEMOTED — no production caller |
 | F24-ERR-01 | F24 | major | high | `cli.rb#run_durable` read-only `show` | UPHELD — fix precedent exists in-repo |
 | F24-ERR-02 | F24 | minor | high | `cli.rb#parse_resume_options` `exit()` | DEMOTED — under-scoped, third victim found |
-| F25-COR-01 | F25 | major | high | `worker.rb#settle_view` cancelled shown completed | pending |
-| F25-SEC-02 | F25 | major | high | `worker.rb#exhausted_budget` inert budgets | pending |
-| F26-ERR-01 | F26 | major | high | `verifier.rb#read_stable_file` zero-byte file | pending |
-| F26-EVD-01 | F26 | major | high | `docs/requirements-audit.json` is stale | pending |
+| F25-COR-01 | F25 | major | high | `worker.rb#settle_view` cancelled shown completed | UPHELD — worker-to-outbox probe |
+| F25-SEC-02 | F25 | major | high | `worker.rb#exhausted_budget` inert budgets | UPHELD — four accepted budgets have no usage evidence |
+| F26-ERR-01 | F26 | major | high | `verifier.rb#read_stable_file` zero-byte file | UPHELD — zero-byte probe raises `NoMethodError` |
+| F26-EVD-01 | F26 | major | high | `docs/requirements-audit.json` is stale | UPHELD — stale artifact provenance; S01/R01 owner |
+| F26-EVD-02 | F26 | minor | high | `script/generate_requirements_audit#run_case` assertion-count gate | OPEN — mechanism confirmed; no committed zero-assertion row |
 | F27-COR-01 | F27 | minor | high | `scoreboard.rb#validate_run!` | DEMOTED — doc splits the responsibility |
 | R01-GATE-01 | R01 | major | high | `Rakefile:444` `ci` omits the quality gates | UPHELD — add budget evidence to the fix |
 | R01-GATE-02 | R01 | major | high | `script/release_rehearsal:157` runs `ci` not `ci_full` | UPHELD — script and plan disagree |
@@ -150,9 +151,10 @@ owed.
   is the highest-value architectural finding in the audit even though each instance
   is graded `major` rather than `critical` for want of a reachable unsafe caller.
 - **Evidence-quality theme.** Several rows have correct mechanisms with unreached
-  or unwired callers (`F19-DEL-01`, `F20-REL-01`, `F26-EVD-01`, `F16-SEC-01`). The
-  pattern is a shared one: a capability is implemented, tested in isolation, and
-  documented, but nothing in the shipped system calls it.
+  or unwired callers (`F19-DEL-01`, `F20-REL-01`, `F16-SEC-01`). The pattern is a
+  shared one: a capability is implemented, tested in isolation, and documented,
+  but nothing in the shipped system calls it. F26-EVD-01 is a separate generated-
+  artifact freshness gap: the committed evidence no longer matches its manifest.
 - **F13 approval disposition.** The independent challenge upheld six major
   findings: schedule approval profiles are not carried into execution, reload
   drops the selected overlay, tool overrides bypass no-session tiers, resolution
@@ -169,6 +171,17 @@ owed.
   profile challenge qualified the threat model to the local operator trust root.
   `F21-REL-01` records the concurrent adoption-write race as minor; the secure
   loader, transition fence, and history-bound notes are recorded as info.
+- **F25 runtime disposition.** The independent challenge upheld `F25-COR-01`: a
+  cancellation redirect can be emitted as `request.completed`/`Verified` while
+  its terminal reason and body say cancellation and unsatisfied verification.
+  It also upheld `F25-SEC-02`: four accepted profile budget keys are carried and
+  pinned but never compared with runtime usage. Both remain major/open at the
+  worker seams; the existing target-request race control is not a duplicate.
+- **F26 evidence disposition.** The independent challenge upheld `F26-ERR-01`:
+  a zero-byte artifact escapes the typed verifier/CLI error contract. It upheld
+  `F26-EVD-01` with a narrower stale-manifest/audit provenance scope owned by
+  S01/R01, and confirmed `F26-EVD-02` as a minor generator contract gap with no
+  current zero-assertion occupant. All remain open; no artifact was regenerated.
 - **Cross-flow disposition.** `CF07-ARCH-01` and `CF07-REL-02` are accepted as
   open major boundary findings after the schedule challenge. The separate
   `flows-CF09-CF11.md` report remains an analyst lead set awaiting explicit
@@ -176,13 +189,14 @@ owed.
 
 ## Challenge outcomes
 
-Fourteen challenge records are indexed under `analyses/challenge-*.md`. The
-current wave added independent challenges for F13 and F18; F21 uses the existing
-`challenge-profile-authority.md` record. Each challenge states whether the
-finding reproduced, the control case, ownership, and the resulting severity.
-F13's challenge demoted one major to minor and closed one design lead; F18's
-challenge closed the browser reachability lead while retaining its major and
-minor dispositions.
+Sixteen challenge records are indexed under `analyses/challenge-*.md`. The
+current waves added independent challenges for F13, F18, F25, and F26; F21 uses
+the existing `challenge-profile-authority.md` record. Each challenge states
+whether the finding reproduced, the control case, ownership, and the resulting
+severity. F13's challenge demoted one major to minor and closed one design lead;
+F18's challenge closed the browser reachability lead while retaining its major
+and minor dispositions; F25 upheld both pending majors; and F26 upheld both
+pending majors while narrowing their ownership.
 
 A challenge record is required for every critical/major finding per [BAR.md](BAR.md).
 Rows marked `pending` above are owed one; see [CHECKPOINT.md](CHECKPOINT.md).

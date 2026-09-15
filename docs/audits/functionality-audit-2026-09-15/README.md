@@ -42,12 +42,12 @@ has 33 `IMPROVE` and 7 `PASS` verdicts. Eight rows still lack a completed
 scalability lens (`A01`, `E01`, `E05`, `E06`, `E07`, `E09`, `F12`, and `F17`),
 so no row is closed under the six-lens bar.
 
-The latest bounded wave added standalone F13 (approval), F18 (capabilities),
-and F21 (profile) reports. F13 and F18 have new independent challenge records;
-F21's major finding is covered by `challenge-profile-authority.md`. Their
-coordinator dispositions are recorded in [FINDINGS.md](FINDINGS.md), with
-remaining work tracked in [CHECKPOINT.md](CHECKPOINT.md). The package remains
-read-only: reports identify production gaps but do not implement fixes.
+The latest bounded waves added standalone F13 (approval), F18 (capabilities),
+F21 (profile), F25 (runtime), and F26 (evals evidence) reports and independent
+challenge records. Their coordinator dispositions are recorded in
+[FINDINGS.md](FINDINGS.md), with remaining work tracked in
+[CHECKPOINT.md](CHECKPOINT.md). The package remains read-only: reports identify
+production gaps but do not implement fixes.
 
 The audit is complete only when [BAR.md](BAR.md) is satisfied. Documentation
 may make the audit bar and evidence clearer; with no implementation in scope,

@@ -9,7 +9,7 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 
 | Surface | Inventory | Scanner pass | Analyst report present | Six-lens complete | Synthesis complete |
 |---|---:|---:|---:|---:|---:|
-| Gem responsibilities | 27/27 | 0/27 | 27/27 | 25/27 | 3/27 |
+| Gem responsibilities | 27/27 | 0/27 | 27/27 | 25/27 | 5/27 |
 | Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 0/1 | 1/1 | 0/1 | 0/1 |
 | Gem and `bin/` executables | 9/9 | 0/9 | 9/9 | 4/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 0/46 | 0/46 item-level | 0/46 item-level | 0/46 |
@@ -36,12 +36,12 @@ CF06. The scanner lanes remain partial at the functionality level: the 11 W1
 gem rows and all 13 cross-flow rows remain pending under the six-lens bar.
 
 The current analysis set includes standalone reports for F13 approval, F18
-capabilities, and F21 profile in addition to the earlier functionality rows and
-cross-gem probes. Their major findings have independent challenge evidence (the
-F21 challenge is recorded in `challenge-profile-authority.md`). The coordinator
-index in [FINDINGS.md](FINDINGS.md) records this wave's dispositions; open
-findings and the remaining scanner, flow, item-level script, and challenge work
-keep the closure counters pending.
+capabilities, F21 profile, F25 runtime, and F26 evals evidence in addition to the
+earlier functionality rows and cross-gem probes. Their major findings have
+independent challenge evidence (the F21 challenge is recorded in
+`challenge-profile-authority.md`). The coordinator index in [FINDINGS.md](FINDINGS.md)
+records these waves' dispositions; open findings and the remaining scanner,
+flow, item-level script, and challenge work keep the closure counters pending.
 
 ## Rolling queue
 
@@ -93,8 +93,8 @@ analyst, synthesis, and disposition columns are intentionally still pending.
 | F22 | `tamoz-agent-session` | Durable deliberation records, planning, graph nodes, effects, routing, adaptive machinery | W1A | pending | pending | pending | open coverage |
 | F23 | `tamoz-agent-improvement` | Candidate provenance, heuristic generation, evaluation, promotion/rollback | W4A | pending | pending | pending | open coverage |
 | F24 | `tamoz-agent-cli` | `tamoz` executable and worker/schedule/profile/session/comms commands | W2A | pending | pending | pending | open coverage |
-| F25 | `tamoz-agent` | Agent runtime, worker/durable execution, model/capability wiring, approval default | W2A | pending | pending | pending | open coverage |
-| F26 | `tamoz-evals` | Artifact schemas, canonical digests, verification, release evidence | W5 | pending | pending | pending | open coverage |
+| F25 | `tamoz-agent` | Agent runtime, worker/durable execution, model/capability wiring, approval default | W2A | pending | complete | complete | 2 major findings open; cancellation projection and inert accepted budgets upheld |
+| F26 | `tamoz-evals` | Artifact schemas, canonical digests, verification, release evidence | W5 | pending | complete | complete | 2 major + 1 minor open; stale artifact and zero-byte guard upheld |
 | F27 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments, benchmarks, external inputs | W5 | pending | pending | pending | open coverage |
 
 ## Apps and entry points
