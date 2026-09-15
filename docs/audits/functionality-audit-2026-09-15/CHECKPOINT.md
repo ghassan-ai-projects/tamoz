@@ -6,13 +6,13 @@
 | Code baseline | branch `audit-15-09`, commit `582ae5566de1ae073aea82b69bb2bbf444494d3b` |
 | Mode | Read-only functionality audit; coordinator-led continuation per owner request; no implementation requested |
 | Package state | Documentation and analyst/challenge reports are in the shared audit folder; production code, tests, and configuration remain untouched |
-| Closure | CF01 has a complete PASS review, CF02–CF12 have complete IMPROVE reviews; CF13 analyst coverage, item-level support review, and overall synthesis remain pending under [BAR.md](BAR.md) |
+| Closure | CF01 has a complete PASS review, CF02–CF13 have complete IMPROVE reviews; item-level app/support synthesis and gem-row synthesis remain pending under [BAR.md](BAR.md) |
 
 ## Filesystem evidence snapshot
 
-The current shared folder contains 41 JSON analyst records expanding to 52 row
+The current shared folder contains 42 JSON analyst records expanding to 53 row
 surfaces: all 27 gem responsibilities, the app and executable surfaces, the
-aggregate script/Rakefile rows, and CF01–CF12. The declared row counters are 44
+aggregate script/Rakefile rows, and CF01–CF13. The declared row counters are 44
 `IMPROVE` and 8 `PASS`. Direct parsing of the `findings` arrays and the
 reconciled JSON counters both yield 193 finding records. `rollup.py` reports
 those counters and is read-only.
@@ -46,6 +46,7 @@ support-script, and synthesis gates keep the overall audit incomplete.
 | CF10 — memory/lifecycle/consolidation | `analyses/CF10-memory-lifecycle.md` and `.json` | `analyses/challenge-memory.md` + retention probes | IMPROVE; CF10-REL-01 upheld as the missing worker retention caller; the receipt and transition leads are carried under F19 without duplicate count |
 | CF11 — healing/improvement/promotion | `analyses/CF11-healing-improvement.md` and `.json` | `analyses/challenge-healing.md`, `review-f20-rel02.md`, and `challenge-improvement-tools-kernel.md` | IMPROVE; all three lead proposals duplicate challenged F20/F23 findings; no new count |
 | CF12 — observability/OTLP | `analyses/CF12-observability-otel.md` and `.json` | existing `challenge-observability.md` and `challenge-comms-otel-schedule.md` | IMPROVE; CF12-OBS-01 accepted as one new minor; F15/F16 findings carried without duplicate count |
+| CF13 — evaluation/release evidence | `analyses/CF13-evaluation-release.md` and `.json` | existing `challenge-f26-evidence.md`, `challenge-core-telegram-evals.md`, and `challenge-session-stream-gates.md` | IMPROVE; no new machine-counted finding; F26/F27/S01/R01 evidence findings carried without duplicate count |
 
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
@@ -56,18 +57,18 @@ scanner lane is recorded in
 critical findings remain F07-SEC-01, F08-SEC-01, F09-SEC-02, and F25-SEC-01.
 F23-SEC-01 and F20-REL-01 are recorded as major after challenge/demotion.
 The CF07 occurrence report and its schedule challenge are also indexed as two
-open major boundary findings. CF09, CF10, CF11, and CF12 now have coordinator
-reports and syntheses; CF11's boundary proposals are explicitly challenged and
-owned by the F20/F23 records, while CF12's upstream worker projection finding is
-separate from the F15/F16 exporter findings. CF13 remains pending its analyst
-report.
+open major boundary findings. CF09, CF10, CF11, CF12, and CF13 now have
+coordinator reports and syntheses; CF11's boundary proposals are explicitly
+challenged and owned by the F20/F23 records, while CF12's upstream worker
+projection finding is separate from the F15/F16 exporter findings. CF13 carries
+existing release-evidence and gate-composition findings without a second count.
 
 ## Remaining work
 
-1. Trace CF13 end to end with boundary owners, tests/contracts, blind spots, and
-   coordinator disposition; CF01–CF12 are directly reviewed, the
-   standalone scanner pass is complete, and an analyst report alone does not
-   close a row.
+1. Complete coordinator synthesis for the app, executable, support-script,
+   Rakefile, and remaining gem rows; the standalone scanner pass and CF01–CF13
+   direct flow reviews are complete, and an analyst report alone does not close
+   a row.
 2. Preserve explicit throughput evidence gaps for the eight rows listed in
    `analyses/scalability-lens-review.md`; run bounded load/soak work only when
    deployment-level throughput evidence is required.

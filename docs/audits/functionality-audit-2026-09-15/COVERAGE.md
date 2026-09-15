@@ -14,7 +14,7 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 | Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 46/46 | 0/46 item-level | 0/46 item-level | 0/46 |
 | Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
-| Cross-gem flows | 13/13 | 13/13 | 12/13 (one partial aggregate) | 12/13 | 12/13 |
+| Cross-gem flows | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 |
 
 No functionality row has met the closure bar at this checkpoint. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
@@ -22,9 +22,9 @@ app, nine executable surfaces, 46 support-script files, and the Rakefile. The
 complete cross-flow scanner pass is recorded in
 `analyses/crossflow-scanner-pass.md`; analyst reports and scanner leads remain
 separate gates. The filesystem currently contains
-41 JSON analyst records expanding to 52 row surfaces, including all 27 gem IDs
+42 JSON analyst records expanding to 53 row surfaces, including all 27 gem IDs
 and the completed CF01, CF02, CF03, CF04, CF05, CF06, CF07, CF08, CF09, CF10,
-CF11, and CF12 flow reviews.
+CF11, CF12, and CF13 flow reviews.
 All 27 gem reports and all app/executable rows now have a scalability assessment.
 The coordinator addendum `analyses/scalability-lens-review.md` records the eight
 rows whose local bounds are proved but whose sustained-load measurements are
@@ -41,8 +41,9 @@ covered approval, profile, capability, toolbox, MCP, websearch, and session
 authority paths. The standalone inventory/search pass in
 `analyses/scanner-pass.md` now covers all gem/app/executable/support/Rakefile
 surfaces, and `analyses/crossflow-scanner-pass.md` covers CF01–CF13. The
-CF13 analyst lane still needs end-to-end boundary review under the six-lens bar;
-CF01–CF12 have direct analyst reports and coordinator synthesis.
+CF01–CF13 have direct analyst reports and coordinator synthesis; the remaining
+open coverage is the grouped app, executable, support-script, Rakefile, and gem
+row synthesis work recorded below.
 
 The current analysis set includes standalone reports for F13 approval, F18
 capabilities, F20 healing, F21 profile, F25 runtime, and F26 evals evidence in
@@ -155,7 +156,7 @@ still fail at a boundary.
 | CF10 | Memory admission, retrieval, deletion, consolidation, and transitions | agent-memory → SQLite → kernel/session/tools | ANALYST COMPLETE; IMPROVE; synthesis complete; CF10-REL-01 upheld as the missing worker retention caller; F19 receipt/transition findings carried without duplicate count |
 | CF11 | Failure classification, safe remediation, candidate improvement, promotion/rollback | healing/improvement → kernel/memory → session/effects/approval | ANALYST COMPLETE; IMPROVE; synthesis complete; lead proposals duplicate challenged F20/F23 findings; no new count |
 | CF12 | Signal recording, metrics/traces, bounded drains, and OTLP export | runtime components → observability → OTel | ANALYST COMPLETE; IMPROVE; synthesis complete; CF12-OBS-01 accepted as a minor; F15/F16 findings carried without duplicate count |
-| CF13 | Evaluation corpus, harness, scorecard, verification, and release evidence | evals/evals-runner ↔ runtime entry points and artifacts | SCANNER COMPLETE; analyst review pending |
+| CF13 | Evaluation corpus, harness, scorecard, verification, and release evidence | evals/evals-runner ↔ runtime entry points and artifacts | ANALYST COMPLETE; IMPROVE; synthesis complete; carries F26/F27/S01/R01 evidence findings without duplicate count |
 
 Historical audits listed in `README.md` are lead sources only. They do not move
 any row above from pending to complete without current source evidence and an

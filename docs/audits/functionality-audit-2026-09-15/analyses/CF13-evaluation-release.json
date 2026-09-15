@@ -1,0 +1,55 @@
+{
+  "row": "CF13",
+  "surface": "evaluation corpus, harness, scorecard, verification, and release evidence",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [],
+  "tests_run": [
+    {"command": "ruby -Itest test/evals_verifier_test.rb", "runs": 23, "assertions": 294, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/requirements_manifest_test.rb", "runs": 11, "assertions": 3018, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/release_evaluation_manifest_test.rb", "runs": 9, "assertions": 149, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/release_rehearsal_evidence_test.rb", "runs": 9, "assertions": 44, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/runner_input_manifest_test.rb", "runs": 7, "assertions": 13, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/ci_configuration_test.rb", "runs": 2, "assertions": 15, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/documentation_surface_test.rb", "runs": 9, "assertions": 87, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_scorecard_test.rb", "runs": 6, "assertions": 215, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest gems/tamoz-evals/test/scoreboard_test.rb", "runs": 4, "assertions": 22, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/benchmark_controls_test.rb", "runs": 14, "assertions": 29, "failures": 0, "errors": 5, "note": "Errno::EPERM loopback bind restriction"}
+  ],
+  "blind_spots": [
+    "No successful caller-owned runner-input-v1 scorecard or release rehearsal was run.",
+    "The requirements audit was not regenerated because this is a read-only audit.",
+    "benchmark_controls_test.rb had five loopback bind errors caused by the environment.",
+    "No real provider, collector, full rake ci, or full rake ci_full run was used.",
+    "Benchmark metric internals and mission internals remain owned by F27."
+  ],
+  "carried_findings": [
+    "F26-EVD-01",
+    "F26-ERR-01",
+    "F26-EVD-02",
+    "F27-COR-01",
+    "F27-SEC-01",
+    "F27-SCAL-01",
+    "S01-BEN-01",
+    "R01-GATE-01",
+    "R01-GATE-02",
+    "R01-GATE-04",
+    "E02",
+    "E03"
+  ],
+  "coordinator_flags": [
+    "CF13 direct review completed without subagent delegation per owner request",
+    "CF13 adds no new machine-counted finding; all observations map to existing owners",
+    "F27-COR-01 is carried at its challenged minor disposition",
+    "F26-EVD-01 remains open and is owned at the S01/R01 artifact-freshness boundary",
+    "carried findings are excluded from CF13 counts to avoid double-counting"
+  ]
+}
