@@ -7,6 +7,17 @@ boundary. Every finding below is a **boundary** defect — a contract two compon
 disagree about, or a hop whose owner is nobody. A gem's own finding is marked
 "duplicate of X, boundary owner Y" and is not counted.
 
+> **Coordinator note (2026-09-15):** This file is the bounded analyst lead for
+> CF09–CF11. CF09's coordinator synthesis is now
+> [`CF09-stream-learning.md`](CF09-stream-learning.md) and its machine record is
+> [`CF09-stream-learning.json`](CF09-stream-learning.json). That synthesis
+> corrects the lead's CF09 count: the missing automatic layer/trust allowlist is
+> the new major, the recall join is a minor, and the “two human gates” item is an
+> information-level duplicate of the existing promotion finding. The lead's
+> verbatim-content observation remains carried as `F19-SEC-01`; it is not counted
+> again. CF10 and CF11 remain lead material until their own coordinator reports
+> are written.
+
 ## Scope and source map
 
 Files read at source for the seam traces (flow-relevant regions, with line counts of

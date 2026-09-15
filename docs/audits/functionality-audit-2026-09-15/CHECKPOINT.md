@@ -6,15 +6,15 @@
 | Code baseline | branch `audit-15-09`, commit `582ae5566de1ae073aea82b69bb2bbf444494d3b` |
 | Mode | Read-only functionality audit; coordinator-led continuation per owner request; no implementation requested |
 | Package state | Documentation and analyst/challenge reports are in the shared audit folder; production code, tests, and configuration remain untouched |
-| Closure | CF01 has a complete PASS review, CF02–CF08 have complete IMPROVE reviews; CF09–CF13 analyst coverage, item-level support review, and overall synthesis remain pending under [BAR.md](BAR.md) |
+| Closure | CF01 has a complete PASS review, CF02–CF09 have complete IMPROVE reviews; CF10–CF13 analyst coverage, item-level support review, and overall synthesis remain pending under [BAR.md](BAR.md) |
 
 ## Filesystem evidence snapshot
 
-The current shared folder contains 37 JSON analyst records expanding to 48 row
+The current shared folder contains 38 JSON analyst records expanding to 49 row
 surfaces: all 27 gem responsibilities, the app and executable surfaces, the
-aggregate script/Rakefile rows, and CF01–CF08. The declared row counters are 40
+aggregate script/Rakefile rows, and CF01–CF09. The declared row counters are 41
 `IMPROVE` and 8 `PASS`. Direct parsing of the `findings` arrays and the
-reconciled JSON counters both yield 188 finding records. `rollup.py` reports
+reconciled JSON counters both yield 191 finding records. `rollup.py` reports
 those counters and is read-only.
 
 All 27 gem IDs now have a standalone JSON row record. All 27 gem reports and
@@ -42,6 +42,7 @@ support-script, and synthesis gates keep the overall audit incomplete.
 | CF06 — request/worker/control routing | `analyses/CF06-control-routing.md` and `.json` | existing `challenge-queue-comms-schedule.md`, `challenge-session-stream-gates.md`, `challenge-f25-runtime.md`, and `challenge-profile-authority.md` | IMPROVE; request identity, fencing, pause/resume, and recovery traced; F07/F22/F25 findings carried, no duplicate count |
 | CF07 — schedule/occurrence/worker settlement | `analyses/CF07-schedule-settlement.md` and `.json` | `analyses/occurrence-contract-and-fencing.md` + `analyses/challenge-queue-comms-schedule.md` | IMPROVE; CF07-ARCH-01 and CF07-REL-02 upheld; F05 history/lease findings carried, no duplicate count |
 | CF08 — channel/delivery/approval relay | `analyses/CF08-channel-delivery.md` and `.json` | `analyses/challenge-comms-otel-schedule.md` + `analyses/challenge-core-telegram-evals.md` | IMPROVE; F11-COR-01, F12-REL-01, and F14-COR-01 upheld; component demotions/closure carried, no duplicate count |
+| CF09 — stream/learning/reverse channel | `analyses/CF09-stream-learning.md` and `.json` | `analyses/challenge-memory.md` + coordinator real-store probe | IMPROVE; CF09-SEC-01 (automatic layer/trust allowlist) upheld as major, CF09-OBS-01 remains minor, and the human-gate lead is demoted to info; F19/F23 findings carried without duplicate count |
 
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
@@ -52,14 +53,15 @@ scanner lane is recorded in
 critical findings remain F07-SEC-01, F08-SEC-01, F09-SEC-02, and F25-SEC-01.
 F23-SEC-01 and F20-REL-01 are recorded as major after challenge/demotion.
 The CF07 occurrence report and its schedule challenge are also indexed as two
-open major boundary findings. The separate CF09–CF11 flow report remains an
-analyst artifact until its boundary findings receive explicit challenge and
-coordinator ownership.
+open major boundary findings. CF09 now has a coordinator report and synthesis;
+the combined `flows-CF09-CF11.md` file remains the lead source for CF10 and CF11
+until their boundary findings receive explicit challenge and coordinator
+ownership.
 
 ## Remaining work
 
-1. Trace CF09–CF13 end to end with boundary owners, tests/contracts, blind
-   spots, and coordinator dispositions; CF01–CF08 are directly reviewed, the
+1. Trace CF10–CF13 end to end with boundary owners, tests/contracts, blind
+   spots, and coordinator dispositions; CF01–CF09 are directly reviewed, the
    standalone scanner pass is complete, and an analyst report alone does not
    close a row.
 2. Preserve explicit throughput evidence gaps for the eight rows listed in

@@ -1,0 +1,107 @@
+{
+  "row": "CF09",
+  "surface": "supervised stream episode, evidence pull, learning loop, and reverse channel",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 1, "minor": 1, "info": 1},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "CF09-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "automatic retrieval ignores the documented layer/trust policy and injects Experience into action planning",
+      "seam": "tamoz-agent-memory Retrieval#recall automatic path → tamoz-agent-session SessionPlanningContext",
+      "citations": [
+        "documentation/design/memory.md:54,70-74",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb:51-64",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:203-243",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:410-429",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_planning_context.rb:567-576",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb:332-340"
+      ],
+      "five_whys": true,
+      "recommendation": "Enforce the automatic layer/trust allowlist in Retrieval#recall before materialization and add a regression assertion that an active Experience row is never automatic; keep the policy at this existing seam.",
+      "disposition": "accepted open major; distinct from F19-SEC-01's verbatim-content framing finding"
+    },
+    {
+      "id": "CF09-OBS-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "the planning turn is not correlated with the memory it injects",
+      "seam": "tamoz-agent-session SessionPlanningContext#add_memory_context",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_planning_context.rb:571-576",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb:177-202",
+        "gems/tamoz-stream/lib/tamoz/stream/live_learning_handlers.rb:111-114"
+      ],
+      "five_whys": false,
+      "recommendation": "Pass the current turn trace through the existing planning-context call chain and supply it to Retrieval#recall(trace:), retaining the existing memory_recalled payload.",
+      "disposition": "accepted open minor"
+    },
+    {
+      "id": "CF09-MNT-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "duplicate",
+      "title": "episode admission and behavior promotion use human gate for different artifacts",
+      "seam": "tamoz-agent-memory Admission versus tamoz-agent-improvement Promotion",
+      "citations": [
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb:242-268",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:38-65",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:220-235",
+        "documentation/design/memory.md:48-64"
+      ],
+      "five_whys": false,
+      "recommendation": "Use artifact-specific gate vocabulary in the memory and improvement design docs; keep F23-SEC-01 as the owner of the unbound promotion evidence.",
+      "disposition": "demoted from lead major; duplicate vocabulary face of F23-SEC-01 and accepted automatic episode-admission design"
+    }
+  ],
+  "carried_forward_findings": [
+    "F19-SEC-01", "F19-OBS-01", "F19-REL-01", "F23-SEC-01", "F23-MNT-01",
+    "F06-SEC-01", "F06-SEC-03"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/stream_learning_loop_test.rb", "runs": 17, "assertions": 84, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_skills_memory_test.rb", "runs": 12, "assertions": 49, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_session_integration_test.rb", "runs": 4, "assertions": 24, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_evidence_client_test.rb", "runs": 10, "assertions": 40, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_end_to_end_test.rb", "runs": 3, "assertions": 62, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_situation_recall_contract_test.rb", "runs": 2, "assertions": 4, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_invariants_test.rb", "runs": 9, "assertions": 212, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_replay_test.rb", "runs": 3, "assertions": 15, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_crash_matrix_test.rb", "runs": 2, "assertions": 18, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_stream_test.rb", "runs": 8, "assertions": 76, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_worker_test.rb", "runs": 8, "assertions": 24, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_capability_host_test.rb", "runs": 9, "assertions": 441, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_situation_request_test.rb", "runs": 11, "assertions": 55, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_situation_snapshot_test.rb", "runs": 8, "assertions": 12, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_fixed_graph_test.rb", "runs": 6, "assertions": 25, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_intent_authority_test.rb", "runs": 5, "assertions": 16, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_repository_adapter_test.rb", "runs": 10, "assertions": 104, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "probes": [
+    {"path": "/tmp/cf09_experience_auto2.rb", "claim": "automatic retrieval returns an active Experience row alongside a reported Knowledge row"},
+    {"path": "/tmp/f19c_probe_auto2.rb", "claim": "automatic retrieval returns a reported Knowledge record"}
+  ],
+  "blind_spots": [
+    "rake stream:proto:check was not run; the pinned proto source was read",
+    "the layer probe calls the memory engine directly rather than a full stream-to-session integration path",
+    "no real external evidence peer, model provider, operator approval service, sustained stream load, or cross-process crash was used",
+    "the upstream intermediary that signs or admits an external stream request was not audited in this row"
+  ],
+  "coordinator_flags": [
+    "CF09 direct review completed without subagent delegation per owner request",
+    "CF09-SEC-01 is challenged by challenge-memory.md plus the coordinator's real-store probe; the authority intersection keeps it major rather than critical",
+    "CF09-MNT-01 is demoted to info and F23-SEC-01 remains the owner of the unbound promotion evidence",
+    "carried findings are excluded from CF09 counts to avoid double-counting"
+  ]
+}

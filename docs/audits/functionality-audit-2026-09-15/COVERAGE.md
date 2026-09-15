@@ -14,7 +14,7 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 | Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 46/46 | 0/46 item-level | 0/46 item-level | 0/46 |
 | Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
-| Cross-gem flows | 13/13 | 13/13 | 8/13 (one partial aggregate) | 8/13 | 8/13 |
+| Cross-gem flows | 13/13 | 13/13 | 9/13 (one partial aggregate) | 9/13 | 9/13 |
 
 No functionality row has met the closure bar at this checkpoint. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
@@ -22,8 +22,8 @@ app, nine executable surfaces, 46 support-script files, and the Rakefile. The
 complete cross-flow scanner pass is recorded in
 `analyses/crossflow-scanner-pass.md`; analyst reports and scanner leads remain
 separate gates. The filesystem currently contains
-37 JSON analyst records expanding to 48 row surfaces, including all 27 gem IDs
-and the completed CF01, CF02, CF03, CF04, CF05, CF06, CF07, and CF08 flow reviews.
+38 JSON analyst records expanding to 49 row surfaces, including all 27 gem IDs
+and the completed CF01, CF02, CF03, CF04, CF05, CF06, CF07, CF08, and CF09 flow reviews.
 All 27 gem reports and all app/executable rows now have a scalability assessment.
 The coordinator addendum `analyses/scalability-lens-review.md` records the eight
 rows whose local bounds are proved but whose sustained-load measurements are
@@ -40,8 +40,8 @@ covered approval, profile, capability, toolbox, MCP, websearch, and session
 authority paths. The standalone inventory/search pass in
 `analyses/scanner-pass.md` now covers all gem/app/executable/support/Rakefile
 surfaces, and `analyses/crossflow-scanner-pass.md` covers CF01–CF13. The
-CF09–CF13 analyst lanes still need end-to-end boundary review under the
-six-lens bar; CF01–CF08 have direct analyst reports and coordinator synthesis.
+CF10–CF13 analyst lanes still need end-to-end boundary review under the
+six-lens bar; CF01–CF09 have direct analyst reports and coordinator synthesis.
 
 The current analysis set includes standalone reports for F13 approval, F18
 capabilities, F20 healing, F21 profile, F25 runtime, and F26 evals evidence in
@@ -150,7 +150,7 @@ still fail at a boundary.
 | CF06 | Request, worker, and multi-turn control routing | CLI → agent runtime/session → SQLite inbox/leases → graph | ANALYST COMPLETE; IMPROVE; synthesis complete; carries F07-REL-01, F22 control findings, F25 cancellation/profile findings, no duplicate counts |
 | CF07 | Schedule admission, occurrence leases, and worker execution | scheduler contract → SQLite schedule store → CLI/runtime/graph | ANALYST COMPLETE; IMPROVE; synthesis complete; CF07-ARCH-01 and CF07-REL-02 upheld; F05 schedule findings carried without duplicate counts |
 | CF08 | Channel admission, rendering, outbox delivery, and approval relay | Telegram → Comms → gateway → SQLite → agent/approval | ANALYST COMPLETE; IMPROVE; synthesis complete; F11-COR-01, F12-REL-01, and F14-COR-01 upheld; demoted/closed component leads carried without duplicate counts |
-| CF09 | Supervised stream episode, evidence pull, learning loop, reverse channel | stream → session/runtime → SQLite/memory/improvement/approval | SCANNER COMPLETE; analyst review pending |
+| CF09 | Supervised stream episode, evidence pull, learning loop, reverse channel | stream → session/runtime → SQLite/memory/improvement/approval | ANALYST COMPLETE; IMPROVE; synthesis complete; CF09-SEC-01 upheld, CF09-OBS-01 open, CF09-MNT-01 demoted to info; existing F19/F23 findings carried without duplicate count |
 | CF10 | Memory admission, retrieval, deletion, consolidation, and transitions | agent-memory → SQLite → kernel/session/tools | SCANNER COMPLETE; analyst review pending |
 | CF11 | Failure classification, safe remediation, candidate improvement, promotion/rollback | healing/improvement → kernel/memory → session/effects/approval | SCANNER COMPLETE; analyst review pending |
 | CF12 | Signal recording, metrics/traces, bounded drains, and OTLP export | runtime components → observability → OTel | SCANNER COMPLETE; analyst review pending |

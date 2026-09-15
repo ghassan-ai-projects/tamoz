@@ -57,6 +57,9 @@ owed.
 | F08-REL-01 | F08 | major | high | `tamoz-tools` `staging_reaper.rb#collect` | UPHELD — reserved-prefix deletion |
 | F09-COR-01 | F09 | minor | medium | `tamoz-mcp` descriptor effect/read-only contract | DEMOTED — no production reachability |
 | F09-SEC-01 | F09 | major | high | `tamoz-agent-session` `session_effects.rb#mcp_planning_surface` | UPHELD — citation corrected |
+| CF09-SEC-01 | CF09 | major | high | `tamoz-agent-memory` `Retrieval#recall` automatic layer/trust allowlist | UPHELD — active Experience and reported Knowledge reach automatic planning |
+| CF09-OBS-01 | CF09 | minor | high | `tamoz-agent-session` `SessionPlanningContext#add_memory_context` | UPHELD — no admission-to-plan recall correlation |
+| CF09-MNT-01 | CF09 | info | high | episode admission versus behavior promotion vocabulary | DEMOTED/DUPLICATE — F23-SEC-01 owns the unbound promotion gate |
 | F10-SEC-01 | F10 | major | high | `script/websearch_adapter#load_provider` | UPHELD — exact-host contract applies |
 | F10-SEC-03 | F10 | info | medium | `tamoz-agent-capabilities` MCP/websearch configuration | MERGED into CF05-SEC-01 — documentation/contract axis |
 | CF05-SEC-01 | CF05 | info | medium | `CapabilityBinding#admission_set` and profile/runtime authority contract | DEMOTED — verified behavior, unresolved documentation contract; see `challenge-profile-authority.md` |
@@ -207,6 +210,15 @@ owed.
   the promised marker. The independent challenges close `F11-SEC-02` and
   demote `F11-SEC-03`, `F11-SEC-01`, and `F14-REL-01`; the F11 store leads move
   to F07 ownership. CF08 adds no machine-counted duplicate.
+- **CF09 stream/learning disposition.** The direct six-lens trace and the
+  coordinator's real-store probe uphold `CF09-SEC-01` as an open major: the
+  automatic retrieval flag filters sensitivity but does not enforce the
+  documented Knowledge/Wisdom-only layer and trust policy, so an active
+  Experience row reaches action planning. `CF09-OBS-01` remains an open minor
+  because the planning recall supplies no trace. The lead's two-human-gates
+  statement is demoted to an information duplicate of `F23-SEC-01`; episode
+  admission is automatic by design. `F19-SEC-01`, `F19-OBS-01`, `F19-REL-01`,
+  `F23-SEC-01`, and the stream notes are carried without double-counting.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
@@ -225,9 +237,10 @@ owed.
   S01/R01, and confirmed `F26-EVD-02` as a minor generator contract gap with no
   current zero-assertion occupant. All remain open; no artifact was regenerated.
 - **Cross-flow disposition.** `CF07-ARCH-01` and `CF07-REL-02` are accepted as
-  open major boundary findings after the schedule challenge. The separate
-  `flows-CF09-CF11.md` report remains an analyst lead set awaiting explicit
-  coordinator challenge and indexing; it does not close CF09–CF11 rows.
+  open major boundary findings after the schedule challenge. CF09 now has a
+  coordinator report and synthesis; CF10 and CF11 remain represented only by
+  the bounded lead report until their own challenge and coordinator records are
+  written.
 
 ## Challenge outcomes
 
