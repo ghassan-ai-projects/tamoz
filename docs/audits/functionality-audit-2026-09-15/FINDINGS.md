@@ -93,7 +93,7 @@ owed.
 | F19-REL-01 | F19 | major | high | `transition_registry.rb#release_or_finalize` | UPHELD — fix larger than reported |
 | F19-SEC-01 | F19 | major | high | admission → planning-context injection path | UPHELD — subject changed |
 | F20-REL-01 | F20 | major | high | `remediation/session.rb` repetition bound | DEMOTED — no production caller |
-| F20-REL-02 | F20 | major | high | `attempt_evidence.rb` raw Array instead of Outcome | pending — new challenger finding needs analyst re-review |
+| F20-REL-02 | F20 | major | high | `attempt_evidence.rb` raw Array instead of Outcome | UPHELD — independently re-reviewed after challenger addition |
 | F20-SEC-01 | F20 | major | high | `rule_registry.rb#assert_reviewed_diff!` | UPHELD — second unaudited verdict source |
 | F21-SEC-01 | F21 | major | high | `Profile.from_authority` pinned snapshot digest | UPHELD — challenge retained major grade |
 | F21-REL-01 | F21 | minor | high | `Profile::AdoptionRegistry#activate` shared-file update | OPEN — concurrent activation can be lost |
@@ -171,6 +171,12 @@ owed.
   profile challenge qualified the threat model to the local operator trust root.
   `F21-REL-01` records the concurrent adoption-write race as minor; the secure
   loader, transition fence, and history-bound notes are recorded as info.
+- **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
+  re-reviewed against the failed-effect path and remains major/open: the public
+  remediation entry point can return the transition `Array` before verification,
+  compensation, terminal validation, or escalation. `F20-REL-01` remains major
+  after its critical proposal was demoted for the absence of a production caller;
+  `F20-SEC-01` remains a separate major authority-contract finding.
 - **F25 runtime disposition.** The independent challenge upheld `F25-COR-01`: a
   cancellation redirect can be emitted as `request.completed`/`Verified` while
   its terminal reason and body say cancellation and unsatisfied verification.
@@ -196,7 +202,11 @@ whether the finding reproduced, the control case, ownership, and the resulting
 severity. F13's challenge demoted one major to minor and closed one design lead;
 F18's challenge closed the browser reachability lead while retaining its major
 and minor dispositions; F25 upheld both pending majors; and F26 upheld both
-pending majors while narrowing their ownership.
+pending majors while narrowing their ownership. The challenger-added F20-REL-02
+was then independently re-reviewed in `review-f20-rel02.md` and accepted as
+major/open.
 
 A challenge record is required for every critical/major finding per [BAR.md](BAR.md).
-Rows marked `pending` above are owed one; see [CHECKPOINT.md](CHECKPOINT.md).
+No coordinator-indexed critical/major row is currently marked `pending`; the
+scanner, missing-lens, cross-flow, and item-level inventories still keep the
+audit incomplete under [BAR.md](BAR.md).

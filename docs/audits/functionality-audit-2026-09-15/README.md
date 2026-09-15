@@ -47,7 +47,8 @@ F21 (profile), F25 (runtime), and F26 (evals evidence) reports and independent
 challenge records. Their coordinator dispositions are recorded in
 [FINDINGS.md](FINDINGS.md), with remaining work tracked in
 [CHECKPOINT.md](CHECKPOINT.md). The package remains read-only: reports identify
-production gaps but do not implement fixes.
+production gaps but do not implement fixes. The challenger-added F20-REL-02
+finding was independently re-reviewed before it was accepted into the index.
 
 The audit is complete only when [BAR.md](BAR.md) is satisfied. Documentation
 may make the audit bar and evidence clearer; with no implementation in scope,

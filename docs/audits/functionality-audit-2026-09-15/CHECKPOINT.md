@@ -29,6 +29,7 @@ incomplete even before scanner and cross-flow gates are considered.
 | F13 — approval | `analyses/F13-approval.md` and `.json` | `analyses/challenge-f13-approval.md` | Six major findings remain open; one scope lead demoted to minor; retention lead closed as accepted design |
 | F18 — capabilities | `analyses/F18-capabilities.md` and `.json` | `analyses/challenge-f18-capabilities.md` | One major and two minor findings remain open; browser reachability lead closed as documented limitation |
 | F21 — profile | `analyses/F21-agent-profile.md` and `.json` | `analyses/challenge-profile-authority.md` | One major and one minor finding remain open; secure-load and transition controls recorded as info |
+| F20 — healing | `analyses/F20-agent-healing.md` and `.json` | `analyses/challenge-healing.md` + `analyses/review-f20-rel02.md` | Critical repetition proposal demoted to major; F20-REL-02 and F20-SEC-01 remain major/open |
 | F25 — runtime | `analyses/F25-agent-runtime.md` and `.json` | `analyses/challenge-f25-runtime.md` | Two major findings remain open: cancellation projection and inert accepted budgets |
 | F26 — evals evidence | `analyses/F26-evals.md` and `.json` | `analyses/challenge-f26-evidence.md` | Two major findings and one minor generator gap remain open; stale-artifact ownership narrowed |
 
@@ -46,9 +47,9 @@ coordinator ownership.
    scanner counters; an analyst report alone does not close a row.
 2. Complete the eight missing scalability-lens reviews and reconcile the
    report `counts` fields with their `findings` arrays.
-3. Challenge the one critical/major entry still marked `pending` in
-   [FINDINGS.md](FINDINGS.md), then record coordinator dispositions and any
-   merges or ownership transfers.
+3. Preserve independent challenge coverage for any new critical/major finding;
+   F20-REL-02 was re-reviewed after the challenger introduced it, and no
+   coordinator-indexed critical/major entry is now pending.
 4. Trace CF01–CF13 end to end, including the already targeted CF02, CF04,
    CF05, and CF06 boundaries, and expand S01 into one row per support script.
 5. Reconcile `README.md`, `COVERAGE.md`, `FINDINGS.md`, and this checkpoint

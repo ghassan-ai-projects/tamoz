@@ -9,7 +9,7 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 
 | Surface | Inventory | Scanner pass | Analyst report present | Six-lens complete | Synthesis complete |
 |---|---:|---:|---:|---:|---:|
-| Gem responsibilities | 27/27 | 0/27 | 27/27 | 25/27 | 5/27 |
+| Gem responsibilities | 27/27 | 0/27 | 27/27 | 25/27 | 6/27 |
 | Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 0/1 | 1/1 | 0/1 | 0/1 |
 | Gem and `bin/` executables | 9/9 | 0/9 | 9/9 | 4/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 0/46 | 0/46 item-level | 0/46 item-level | 0/46 |
@@ -36,12 +36,14 @@ CF06. The scanner lanes remain partial at the functionality level: the 11 W1
 gem rows and all 13 cross-flow rows remain pending under the six-lens bar.
 
 The current analysis set includes standalone reports for F13 approval, F18
-capabilities, F21 profile, F25 runtime, and F26 evals evidence in addition to the
-earlier functionality rows and cross-gem probes. Their major findings have
-independent challenge evidence (the F21 challenge is recorded in
-`challenge-profile-authority.md`). The coordinator index in [FINDINGS.md](FINDINGS.md)
-records these waves' dispositions; open findings and the remaining scanner,
-flow, item-level script, and challenge work keep the closure counters pending.
+capabilities, F20 healing, F21 profile, F25 runtime, and F26 evals evidence in
+addition to the earlier functionality rows and cross-gem probes. Their major
+findings have independent challenge evidence (the F21 challenge is recorded in
+`challenge-profile-authority.md`); the challenger-added F20-REL-02 has the
+separate analyst re-review `review-f20-rel02.md`. The coordinator index in
+[FINDINGS.md](FINDINGS.md) records these waves' dispositions; open findings and
+the remaining scanner, flow, item-level script, and challenge work keep the
+closure counters pending.
 
 ## Rolling queue
 
@@ -88,7 +90,7 @@ analyst, synthesis, and disposition columns are intentionally still pending.
 | F17 | `tamoz-agent-kernel` | Episode records/receipts, plan/review/execute/verify, effects, catalogs, routes, projections | W1A | pending | pending | pending | open coverage |
 | F18 | `tamoz-agent-capabilities` | Sealed capability catalog and child-task dispatch | W1B | pending | complete | complete | 1 major + 2 minor open; browser limitation closed |
 | F19 | `tamoz-agent-memory` | Durable memory admission, retrieval, lifecycle, consolidation, behavior transitions | W4A | pending | pending | pending | open coverage |
-| F20 | `tamoz-agent-healing` | Typed failure classification, abstention, rules, reviewed remediation | W4A | pending | pending | pending | open coverage |
+| F20 | `tamoz-agent-healing` | Typed failure classification, abstention, rules, reviewed remediation | W4A | pending | complete | complete | F20-REL-01 demoted; F20-REL-02 and F20-SEC-01 major/open |
 | F21 | `tamoz-agent-profile` | Trusted profiles, authority/egress/check validation, secure files, registries | W1B | pending | complete | complete | 1 major + 1 minor open; info controls recorded |
 | F22 | `tamoz-agent-session` | Durable deliberation records, planning, graph nodes, effects, routing, adaptive machinery | W1A | pending | pending | pending | open coverage |
 | F23 | `tamoz-agent-improvement` | Candidate provenance, heuristic generation, evaluation, promotion/rollback | W4A | pending | pending | pending | open coverage |
