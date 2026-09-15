@@ -23,6 +23,29 @@ module Tamoz
       # further milestones replace the newest live row instead of growing.
       MILESTONE_BOUND = 32
 
+      # Per-conversation FIFO: a pending successor is ineligible while an earlier
+      # same-conversation delivery is `unknown` (its send crossed the transport
+      # boundary but is not yet resolved), so a later part cannot be delivered
+      # before an ambiguous predecessor is decided. (created_at_ms, delivery_id)
+      # is the deterministic predecessor order; resolving it unblocks the row.
+      CLAIM_DELIVERY_SQL = <<~SQL
+        UPDATE tamoz_comms_outbox
+        SET status = 'claimed', claim_owner = ?, claim_fence = ?, claim_expires_at_ms = ?
+        WHERE delivery_id = ? AND (
+          status = 'pending' OR
+          (status = 'claimed' AND claim_expires_at_ms <= ? AND send_started_at_ms IS NULL)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM tamoz_comms_outbox AS pred
+          WHERE pred.surface_id = tamoz_comms_outbox.surface_id
+            AND pred.conversation_id = tamoz_comms_outbox.conversation_id
+            AND pred.status = 'unknown'
+            AND (pred.created_at_ms < tamoz_comms_outbox.created_at_ms
+                 OR (pred.created_at_ms = tamoz_comms_outbox.created_at_ms
+                     AND pred.delivery_id < tamoz_comms_outbox.delivery_id))
+        )
+      SQL
+
       def initialize(adapter:)
         @adapter = adapter
       end
@@ -86,14 +109,8 @@ module Tamoz
           SQL
           next :missing unless existing
 
-          txn.execute('comms.outbox.claim', <<~SQL, [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
-            UPDATE tamoz_comms_outbox
-            SET status = 'claimed', claim_owner = ?, claim_fence = ?, claim_expires_at_ms = ?
-            WHERE delivery_id = ? AND (
-              status = 'pending' OR
-              (status = 'claimed' AND claim_expires_at_ms <= ? AND send_started_at_ms IS NULL)
-            )
-          SQL
+          txn.execute('comms.outbox.claim', CLAIM_DELIVERY_SQL,
+                      [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
           txn.changes == 1 ? :claimed : :not_claimable
         end
       end
