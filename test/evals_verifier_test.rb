@@ -214,6 +214,17 @@ class EvalsVerifierTest < Minitest::Test
     end
   end
 
+  # A zero-byte artifact — the likely residue of an interrupted write — must
+  # fail closed with a typed refusal, not an uncaught NoMethodError (F26-ERR-01).
+  def test_zero_byte_artifact_fails_closed_with_a_typed_error
+    Dir.mktmpdir("tamoz-empty") do |directory|
+      path = File.join(directory, "empty.case.json")
+      File.write(path, "")
+
+      assert_raises(Tamoz::Evals::InvalidArtifactError) { Tamoz::Evals.verify(path) }
+    end
+  end
+
   def test_duplicate_json_keys_are_rejected_before_schema_validation
     Dir.mktmpdir("tamoz-duplicate-key") do |directory|
       path = File.join(directory, "duplicate.case.json")
