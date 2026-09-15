@@ -156,6 +156,22 @@ class ConcurrencyDrainTest < Minitest::Test
     gate << :go rescue nil
   end
 
+  # A caller must be able to tell a clean shutdown from an abandoned backlog:
+  # close returns the count it could not drain, never a bare nil (F03-REL-02).
+  def test_close_returns_the_backlog_it_could_not_drain
+    collector = Collector.new(lanes: { a: 8 }, batch_size: 8)
+    gate = Queue.new
+    collector.hold_delivery(gate)
+
+    assert_equal true, collector.store(:a, 1)
+    wait_until { collector.in_flight.positive? }
+
+    assert_operator collector.close(deadline_ms: 20), :>, 0,
+                    "close reports the backlog it abandoned, never a clean nil"
+  ensure
+    gate << :go rescue nil
+  end
+
   def test_unknown_lane_is_rejected_without_touching_the_queues
     collector = Collector.new(lanes: { a: 4 }, batch_size: 4)
 
