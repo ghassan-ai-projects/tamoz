@@ -2,9 +2,8 @@
 
 This package is the index and quality bar for a read-only, functionality-by-
 functionality audit of the current Tamoz checkout. It follows the real source
-paths end to end, records gaps and weaknesses with evidence, and uses a fresh
-independent subagent for each functionality that produces a full analysis and
-write-up. It does not implement fixes.
+paths end to end and records gaps and weaknesses with evidence. It does not
+implement fixes.
 
 The baseline is branch `audit-15-09`, commit `582ae55`, with a clean worktree
 when setup began on 2026-09-15. The live tree has 27 gem library directories.
@@ -15,15 +14,15 @@ cross-gem flows in separate inventories.
 ## How the audit runs
 
 The coordinator owns the queue, the evidence bar, synthesis, and the final
-coverage decision. For each queued functionality it sends a short, bounded
-brief to a new read-only subagent running `gpt-5.6-luna` at the maximum
-supported thinking level. The brief names the functionality, source and test
-surfaces, its queue group, forbidden paths, and the required report shape.
-The analyst reads the actual implementation and relevant behavior contracts,
-tests, callers, and documentation; it records verified findings and writes its
-owned report under this folder. A scanner may supply inventory, search, Enola,
-or quality-signal leads, but a scanner lead is never a finding or a completed
-review until an independent analyst confirms it.
+coverage decision. The normal delegated lane uses a short, bounded brief to a
+read-only `gpt-5.6-luna` analyst at the maximum supported thinking level. For
+the current owner-directed continuation, the coordinator is performing those
+bounded source reviews directly because subagent delegation was explicitly
+paused; the quality bar and report shape are unchanged. Each review reads the
+actual implementation and relevant behavior contracts, tests, callers, and
+documentation, then records verified findings under this folder. A scanner may
+supply inventory, search, Enola, or quality-signal leads, but a scanner lead is
+never a finding or a completed review until an analyst confirms it.
 
 The coordinator then checks citations, challenges the reasoning, reconciles
 overlap with earlier audits, and records a disposition. Critical and major
@@ -35,10 +34,10 @@ dispositions, and blind spots are recorded in [COVERAGE.md](COVERAGE.md).
 
 ## Current synthesis checkpoint
 
-The shared audit package now contains 31 JSON analyst records expanding to 42
+The shared audit package now contains 32 JSON analyst records expanding to 43
 row surfaces: all 27 gem responsibilities, the reference app and executable
-surfaces, the aggregate script/Rakefile rows, and CF01–CF02. The current analyst
-snapshot has 34 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
+surfaces, the aggregate script/Rakefile rows, and CF01–CF03. The current analyst
+snapshot has 35 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
 assessment; eight retain explicit sustained-load measurement gaps documented in
 `analyses/scalability-lens-review.md`. The standalone scanner passes cover every
 gem/app/executable/support/Rakefile inventory and CF01–CF13; cross-flow analyst
@@ -51,6 +50,8 @@ challenge records. Their coordinator dispositions are recorded in
 [CHECKPOINT.md](CHECKPOINT.md). The package remains read-only: reports identify
 production gaps but do not implement fixes. The challenger-added F20-REL-02
 finding was independently re-reviewed before it was accepted into the index.
+CF01–CF03 now have direct end-to-end reports; CF03 carries existing authority
+and reliability findings without double-counting them.
 
 The audit is complete only when [BAR.md](BAR.md) is satisfied. Documentation
 may make the audit bar and evidence clearer; with no implementation in scope,
