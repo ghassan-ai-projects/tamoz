@@ -303,6 +303,32 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
+  def test_run_check_withholds_operator_secrets_outside_the_provider_list
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      probe = 'puts [ENV.key?("TAMOZ_SIGNING_KEY"), ENV.key?("TAMOZ_CONFIG_HOME"), ' \
+              'ENV.key?("DATABASE_DSN"), ENV.key?("PATH")].inspect'
+      toolbox = Tamoz::Agent::Toolbox.new(
+        root:,
+        allow_changes: true,
+        checks: {"env" => [RbConfig.ruby, "-e", probe]}
+      )
+      ENV["TAMOZ_SIGNING_KEY"] = "signing-secret"
+      ENV["TAMOZ_CONFIG_HOME"] = "/tmp/tamoz-config"
+      ENV["DATABASE_DSN"] = "postgres://user:pw@host/db"
+
+      result = toolbox.execute("run_check", "name" => "env")
+
+      assert result.passed?, result.to_s
+      assert_includes result.to_s, "[false, false, false, true]"
+      refute_includes result.to_s, "signing-secret"
+      refute_includes result.to_s, "user:pw"
+    ensure
+      ENV.delete("TAMOZ_SIGNING_KEY")
+      ENV.delete("TAMOZ_CONFIG_HOME")
+      ENV.delete("DATABASE_DSN")
+    end
+  end
+
   def test_credential_env_classification
     assert Tamoz::Agent::Toolbox.credential_env?("DEEPSEEK_API_KEY")
     assert Tamoz::Agent::Toolbox.credential_env?("MY_SECRET_TOKEN")
