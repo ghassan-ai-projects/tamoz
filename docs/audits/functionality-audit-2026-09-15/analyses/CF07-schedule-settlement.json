@@ -1,0 +1,39 @@
+{
+  "row": "CF07",
+  "surface": "schedule admission, occurrence leases, and worker execution",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": [
+    "CF07-ARCH-01", "CF07-REL-02", "F05-REL-04", "F05-REL-05",
+    "F05-REL-01", "F05-COR-01", "F05-OBS-06", "F05-REL-02", "F07-REL-01"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/scheduler_values_test.rb", "runs": 17, "assertions": 112, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/scheduler_contract_test.rb", "runs": 3, "assertions": 21, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/scheduler_due_occurrences_test.rb", "runs": 9, "assertions": 24, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/scheduler_consumer_test.rb", "runs": 8, "assertions": 26, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/sqlite_schedule_determinism_test.rb", "runs": 4, "assertions": 15, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/sqlite_schedule_store_test.rb", "runs": 21, "assertions": 73, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_schedule_test.rb", "runs": 9, "assertions": 65, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "blind_spots": [
+    "No alternate non-SQLite adapter was driven through worker settlement.",
+    "No in-tree mismatched completion caller was found; the store mismatch was reproduced while running.",
+    "No lost-consumer, lease-expiry, reclaim, long-outage, multi-process race, or sustained schedule-load run was performed.",
+    "No real model, provider, MCP service, sink, network endpoint, or external authorization layer was used."
+  ],
+  "coordinator_flags": [
+    "CF07 direct review completed without subagent delegation per owner request.",
+    "CF07-ARCH-01 and CF07-REL-02 are upheld by the independent schedule challenge.",
+    "Carried findings are excluded from CF07 counts to avoid double-counting.",
+    "Lease/reclaim remains a deferred contract/design decision, not a new severity count."
+  ]
+}

@@ -187,6 +187,16 @@ owed.
   control, cancellation-projection, and profile-authority findings. `F22-REL-02`
   remains a minor public-recovery precondition gap. Existing challenge records
   uphold those dispositions; no CF06 duplicate is indexed.
+- **CF07 schedule-settlement disposition.** The direct six-lens trace confirms
+  revision-checked admission, atomic request/occurrence materialization,
+  deterministic identity, fenced acknowledgement, and the ordinary worker
+  execution path. The independent schedule challenge upholds `CF07-ARCH-01`
+  (the worker settlement methods are absent from the versioned store contract)
+  and `CF07-REL-02` (completion does not fence the acknowledged execution id).
+  `F05-REL-04` remains minor after challenge, `F05-REL-05` remains major, and
+  the schedule digest, zero-concurrency, and correlation gaps retain F05
+  ownership. The lease/reclaim mismatch is recorded as a deferred design
+  decision. CF07 adds no machine-counted duplicate.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
