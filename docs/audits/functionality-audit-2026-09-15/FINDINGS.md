@@ -86,6 +86,7 @@ owed.
 | F16-OBS-01 | F16 | major | high | `tamoz-otel` `async_exporter.rb#delivery_result` | UPHELD — `outcome` dropped |
 | F16-SEC-01 | F16 | minor | high | `tamoz-otel` exporter has no enable path | DEMOTED — docs/ownership debt |
 | F16-SEC-02 | F16 | major | high | `tamoz-otel` `http_exporter.rb#resource_spans` | UPHELD — not critical, gem unreachable |
+| CF12-OBS-01 | CF12 | minor | high | `tamoz-agent` `worker.rb#settle` / `#emit_durable_model_calls` | ACCEPTED — budget-stop and non-success effects are absent from the model-call projection |
 | F17-COR-01 | F17 | info | high | `tamoz-agent-kernel` `session_steps.rb#journaled_verdict` | DEMOTED — `deep_freeze` closes the exploit |
 | F17-REL-01 | F17 | major | high | same defect as CF04-REL-01 — do not double-count | UPHELD |
 | F17-B9-01 | F17 | minor | high | `episode_nodes.rb` RISK_RANK duplication | DEMOTED + merged with B9-02 |
@@ -227,6 +228,14 @@ owed.
   the owning component symptom with its `deleted: false` mechanism corrected;
   the flow counts only the missing worker caller. The deletion-receipt and
   transition-recovery leads are carried under F19 without duplicate counts.
+- **CF12 observability/OTLP disposition.** The direct six-lens trace and real
+  budget-stop probe confirm `CF12-OBS-01`: settlement returns before the durable
+  model-call projection when a configured budget is exhausted, and the projector
+  itself selects only successful effects. The SQLite effect journal and the
+  `request.stopped` event remain present, so this is accepted as one bounded
+  minor observability finding at the worker seam. F15 recorder/trace findings
+  and F16 exporter findings remain their existing owners and are carried without
+  double-counting.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
