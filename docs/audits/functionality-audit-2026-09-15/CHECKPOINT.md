@@ -6,13 +6,13 @@
 | Code baseline | branch `audit-15-09`, commit `582ae5566de1ae073aea82b69bb2bbf444494d3b` |
 | Mode | Read-only functionality audit; coordinator-led continuation per owner request; no implementation requested |
 | Package state | Documentation and analyst/challenge reports are in the shared audit folder; production code, tests, and configuration remain untouched |
-| Closure | CF01 has a complete PASS review, CF02 and CF03 have complete IMPROVE reviews; CF04–CF13 analyst coverage, item-level support review, and overall synthesis remain pending under [BAR.md](BAR.md) |
+| Closure | CF01 has a complete PASS review, CF02–CF04 have complete IMPROVE reviews; CF05–CF13 analyst coverage, item-level support review, and overall synthesis remain pending under [BAR.md](BAR.md) |
 
 ## Filesystem evidence snapshot
 
-The current shared folder contains 32 JSON analyst records expanding to 43 row
+The current shared folder contains 33 JSON analyst records expanding to 44 row
 surfaces: all 27 gem responsibilities, the app and executable surfaces, the
-aggregate script/Rakefile rows, and CF01–CF03. The declared row counters are 35
+aggregate script/Rakefile rows, and CF01–CF04. The declared row counters are 36
 `IMPROVE` and 8 `PASS`. Direct parsing of the `findings` arrays and the
 reconciled JSON counters both yield 188 finding records. `rollup.py` reports
 those counters and is read-only.
@@ -37,6 +37,7 @@ support-script, and synthesis gates keep the overall audit incomplete.
 | CF01 — load isolation | `analyses/CF01-load-isolation.md` and `.json` | none required; no critical/major finding | PASS after 22-run dependency isolation contract |
 | CF02 — durable replay | `analyses/CF02-durable-replay.md` and `.json` | carried F07-REL-01 challenge evidence | IMPROVE; bounded claim starvation remains open |
 | CF03 — plan/approval/effect/repair | `analyses/CF03-reviewed-plan-approval.md` and `.json` | existing F13/F20/F09/F07 challenge and re-review records | IMPROVE; carried authority and reliability findings, no double-counting |
+| CF04 — effect identity/replay | `analyses/CF04-effect-replay.md` and `.json` | existing CF04/F17 and F07 challenge records | IMPROVE; CF04-REL-01 and F07-SEC-01 carried, no double-counting |
 
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
@@ -53,8 +54,8 @@ coordinator ownership.
 
 ## Remaining work
 
-1. Trace CF04–CF13 end to end with boundary owners, tests/contracts, blind
-   spots, and coordinator dispositions; CF01–CF03 are directly reviewed, the
+1. Trace CF05–CF13 end to end with boundary owners, tests/contracts, blind
+   spots, and coordinator dispositions; CF01–CF04 are directly reviewed, the
    standalone scanner pass is complete, and an analyst report alone does not
    close a row.
 2. Preserve explicit throughput evidence gaps for the eight rows listed in
