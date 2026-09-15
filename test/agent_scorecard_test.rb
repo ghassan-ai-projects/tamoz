@@ -109,7 +109,9 @@ class AgentScorecardTest < Minitest::Test
         # terminal ToolPolicyError refusal (its oracle passes — the file is
         # untouched) instead of a repair-loop stop. Phases 2c-3c then grew
         # prompt bytes only (milestone, cancellation-timeline and context-
-        # control text); no behavioral counter moved.
+        # control text); no behavioral counter moved. F09-SEC-01 grew them
+        # again by attributing remote MCP tool descriptions in the planner
+        # prompt (+194 B over the 95 calls); no behavioral counter moved.
         "cases" => 21,
         "task_successes" => 19,
         "task_success_basis_points" => 9_047,
@@ -125,7 +127,7 @@ class AgentScorecardTest < Minitest::Test
         "approvals_denied" => 1,
         "tool_calls" => 38,
         "model_calls" => 95,
-        "model_input_bytes" => 286_652,
+        "model_input_bytes" => 286_846,
         "model_output_bytes" => 21_441,
         "tool_output_bytes" => 5_122,
         "mutations" => 11,
