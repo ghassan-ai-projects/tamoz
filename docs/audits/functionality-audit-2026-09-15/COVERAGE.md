@@ -14,7 +14,7 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 | Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 46/46 | 0/46 item-level | 0/46 item-level | 0/46 |
 | Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
-| Cross-gem flows | 13/13 | 13/13 | 10/13 (one partial aggregate) | 10/13 | 10/13 |
+| Cross-gem flows | 13/13 | 13/13 | 11/13 (one partial aggregate) | 11/13 | 11/13 |
 
 No functionality row has met the closure bar at this checkpoint. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
@@ -22,8 +22,9 @@ app, nine executable surfaces, 46 support-script files, and the Rakefile. The
 complete cross-flow scanner pass is recorded in
 `analyses/crossflow-scanner-pass.md`; analyst reports and scanner leads remain
 separate gates. The filesystem currently contains
-39 JSON analyst records expanding to 50 row surfaces, including all 27 gem IDs
-and the completed CF01, CF02, CF03, CF04, CF05, CF06, CF07, CF08, CF09, and CF10 flow reviews.
+40 JSON analyst records expanding to 51 row surfaces, including all 27 gem IDs
+and the completed CF01, CF02, CF03, CF04, CF05, CF06, CF07, CF08, CF09, CF10,
+and CF11 flow reviews.
 All 27 gem reports and all app/executable rows now have a scalability assessment.
 The coordinator addendum `analyses/scalability-lens-review.md` records the eight
 rows whose local bounds are proved but whose sustained-load measurements are
@@ -40,8 +41,8 @@ covered approval, profile, capability, toolbox, MCP, websearch, and session
 authority paths. The standalone inventory/search pass in
 `analyses/scanner-pass.md` now covers all gem/app/executable/support/Rakefile
 surfaces, and `analyses/crossflow-scanner-pass.md` covers CF01–CF13. The
-CF11–CF13 analyst lanes still need end-to-end boundary review under the
-six-lens bar; CF01–CF10 have direct analyst reports and coordinator synthesis.
+CF12–CF13 analyst lanes still need end-to-end boundary review under the
+six-lens bar; CF01–CF11 have direct analyst reports and coordinator synthesis.
 
 The current analysis set includes standalone reports for F13 approval, F18
 capabilities, F20 healing, F21 profile, F25 runtime, and F26 evals evidence in
@@ -152,7 +153,7 @@ still fail at a boundary.
 | CF08 | Channel admission, rendering, outbox delivery, and approval relay | Telegram → Comms → gateway → SQLite → agent/approval | ANALYST COMPLETE; IMPROVE; synthesis complete; F11-COR-01, F12-REL-01, and F14-COR-01 upheld; demoted/closed component leads carried without duplicate counts |
 | CF09 | Supervised stream episode, evidence pull, learning loop, reverse channel | stream → session/runtime → SQLite/memory/improvement/approval | ANALYST COMPLETE; IMPROVE; synthesis complete; CF09-SEC-01 upheld, CF09-OBS-01 open, CF09-MNT-01 demoted to info; existing F19/F23 findings carried without duplicate count |
 | CF10 | Memory admission, retrieval, deletion, consolidation, and transitions | agent-memory → SQLite → kernel/session/tools | ANALYST COMPLETE; IMPROVE; synthesis complete; CF10-REL-01 upheld as the missing worker retention caller; F19 receipt/transition findings carried without duplicate count |
-| CF11 | Failure classification, safe remediation, candidate improvement, promotion/rollback | healing/improvement → kernel/memory → session/effects/approval | SCANNER COMPLETE; analyst review pending |
+| CF11 | Failure classification, safe remediation, candidate improvement, promotion/rollback | healing/improvement → kernel/memory → session/effects/approval | ANALYST COMPLETE; IMPROVE; synthesis complete; lead proposals duplicate challenged F20/F23 findings; no new count |
 | CF12 | Signal recording, metrics/traces, bounded drains, and OTLP export | runtime components → observability → OTel | SCANNER COMPLETE; analyst review pending |
 | CF13 | Evaluation corpus, harness, scorecard, verification, and release evidence | evals/evals-runner ↔ runtime entry points and artifacts | SCANNER COMPLETE; analyst review pending |
 

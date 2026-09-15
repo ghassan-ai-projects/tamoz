@@ -245,10 +245,10 @@ owed.
   S01/R01, and confirmed `F26-EVD-02` as a minor generator contract gap with no
   current zero-assertion occupant. All remain open; no artifact was regenerated.
 - **Cross-flow disposition.** `CF07-ARCH-01` and `CF07-REL-02` are accepted as
-  open major boundary findings after the schedule challenge. CF09 now has a
-  coordinator report and synthesis; CF10 and CF11 remain represented only by
-  the bounded lead report until their own challenge and coordinator records are
-  written.
+  open major boundary findings after the schedule challenge. CF09, CF10, and
+  CF11 now have coordinator reports and syntheses. CF11's raw-array, repetition,
+  and promotion-gate proposals are confirmed observations but duplicate the
+  challenged F20/F23 records, so they add no machine-counted findings.
 
 ## Challenge outcomes
 

@@ -12,14 +12,18 @@ disagree about, or a hop whose owner is nobody. A gem's own finding is marked
 > [`CF09-stream-learning.md`](CF09-stream-learning.md) and its machine record is
 > [`CF09-stream-learning.json`](CF09-stream-learning.json), and
 > [`CF10-memory-lifecycle.md`](CF10-memory-lifecycle.md) plus
-> [`CF10-memory-lifecycle.json`](CF10-memory-lifecycle.json). Those syntheses
+> [`CF10-memory-lifecycle.json`](CF10-memory-lifecycle.json), and
+> [`CF11-healing-improvement.md`](CF11-healing-improvement.md) plus
+> [`CF11-healing-improvement.json`](CF11-healing-improvement.json). Those syntheses
 > correct the lead's CF09 count: the missing automatic layer/trust allowlist is
 > the new major, the recall join is a minor, and the “two human gates” item is an
 > information-level duplicate of the existing promotion finding. The lead's
 > verbatim-content observation remains carried as `F19-SEC-01`; it is not counted
 > again. CF10 retains only the missing worker retention caller as a new boundary
-> major; its receipt observation is carried under F19. CF11 remains lead material
-> until its own coordinator report is written.
+> major; its receipt observation is carried under F19. CF11's three lead
+> proposals are all duplicates of the challenged F20/F23 findings and add no
+> machine-counted finding. The coordinator reports are authoritative for all
+> three rows; the detailed lead sections remain historical analyst material.
 
 ## Scope and source map
 
