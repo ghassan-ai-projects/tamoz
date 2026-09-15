@@ -323,6 +323,25 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  # A 409 on a send is not a poller conflict: PollerConflictError is a class the
+  # delivery drainer cannot read, so classifying a send that way would kill the
+  # drainer thread and strand the row. A send's outcome is ambiguous (F14-COR-01).
+  def test_a_send_conflict_is_ambiguous_not_a_poller_conflict
+    with_transport do |transport, server|
+      server.script('sendMessage', status: 409, body: {
+        'ok' => false, 'error_code' => 409, 'description' => 'Conflict'
+      }, times: 1)
+      delivery = Comms::Delivery.build(
+        conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'hello',
+        part_index: 0, part_count: 1, journaled: true, render_version: 1,
+        content_digest: 'b' * 64
+      )
+
+      error = assert_raises(Comms::AmbiguousDeliveryError) { transport.deliver(delivery) }
+      refute_kind_of Comms::PollerConflictError, error
+    end
+  end
+
   def test_signal_answers_the_callback_query
     with_transport do |transport, server|
       server.script('answerCallbackQuery', body: { 'ok' => true, 'result' => true }, times: 1)
