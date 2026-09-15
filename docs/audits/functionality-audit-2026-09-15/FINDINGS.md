@@ -197,6 +197,16 @@ owed.
   the schedule digest, zero-concurrency, and correlation gaps retain F05
   ownership. The lease/reclaim mismatch is recorded as a deferred design
   decision. CF07 adds no machine-counted duplicate.
+- **CF08 channel/delivery disposition.** The direct six-lens trace confirms
+  offset-after-admission ordering, typed admission and refusal, durable outbox
+  capacity and fences, approval evidence binding, and no-blind-retry handling.
+  `F12-REL-01` remains an open major because an unknown multipart predecessor
+  does not block its successor; `F14-COR-01` remains an open major because a
+  send-side HTTP 409 is classified as an unhandled poller conflict; and
+  `F11-COR-01` remains an open major because rendering drops overflow without
+  the promised marker. The independent challenges close `F11-SEC-02` and
+  demote `F11-SEC-03`, `F11-SEC-01`, and `F14-REL-01`; the F11 store leads move
+  to F07 ownership. CF08 adds no machine-counted duplicate.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
