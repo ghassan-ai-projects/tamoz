@@ -179,6 +179,14 @@ owed.
   `F10-SEC-03` is merged into this same contract axis. The combined-path regression
   recommendation remains, while `F25-SEC-01`, `F22-SEC-01`, `F18-SEC-01`, and the
   F09/F10 egress findings retain their existing owners and severities.
+- **CF06 control-routing disposition.** The direct six-lens trace confirms the
+  request identity, fenced claim/recovery, open-occurrence priority, and
+  paused-resume paths. It adds no machine-counted finding. `F07-REL-01` remains
+  the owning major for an eight-row deferred-turn starvation window;
+  `F22-COR-01`/`F22-SEC-01` and `F25-COR-01`/`F25-SEC-01` remain the owning
+  control, cancellation-projection, and profile-authority findings. `F22-REL-02`
+  remains a minor public-recovery precondition gap. Existing challenge records
+  uphold those dispositions; no CF06 duplicate is indexed.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
