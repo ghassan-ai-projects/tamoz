@@ -182,9 +182,21 @@ module Tamoz
 
         @store.adapter.__send__(:transaction, operation: 'effect.resolve') do |tx|
           now = @store.adapter.__send__(:backend_time, tx, 'effect.resolve.time')
+          lease = @guard.lease
+          @store.adapter.__send__(
+            :validate_lease_in_transaction!,
+            tx,
+            lease,
+            now:,
+            label: 'effect.resolve.lease'
+          )
           row = EffectJournalRows.effect(tx, effect_key, 'effect.resolve.row')
           raise CheckpointConflictError, 'effect does not exist' unless row
 
+          if row.fetch(2) != lease.thread_id || row.fetch(3) != lease.namespace
+            raise CheckpointConflictError,
+                  'effect resolution outside the writer row scope'
+          end
           head_status = row.fetch(9)
           unless %w[unknown reconcile failed].include?(head_status)
             raise CheckpointConflictError,
@@ -200,8 +212,10 @@ module Tamoz
                     requires_reconciliation END,
                   updated_at_ms = ?
               WHERE effect_key = ? AND status = ?
+                AND thread_id = ? AND namespace = ?
             SQL
-            [status_text, status_text, now, effect_key, head_status]
+            [status_text, status_text, now, effect_key, head_status,
+             lease.thread_id, lease.namespace]
           )
           raise CheckpointConflictError, 'effect resolution lost' unless tx.changes == 1
 

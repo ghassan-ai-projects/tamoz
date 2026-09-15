@@ -436,6 +436,74 @@ class SQLiteEffectJournalTest < Minitest::Test
     end
   end
 
+  def test_human_resolution_refuses_a_foreign_writer_row_scope
+    with_effect_store do |_adapter, _app, store, execution_id|
+      decision = nil
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.a.start",
+        ttl: store.writer_ttl
+      ) do |writer|
+        decision = prepare_effect(
+          writer.effects,
+          execution_id:,
+          task_id: "task.scope",
+          safety: :unsafe
+        )
+        writer.effects.start(
+          key: decision.record.key,
+          attempt_token: decision.attempt_token
+        )
+      end
+      expire_attempt(store.adapter.path, decision.attempt_token)
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.a.unknown",
+        ttl: store.writer_ttl
+      ) do |writer|
+        assert_equal :unknown, prepare_effect(
+          writer.effects,
+          execution_id:,
+          task_id: "task.scope",
+          safety: :unsafe
+        ).action
+      end
+
+      store.open_writer(
+        thread_id: "thread.b",
+        namespace: [],
+        owner_id: "owner.b.human",
+        ttl: store.writer_ttl
+      ) do |writer|
+        assert_raises(Tamoz::CheckpointConflictError) do
+          writer.effects.resolve(
+            key: decision.record.key,
+            status: :succeeded,
+            actor: "operator.b",
+            evidence: {"ticket" => "INC-2"}
+          )
+        end
+      end
+
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.a.human",
+        ttl: store.writer_ttl
+      ) do |writer|
+        resolved = writer.effects.resolve(
+          key: decision.record.key,
+          status: :succeeded,
+          actor: "operator.a",
+          evidence: {"ticket" => "INC-2"}
+        )
+        assert_equal :succeeded, resolved.status
+      end
+    end
+  end
+
   def test_durable_runner_rejects_an_unbound_effect_journal
     Dir.mktmpdir("tamoz-effect-context") do |directory|
       adapter = Tamoz::SQLite::Adapter.new(
