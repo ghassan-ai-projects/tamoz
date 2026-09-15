@@ -1,0 +1,155 @@
+{
+  "row": "F20",
+  "surface": "gems/tamoz-agent-healing",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 1, "major": 1, "minor": 3, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F20-REL-01",
+      "severity": "critical",
+      "confidence": "high",
+      "status": "open",
+      "title": "The remediation protocol has no bound on repetitions; a repeated failure is not detected by identity and the circuit cannot stop it",
+      "seam": "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb#call + lib/tamoz/agent/healing/seams.rb#MemoryCircuitStore#record_failure",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb:63",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb:78-85",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb:93",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:19",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:46",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:84",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:258",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/preflight.rb:118-124",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb:510-520",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb:56-63",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb:65-73",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/attempt_evidence.rb:46",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb:26",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_evidence.rb:128-151",
+        "README.md:58-62"
+      ],
+      "five_whys": true,
+      "recommendation": "Have Session carry the per-fingerprint attempt count in its circuit seam instead of trusting the caller-supplied attempt: argument, and take the repetition ceiling from the rule's existing budgets[\"max_attempts\"]; dedupe on the already-defined Tamoz::Circuit::Record::FailureEvent (gems/tamoz-core/lib/tamoz/circuit/record.rb:34), which already carries a fingerprint. A comparison at the existing seam, not new machinery."
+    },
+    {
+      "id": "F20-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The human-approval gate for a self-protected rule amendment is satisfied by a caller-supplied string prefix, not by the approval-policy seam",
+      "seam": "gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb#assert_reviewed_diff!",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb:79",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb:164-178",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb:100-116",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:43",
+        "gems/tamoz-approval/policy/base.yaml",
+        "test/healing_failure_contract_test.rb:390",
+        "test/healing_failure_contract_test.rb:419"
+      ],
+      "five_whys": true,
+      "recommendation": "Accept the approval decision object Tamoz::Approval::Engine#decide already returns (it carries the verdict and the policy revision) in place of the \"human:\"-prefixed String, and require the same for write_lifecycle_mode. The value already exists one gem over; no new class."
+    },
+    {
+      "id": "F20-OBS-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Neither a remediation Outcome nor an escalation payload can be revived through the allowlisted loader",
+      "seam": "gems/tamoz-agent-healing/lib/tamoz/agent/healing.rb#RECORD_KINDS",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing.rb:20-36",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/outcome.rb:10-24",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/escalation_payload.rb:22-27",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb:125-131",
+        "test/healing_failure_contract_test.rb:194"
+      ],
+      "five_whys": false,
+      "recommendation": "When H3 lands the durable owned issue record, key its id on the failure fingerprint already present in the payload (escalation_payload.rb:33) rather than the positional \"escalation.N\" counter. No protocol change."
+    },
+    {
+      "id": "F20-COR-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "A family-unauthorized classification escalates correctly but is not counted as an abstention",
+      "seam": "gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb#family_unauthorized_decision",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb:169",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb:212-220",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification/matrix.rb:50",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb:49-52"
+      ],
+      "five_whys": false,
+      "recommendation": "Count family_not_authorized in the matrix's abstained axis (or add a refused counter beside it) in matrix.rb#tally. A tally change, no protocol change."
+    },
+    {
+      "id": "F20-MNT-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "The documented seam replacements have no non-test constructor; the protocol is complete but unreachable from production",
+      "seam": "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb#build_session",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb:88-107",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb:5-17",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb:150-163",
+        "gems/tamoz-agent/lib/tamoz/agent.rb:18",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb:99-106"
+      ],
+      "five_whys": false,
+      "recommendation": "None beyond what seams.rb already prescribes: when H3 lands, the durable circuit must carry FailureEvent#fingerprint so F20-REL-01 closes at the seam replacing the in-memory counter."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/healing_failure_contract_test.rb", "runs": 35, "assertions": 264, "failures": 0},
+    {"command": "ruby -Itest test/healing_remediation_test.rb", "runs": 13, "assertions": 74, "failures": 0},
+    {"command": "ruby -Itest test/healing_matrix_test.rb", "runs": 4, "assertions": 44, "failures": 0},
+    {"command": "ruby -Itest test/agent_repair_evaluation_test.rb", "runs": 8, "assertions": 55, "failures": 0},
+    {"command": "ruby -Itest test/agent_diagnosis_catalog_test.rb", "runs": 15, "assertions": 53, "failures": 0},
+    {"command": "ruby -Itest test/agent_worker_failure_reason_test.rb", "runs": 6, "assertions": 14, "failures": 0}
+  ],
+  "probes": [
+    "/tmp/f20_probe1.rb - failure record shape/identity, allowlist, version gates",
+    "/tmp/f20_probe2.rb - abstention paths and action-family membership",
+    "/tmp/f20_probe3.rb - rule immutability, in-band guard, registry gates",
+    "/tmp/f20_probe5.rb - repeated remediation cycles",
+    "/tmp/f20_probe6.rb - one fingerprint over 5 cycles; effect replay; compensation contract",
+    "/tmp/f20_probe7.rb - EffectIdentity separation on rule version and trace",
+    "/tmp/f20_probe8.rb - circuit threshold vs repeated fingerprint; escalation id collision"
+  ],
+  "prior_findings": [
+    {
+      "id": "top100-100",
+      "title": "FailureRecord shared FailureEvent value + 0-ParameterLists fix",
+      "current_status": "closed, verified; one gap carried forward",
+      "evidence": "gems/tamoz-core/lib/tamoz/circuit/record.rb:34 defines FailureEvent with a fingerprint field; record.rb:346 and gems/tamoz-sqlite/lib/tamoz/sqlite/circuit_store.rb:126 consume it; test/circuit_record_test.rb:64 covers it. FailureRecord version-first gates hold in both entry paths (failure_record.rb:230-234, 278-283), both raising CheckpointVersionError, and the dead readers are gone. Gap: gems/tamoz-agent-healing/lib has zero references to FailureEvent, so the shared value is unused by this gem - the mechanism behind F20-REL-01. The #100 [major][SIZE] overage remains declined and silenced in .rubocop_todo.yml; not re-litigated."
+    }
+  ],
+  "b9_domain_data_check": {
+    "verdict": "no finding",
+    "evidence": "Everything in the gem is machinery: Classification::CATEGORY_ACTION_FAMILY/REQUIRED_EVIDENCE implement the framework's own design §3 closed category taxonomy (classification.rb:51,72), Preflight::CHECKS implement design §5 protocol steps (preflight.rb:89), and RuleRegistry#amend is a fail-closed shape gate on caller-supplied reviewed-diff + approval evidence (rule_registry.rb:164-178), exercised both ways by test/healing_failure_contract_test.rb:390. No diagnosis catalog, compensation map, watch-property rule, prompt, preset, or fixture response appears as a Ruby literal. test/support/domain_loader.rb:7-13 and test/fixtures/domains/{aquaculture,climate,cold-chain,shipment,thermal-lab}.json were read to establish the correct shape."
+  },
+  "blind_spots": [
+    "No production caller of Remediation.run or RuleRegistry exists (repo-wide grep outside the gem returns zero), so the repetition bound was verified by driving the protocol directly rather than through a session; a future caller passing a monotonically increasing attempt: would make preflight.rb:118-124 fire, so blast radius depends on the H3 wiring.",
+    "Did not run test/agent_change_evaluation_test.rb or test/agent_acceptance_workflow_test.rb - present but neither references Tamoz::Agent::Healing (F23/F25 surfaces).",
+    "Did not audit the SQLite effect journal's own attempt accounting beyond the MAX_ATTEMPTS vs current_attempt interaction (gems/tamoz-sqlite/lib/tamoz/sqlite/effect_attempt_ledger.rb:48-56); that is F07's row.",
+    "Tamoz::Sqlite::CircuitStore is named in seams.rb:32-35 as the H3 replacement but was not read for Seams-interface compatibility.",
+    "The promotion lifecycle (H4) producer side lives in tamoz-evals (F26/F27); only the pure PromotionGate predicates were read.",
+    "tamoz-agent-improvement shares the bounded-self-healing vocabulary (improvement/errors.rb:5) and was not read; vocabulary-overlap belongs to F23."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge (F20-REL-01 critical; F20-SEC-01 major)",
+    "F20-REL-01 severity depends on whether a production caller reaches Remediation.run before H3 lands",
+    "possible shared-shape (not duplicate) concern with CF04-REL-01 in tamoz-agent-kernel EffectDispatcher - distinct owning seam, challenge pass should confirm",
+    "prior top-100 #100 verified closed but its shared FailureEvent value is unused by this gem; the gap is recorded under F20-REL-01 rather than as a new finding"
+  ]
+}

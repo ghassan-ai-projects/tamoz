@@ -1,0 +1,217 @@
+{
+  "row": "F22",
+  "surface": "gems/tamoz-agent-session",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 3, "minor": 5, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F22-COR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "cancel re-enters intake and overwrites a completed session's terminal verdict with cancelled_by_user",
+      "seam": "session_bindings.rb#intake",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:82-88",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:17-25",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_lifecycle.rb:46-57",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_session_commands.rb:182-218",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_session_commands.rb:203-208",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_deliberation.rb:41-44",
+        "gems/tamoz-agent/lib/tamoz/agent/terminal_progress.rb:14",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:717-727",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:856-868"
+      ],
+      "five_whys": true,
+      "recommendation": "In SessionBindings#intake, before cancellation_update, refuse (typed) when the stored session already carries a satisfied terminal reason; or route the cancel through SessionDeliberation#cancelled?'s existing predicate instead of a second unguarded spelling of the same rule."
+    },
+    {
+      "id": "F22-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The session half of the F07-REL-01 claim-starvation boundary is undocumented and untested; no session-layer progress contract exists",
+      "seam": "session_routing.rb#fallback_with_records / RequestInboxClaimer#candidate_rows (owner F07)",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_routing.rb:238-258",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:102-115",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_graph.rb:89-97",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:216-231",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:33",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:183-190",
+        "gems/tamoz-graph/lib/tamoz/graph/request_staleness.rb:34-40",
+        "gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb:66-74",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:509-520",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:261-310",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_context_controls.rb:166-180"
+      ],
+      "five_whys": true,
+      "recommendation": "No code change at the session seam: keep the early-turn deferral, and record in documentation/architecture/invariants.md that a valid queued control request for the open occurrence must stay claimable regardless of deferral backlog. The code fix stays where F07-REL-01 put it (RequestInboxClaimer#candidate_rows), which is the single decision point both run_next and the CLI ride. Optionally surface a deferred/backlog counter in SessionContextControls#usage_report."
+    },
+    {
+      "id": "F22-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The session stores a profile authority binding it never re-verifies; guard_state! checks graph/skill/MCP/egress/behavior only",
+      "seam": "session.rb#guard_state!",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:439-449",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:219-231",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb:52",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb:472",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:57",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_planning_context.rb:434",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:293-298",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:1119-1125",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_options.rb:142-176"
+      ],
+      "five_whys": true,
+      "recommendation": "Add enforce_profile_binding! beside enforce_skill_binding! in session.rb (compare record.fetch(\"profile_digest\", LEGACY_PROFILE_DIGEST) against @profile&.canonical_digest) and call it from guard_state! and from view/outcome exactly as enforce_graph_binding! is called. Sequence with whoever closes F21-SEC-01/F25-SEC-01 so all three sites share one verdict."
+    },
+    {
+      "id": "F22-COR-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "continue on a completed thread terminal-fails the request as stale but returns the completed view with exit 0",
+      "seam": "cli.rb#drive_continue",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:325-328",
+        "gems/tamoz-graph/lib/tamoz/graph/request_staleness.rb:24",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:249-255",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:303-310"
+      ],
+      "five_whys": false,
+      "recommendation": "At cli.rb:249-255, surface the stale terminal-failure instead of returning the view; the mechanism already exists in advance_queued_request/render_request_terminal_failure."
+    },
+    {
+      "id": "F22-REL-02",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "Session#recover acts on a paused thread without the absence-of-interrupts precondition that resume enforces",
+      "seam": "session.rb#recover",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:330-338",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:206-225",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:312-317",
+        "gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb:104-115"
+      ],
+      "five_whys": false,
+      "recommendation": "At session.rb:330-338, mirror the guard resume already has: read view and refuse (typed) when view.status == :paused && !view.interrupts.empty?, pointing the caller at resume."
+    },
+    {
+      "id": "F22-REL-03",
+      "severity": "minor",
+      "confidence": "low",
+      "status": "open",
+      "title": "The bound transcript length in a compact context_control record is measured outside the writer fence while the pinned summary is read back from the record",
+      "seam": "session_context_controls.rb#compact_transcript",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_context_controls.rb:148-161",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_context_controls.rb:357-371",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_context_controls.rb:289-307",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_planning_context.rb:68-85"
+      ],
+      "five_whys": false,
+      "recommendation": "Move the conversation_history_for(thread) read inside the fields lambda at session_context_controls.rb:151 so truncated_fragments and the pinned summary are measured under the same fence."
+    },
+    {
+      "id": "F22-DOC-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Top-100 tracker still records session.rb (021) as todo; the 2026-09-12 resolution section marks all five findings fixed and current source confirms it",
+      "seam": "docs/audits/top100-audit-2026-09-11/IMPLEMENTATION.md",
+      "citations": [
+        "docs/audits/top100-audit-2026-09-11/IMPLEMENTATION.md:32",
+        "docs/audits/top100-audit-2026-09-11/021-session.md:31-48",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:70-97",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:100-127",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:143-195",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_graph.rb:15-23",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_options.rb:39-57"
+      ],
+      "five_whys": false,
+      "recommendation": "Flip IMPLEMENTATION.md:32 to done with a note pointing at 021-session.md:31-48. Documentation-only, one line."
+    },
+    {
+      "id": "F22-DOC-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "limitations.md claims invariant 18 version-refusal evidence is failing while docs/requirements-audit.json INV-18 records pass and the named suites are green",
+      "seam": "documentation/limitations.md",
+      "citations": [
+        "documentation/limitations.md:56-62",
+        "documentation/limitations.md:9-12",
+        "docs/requirements-audit.json:7094-7110",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb:382-393",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb:412-424",
+        "test/agent_session_records_test.rb:50-63",
+        "test/legacy_session_resume_test.rb:114-122"
+      ],
+      "five_whys": false,
+      "recommendation": "Correct the invariant-18 paragraph of documentation/limitations.md to match INV-18's committed pass; optionally add a bidirectional check between the page's release-blocking gap headings and the audit's failing entries."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/agent_session_records_test.rb", "runs": 15, "assertions": 34, "failures": 0},
+    {"command": "ruby -Itest test/agent_session_operations_test.rb", "runs": 6, "assertions": 36, "failures": 0},
+    {"command": "ruby -Itest test/agent_session_effect_test.rb", "runs": 19, "assertions": 78, "failures": 0},
+    {"command": "ruby -Itest test/agent_session_adaptive_test.rb", "runs": 6, "assertions": 52, "failures": 0},
+    {"command": "ruby -Itest test/agent_session_test.rb", "runs": 11, "assertions": 72, "failures": 0},
+    {"command": "ruby -Itest test/agent_session_status_projection_test.rb", "runs": 2, "assertions": 7, "failures": 0},
+    {"command": "ruby -Itest test/session_context_controls_test.rb", "runs": 10, "assertions": 91, "failures": 0},
+    {"command": "ruby -Itest test/agent_request_routing_test.rb", "runs": 18, "assertions": 232, "failures": 0},
+    {"command": "ruby -Itest test/agent_non_ascii_session_test.rb", "runs": 7, "assertions": 39, "failures": 0},
+    {"command": "ruby -Itest test/legacy_session_resume_test.rb", "runs": 5, "assertions": 28, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_stale_request_test.rb", "runs": 26, "assertions": 176, "failures": 0}
+  ],
+  "tests_not_run": [
+    {"command": "ruby -Itest test/agent_session_kill_matrix_test.rb", "reason": "real SIGTERM/SIGINT/SIGKILL to child workers; documentation/limitations.md records it as environment-bound and it is outside a 60-minute read-only budget"},
+    {"command": "rake ci / rake ci_full", "reason": "excluded by the brief's environment block"}
+  ],
+  "probes": [
+    {"path": "/tmp/tamoz-f22/probe_verbs.rb", "purpose": "real Session over a real Tamoz::SQLite::Adapter with a deterministic scripted model; exercised resume/continue/cancel against a completed thread", "result": "cancel rewrote terminal.reason check_passed -> cancelled_by_user while status stayed completed and all three effect receipts stayed succeeded (F22-COR-01); continue on completed left status completed (F22-COR-02)"},
+    {"path": "/tmp/tamoz-f22/probe_verbs2.rb", "purpose": "same harness; exercised resolve_effect on terminal effects and redirect on a completed thread", "result": "resolve_effect on all three succeeded effects raised Tamoz::CheckpointConflictError 'effect status succeeded cannot be human-resolved' and left receipts intact; resolve on an unknown key raised 'effect does not exist'; redirect on a completed thread terminal-failed as stale (view=failed)"}
+  ],
+  "carried_forward": [
+    {"id": "F07-REL-01", "status": "open", "note": "session half traced and bounded in F22-REL-01; no session-layer guard exists and none is needed once the F07 remedy lands at RequestInboxClaimer#candidate_rows"},
+    {"id": "CF04-REL-01", "status": "open", "note": "unchanged; no session-layer defence, but the session faithfully records outcome.error, so the nil-error failed replay is recorded and classified rather than masked"},
+    {"id": "F21-SEC-01", "status": "open", "note": "unchanged; session-layer component stated as F22-SEC-01"},
+    {"id": "F25-SEC-01", "status": "open", "note": "unchanged; session-layer component stated as F22-SEC-01"},
+    {"id": "CF05-SEC-01", "status": "open", "note": "unchanged; SessionAdaptive#decision_prompt merges the configured MCP planning surface and allowed_tool_names(:discovery) is the only filter"},
+    {"id": "F07-SEC-01", "status": "open", "note": "unchanged; the session adds no thread-scoping guard and relies entirely on the store"}
+  ],
+  "prior_findings_verified": [
+    {"id": "top100-021", "prior_claim": "session.rb: SIZE/DEAD/DUP/STATE, tracker todo", "current": "ALL FIVE RESOLVED in source; tracker row stale. No new SIZE/DEAD/DUP/STATE defect found. Recorded as F22-DOC-01"},
+    {"id": "top100-068", "prior_claim": "session_adaptive.rb: lifecycle_event 12->5 params; node-method split declined", "current": "CONFIRMED: lifecycle_event takes 5 params with the LIFECYCLE_DETAIL_KEYS allowlist raising ArgumentError on unknown keys (session_adaptive.rb:222-225,524-537); node methods remain over the ceiling under the documented justification (session_adaptive.rb:10-13). Status partial, justified, no new defect"},
+    {"id": "top100-081", "prior_claim": "session_context_controls.rb: dead /new generation pair deleted; conversation_history_for helper", "current": "CONFIRMED DONE: no /new generation pair remains (only reset/think/verbose/compact/usage/context, session_context_controls.rb:109-206) and conversation_history_for exists at :212-216"}
+  ],
+  "blind_spots": [
+    "test/agent_session_kill_matrix_test.rb not run: the only real-signal crash evidence for sessions, environment-bound; reliability conclusions rest on source and the non-crash operation suite",
+    "No worker-level or sink-level probe: Worker#settle was traced, not executed, so the notification-duplication risk in F22-REL-01 stays medium confidence",
+    "tamoz-agent and tamoz-agent-cli were read for the boundary and cited lines only; they are rows F24/F25 and were not audited here",
+    "Tamoz::Graph::DurableRunner / Compiled / RequestStaleness and tamoz-sqlite's claimer/reconciler were read for the boundary; F22 statements about them are limited to the cited lines",
+    "No load or soak run: the scalability bounds table is proven by source, but the growth path and the cmd_list/cmd_show pagination gaps are read, not measured",
+    "F22-REL-03 was not reproduced and is deliberately kept at low confidence"
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F22-COR-01 (major) — a reproduced terminal-state overwrite, no existing test covers it",
+    "F22-SEC-01 is the session-layer component of the open critical F21-SEC-01 and F25-SEC-01; sequence any fix so all three authority sites agree on one verdict",
+    "possible duplicate of F07-REL-01: F22-REL-01 is the session half of the same starvation boundary, not a second defect; do not count it twice",
+    "F22-DOC-01 corrects the record: top-100 finding 021 is resolved in source and should be marked done, not reopened",
+    "F22-DOC-02 reconciles the brief's invariant-18 question: the code is correct and limitations.md is stale against docs/requirements-audit.json INV-18 (pass)",
+    "structural observation not graded: Session is a facade over two lifecycles (durable request runner vs latest-checkpoint-plus-writer); design debt for an ADR, not a finding"
+  ]
+}

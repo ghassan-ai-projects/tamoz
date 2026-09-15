@@ -1,0 +1,174 @@
+{
+  "row": "F08",
+  "surface": "gems/tamoz-tools",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 1, "major": 1, "minor": 3, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F08-SEC-01",
+      "severity": "critical",
+      "confidence": "high",
+      "status": "open",
+      "title": "The run_check child inherits operator credentials the deny-list does not name",
+      "seam": "check_runner.rb#credential_free_env / CheckRunner.execute",
+      "citations": [
+        "gems/tamoz-tools/lib/tamoz/tools/check_runner.rb:13",
+        "gems/tamoz-tools/lib/tamoz/tools/check_runner.rb:14",
+        "gems/tamoz-tools/lib/tamoz/tools/check_runner.rb:17",
+        "gems/tamoz-tools/lib/tamoz/tools/check_runner.rb:60",
+        "gems/tamoz-tools/lib/tamoz/tools/toolbox.rb:40",
+        "test/agent_toolbox_test.rb:286",
+        "test/agent_toolbox_test.rb:306"
+      ],
+      "five_whys": true,
+      "recommendation": "Give each configured check an explicit env allow-list merged onto a minimal base (PATH/HOME/LANG/TMPDIR) and pass it to Open3.popen3 with unsetenv_others: true - one keyword on the normalized check plus one spawn option; failing that, widen ENV_NAMES/ENV_PATTERN to cover *_KEY, *_TOKEN, *_DSN, *_URL and unnamed TAMOZ_*. Add one test that exports a secret name outside the current pattern and asserts the child cannot see it.",
+      "evidence": "Reproduced by direct execution: with TAMOZ_DATABASE_PASSWORD and TAMOZ_SIGNING_KEY exported, the child printed [\"TAMOZ_SIGNING_KEY\"]. credential_free_env is a redaction list (nil values), not a scrubber, so every unmatched name is inherited verbatim into the child whose stdout becomes the check receipt, the model prompt, and the durable log (invariant 24)."
+    },
+    {
+      "id": "F08-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The staging sweep deletes user files that match the reserved name shape",
+      "seam": "staging_reaper.rb#collect / StagingReaper::PATTERN",
+      "citations": [
+        "gems/tamoz-tools/lib/tamoz/tools/staging_reaper.rb:13",
+        "gems/tamoz-tools/lib/tamoz/tools/staging_reaper.rb:62",
+        "gems/tamoz-tools/lib/tamoz/tools/staging_reaper.rb:29",
+        "gems/tamoz-tools/lib/tamoz/tools/toolbox.rb:71",
+        "gems/tamoz-tools/lib/tamoz/tools/patch_operations.rb:70",
+        "gems/tamoz-tools/lib/tamoz/tools/creation_operations.rb:53",
+        "test/toolbox_staging_reaper_test.rb:72",
+        "documentation/limitations.md:213"
+      ],
+      "five_whys": true,
+      "recommendation": "Strengthen identity at the existing predicate: accept only Tempfile-produced names (\\A\\.tamoz-(?:create-)?\\d{8}-\\d+-[a-z0-9]+\\.tmp\\z, which both observed real stage names match) and require the owner-only mode the staging Tempfile is created with. Add the missing test: plant a .tamoz-notes.tmp regular file at the same age and assert it survives.",
+      "evidence": "Reproduced: a stale mode-0755 regular file named .tamoz-notes.tmp in a fresh workspace was deleted and reported in reaped_staging when Toolbox.new(root:, allow_changes: true) was constructed. Age + uid + name-shape is not provenance, and no test plants a pattern match that is not a staging file (every refusal test plants a near-miss)."
+    },
+    {
+      "id": "F08-REL-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "The sweep's MAX_FILES head can starve an orphan indefinitely",
+      "seam": "staging_reaper.rb#stale_files",
+      "citations": [
+        "gems/tamoz-tools/lib/tamoz/tools/staging_reaper.rb:44",
+        "gems/tamoz-tools/lib/tamoz/tools/staging_reaper.rb:26",
+        "gems/tamoz-tools/lib/tamoz/tools/staging_reaper.rb:48",
+        "test/toolbox_staging_reaper_test.rb:137"
+      ],
+      "five_whys": false,
+      "recommendation": "Drop the break at staging_reaper.rb:44 so MAX_FILES bounds deletions per session (which is what the existing test claims) rather than the candidate scan window."
+    },
+    {
+      "id": "F08-SEC-02",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "apply_patch publishes by rename onto a path with no lstat/fstat guard (intermediate-component TOCTOU)",
+      "seam": "patch_operations.rb#atomic_replace",
+      "citations": [
+        "gems/tamoz-tools/lib/tamoz/tools/patch_operations.rb:68",
+        "gems/tamoz-tools/lib/tamoz/tools/patch_operations.rb:78",
+        "gems/tamoz-tools/lib/tamoz/tools/patch_preparation.rb:52",
+        "gems/tamoz-tools/lib/tamoz/tools/path_resolver.rb:32",
+        "gems/tamoz-tools/lib/tamoz/tools/creation_operations.rb:77"
+      ],
+      "five_whys": false,
+      "recommendation": "Reuse the sibling defence: re-run the parent realpath equality check on path.dirname inside atomic_replace immediately before File.rename, exactly as CreationOperations#revalidate_parent does."
+    },
+    {
+      "id": "F08-MNT-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "The check ENV_PATTERN deny-list is a second, unbound secret taxonomy",
+      "seam": "check_runner.rb#ENV_PATTERN / ENV_NAMES",
+      "citations": [
+        "gems/tamoz-tools/lib/tamoz/tools/check_runner.rb:13",
+        "gems/tamoz-core/lib/tamoz/core.rb:47",
+        "gems/tamoz-core/lib/tamoz/core.rb:129",
+        "test/agent_toolbox_test.rb:306"
+      ],
+      "five_whys": false,
+      "recommendation": "Add one test asserting the property (representative operator secret names classify as credentials) so the env taxonomy and Core::SECRET_VALUE_PATTERNS cannot drift silently. Supporting evidence for F08-SEC-01; no independent production change."
+    }
+  ],
+  "carried_forward": [
+    {
+      "id": "top100-044",
+      "prior_status": "done",
+      "current_status": "still resolved",
+      "note": "A-20 compiles clean vs hostile trees from genuinely different sources and asserts refute_equal clean.epoch, hostile.epoch at test/agent_skills_adversarial_test.rb:300-302. The surviving catalog_digest equality is a real claim: ToolCatalog#initialize (tool_catalog.rb:44-49) hashes only allowed_tools, description bytes and check names/safeties/argv, so a skill body cannot enter it. A hostile body is stored verbatim and fenced; surface, digest and read-only set unchanged; validate(\"shell\") and execute(\"read_file\", \"/etc/passwd\") still raise."
+    },
+    {
+      "id": "top100-051",
+      "prior_status": "todo",
+      "current_status": "confirmed, unchanged",
+      "note": "616 lines. execute :166-218, wait_for_child :273-306 and escalate_termination :307-348 exceed the 30-line ceiling; normalize_text still takes boolean allow_empty: (:575). SIZE only; no behavioural consequence found. PREMISE CORRECTION: this file is gems/tamoz-evals-runner/lib/tamoz/evals/harness/subprocess_runner.rb (row F27), not a tamoz-tools file. F08's own subprocess seam is check_runner.rb (123 lines), which is smaller and stricter: array-form Open3.popen3, credential-stripped env, chdir root, pgroup true, bounded readers, TERM-to-KILL escalation."
+    },
+    {
+      "id": "top100-004",
+      "prior_status": "done",
+      "current_status": "still resolved",
+      "note": "test/agent_toolbox_test.rb is 1359 lines; 62 runs / 323 assertions / 0 failures."
+    },
+    {
+      "id": "CF05-SEC-01",
+      "prior_status": "open, contract decision required",
+      "current_status": "F08's share disproved",
+      "note": "\"Content never grants\" is TRUE and proven at tamoz-tools. Grants are operator policy frozen at construction (tool_policy_normalizer.rb:19-27, 94-98); the registry admission set is computed once and the surface frozen (registry.rb:26-34, 114-122); register always raises and new is private (:52-64); dispatcher rebinding is refused (capability_host.rb:110-124); skill allowed-tools/metadata/tamoz.risk/body reach only the renderers and digest inputs (skills.rb:198-230, compiler.rb:178-199); a profile-bound toolbox exposes no skill tool (test/agent_skills_toolbox_test.rb:124-137). The conflicting description CF05-SEC-01 found lives in the MCP admission surface (capability_binding.rb:165-169), which F08 neither confirms nor extends."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/agent_toolbox_test.rb", "runs": 62, "assertions": 323, "failures": 0},
+    {"command": "ruby -Itest test/agent_skills_test.rb", "runs": 18, "assertions": 96, "failures": 0},
+    {"command": "ruby -Itest test/agent_skills_adversarial_test.rb", "runs": 37, "assertions": 249, "failures": 0},
+    {"command": "ruby -Itest test/agent_skills_toolbox_test.rb", "runs": 18, "assertions": 152, "failures": 0},
+    {"command": "ruby -Itest test/agent_tool_error_recovery_test.rb", "runs": 13, "assertions": 116, "failures": 0},
+    {"command": "ruby -Itest test/subprocess_runner_test.rb", "runs": 16, "assertions": 128, "failures": 0},
+    {"command": "ruby -Itest test/p16_tools_gem_test.rb", "runs": 15, "assertions": 129, "failures": 0},
+    {"command": "ruby -Itest test/toolbox_staging_reaper_test.rb", "runs": 10, "assertions": 33, "failures": 0},
+    {"command": "ruby -Itest test/capability_host_test.rb", "runs": 21, "assertions": 91, "failures": 0},
+    {"command": "ruby -Itest test/capability_registry_test.rb", "runs": 9, "assertions": 28, "failures": 0},
+    {"command": "ruby -Itest test/capability_closed_world_test.rb", "runs": 3, "assertions": 14, "failures": 0},
+    {"command": "ruby -Itest test/capability_inventory_test.rb", "runs": 3, "assertions": 18, "failures": 0}
+  ],
+  "tests_total": {"runs": 225, "assertions": 1377, "failures": 0, "errors": 0, "skips": 0},
+  "tests_not_run": [
+    {"command": "rake ci / rake ci_full", "reason": "forbidden by the brief; focused suites only"},
+    {"command": "ruby -Itest test/skill_binding_contract_test.rb", "reason": "not found - the file does not exist"}
+  ],
+  "probes_run": [
+    "credential-leak probe from /tmp: TAMOZ_DATABASE_PASSWORD nil-ed, TAMOZ_SIGNING_KEY inherited by the check child",
+    "Tempfile-name vs STAGING_PATTERN probe: both real stage names (.tamoz-<date>-<pid>-<rand>.tmp, .tamoz-create-<date>-<pid>-<rand>.tmp) match",
+    "sweep probe: stale mode-0755 user file .tamoz-notes.tmp was deleted and reported in reaped_staging",
+    "symlink-escape probe: read_file through a link to an outside file and list_directory through a link to an outside directory both raise ToolPolicyError 'path escapes the workspace root'"
+  ],
+  "b9_domain_check": "PASS - zero hardcoded diagnosis catalogs, operator prompts, intent/risk tables, compensation maps, watch rules, or fixture responses in gems/tamoz-tools/lib. The only literal tables are the tool-description catalog (tool_catalog.rb:13-26), the check env pattern/names (check_runner.rb:13-15), and the closed INVENTORY_REASONS enum (capability_host.rb:25-29); test/fixtures/domains/ holds the five benchmark domains, which this gem never reads.",
+  "blind_spots": [
+    "Concurrent multi-process publication was not exercised; F08-SEC-02 rests on reading, not a reproduced race (medium confidence).",
+    "Tamoz::Agent::Profile / authority roots read only as far as the toolbox binding; F21 owns that row.",
+    "MCP and websearch descriptors are constructed outside this gem (capability_binding.rb:222-248); CF05-SEC-01 owns that boundary.",
+    "tamoz-evals-runner SubprocessRunner callers not audited (F27); only the runner itself was read, to re-verify prior 051.",
+    "gems/tamoz-stream/lib/tamoz/stream/capability_host.rb is a different class with the same name in another gem; not read, not part of F08.",
+    "No soak or load evidence for MAX_SEARCH_FILES / MAX_SEARCH_RESULTS / MAX_DIRECTORY_ENTRIES on a genuinely large workspace.",
+    "documentation/design/skills.md:75 describes a staged supply-chain promotion workflow that documentation/limitations.md:88-94 disclaims as not implemented; the two documents disagree and the limitations text was treated as accurate."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F08-SEC-01 (critical) - reproduced by direct execution, but the disposition depends on whether a configured check counts as trusted operator code entitled to the operator's environment",
+    "needs independent challenge: F08-REL-01 (major) - deletion in the operator's workspace; the fix is a one-predicate narrowing",
+    "premise correction for prior 051: subprocess_runner.rb belongs to tamoz-evals-runner (F27), not tamoz-tools",
+    "CF05-SEC-01: F08 disproves the tamoz-tools half of the 'content never grants' concern; the MCP admission conflict is unaffected and still needs its contract decision",
+    "possible duplicate family: F08-REL-02 has the same fixed-window starvation shape as F07-REL-01 (different store, different owner seam)"
+  ]
+}

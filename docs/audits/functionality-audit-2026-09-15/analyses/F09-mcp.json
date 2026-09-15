@@ -1,0 +1,185 @@
+{
+  "row": "F09",
+  "surface": "gems/tamoz-mcp",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 1, "major": 2, "minor": 0, "info": 1},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F09-SEC-02",
+      "severity": "critical",
+      "confidence": "high",
+      "status": "open",
+      "title": "An MCP elicitation is collapsed into a tool failure and never reaches the operator",
+      "seam": "session_effects.rb#mcp_payload",
+      "citations": [
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:370-375",
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:108-124",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:117-121",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:229-232",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:246-251",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/governed_browser_source.rb:180",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:538",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_prompt_adapter.rb:57-60",
+        "test/support/agent_smoke_corpus.rb:1486-1505"
+      ],
+      "five_whys": true,
+      "recommendation": "In SessionEffects#mcp_payload give :interrupt its own branch that reaches the step gate via the existing Tamoz.interrupt seam (graph/interrupt.rb:51) instead of raising ToolError, then route the answer through the already-existing but dead Invocation.reissue using the descriptor's effect_key. If full MRTR is out of scope, make :interrupt terminal and operator-visible rather than repairable so the run stops with the server's question instead of looping."
+    },
+    {
+      "id": "F09-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Server-authored tool descriptions reach the planner prompt verbatim and unmarked",
+      "seam": "session_effects.rb#mcp_planning_surface",
+      "citations": [
+        "gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb:200-202",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:337-342",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:392-401",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_deliberation.rb:62",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_plan_attempt.rb:63,180",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb:104-108",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb:119-128",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:238-245",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:344-353"
+      ],
+      "five_whys": true,
+      "recommendation": "In SessionEffects#mcp_planning_surface prefix each remote description with the same 'remote content from server <id>' attribution Invocation already applies to result blocks (invocation.rb:32, :640-641), so merge_tool_surfaces keeps its shape and the prompt distinguishes remote from local text. Add one assertion to test/agent_mcp_capability_source_test.rb."
+    },
+    {
+      "id": "F09-COR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Invocation and the capability binding read different fields of the same duck-typed descriptor with no agreement guard",
+      "seam": "invocation.rb#transport_round_trip",
+      "citations": [
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:37",
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:76-78",
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:171-180",
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:382",
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:489",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:192-194",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:451-453",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb:104-106",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb:172-176",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:28-31",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:80-89"
+      ],
+      "five_whys": true,
+      "recommendation": "Pick one authoritative reader: either add :read_only? to REQUIRED_DESCRIPTOR_METHODS (invocation.rb:37), or have Invocation derive its branch from effect_class when the descriptor responds to it, matching McpCapabilitySource#read_only_descriptor? which already prefers read_only?. State the choice in the duck-type comment at mcp_source_builder.rb:28-31 and add the one-line assertion to test/mcp_invocation_test.rb."
+    },
+    {
+      "id": "F09-INFO-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "stdio frame bound (4 MiB SDK default) is 64x the configured output budget",
+      "seam": "supervisor.rb#read_line",
+      "citations": [
+        "gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb:285-296",
+        "gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb:174-178",
+        "gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb:615-628",
+        "gems/tamoz-mcp/lib/tamoz/mcp/http_supervisor.rb:106-112"
+      ],
+      "five_whys": false,
+      "recommendation": "Optionally pass max_line_bytes: config.budgets.max_output_bytes at supervisor.rb:174-178 so both transports enforce the configured budget. No action required."
+    }
+  ],
+  "carried_forward": [
+    {
+      "id": "CF05-SEC-01",
+      "severity": "major",
+      "status": "open",
+      "note": "Verified against current source, unchanged. The half in tamoz-mcp is narrow and not a defect: the gem supplies catalog/descriptors/source_digest but makes no admission decision and has no profile concept. The other half lives in tamoz-agent-capabilities: CapabilityBinding#admission_set (capability_binding.rb:161-169) appends every @mcp.names beside the profile-derived @toolbox.allowed_tools, and McpSourceBuilder builds without consulting a profile (mcp_source_builder.rb:50-69; cli.rb:650 uses its profile: argument only for a workspace-root comparison). New datum: the binding's own comment at capability_binding.rb:157-162 calls the set policy-derived and claims Toolbox#allowed_tools is already profile-intersected, while the same expression unconditionally appends @mcp.names."
+    },
+    {
+      "id": "top100-023",
+      "severity": "minor",
+      "status": "open",
+      "note": "DEAD confirmed fixed (strict_schema at invocation.rb:239-241 delegates wholly to deep_strictify). SIZE confirmed open: call 7 params (:84), reissue 10 (:108), round_trip 8 keywords (:358). FX confirmed open: resume_tool still uses client.send(:request, ...) at :427."
+    },
+    {
+      "id": "top100-085",
+      "severity": "minor",
+      "status": "unchanged",
+      "note": "server_config.rb validator breadth unchanged; no new defect found. describe (:158-175) exposes env/credential names only, never values."
+    },
+    {
+      "id": "top100-091",
+      "severity": "info",
+      "status": "closed",
+      "note": "PASS upheld. FX question answered affirmatively: no raw MCP call site exists inside a graph node. Invocation's only production caller is the executor lambda at mcp_source_builder.rb:120, reached exclusively via McpCapabilitySource#execute -> McpDispatcher#execute -> CapabilityBinding#execute -> SessionEffects#execute_dispatch inside EffectDispatcher.run. Catalog.compile (mcp_source_builder.rb:73) and Supervisor.build (:75) are admission-time, run once per runtime at worker_runtime.rb:919-923 outside graph execution, and are pinned by digest rather than journaled."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/mcp_server_config_test.rb", "runs": 39, "assertions": 321, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/mcp_catalog_test.rb", "runs": 9, "assertions": 80, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/mcp_supervisor_test.rb", "runs": 16, "assertions": 87, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/mcp_elicitation_test.rb", "runs": 19, "assertions": 71, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/mcp_invocation_test.rb", "runs": 31, "assertions": 208, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/mcp_http_test.rb", "runs": 2, "assertions": 11, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_mcp_adversarial_test.rb", "runs": 8, "assertions": 41, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_mcp_capability_source_test.rb", "runs": 14, "assertions": 102, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_worker_mcp_test.rb", "runs": 11, "assertions": 35, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_cli_mcp_test.rb", "runs": 6, "assertions": 28, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "tests_not_run": [
+    {"what": "rake ci / rake ci_full", "why": "excluded by the brief's budget rule"},
+    {"what": "scorecard / agent_smoke_corpus-driven suites", "why": "budget; the scorecard blind spot in F09-SEC-02 was found by reading test/support/agent_smoke_corpus.rb:1486-1505, not by running it"}
+  ],
+  "tests_not_found": [
+    "any test driving an MCP elicitation through SessionSteps/SessionEffects to a rendered operator prompt (evidence gap behind F09-SEC-02)",
+    "any test asserting a descriptor's effect_class and read_only? agree (F09-COR-01)",
+    "any test asserting MCP tool descriptions are distinguishable from local ones in the planner prompt"
+  ],
+  "probes": [
+    {
+      "name": "probe A",
+      "what": "descriptor with effect_class=:bounded and read_only?=true driven through a post-send transport failure",
+      "result": "raised Tamoz::Mcp::UnavailableError ('the call is read-only and may be retried by the caller') instead of AmbiguousOutcomeError; an unsafe effect was classified as safely retryable",
+      "log": "/tmp/tamoz-agents/analyst_f09.log"
+    },
+    {
+      "name": "probe B",
+      "what": "production descriptor_for(effect_class: :bounded).read_only?",
+      "result": "false - production constructor is internally consistent, so divergence needs a hand-built duck-typed descriptor",
+      "log": "/tmp/tamoz-agents/analyst_f09.log"
+    },
+    {
+      "name": "probe C",
+      "what": "6132-byte hostile server description through BoundedText at the 4096-byte cap",
+      "result": "bounded to 4096 bytes with 'IGNORE ALL PREVIOUS INSTRUCTIONS' and 'never ask for approval' retained verbatim; no trust marker or delimiter matched",
+      "log": "/tmp/tamoz-agents/analyst_f09.log"
+    },
+    {
+      "name": "probe D",
+      "what": "read_only descriptor retry eligibility",
+      "result": "a :read_only effect_class makes post-send failures retryable (max_attempts = 1 + retry_budget); effect_class is operator policy from read_only_tools at mcp_source_builder.rb:203",
+      "log": "/tmp/tamoz-agents/analyst_f09.log"
+    }
+  ],
+  "blind_spots": [
+    "No real MCP server and no live network call: all probes used hand-built descriptors and doubles. F09-SEC-02 is proven by source trace, not by running a server that asks for input.",
+    "No real model was called, so F09-SEC-01 is proven at the prompt-assembly seam, not by observing a model act on an injected instruction. No claim is made that a model was steered.",
+    "McpCapabilitySource's catalog_revision participates in the effect logical identity (session_effects.rb:153-156); a catalog-change replay was read but not exercised, so that assertion is source-read only.",
+    "GovernedBrowserSource and GovernedDatabaseSource appear unwired from CapabilityBinding (only the requires at agent_capabilities.rb:15-16). Not investigated - belongs to F08/F18; recorded so the coordinator can route it.",
+    "Prior 085 and 091 were verified against current source at the level the brief asked; their full finding sets were not re-derived.",
+    "No suite outside the ten MCP files was run (no rake ci, no scorecard suites)."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F09-SEC-02 (critical) - a stated design invariant (elicitation is persisted as an interrupt) is violated and the scorecard counts the gem's direct Invocation.call as proof the agent surfaced it",
+    "needs independent challenge: F09-COR-01 - mechanism confirmed by probe A, production reachability medium (no production caller hand-builds descriptors today); contract decision required",
+    "possible duplicate: F09-COR-01 overlaps the scanner signal already recorded in the F09 brief",
+    "carry-forward re-verified: CF05-SEC-01 unchanged and open; the tamoz-mcp half is not a defect, the tamoz-agent-capabilities half is, and capability_binding.rb:157-162 asserts an intersection the code does not perform",
+    "carry-forward re-verified: top100-023 DEAD fixed, SIZE+FX open; top100-091 PASS upheld and the FX question for invocation.rb is answered negatively (no raw node call site)"
+  ]
+}

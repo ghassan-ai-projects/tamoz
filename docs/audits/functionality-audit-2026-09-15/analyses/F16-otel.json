@@ -1,0 +1,159 @@
+{
+  "row": "F16",
+  "surface": "gems/tamoz-otel",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 3, "minor": 3, "info": 1},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F16-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The governed exporter has no enable path; its governance is unproven and its documented operational story is not implemented",
+      "seam": "gems/tamoz-observability/lib/tamoz/observability/exporter.rb#Exporter seam (no caller exists)",
+      "citations": [
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:11",
+        "gems/tamoz-observability/lib/tamoz/observability/exporter.rb:5-9",
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:177",
+        "gems/tamoz-otel/tamoz-otel.gemspec:11-14",
+        "documentation/design/observability.md:14",
+        "documentation/operations/observability-ops.md:88-90",
+        "documentation/limitations.md:119",
+        "test/test_helper.rb:61"
+      ],
+      "five_whys": true,
+      "recommendation": "Record in documentation/limitations.md that the adapter is present but not wired, and name the owner seam (tamoz-agent runtime-directory observability configuration) plus the authorization input that must gate enabling export. Do not build an enable path in this read-only package and do not add a plugin API (ADR-044 forbids it)."
+    },
+    {
+      "id": "F16-SEC-02",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The exporter applies no content/redaction policy to exported attributes and does not carry the governing policy digest",
+      "seam": "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb#resource_spans",
+      "citations": [
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:113-123",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:131",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:134",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:147",
+        "gems/tamoz-observability/lib/tamoz/observability/content_policy.rb:1-230",
+        "documentation/operations/observability-ops.md:78-81"
+      ],
+      "five_whys": true,
+      "recommendation": "At the existing resource_spans seam, carry the document's policy_digest into the exported span (span attribute or resource block) so exported evidence is self-describing. Do not duplicate the redaction decision in the exporter; the upstream ContentPolicy already owns it."
+    },
+    {
+      "id": "F16-OBS-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Export outcome and divergence are unrecorded; the exported span loses outcome, making a failed turn indistinguishable from a successful one",
+      "seam": "gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb#delivery_result",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:176-177",
+        "gems/tamoz-observability/lib/tamoz/observability/signal.rb:70",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:73-82",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:113-123",
+        "gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb:85-96",
+        "test/observability_catalog_test.rb:36-37",
+        "documentation/limitations.md:126"
+      ],
+      "five_whys": true,
+      "recommendation": "Emit tamoz.telemetry.export with its outcome attribute from the existing delivery_result seam, which already receives the result on every delivery attempt. Leave divergence accounting to the slice that owns the durable reader."
+    },
+    {
+      "id": "F16-REL-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "AsyncExporter hardcodes a 2 s export deadline, silently overriding a longer configured timeout_ms",
+      "seam": "gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb#deliver_batch",
+      "citations": [
+        "gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb:75",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:55",
+        "gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb:10",
+        "gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb:14"
+      ],
+      "five_whys": false,
+      "recommendation": "Pass the policy's own timeout at async_exporter.rb:75 instead of the literal 2_000, so the export deadline has exactly one source."
+    },
+    {
+      "id": "F16-COR-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Emitted span attributes are not OTLP/JSON-conformant; the exporter never validates its own wire body",
+      "seam": "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb#resource_spans",
+      "citations": [
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:41",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:131",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:134",
+        "gems/tamoz-observability/lib/tamoz/observability/signal.rb:155-170",
+        "test/otel_test.rb:33-53"
+      ],
+      "five_whys": false,
+      "recommendation": "At resource_spans, map attribute values into OTLP's typed AnyValue form and drop the whole batch locally with :rejected if any value cannot be represented."
+    },
+    {
+      "id": "F16-MNT-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "ADR-044 requires a conformance suite for the exporter adapter; no conformance suite exists",
+      "seam": "gems/tamoz-observability/lib/tamoz/observability/exporter.rb#Exporter",
+      "citations": [
+        "documentation/adr/adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md:11-14",
+        "gems/tamoz-observability/lib/tamoz/observability/exporter.rb:5-9",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:11",
+        "test/otel_test.rb:1-74"
+      ],
+      "five_whys": false,
+      "recommendation": "If a second adapter is planned, add the shared assertion set to exporter.rb and call it from test/otel_test.rb; until then record the ADR/code divergence in documentation/limitations.md."
+    },
+    {
+      "id": "F16-COR-02",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "The documented OpenTelemetry gen_ai attribute mapping does not exist in code",
+      "seam": "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb#resource_spans",
+      "citations": [
+        "documentation/design/observability.md:12",
+        "docs/OBSERVABILITY_DESIGN.md:33",
+        "docs/OBSERVABILITY_PLAN.md:226",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:110-135"
+      ],
+      "five_whys": false,
+      "recommendation": "Align the one-line table entry in documentation/design/observability.md:12 with what shipped, or track the mapping as planned work. No code change."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/otel_test.rb", "runs": 6, "assertions": 17, "failures": 0},
+    {"command": "ruby -Itest test/public_api_test.rb", "runs": 3, "assertions": 1051, "failures": 0},
+    {"command": "ruby -Itest test/observability_catalog_test.rb", "runs": 10, "assertions": 26, "failures": 0},
+    {"command": "ruby -Itest test/concurrency_drain_test.rb", "runs": 7, "assertions": 36, "failures": 0}
+  ],
+  "blind_spots": [
+    "Sampling does not exist in either gem; limitations.md:126 is accurate. Because every accepted batch is exported and every refusal is counted only in memory, a collector's view of a turn cannot be distinguished from a complete one, and queue_full / post-disable losses are invisible to the collector. That misreading risk is worse than a sampled trace, which at least declares a rate.",
+    "Did not read metrics.rb, trace.rb, producer.rb, usage.rb end to end (belong to F15).",
+    "No live TLS collector was constructed, by instruction; HTTP behavior was verified against a blackhole address and by reading the Net::HTTP configuration. No bytes were sent to any real endpoint.",
+    "Could not verify whether an operator-facing OTLP configuration key exists outside the globs searched (*.rb, *.gemspec, *.yaml, *.yml, *.json, *.md, Gemfile, Rakefile). If one exists in a non-Ruby entry point, the no-enable-path conclusion needs revisiting; no candidate was found.",
+    "allow_local authority (egress_policy.rb:16) and the skipped post-resolution guard when it is true (:36) are recorded as observations, not findings: no authority contract for that flag was found and the path is unreachable.",
+    "rake ci / rake ci_full were not run (excluded by the brief). AsyncExporter queue bound, drop accounting, backoff, failure-limit disable and close path have no test; they were exercised only by ad hoc probes for this audit."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F16-SEC-02 and F16-OBS-01 (both major, high confidence)",
+    "F16-SEC-02 graded major rather than critical: no live leak occurs today because ContentPolicy keeps prompt text in the separate content field (signal.rb:129) and the gem is unreachable (F16-SEC-01); confirm that reasoning in challenge",
+    "F16-SEC-01 is a documentation/ownership gap, not a code defect; the off-by-default property itself is verified PASS and the gem is unreachable rather than merely disabled",
+    "verified passes to record: no production gem depends on tamoz-otel (only Gemfile:35 dev path line); bounded queue with counted drops and failure-limit disable; connect and read timeouts both set; redirects, proxy env and private addresses refused; resolved addresses re-validated and pinned against DNS rebinding; credential newline injection refused",
+    "documented gen_ai mapping (F16-COR-02) is absent from code but asserted in three design docs"
+  ]
+}

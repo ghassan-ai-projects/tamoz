@@ -1,0 +1,200 @@
+{
+  "row": "F15",
+  "surface": "gems/tamoz-observability",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 1, "minor": 5, "info": 1},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F15-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "No content-side secret policy: a secret-shaped plain string reaches the journal and a metric label unguarded; secrecy is enforced only by object identity (Tamoz::Secret)",
+      "seam": "content_policy.rb#ContentPolicy#describe / metrics.rb#validate_label_value! / recorder_drop_ledger.rb#DropLedger#validate!",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/content_policy.rb:36-42",
+        "gems/tamoz-observability/lib/tamoz/observability/content_policy.rb:80-95",
+        "gems/tamoz-observability/lib/tamoz/observability/content_policy.rb:169-172",
+        "gems/tamoz-observability/lib/tamoz/observability/content_policy.rb:201-206",
+        "gems/tamoz-observability/lib/tamoz/observability/signal.rb:195-198",
+        "gems/tamoz-observability/lib/tamoz/observability/metrics.rb:142-149",
+        "gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb:11",
+        "gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb:236-245",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:137",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:1032",
+        "documentation/design/observability.md:47",
+        "documentation/limitations.md:125"
+      ],
+      "five_whys": true,
+      "recommendation": "Add one shape-level refusal in ContentPolicy#canonicalize_string (the single point every captured string passes through), so a credential-shaped string is refused or digest-replaced exactly as Tamoz::Secret is at guard_value!. Apply the same predicate in DropLedger#validate! and Metrics#validate_label_value!, which are already the two enforcement points. No new scanner class. If the owner instead keeps reliance on producer-wrapped Tamoz::Secret, promote the two observe-doctor literals into a property test and remove the 'above every policy decision' sentence from design/observability.md."
+    },
+    {
+      "id": "F15-OBS-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Metrics.from_documents silently discards every signal it cannot project and reports :recorded, contradicting the design doc's 'Never lossy'",
+      "seam": "metrics.rb#add_document / metrics.rb#duration_metric_for",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/metrics.rb:13-16",
+        "gems/tamoz-observability/lib/tamoz/observability/metrics.rb:68-75",
+        "gems/tamoz-observability/lib/tamoz/observability/metrics.rb:162-171",
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:148-182",
+        "documentation/design/observability.md:58"
+      ],
+      "five_whys": false,
+      "recommendation": "Count an unmatched document name as a violation in add_document (metrics.rb:68-75 already has @violations and count_violation), so the loss is visible in tamoz observe metrics --format json; and correct design/observability.md:58 to say the reconstruction is complete for projected signals and counted otherwise."
+    },
+    {
+      "id": "F15-COR-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "DropLedger#drops_hash destructures an already-joined String key as a 3-tuple and re-joins it, emitting a malformed 'name:reason:lane::' drop identifier in every record",
+      "seam": "recorder_drop_ledger.rb#DropLedger#drops_hash",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_drop_ledger.rb:45-55",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:325-329",
+        "gems/tamoz-observability/lib/tamoz/observability/recorders.rb:80-83",
+        "documentation/design/observability.md:68"
+      ],
+      "five_whys": false,
+      "recommendation": "One-line fix at the ledger: store the tuple in count_drop (@drops[[name, reason, lane]] += 1) so drops_hash's destructuring is correct as written, or return @drops.to_h directly since the key is already a String. Add a key-shape assertion to the existing saturation test."
+    },
+    {
+      "id": "F15-SCAL-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Metric label cardinality is bounded by a series cap rather than by value validation: the low_cardinality check is a charset rule, so unvalidated label values consume and then block the series budget",
+      "seam": "metrics.rb#validate_label_value! / signal_catalog.rb#LOW_CARDINALITY_PATTERN",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/metrics.rb:142-149",
+        "gems/tamoz-observability/lib/tamoz/observability/metrics.rb:203-208",
+        "gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb:11",
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:13-14",
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:162-166",
+        "documentation/design/observability.md:60"
+      ],
+      "five_whys": false,
+      "recommendation": "Declare the already-closed label sets (outcome, kind, reason_class, status, direction) as :enum in catalog.rb and reject out-of-set values in validate_label_value!. Leave model/tool/profile as-is and accept the series cap; an allowlist for model names would be speculative machinery."
+    },
+    {
+      "id": "F15-SCAL-02",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "The reserved-lane fallback performs a full disk write (and possible File.rename rotation) while holding the journal mutex that the drain thread needs, so a saturated reserved lane can stall the whole drain",
+      "seam": "recorder_journal.rb#route / recorder_journal.rb#write_reserved_now",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:83",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:90-97",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:117-122",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:150-168",
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:145-160",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder.rb:8-9",
+        "documentation/limitations.md:124-125"
+      ],
+      "five_whys": false,
+      "recommendation": "Decide the lane under the lock and perform write_reserved_now after synchronize returns (recorder_journal.rb:81-84), preserving never-drop while removing disk I/O from the critical section. If the current shape is kept, state the accepted bound in the Recorder contract and let the outstanding non-interference proof measure it. Do not add a second writer thread."
+    },
+    {
+      "id": "F15-OBS-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Trace produces a flat span list and can never build a parent chain (nothing writes parent_span_id/span_anchor), and divergence is a hardcoded empty array, while the design doc claims an 'authoritative span tree' and a counted divergence signal",
+      "seam": "trace.rb#build_trace / trace.rb#span_from",
+      "citations": [
+        "gems/tamoz-observability/lib/tamoz/observability/trace.rb:78-81",
+        "gems/tamoz-observability/lib/tamoz/observability/trace.rb:145-149",
+        "gems/tamoz-observability/lib/tamoz/observability/trace.rb:156",
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:176",
+        "gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb:118",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb:80-81",
+        "documentation/design/observability.md:58",
+        "documentation/design/observability.md:60",
+        "documentation/limitations.md:121-126"
+      ],
+      "five_whys": false,
+      "recommendation": "No code change until the read-only telemetry adapter exists. Align design/observability.md:58-60 with the code and with limitations.md: state that the current projection is a flat ordered span list whose parentage is producer-supplied and not yet emitted, and mark tamoz.telemetry.divergence as declared-but-not-computed."
+    },
+    {
+      "id": "F15-INFO-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "closed",
+      "title": "The 'Observability remains partial' section of documentation/limitations.md (invariants 59-61, ADR-044-047) verified claim by claim against code; no contradicted claim found in that section",
+      "seam": "documentation/limitations.md#Observability remains partial",
+      "citations": [
+        "documentation/limitations.md:115-129",
+        "gems/tamoz-observability/lib/tamoz/observability/telemetry_reader.rb:8-13",
+        "gems/tamoz-observability/lib/tamoz/observability/exporter.rb:6-8",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb:80-81",
+        "gems/tamoz-observability/lib/tamoz/observability/usage.rb:42-71"
+      ],
+      "five_whys": false,
+      "recommendation": "None. Verified design fact: the closed catalog, deterministic correlation, bounded journal, content policy, derived metrics, model cost basis and counted bulk drops are all implemented as stated, and the listed gaps (SQLite telemetry adapter, durable model-usage persistence, journal-only tamoz trace, outstanding four-way non-interference proof / full secret property test / export sampling / divergence accounting) are all confirmed absent. The two doc claims contradicted by code live in design/observability.md:47 and :58, recorded under F15-SEC-01, F15-OBS-01 and F15-OBS-02."
+    }
+  ],
+  "prior_findings_status": [
+    {
+      "id": "top100-076",
+      "carried_forward": true,
+      "critical_flush_crash": "closed — verified independently. Fanout#guarded now takes an explicit per-call fallback (recorders.rb:119-123) and flush passes 0 (recorders.rb:109); probe P12 shows a raising child yields flush == 0 with no exception. Regression test test/observability_runtime_test.rb:201-218 passes.",
+      "major_duplication_DropLedger_mixin": "closed — validate!/drop_key/drops_hash/count_invalid_drop and the strict-mode envelope exist once in Recorder::DropLedger (recorder_drop_ledger.rb:17-56), included by Memory (recorders.rb:30) and Journal (recorder_journal.rb:14). No verbatim duplicate remains.",
+      "minor_mislabeled_drops": "closed — ValidationError books invalid:validation:bulk, any other StandardError books record:error:bulk (recorder_drop_ledger.rb:23-33); confirmed by probes P15/P16 vs P12.",
+      "minor_fanout_health_symbol": "closed — Fanout#health uses guarded(UNAVAILABLE_HEALTH) (recorders.rb:91, :104); probe P12 returns {'enabled'=>false,'error'=>'unavailable'}, no :dropped symbol.",
+      "minor_journal_split": "closed and coherent — Journal + Journal::Files live in recorder_journal.rb (340 lines); recorders.rb is 127 lines holding only Null/Memory/Fanout; Journal.read/read_entries/inventory are thin delegations (recorder_journal.rb:23-33), so no shadow API was introduced.",
+      "new_residual": "The mixin's serialization side is now wrong: F15-COR-01 records a malformed drop key introduced by the pre-joined-String key form."
+    },
+    {
+      "id": "top100-061",
+      "carried_forward": true,
+      "status": "not re-litigated — out of row. The SQLite trace recorder lives in tamoz-sqlite (row F07); test/sqlite_trace_recorder_test.rb was NOT run for this reason. The ShapeValidation shared module is claimed as the seam with this gem, but I did not trace a call from that path into tamoz-observability, so whether it consumes Signal/Trace or merely mirrors the shape is an open blind spot for the F07 analyst."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/observability_catalog_test.rb", "runs": 10, "assertions": 26, "failures": 0},
+    {"command": "ruby -Itest test/observability_correlation_test.rb", "runs": 6, "assertions": 16, "failures": 0},
+    {"command": "ruby -Itest test/observability_signal_test.rb", "runs": 10, "assertions": 26, "failures": 0},
+    {"command": "ruby -Itest test/observability_runtime_test.rb", "runs": 13, "assertions": 53, "failures": 0},
+    {"command": "ruby -Itest test/observability_cli_test.rb", "runs": 2, "assertions": 11, "failures": 0}
+  ],
+  "tests_not_run": [
+    {"command": "ruby -Itest test/sqlite_trace_recorder_test.rb", "reason": "covers the SQLite trace recorder owned by row F07; the seam into tamoz-observability was not established. Not run for budget and scope, not because it is believed green."}
+  ],
+  "blind_spots": [
+    "test/sqlite_trace_recorder_test.rb (583 lines) not run or read; the F07 seam with this gem is unestablished and findings here may or may not extend to F07.",
+    "No measurement of reserved-lane lock hold time or drain stall under saturation (F15-SCAL-02 stays medium confidence); no soak/load evidence exists in the repo to borrow.",
+    "tamoz-otel was not audited; http_exporter.rb:118 was read only to establish that nothing writes span_anchor. OTLP conformance, egress rules and sampling are another row.",
+    "Sampling (design/observability.md:62-64) was not exercised: exporter.rb is contract-only and no sampler exists in this gem. Did not look for one in tamoz-otel.",
+    "The stream.*/scheduler.*/mcp.* permitted prefixes (signal_catalog.rb:12) have no seeded entries here; if any owning gem registers names at load, the catalog is closed per-process rather than globally. Seeded set is 68 names, all tamoz.* and comms.*.",
+    "Immutable.copy's reject_sensitive path (instrumentation.rb:21, immutable.rb:28-30) was read but not tested; it also rejects by class, so it does not close the shape gap."
+  ],
+  "probes": [
+    "P1/P2 producer+notifier refuse an unregistered name -> :dropped / false, 0 recorded",
+    "P3 correlation is pure (no Thread/current/SecureRandom), JSON domain separation defeats comma injection; trace is flat with parent=nil",
+    "P5/P7/P31/P33 secret-shaped strings stored verbatim in a reason attribute, a captured error_detail, and metric labels",
+    "P8 catalog = 68 names, 28 measurements, DURATION_METRICS = 2",
+    "P12/P13/P14/P40/P41/P42/P50 prior-076 flush crash gone; drops counted; reserved lane 5/5 recorded with 0 drops; record cannot raise after close; no mutex re-entrancy; flush cannot raise and cannot hang (0ms and negative deadlines return the outstanding count)",
+    "P44 8 threads x 50 signals: 400/400 lines consistent, 0 drops, no thread-local leakage",
+    "P45/P47/P48/P49 metrics projection silently discards unprojectable documents; 5000 distinct model labels -> exactly 4096 series + 904 violations",
+    "P53 isolated the DropLedger: raw key 'invalid:validation:bulk', drops_hash -> 'invalid:validation:bulk::'"
+  ],
+  "coordinator_flags": [
+    "needs independent challenge — F15-SEC-01 is the row's only major and its severity turns on whether the owner intends producer-wrapped Tamoz::Secret as the contract or a sink-level shape guard; a challenge should establish which reading the rest of the repo assumes before disposition",
+    "F15-SCAL-02 is medium confidence and needs the outstanding four-way non-interference measurement before it could be called material",
+    "possible seam to F07-REL-01 / top100-061 — the SQLite trace recorder's ShapeValidation seam into this gem was not traced; route to the F07 analyst",
+    "doc defect, not a code defect, in design/observability.md:47 and :58; limitations.md is accurate and needs no change",
+    "F15-COR-01 was introduced by the 076 DropLedger extraction (pre-joined String key vs tuple destructuring) and is not a pre-existing defect"
+  ]
+}

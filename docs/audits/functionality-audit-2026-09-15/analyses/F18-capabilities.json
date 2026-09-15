@@ -1,0 +1,227 @@
+{
+  "row": "F18",
+  "surface": "gems/tamoz-agent-capabilities",
+  "verdict": "IMPROVE",
+  "counts": {
+    "critical": 0,
+    "major": 1,
+    "minor": 2,
+    "info": 2
+  },
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F18-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "MCP source resume pins omit operator policy that changes effect and validation semantics",
+      "seam": "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb#record_source_digest! and Session MCP binding",
+      "citations": [
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:80-89",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:125-138",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:182-204",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:191-195",
+        "gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb:158-174",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:34-41",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session.rb:233-248",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:201-209",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:362-371"
+      ],
+      "five_whys": true,
+      "recommendation": "Hash a canonical payload containing config.describe plus every policy setting consumed by build_server, at minimum normalized read_only_tools and database options, and add a resume test that changes each policy while keeping the catalog snapshot unchanged."
+    },
+    {
+      "id": "F18-COR-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "The sealed registry accepts duplicate source IDs although host dispatch has one implementation slot per ID",
+      "seam": "gems/tamoz-core/lib/tamoz/core/capability/registry.rb#build and gems/tamoz-tools/lib/tamoz/tools/capability_host.rb#bind_dispatcher",
+      "citations": [
+        "gems/tamoz-core/lib/tamoz/core/capability/registry.rb:69-112",
+        "gems/tamoz-core/lib/tamoz/core/capability/registry.rb:45-48",
+        "gems/tamoz-tools/lib/tamoz/tools/capability_host.rb:102-123",
+        "gems/tamoz-tools/lib/tamoz/tools/capability_host.rb:147-157",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:261-310",
+        "test/capability_registry_test.rb:116-125"
+      ],
+      "five_whys": false,
+      "recommendation": "Reject duplicate source.source_id values in Registry.build before build_registry and add one focused host/registry test."
+    },
+    {
+      "id": "F18-SCL-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "MCP server and descriptor aggregation has no global resource bound",
+      "seam": "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb#server_configs/build",
+      "citations": [
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:50-64",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:71-78",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:257-280",
+        "gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb:107-113",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:302-310"
+      ],
+      "five_whys": false,
+      "recommendation": "Add a simple aggregate server and descriptor admission limit before catalog materialization, and reject the complete configuration when it exceeds that limit."
+    },
+    {
+      "id": "F18-OBS-01",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "unconfirmed",
+      "title": "Caller-supplied MCP sources may omit the source provenance map",
+      "seam": "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb#initialize",
+      "citations": [
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb:50-74",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb:208-221",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:34-41",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb:169-178",
+        "test/agent_mcp_capability_source_test.rb:144-169"
+      ],
+      "five_whys": false,
+      "recommendation": "Decide whether source provenance is mandatory for every MCP source; if so require an exact valid digest map keyed by every catalog server, otherwise document catalog-only mode."
+    },
+    {
+      "id": "F18-MNT-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "Browser governance is an injected adapter seam with no sealed-catalog reachability",
+      "seam": "gems/tamoz-agent-capabilities/lib/tamoz/agent/governed_browser_source.rb and CapabilityBinding source construction",
+      "citations": [
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent_capabilities.rb:12-17",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb:261-310",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/governed_browser_source.rb:46-55",
+        "gems/tamoz-agent-capabilities/lib/tamoz/agent/governed_browser_source.rb:163-175",
+        "test/agent_phase4_capability_test.rb:130-201",
+        "docs/openclaw-intelligence-study/implementation-plan/evidence/phase-4/implementation-review.md:50-61"
+      ],
+      "five_whys": false,
+      "recommendation": "Keep the public contract explicit that this is an injected adapter seam, or add deliberate browser source registration only when an approved connector exists; add a reachability test for the chosen state."
+    }
+  ],
+  "carried_forward": [
+    {
+      "id": "CF05-SEC-01",
+      "severity": "major",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "Profile/MCP name admission contract remains with CF05; F18 records source-policy digest drift after admission."
+    },
+    {
+      "id": "F09-SEC-01",
+      "severity": "major",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "Remote description provenance remains with F09; F18 checked the shared binding without duplicating it."
+    },
+    {
+      "id": "F09-SEC-02",
+      "severity": "critical->major",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "MCP elicitation collapse remains with F09."
+    },
+    {
+      "id": "F09-COR-01",
+      "severity": "major",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "Duck-typed effect_class/read_only divergence remains with F09."
+    },
+    {
+      "id": "F10-SEC-03",
+      "severity": "major",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "Websearch egress declaration comparison remains with F10; F18 does not duplicate it."
+    },
+    {
+      "id": "F10-SEC-04",
+      "severity": "major",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "Websearch query/result sanitizer wiring remains with F10."
+    },
+    {
+      "id": "F25-SEC-01",
+      "severity": "critical",
+      "status": "open",
+      "owns_this_row": false,
+      "note": "Parent profile resume verification remains with F25."
+    },
+    {
+      "id": "F25-REL-01",
+      "severity": "major",
+      "status": "unconfirmed",
+      "owns_this_row": false,
+      "note": "Child MCP nil-path ambiguity remains with F25 and is not duplicated."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/capability_registry_test.rb", "runs": 9, "assertions": 28, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/capability_host_test.rb", "runs": 21, "assertions": 91, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_phase4_capability_test.rb", "runs": 7, "assertions": 31, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_child_task_runtime_test.rb", "runs": 4, "assertions": 11, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_mcp_capability_source_test.rb", "runs": 14, "assertions": 102, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_worker_mcp_test.rb -n '/test_(?!the_worker_calls_a_real_mcp_server_over_http)/'", "runs": 10, "assertions": 32, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_governed_database_source_test.rb", "runs": 2, "assertions": 7, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_cli_mcp_test.rb", "runs": 6, "assertions": 28, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/agent_mcp_adversarial_test.rb", "runs": 8, "assertions": 41, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/capability_closed_world_test.rb", "runs": 3, "assertions": 14, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/capability_descriptor_contract_test.rb", "runs": 4, "assertions": 18, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/capability_inventory_test.rb", "runs": 3, "assertions": 18, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/mcp_server_config_test.rb", "runs": 39, "assertions": 321, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/mcp_catalog_test.rb", "runs": 9, "assertions": 80, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/mcp_invocation_test.rb", "runs": 31, "assertions": 208, "failures": 0, "errors": 0},
+    {"command": "ruby -Itest test/public_api_test.rb", "runs": 3, "assertions": 1051, "failures": 0, "errors": 0}
+  ],
+  "tests_not_run": [
+    {"command": "ruby -Itest test/agent_worker_mcp_test.rb", "reason": "full file attempted; one HTTP fixture test errored with Errno::EPERM binding 127.0.0.1:0 in the sandbox"},
+    {"command": "rake ci / rake ci_full", "reason": "forbidden by the bounded read-only brief"},
+    {"command": "rubocop / enola", "reason": "forbidden by the bounded read-only brief"}
+  ],
+  "tests_not_found": [
+    "No test requires an exact source_digests entry for every MCP catalog server.",
+    "No test changes read_only_tools or database policy while holding the catalog snapshot constant and asserts resume refusal.",
+    "No test covers duplicate source IDs in Capability::Registry or an aggregate MCP server/descriptor bound."
+  ],
+  "probes": [
+    {
+      "kind": "source_digest_sidecar_policy",
+      "result": "ServerConfig#describe omitted read_only_tools and database; two different sidecar settings produced the same source digest sha256:de24b9cd6db94ed553d9cab41aad26c639bb270873efcd8c760d051e4f4c0d42"
+    },
+    {
+      "kind": "duplicate_source_id",
+      "result": "Registry.build accepted two local sources; CapabilityHost rejected the second dispatcher binding and routed both IDs through the first dispatcher"
+    },
+    {
+      "kind": "optional_source_digest_map",
+      "result": "McpCapabilitySource accepted a valid catalog and descriptor without source_digests and exposed mcp_source_digests as {}"
+    }
+  ],
+  "blind_spots": [
+    "No full CI, ci_full, RuboCop, Enola, or quality gate was run.",
+    "The full worker MCP file was blocked only at the local HTTP fixture socket bind; the remaining ten tests passed.",
+    "No live browser connector or real external provider exists in this checkout.",
+    "No load, soak, or many-server experiment was run.",
+    "Generic duplicate source ID and optional source digest behaviors have no current production caller proven in this audit.",
+    "Unrelated session, SQLite, approval, and MCP transport defects remain with their owning rows."
+  ],
+  "coordinator_flags": [
+    "F18-SEC-01 is a new major and should receive an independent challenge focused on whether read_only_tools/database are intended parts of the resumable MCP source authority.",
+    "F18-COR-01 is limited to the generic public Registry/CapabilityHost API; normal CapabilityBinding construction groups or creates unique source IDs.",
+    "F18-SCL-01 is an aggregate operator-configuration bound gap; no untrusted content path was found.",
+    "F18-OBS-01 is a contract decision: production McpSourceBuilder supplies source digests, but McpCapabilitySource permits catalog-only callers.",
+    "F18-MNT-01 resolves the earlier F09 browser reachability lead as an explicit partial-phase limitation."
+  ]
+}
