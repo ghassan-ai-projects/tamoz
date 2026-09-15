@@ -14,7 +14,7 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 | Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 46/46 | 0/46 item-level | 0/46 item-level | 0/46 |
 | Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
-| Cross-gem flows | 13/13 | 13/13 | 2/13 (one partial aggregate) | 1/13 | 1/13 |
+| Cross-gem flows | 13/13 | 13/13 | 3/13 (one partial aggregate) | 2/13 | 2/13 |
 
 No functionality row has met the closure bar at this checkpoint. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
@@ -22,8 +22,8 @@ app, nine executable surfaces, 46 support-script files, and the Rakefile. The
 complete cross-flow scanner pass is recorded in
 `analyses/crossflow-scanner-pass.md`; analyst reports and scanner leads remain
 separate gates. The filesystem currently contains
-30 JSON analyst records expanding to 41 row surfaces, including all 27 gem IDs
-and the completed CF01 flow review.
+31 JSON analyst records expanding to 42 row surfaces, including all 27 gem IDs
+and the completed CF01 and CF02 flow reviews.
 All 27 gem reports and all app/executable rows now have a scalability assessment.
 The coordinator addendum `analyses/scalability-lens-review.md` records the eight
 rows whose local bounds are proved but whose sustained-load measurements are
@@ -143,7 +143,7 @@ still fail at a boundary.
 | ID | Flow | Primary surfaces | State |
 |---|---|---|---|
 | CF01 | Load and dependency isolation | gem entry points, gemspecs, Zeitwerk, public API tests | ANALYST COMPLETE; PASS; synthesis complete |
-| CF02 | Durable graph checkpoint, crash recovery, and replay | `tamoz-agent-session` → `tamoz-graph` → `tamoz-sqlite` → `tamoz-core`/cancellation | SCANNER COMPLETE; analyst review pending |
+| CF02 | Durable graph checkpoint, crash recovery, and replay | `tamoz-agent-session` → `tamoz-graph` → `tamoz-sqlite` → `tamoz-core`/cancellation | ANALYST COMPLETE; IMPROVE; synthesis complete |
 | CF03 | Reviewed plan, approval, execution, verification, and repair | agent/session/kernel → tools/capabilities → approval → SQLite → observability | SCANNER COMPLETE; analyst review pending |
 | CF04 | Model/tool effect identity, journal, unknown outcome, and replay | agent runtime/session → graph dispatcher → SQLite effect journal | SCANNER COMPLETE; analyst review pending |
 | CF05 | Trusted authority, capability intersection, and governed egress | profile/approval → capabilities/tools → MCP/websearch → session | SCANNER COMPLETE; analyst review pending |

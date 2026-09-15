@@ -1,0 +1,39 @@
+{
+  "row": "CF02",
+  "surface": "durable graph checkpoint, crash recovery, and replay",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": ["F07-REL-01", "CF04-REL-01", "F07-SEC-01"],
+  "tests_run": [
+    {
+      "command": "ruby -Itest test/sqlite_crash_recovery_test.rb",
+      "runs": 3,
+      "assertions": 30,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0
+    },
+    {
+      "command": "ruby -Itest test/graph_history_test.rb",
+      "runs": 7,
+      "assertions": 30,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0
+    }
+  ],
+  "blind_spots": [
+    "The full session kill matrix did not finish in this bounded pass.",
+    "No production worker soak or multi-process claim-fairness load was run.",
+    "Effect-journal replay and cross-thread resolution were not re-litigated here."
+  ],
+  "coordinator_flags": ["F07-REL-01 carried without double-counting"]
+}

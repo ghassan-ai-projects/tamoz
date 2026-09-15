@@ -35,10 +35,10 @@ dispositions, and blind spots are recorded in [COVERAGE.md](COVERAGE.md).
 
 ## Current synthesis checkpoint
 
-The shared audit package now contains 30 JSON analyst records expanding to 41
+The shared audit package now contains 31 JSON analyst records expanding to 42
 row surfaces: all 27 gem responsibilities, the reference app and executable
-surfaces, the aggregate script/Rakefile rows, and CF01. The current analyst
-snapshot has 33 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
+surfaces, the aggregate script/Rakefile rows, and CF01–CF02. The current analyst
+snapshot has 34 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
 assessment; eight retain explicit sustained-load measurement gaps documented in
 `analyses/scalability-lens-review.md`. The standalone scanner passes cover every
 gem/app/executable/support/Rakefile inventory and CF01–CF13; cross-flow analyst
