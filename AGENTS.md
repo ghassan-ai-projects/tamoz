@@ -71,6 +71,31 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
   name actual files and seams, not invented abstractions or jargon; say plainly what
   is a real model result versus a plumbing test, and never overclaim.
 
+## Running tests and lint (fast path)
+
+- Tests need the pinned Ruby on PATH, one file per command:
+  `export PATH="$HOME/.rbenv/bin:$HOME/.rbenv/versions/3.3.11/bin:$PATH" && ruby -Itest test/<file>.rb`
+  (a second file on the same command line is ignored). Filter with `-n "/pattern/"`.
+- Lint a changed file directly: `bundle exec rubocop <path>...`. Check that your diff
+  adds no NEW offense — several files already carry pre-existing ones (e.g. long
+  methods); compare against `git stash` if unsure rather than autocorrecting unrelated code.
+
+## Functionality audit remediation (docs/audits/functionality-audit-2026-09-15)
+
+- `FINDINGS.md` is the coordinator index (severity/status/owning seam per finding);
+  `analyses/<row>.md` carries the full evidence, `file:line` citations, five-whys, and a
+  concrete "smallest action at the existing seam" recommendation. Read the analysis before
+  fixing — each finding was reproduced and names the exact seam.
+- Verify every claim against live source first (line numbers may have drifted), fix at the
+  named seam, add the regression test the finding asks for, and confirm it fails without the
+  fix (`git stash push <prod files>`), then commit per finding.
+- Recurring theme — **authority must be pinned, never re-derived by id.** The canonical fence
+  is `WorkerRuntime#child_profile_for` (compares a reloaded profile's `canonical_digest`
+  against the digest recorded at bind time); `validate_thread_profile` mirrors it. Effect
+  mutations must bind `(thread_id, namespace)` to the active lease (`EffectReconciler#reconcile`
+  is the pattern). When a store/authority lookup fails, fail closed (see
+  `agent_worker_fail_closed_test.rb`), never return the permissive default.
+
 ## Comments
 
 Default to none. Name things so the code reads without them; if it does not read,
