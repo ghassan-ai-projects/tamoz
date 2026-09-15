@@ -40,8 +40,9 @@ surfaces, the aggregate script/Rakefile rows, and CF01–CF13. The current analy
 snapshot has 44 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
 assessment; eight retain explicit sustained-load measurement gaps documented in
 `analyses/scalability-lens-review.md`. The standalone scanner passes cover every
-gem/app/executable/support/Rakefile inventory and CF01–CF13; cross-flow analyst
-review and synthesis remain open, so no row is closed.
+gem/app/executable/support/Rakefile inventory and CF01–CF13; coordinator
+synthesis is recorded in `analyses/gem-synthesis.md` and
+`analyses/entry-support-synthesis.md`.
 
 The latest bounded waves added standalone F13 (approval), F18 (capabilities),
 F21 (profile), F25 (runtime), and F26 (evals evidence) reports and independent
@@ -55,8 +56,8 @@ CF08, CF09, CF10, CF11, CF12, and CF13 carry existing authority, reliability,
 replay, control-routing, observability, and release-evidence findings without
 double-counting them. The app, executable, support-script, and Rakefile rows
 also have item-level coordinator synthesis in
-`analyses/entry-support-synthesis.md`; the remaining synthesis queue is the
-21 gem rows not yet reconciled in a dedicated coordinator wave.
+`analyses/entry-support-synthesis.md`; all 27 gem rows are reconciled in
+`analyses/gem-synthesis.md`.
 
 The audit is complete only when [BAR.md](BAR.md) is satisfied. Documentation
 may make the audit bar and evidence clearer; with no implementation in scope,

@@ -9,14 +9,15 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 
 | Surface | Inventory | Scanner pass | Analyst report present | Six-lens complete | Synthesis complete |
 |---|---:|---:|---:|---:|---:|
-| Gem responsibilities | 27/27 | 27/27 | 27/27 | 27/27 | 6/27 |
+| Gem responsibilities | 27/27 | 27/27 | 27/27 | 27/27 | 27/27 |
 | Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
 | Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 |
 | Support scripts (`script/` 45 entries + nested quality file + `scripts/` 1 file) | 47/47 | 47/47 | 47/47 item-level | 47/47 item-level | 47/47 |
 | Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
 | Cross-gem flows | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 |
 
-No functionality row has met the closure bar at this checkpoint. The standalone
+All functionality rows have completed the review and synthesis stages; open
+findings keep their verdicts at `IMPROVE` where the bar requires it. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
 app, nine executable surfaces, 47 support-script files, and the Rakefile. The
 complete cross-flow scanner pass is recorded in
@@ -41,9 +42,10 @@ covered approval, profile, capability, toolbox, MCP, websearch, and session
 authority paths. The standalone inventory/search pass in
 `analyses/scanner-pass.md` now covers all gem/app/executable/support/Rakefile
 surfaces, and `analyses/crossflow-scanner-pass.md` covers CF01–CF13. The
-CF01–CF13 have direct analyst reports and coordinator synthesis; the remaining
-open coverage is the grouped app, executable, support-script, Rakefile, and gem
-row synthesis work recorded below.
+CF01–CF13 have direct analyst reports and coordinator synthesis. The grouped
+app, executable, support-script, Rakefile, and all 27 gem rows also have
+coordinator synthesis in `analyses/entry-support-synthesis.md` and
+`analyses/gem-synthesis.md`.
 
 The current analysis set includes standalone reports for F13 approval, F18
 capabilities, F20 healing, F21 profile, F25 runtime, and F26 evals evidence in
@@ -51,9 +53,8 @@ addition to the earlier functionality rows and cross-gem probes. Their major
 findings have independent challenge evidence (the F21 challenge is recorded in
 `challenge-profile-authority.md`); the challenger-added F20-REL-02 has the
 separate analyst re-review `review-f20-rel02.md`. The coordinator index in
-[FINDINGS.md](FINDINGS.md) records these waves' dispositions; open findings and
-the remaining scanner, flow, item-level script, and challenge work keep the
-closure counters pending.
+[FINDINGS.md](FINDINGS.md) records these waves' dispositions; open findings
+remain open by design and are not silently treated as implementation closure.
 
 ## Rolling queue
 
@@ -63,52 +64,52 @@ boundary brief. Gem IDs appear exactly once in the detailed inventory below.
 
 | Queue | Group | Gem units | State | Next scan focus |
 |---|---|---:|---|---|
-| W1A | core / graph / SQLite / agent kernel / session | 5 | ACTIVE — 0/5 complete | durable state, replay, effects, routing, and session boundaries |
-| W1B | authority / profile / tools / MCP / capabilities | 6 | ACTIVE — F13/F18/F21 synthesized; F08–F10 pending | trust, approval, egress, capability sealing, and tool execution |
-| W2A | CLI / runtime | 2 | QUEUED — 0/2 complete | command routing, worker lifecycle, model and capability wiring |
-| W2B | cancellation / concurrency / scheduler | 3 | QUEUED — 0/3 complete | signals, bounds, drains, leases, and schedule contracts |
-| W3A | comms / gateway / Telegram | 3 | QUEUED — 0/3 complete | admission, rendering, transport, delivery, and channel recovery |
-| W3B | stream | 1 | QUEUED — 0/1 complete | supervised episode worker, reverse channel, and Situation boundary |
-| W4A | memory / healing / improvement | 3 | QUEUED — 0/3 complete | lifecycle, abstention, remediation, provenance, and promotion |
-| W4B | observability / OTLP | 2 | QUEUED — 0/2 complete | signal catalog, bounded recording, projection, and export |
-| W5 | evals / evals-runner | 2 | QUEUED — 0/2 complete | artifacts, digests, harnesses, scorecards, and release evidence |
+| W1A | core / graph / SQLite / agent kernel / session | 5 | SYNTHESIZED — 5/5 | durable state, replay, effects, routing, and session boundaries |
+| W1B | authority / profile / tools / MCP / capabilities | 6 | SYNTHESIZED — 6/6 | trust, approval, egress, capability sealing, and tool execution |
+| W2A | CLI / runtime | 2 | SYNTHESIZED — 2/2 | command routing, worker lifecycle, model and capability wiring |
+| W2B | cancellation / concurrency / scheduler | 3 | SYNTHESIZED — 3/3 | signals, bounds, drains, leases, and schedule contracts |
+| W3A | comms / gateway / Telegram | 3 | SYNTHESIZED — 3/3 | admission, rendering, transport, delivery, and channel recovery |
+| W3B | stream | 1 | SYNTHESIZED — 1/1 | supervised episode worker, reverse channel, and Situation boundary |
+| W4A | memory / healing / improvement | 3 | SYNTHESIZED — 3/3 | lifecycle, abstention, remediation, provenance, and promotion |
+| W4B | observability / OTLP | 2 | SYNTHESIZED — 2/2 | signal catalog, bounded recording, projection, and export |
+| W5 | evals / evals-runner | 2 | SYNTHESIZED — 2/2 | artifacts, digests, harnesses, scorecards, and release evidence |
 
 ## Gem responsibility inventory
 
 Responsibilities are copied from the root responsibility map and checked
-against the corresponding live `lib` directory during setup. The analyst,
-synthesis, and disposition columns remain pending until their gates are
-completed; the scanner column is complete for all gem responsibility rows.
+against the corresponding live `lib` directory during setup. The scanner,
+analyst, six-lens, synthesis, and disposition gates are complete for all gem
+responsibility rows; open findings remain open in `FINDINGS.md`.
 
 | ID | Gem | Responsibility | Queue | Scanner | Analyst | Synthesis | Disposition |
 |---|---|---|---|---|---|---|---|
-| F01 | `tamoz-core` | Shared values, context, secrets, canonical digests, durable circuit, sentinels | W1A | complete | pending | pending | open coverage |
-| F02 | `tamoz-cancellation` | Cancellation token, signal traps, process groups, interruptible sleep | W2B | complete | pending | pending | open coverage |
-| F03 | `tamoz-concurrency` | Bounded pools, stream/event sinks, shared-budget drain | W2B | complete | pending | pending | open coverage |
-| F04 | `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | W1A | complete | pending | pending | open coverage |
-| F05 | `tamoz-scheduler` | Schedule/occurrence values and the non-executing store contract | W2B | complete | pending | pending | open coverage |
-| F06 | `tamoz-stream` | Supervised gRPC episode worker and Situation boundary | W3B | complete | pending | pending | open coverage |
-| F07 | `tamoz-sqlite` | Durable checkpoints, inbox, effects, leases, schedules, and comms adapter | W1A | complete | pending | pending | open coverage |
-| F08 | `tamoz-tools` | Workspace toolbox, skills compiler, capability host | W1B | complete | pending | pending | open coverage |
-| F09 | `tamoz-mcp` | Governed MCP client and host | W1B | complete | pending | pending | open coverage |
-| F10 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | W1B | complete | pending | pending | open coverage |
-| F11 | `tamoz-comms` | Channel values, admission, rendering, transport and store contracts | W3A | complete | pending | pending | open coverage |
-| F12 | `tamoz-comms-gateway` | Long-running gateway and delivery drainer over Comms seams | W3A | complete | pending | pending | open coverage |
+| F01 | `tamoz-core` | Shared values, context, secrets, canonical digests, durable circuit, sentinels | W1A | complete | complete | complete | IMPROVE; findings dispositioned |
+| F02 | `tamoz-cancellation` | Cancellation token, signal traps, process groups, interruptible sleep | W2B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F03 | `tamoz-concurrency` | Bounded pools, stream/event sinks, shared-budget drain | W2B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F04 | `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | W1A | complete | complete | complete | PASS; two minors remain |
+| F05 | `tamoz-scheduler` | Schedule/occurrence values and the non-executing store contract | W2B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F06 | `tamoz-stream` | Supervised gRPC episode worker and Situation boundary | W3B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F07 | `tamoz-sqlite` | Durable checkpoints, inbox, effects, leases, schedules, and comms adapter | W1A | complete | complete | complete | IMPROVE; findings dispositioned |
+| F08 | `tamoz-tools` | Workspace toolbox, skills compiler, capability host | W1B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F09 | `tamoz-mcp` | Governed MCP client and host | W1B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F10 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | W1B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F11 | `tamoz-comms` | Channel values, admission, rendering, transport and store contracts | W3A | complete | complete | complete | IMPROVE; findings dispositioned |
+| F12 | `tamoz-comms-gateway` | Long-running gateway and delivery drainer over Comms seams | W3A | complete | complete | complete | IMPROVE; findings dispositioned |
 | F13 | `tamoz-approval` | Policy-as-data approval engine, grants, decisions, and durable log | W1B | complete | complete | complete | 6 major + 1 minor open; 1 info lead closed |
-| F14 | `tamoz-telegram` | Telegram Bot API transport adapter | W3A | complete | pending | pending | open coverage |
-| F15 | `tamoz-observability` | Closed signals, correlation, bounded recorders, metrics, trace projection | W4B | complete | pending | pending | open coverage |
-| F16 | `tamoz-otel` | Governed optional OTLP/HTTP exporter | W4B | complete | pending | pending | open coverage |
-| F17 | `tamoz-agent-kernel` | Episode records/receipts, plan/review/execute/verify, effects, catalogs, routes, projections | W1A | complete | pending | pending | open coverage |
+| F14 | `tamoz-telegram` | Telegram Bot API transport adapter | W3A | complete | complete | complete | IMPROVE; findings dispositioned |
+| F15 | `tamoz-observability` | Closed signals, correlation, bounded recorders, metrics, trace projection | W4B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F16 | `tamoz-otel` | Governed optional OTLP/HTTP exporter | W4B | complete | complete | complete | IMPROVE; findings dispositioned |
+| F17 | `tamoz-agent-kernel` | Episode records/receipts, plan/review/execute/verify, effects, catalogs, routes, projections | W1A | complete | complete | complete | IMPROVE; findings dispositioned |
 | F18 | `tamoz-agent-capabilities` | Sealed capability catalog and child-task dispatch | W1B | complete | complete | complete | 1 major + 2 minor open; browser limitation closed |
-| F19 | `tamoz-agent-memory` | Durable memory admission, retrieval, lifecycle, consolidation, behavior transitions | W4A | complete | pending | pending | open coverage |
+| F19 | `tamoz-agent-memory` | Durable memory admission, retrieval, lifecycle, consolidation, behavior transitions | W4A | complete | complete | complete | IMPROVE; findings dispositioned |
 | F20 | `tamoz-agent-healing` | Typed failure classification, abstention, rules, reviewed remediation | W4A | complete | complete | complete | F20-REL-01 demoted; F20-REL-02 and F20-SEC-01 major/open |
 | F21 | `tamoz-agent-profile` | Trusted profiles, authority/egress/check validation, secure files, registries | W1B | complete | complete | complete | 1 major + 1 minor open; info controls recorded |
-| F22 | `tamoz-agent-session` | Durable deliberation records, planning, graph nodes, effects, routing, adaptive machinery | W1A | complete | pending | pending | open coverage |
-| F23 | `tamoz-agent-improvement` | Candidate provenance, heuristic generation, evaluation, promotion/rollback | W4A | complete | pending | pending | open coverage |
-| F24 | `tamoz-agent-cli` | `tamoz` executable and worker/schedule/profile/session/comms commands | W2A | complete | pending | pending | open coverage |
+| F22 | `tamoz-agent-session` | Durable deliberation records, planning, graph nodes, effects, routing, adaptive machinery | W1A | complete | complete | complete | IMPROVE; findings dispositioned |
+| F23 | `tamoz-agent-improvement` | Candidate provenance, heuristic generation, evaluation, promotion/rollback | W4A | complete | complete | complete | IMPROVE; findings dispositioned |
+| F24 | `tamoz-agent-cli` | `tamoz` executable and worker/schedule/profile/session/comms commands | W2A | complete | complete | complete | IMPROVE; findings dispositioned |
 | F25 | `tamoz-agent` | Agent runtime, worker/durable execution, model/capability wiring, approval default | W2A | complete | complete | complete | 2 major findings open; cancellation projection and inert accepted budgets upheld |
 | F26 | `tamoz-evals` | Artifact schemas, canonical digests, verification, release evidence | W5 | complete | complete | complete | 2 major + 1 minor open; stale artifact and zero-byte guard upheld |
-| F27 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments, benchmarks, external inputs | W5 | complete | pending | pending | open coverage |
+| F27 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments, benchmarks, external inputs | W5 | complete | complete | complete | IMPROVE; findings dispositioned |
 
 ## Apps and entry points
 

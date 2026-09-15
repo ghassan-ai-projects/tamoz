@@ -6,7 +6,7 @@
 | Code baseline | branch `audit-15-09`, commit `582ae5566de1ae073aea82b69bb2bbf444494d3b` |
 | Mode | Read-only functionality audit; coordinator-led continuation per owner request; no implementation requested |
 | Package state | Documentation and analyst/challenge reports are in the shared audit folder; production code, tests, and configuration remain untouched |
-| Closure | CF01 has a complete PASS review, CF02–CF13 have complete IMPROVE reviews; item-level app/support synthesis and gem-row synthesis remain pending under [BAR.md](BAR.md) |
+| Closure | All 27 gem rows, the app/executable/support/Rakefile surfaces, and CF01–CF13 have complete scanner, analyst, six-lens, challenge, and coordinator synthesis stages under [BAR.md](BAR.md) |
 
 ## Filesystem evidence snapshot
 
@@ -23,8 +23,8 @@ surfaces, 47 support files, and the Rakefile now have item-level coordinator
 synthesis in `analyses/entry-support-synthesis.md`. Eight rows retain an
 explicit sustained-load measurement gap in
 [analyses/scalability-lens-review.md](analyses/scalability-lens-review.md), but
-the lens itself is no longer unreviewed. The remaining cross-flow analyst,
-support-script, and synthesis gates keep the overall audit incomplete.
+the lens itself is no longer unreviewed. Open findings and evidence blind spots
+remain explicitly open; they are not treated as implementation closure.
 
 ## Completed coordinator waves
 
@@ -50,6 +50,7 @@ support-script, and synthesis gates keep the overall audit incomplete.
 | CF12 — observability/OTLP | `analyses/CF12-observability-otel.md` and `.json` | existing `challenge-observability.md` and `challenge-comms-otel-schedule.md` | IMPROVE; CF12-OBS-01 accepted as one new minor; F15/F16 findings carried without duplicate count |
 | CF13 — evaluation/release evidence | `analyses/CF13-evaluation-release.md` and `.json` | existing `challenge-f26-evidence.md`, `challenge-core-telegram-evals.md`, and `challenge-session-stream-gates.md` | IMPROVE; no new machine-counted finding; F26/F27/S01/R01 evidence findings carried without duplicate count |
 | Apps/entry/support/Rakefile | `analyses/entry-support-synthesis.md` plus item reports | `analyses/challenge-core-telegram-evals.md` and `analyses/challenge-session-stream-gates.md` | Grouped synthesis complete; A01/E03/E04/S01/S02 minors and E08/E09/R01 majors dispositioned; no new cross-flow count |
+| All gem responsibilities | `analyses/gem-synthesis.md` plus F01–F27 reports | all applicable `challenge-*.md` and re-review records | 27/27 synthesized; F04 PASS, remaining rows IMPROVE with findings dispositioned |
 
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
@@ -68,18 +69,13 @@ existing release-evidence and gate-composition findings without a second count.
 
 ## Remaining work
 
-1. Complete coordinator synthesis for the 21 remaining gem rows; the standalone
-   scanner pass, item-level app/support review, and CF01–CF13 direct flow reviews
-   are complete, and an analyst report alone does not close a row.
-2. Preserve explicit throughput evidence gaps for the eight rows listed in
+1. Preserve explicit throughput evidence gaps for the eight rows listed in
    `analyses/scalability-lens-review.md`; run bounded load/soak work only when
    deployment-level throughput evidence is required.
-3. Preserve independent challenge coverage for any new critical/major finding;
+2. Preserve independent challenge coverage for any new critical/major finding;
    F20-REL-02 was re-reviewed after the challenger introduced it, and no
    coordinator-indexed critical/major entry is now pending.
-4. Expand S01 into one row per support script and attach item-level evidence;
-   cross-flow source scanning is complete but analyst review is still pending.
-5. Reconcile `README.md`, `COVERAGE.md`, `FINDINGS.md`, and this checkpoint
+3. Reconcile `README.md`, `COVERAGE.md`, `FINDINGS.md`, and this checkpoint
    after every bounded wave so the file ledger stays authoritative.
 
 ## Evidence and housekeeping

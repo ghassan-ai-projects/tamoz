@@ -148,6 +148,52 @@ owed.
 | S02-SEC-01 | S02 | minor | medium | `scripts/start-tamoz-comms.sh` child environment | OPEN — whole `.env` is exported to both children |
 | S02-REL-03 | S02 | minor | medium | `scripts/start-tamoz-comms.sh#stop_all` process match | OPEN — `--stop` may leave a worker alive |
 
+## Additional row-level dispositions
+
+The detailed analyst JSON records also contain the following minor/info
+observations. They are explicitly dispositioned here so the coordinator index
+does not silently omit a row finding; their full citations and test evidence
+remain in the corresponding `analyses/F*.md` report.
+
+| Row | Findings | Coordinator disposition |
+|---|---|---|
+| F01 | `F01-MNT-01`, `F01-MNT-02`, `F01-REL-02`, `F01-COR-04` | OPEN as bounded foundation maintenance/circuit-contract findings |
+| F01 | `F01-MNT-03` | CLOSED as a corrected historical explanation; no production defect reopened |
+| F02 | `F02-MNT-01`, `F02-REL-01`, `F02-COR-01` | OPEN as local cancellation/process-group contract observations |
+| F03 | `F03-OBS-01`, `F03-MNT-01` | OPEN as bounded backlog visibility and ownership debt |
+| F04 | `F04-REL-01`, `F04-OBS-01` | OPEN as minor lease/error observability documentation gaps; PASS remains below the three-minor threshold |
+| F05 | `F05-COR-01`, `F05-OBS-06` | OPEN as occurrence delivery/correlation minors |
+| F05 | `F05-INF-03`, `F05-INF-07`, `F05-SEC-02` | OPEN as documented contract/design questions, not authority bypasses |
+| F06 | `F06-COR-01`, `F06-COR-02`, `F06-REL-01` | OPEN as typed serialization/failure-path minors |
+| F06 | `F06-REL-02`, `F06-REL-03`, `F06-SEC-02`, `F06-MNT-01` | OPEN as info-level evidence, endpoint, retention, and architecture limitations |
+| F07 | `F07-INT-01`, `F07-BND-02` | OPEN as digest and pagination/resource-bound minors |
+| F08 | `F08-REL-02`, `F08-SEC-02`, `F08-MNT-01` | OPEN as bounded workspace/reaper contract minors |
+| F09 | `F09-INFO-01` | OPEN as an informational frame-budget mismatch |
+| F10 | `F10-SEC-02` | OPEN as a model-controlled request-size minor |
+| F10 | `F10-REL-01`, `F10-REL-02`, `F10-MNT-01` | OPEN as circuit/retry/descriptor contract observations; no duplicate of CF05 |
+| F11 | `F11-ERR-03`, `F11-OBS-01`, `F11-SCAL-01` | OPEN as typed error, approval visibility, and lookup-cost minors |
+| F12 | `F12-COR-01`, `F12-REL-02`, `F12-SEC-01`, `F12-OBS-01`, `F12-MNT-01` | OPEN as outbox retry, process-local state, pairing, terminal visibility, and lifecycle minors |
+| F14 | `F14-RES-01`, `F14-OBS-01`, `F14-SEC-02`, `F14-MNT-02` | OPEN as transport response, token observability, TLS-test, and vocabulary minors |
+| F14 | `F14-MNT-01` | OPEN as an informational timeout-injection limitation |
+| F15 | `F15-OBS-01`, `F15-COR-01`, `F15-SCAL-01`, `F15-SCAL-02`, `F15-OBS-02` | OPEN as recorder, metric, lock, and trace projection minors |
+| F15 | `F15-INFO-01` | CLOSED — the limitations section was verified claim by claim |
+| F16 | `F16-REL-01`, `F16-COR-01`, `F16-MNT-01` | OPEN as exporter deadline, OTLP typing, and conformance minors |
+| F16 | `F16-COR-02` | OPEN as an informational mapping/documentation gap |
+| F17 | `F17-B9-02` | MERGED into the kernel B9 catalog finding; no second count |
+| F17 | `F17-ERR-01`, `F17-INFO-01`, `F17-INFO-02` | OPEN/recorded as failed-effect diagnostic and durable-journal facts |
+| F19 | `F19-OBS-01`, `F19-REL-02` | OPEN as admission visibility and CAS-window minors |
+| F20 | `F20-OBS-01`, `F20-COR-01`, `F20-MNT-01` | OPEN as loader/abstention/reachability minors; major authority findings remain separate |
+| F22 | `F22-COR-02`, `F22-REL-02`, `F22-REL-03` | OPEN as continuation/recovery/transcript-bound minors |
+| F22 | `F22-DOC-01`, `F22-DOC-02` | OPEN as tracker/limitations documentation drift |
+| F23 | `F23-SCA-01`, `F23-SEC-03` | OPEN as generator-bound and policy-compare minors |
+| F23 | `F23-INF-01`, `F23-INF-02` | OPEN as rollback and score-floor informational limitations |
+| F24 | `F24-ERR-03`, `F24-SEC-01`, `F24-REL-01` | OPEN as CLI help, terminal escaping, and follow-mode minors |
+| F24 | `F24-INFO-01`, `F24-INFO-02` | OPEN as exit-taxonomy and safety-counter informational limits |
+| F25 | `F25-REL-01` | UNCONFIRMED; no production child-MCP consequence was proven |
+| F25 | `F25-OBS-01`, `F25-SCL-02` | OPEN as counter and repeated-census minors |
+| F27 | `F27-OBS-01` | OPEN as a non-load-bearing provenance/naming note |
+| F27 | `F27-SEC-01`, `F27-SCAL-01` | OPEN as CLI tamper-test and whole-run-bound minors |
+
 ## Coordinator dispositions
 
 - **Four criticals stand.** `F07-SEC-01` (a thread-B lease resolves a thread-A
