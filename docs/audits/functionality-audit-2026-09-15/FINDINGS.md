@@ -59,6 +59,7 @@ owed.
 | F09-SEC-01 | F09 | major | high | `tamoz-agent-session` `session_effects.rb#mcp_planning_surface` | UPHELD — citation corrected |
 | F10-SEC-01 | F10 | major | high | `script/websearch_adapter#load_provider` | UPHELD — exact-host contract applies |
 | F10-SEC-03 | F10 | info | medium | `tamoz-agent-capabilities` MCP/websearch configuration | MERGED into CF05-SEC-01 — documentation/contract axis |
+| CF05-SEC-01 | CF05 | info | medium | `CapabilityBinding#admission_set` and profile/runtime authority contract | DEMOTED — verified behavior, unresolved documentation contract; see `challenge-profile-authority.md` |
 | F10-SEC-04 | F10 | closed | high | `tamoz-agent-capabilities` `mcp_source_builder.rb#build_validator` | REFUTED — production controls are present |
 | F11-COR-01 | F11 | major | high | `tamoz-comms` `rendering.rb#split` | UPHELD — truncation marker absent |
 | F11-SEC-01 | F11 | minor | high | `tamoz-comms` `rendering.rb#plain` | DEMOTED — no caller selects `restricted_html` |
@@ -171,6 +172,13 @@ owed.
   profile challenge qualified the threat model to the local operator trust root.
   `F21-REL-01` records the concurrent adoption-write race as minor; the secure
   loader, transition fence, and history-bound notes are recorded as info.
+- **CF05 authority disposition.** `CF05-SEC-01` is a verified profile/MCP
+  admission behavior, but the independent challenge demoted it to an open info
+  documentation/contract gap: the profile schema has no MCP allowlist and the
+  owning runtime code states that the operator runtime directory is the authority.
+  `F10-SEC-03` is merged into this same contract axis. The combined-path regression
+  recommendation remains, while `F25-SEC-01`, `F22-SEC-01`, `F18-SEC-01`, and the
+  F09/F10 egress findings retain their existing owners and severities.
 - **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
   re-reviewed against the failed-effect path and remains major/open: the public
   remediation entry point can return the transition `Array` before verification,
@@ -204,7 +212,9 @@ F18's challenge closed the browser reachability lead while retaining its major
 and minor dispositions; F25 upheld both pending majors; and F26 upheld both
 pending majors while narrowing their ownership. The challenger-added F20-REL-02
 was then independently re-reviewed in `review-f20-rel02.md` and accepted as
-major/open.
+major/open. The profile-authority challenge also demoted CF05-SEC-01 from a
+major contract lead to an info/documentation gap and merged F10-SEC-03 into that
+decision; the observed admission behavior remains confirmed.
 
 A challenge record is required for every critical/major finding per [BAR.md](BAR.md).
 No coordinator-indexed critical/major row is currently marked `pending`; the
