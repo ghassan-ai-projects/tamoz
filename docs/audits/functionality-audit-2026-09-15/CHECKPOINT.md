@@ -38,8 +38,9 @@ keep every row incomplete.
 The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
 inventory/search scanner pass is recorded in
 [analyses/scanner-pass.md](analyses/scanner-pass.md); it covers all gem,
-app/executable, support-script, and Rakefile surfaces, while CF01–CF13 remain
-without an end-to-end scanner lane. Four confirmed
+app/executable, support-script, and Rakefile surfaces. The complete cross-flow
+scanner lane is recorded in
+[analyses/crossflow-scanner-pass.md](analyses/crossflow-scanner-pass.md). Four confirmed
 critical findings remain F07-SEC-01, F08-SEC-01, F09-SEC-02, and F25-SEC-01.
 F23-SEC-01 and F20-REL-01 are recorded as major after challenge/demotion.
 The CF07 occurrence report and its schedule challenge are also indexed as two
@@ -49,17 +50,17 @@ coordinator ownership.
 
 ## Remaining work
 
-1. Record a standalone scanner pass for each cross-gem flow and update the
-   remaining scanner counters; the gem/app/executable/support/Rakefile scanner
-   pass is complete, and an analyst report alone does not close a row.
+1. Trace CF01–CF13 end to end with boundary owners, tests/contracts, blind
+   spots, and coordinator dispositions; the standalone scanner pass is complete,
+   and an analyst report alone does not close a row.
 2. Preserve explicit throughput evidence gaps for the eight rows listed in
    `analyses/scalability-lens-review.md`; run bounded load/soak work only when
    deployment-level throughput evidence is required.
 3. Preserve independent challenge coverage for any new critical/major finding;
    F20-REL-02 was re-reviewed after the challenger introduced it, and no
    coordinator-indexed critical/major entry is now pending.
-4. Trace CF01–CF13 end to end, including the already targeted CF02, CF04,
-   CF05, and CF06 boundaries, and expand S01 into one row per support script.
+4. Expand S01 into one row per support script and attach item-level evidence;
+   cross-flow source scanning is complete but analyst review is still pending.
 5. Reconcile `README.md`, `COVERAGE.md`, `FINDINGS.md`, and this checkpoint
    after every bounded wave so the file ledger stays authoritative.
 

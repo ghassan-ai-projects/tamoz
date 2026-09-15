@@ -14,13 +14,14 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 | Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 46/46 | 0/46 item-level | 0/46 item-level | 0/46 |
 | Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 0/1 |
-| Cross-gem flows | 13/13 | 0/13 | 1/13 partial | 0/13 | 0/13 |
+| Cross-gem flows | 13/13 | 13/13 | 1/13 partial | 0/13 | 0/13 |
 
 No functionality row has met the closure bar at this checkpoint. The standalone
 scanner pass is recorded in `analyses/scanner-pass.md` for all 27 gem rows, the
 app, nine executable surfaces, 46 support-script files, and the Rakefile. The
-cross-flow scanner remains unrecorded beyond the targeted partial logs; analyst
-reports and scanner leads are separate gates. The filesystem currently contains
+complete cross-flow scanner pass is recorded in
+`analyses/crossflow-scanner-pass.md`; analyst reports and scanner leads remain
+separate gates. The filesystem currently contains
 29 JSON analyst records expanding to 40 row surfaces, including all 27 gem IDs.
 All 27 gem reports and all app/executable rows now have a scalability assessment.
 The coordinator addendum `analyses/scalability-lens-review.md` records the eight
@@ -37,8 +38,9 @@ The authority/tools scanner (`/tmp/tamoz-agents/scan_authority_tools.log`)
 covered approval, profile, capability, toolbox, MCP, websearch, and session
 authority paths. The standalone inventory/search pass in
 `analyses/scanner-pass.md` now covers all gem/app/executable/support/Rakefile
-surfaces. The scanner lanes remain partial only for the 13 cross-flow rows,
-which still need end-to-end boundary scans under the six-lens bar.
+surfaces, and `analyses/crossflow-scanner-pass.md` covers CF01–CF13. The
+cross-flow analyst lanes still need end-to-end boundary review under the
+six-lens bar.
 
 The current analysis set includes standalone reports for F13 approval, F18
 capabilities, F20 healing, F21 profile, F25 runtime, and F26 evals evidence in
@@ -139,19 +141,19 @@ still fail at a boundary.
 
 | ID | Flow | Primary surfaces | State |
 |---|---|---|---|
-| CF01 | Load and dependency isolation | gem entry points, gemspecs, Zeitwerk, public API tests | MAPPED; review pending |
-| CF02 | Durable graph checkpoint, crash recovery, and replay | `tamoz-agent-session` → `tamoz-graph` → `tamoz-sqlite` → `tamoz-core`/cancellation | TARGETED SCAN; full review pending |
-| CF03 | Reviewed plan, approval, execution, verification, and repair | agent/session/kernel → tools/capabilities → approval → SQLite → observability | MAPPED; review pending |
-| CF04 | Model/tool effect identity, journal, unknown outcome, and replay | agent runtime/session → graph dispatcher → SQLite effect journal | TARGETED SCAN; full review pending |
-| CF05 | Trusted authority, capability intersection, and governed egress | profile/approval → capabilities/tools → MCP/websearch → session | TARGETED SCAN; contract and full review pending |
-| CF06 | Request, worker, and multi-turn control routing | CLI → agent runtime/session → SQLite inbox/leases → graph | TARGETED SCAN; full review pending |
-| CF07 | Schedule admission, occurrence leases, and worker execution | scheduler contract → SQLite schedule store → CLI/runtime/graph | MAPPED; review pending |
-| CF08 | Channel admission, rendering, outbox delivery, and approval relay | Telegram → Comms → gateway → SQLite → agent/approval | MAPPED; review pending |
-| CF09 | Supervised stream episode, evidence pull, learning loop, reverse channel | stream → session/runtime → SQLite/memory/improvement/approval | MAPPED; review pending |
-| CF10 | Memory admission, retrieval, deletion, consolidation, and transitions | agent-memory → SQLite → kernel/session/tools | MAPPED; review pending |
-| CF11 | Failure classification, safe remediation, candidate improvement, promotion/rollback | healing/improvement → kernel/memory → session/effects/approval | MAPPED; review pending |
-| CF12 | Signal recording, metrics/traces, bounded drains, and OTLP export | runtime components → observability → OTel | MAPPED; review pending |
-| CF13 | Evaluation corpus, harness, scorecard, verification, and release evidence | evals/evals-runner ↔ runtime entry points and artifacts | MAPPED; review pending |
+| CF01 | Load and dependency isolation | gem entry points, gemspecs, Zeitwerk, public API tests | SCANNER COMPLETE; analyst review pending |
+| CF02 | Durable graph checkpoint, crash recovery, and replay | `tamoz-agent-session` → `tamoz-graph` → `tamoz-sqlite` → `tamoz-core`/cancellation | SCANNER COMPLETE; analyst review pending |
+| CF03 | Reviewed plan, approval, execution, verification, and repair | agent/session/kernel → tools/capabilities → approval → SQLite → observability | SCANNER COMPLETE; analyst review pending |
+| CF04 | Model/tool effect identity, journal, unknown outcome, and replay | agent runtime/session → graph dispatcher → SQLite effect journal | SCANNER COMPLETE; analyst review pending |
+| CF05 | Trusted authority, capability intersection, and governed egress | profile/approval → capabilities/tools → MCP/websearch → session | SCANNER COMPLETE; analyst review pending |
+| CF06 | Request, worker, and multi-turn control routing | CLI → agent runtime/session → SQLite inbox/leases → graph | SCANNER COMPLETE; analyst review pending |
+| CF07 | Schedule admission, occurrence leases, and worker execution | scheduler contract → SQLite schedule store → CLI/runtime/graph | SCANNER COMPLETE; analyst review pending |
+| CF08 | Channel admission, rendering, outbox delivery, and approval relay | Telegram → Comms → gateway → SQLite → agent/approval | SCANNER COMPLETE; analyst review pending |
+| CF09 | Supervised stream episode, evidence pull, learning loop, reverse channel | stream → session/runtime → SQLite/memory/improvement/approval | SCANNER COMPLETE; analyst review pending |
+| CF10 | Memory admission, retrieval, deletion, consolidation, and transitions | agent-memory → SQLite → kernel/session/tools | SCANNER COMPLETE; analyst review pending |
+| CF11 | Failure classification, safe remediation, candidate improvement, promotion/rollback | healing/improvement → kernel/memory → session/effects/approval | SCANNER COMPLETE; analyst review pending |
+| CF12 | Signal recording, metrics/traces, bounded drains, and OTLP export | runtime components → observability → OTel | SCANNER COMPLETE; analyst review pending |
+| CF13 | Evaluation corpus, harness, scorecard, verification, and release evidence | evals/evals-runner ↔ runtime entry points and artifacts | SCANNER COMPLETE; analyst review pending |
 
 Historical audits listed in `README.md` are lead sources only. They do not move
 any row above from pending to complete without current source evidence and an
