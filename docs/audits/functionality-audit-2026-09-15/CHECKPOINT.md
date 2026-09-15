@@ -12,10 +12,15 @@
 
 The current shared folder contains 42 JSON analyst records expanding to 53 row
 surfaces: all 27 gem responsibilities, the app and executable surfaces, the
-aggregate script/Rakefile rows, and CF01–CF13. The declared row counters are 44
+aggregate script/Rakefile rows, and CF01–CF13. The declared row counters are 45
 `IMPROVE` and 8 `PASS`. Direct parsing of the `findings` arrays and the
 reconciled JSON counters both yield 193 finding records. `rollup.py` reports
 those counters and is read-only.
+
+The final mapped, scanned, independently reviewed, synthesized, and audit-row
+closed counters are consolidated in [FINAL-STATUS.md](FINAL-STATUS.md). Audit
+row closure records completion of the review gates; it does not close the open
+production findings.
 
 All 27 gem IDs now have a standalone JSON row record. All 27 gem reports and
 the app/executable rows have a scalability assessment. The app, nine executable

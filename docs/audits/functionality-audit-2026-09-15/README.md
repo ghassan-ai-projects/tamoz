@@ -37,12 +37,14 @@ dispositions, and blind spots are recorded in [COVERAGE.md](COVERAGE.md).
 The shared audit package now contains 42 JSON analyst records expanding to 53
 row surfaces: all 27 gem responsibilities, the reference app and executable
 surfaces, the aggregate script/Rakefile rows, and CF01–CF13. The current analyst
-snapshot has 44 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
+snapshot has 45 `IMPROVE` and 8 `PASS` verdicts. All rows now have a scalability
 assessment; eight retain explicit sustained-load measurement gaps documented in
 `analyses/scalability-lens-review.md`. The standalone scanner passes cover every
 gem/app/executable/support/Rakefile inventory and CF01–CF13; coordinator
 synthesis is recorded in `analyses/gem-synthesis.md` and
-`analyses/entry-support-synthesis.md`.
+`analyses/entry-support-synthesis.md`. The final mapped, scanned,
+independently reviewed, synthesized, and audit-row closed counters are
+recorded in [FINAL-STATUS.md](FINAL-STATUS.md).
 
 The latest bounded waves added standalone F13 (approval), F18 (capabilities),
 F21 (profile), F25 (runtime), and F26 (evals evidence) reports and independent

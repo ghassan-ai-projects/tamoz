@@ -7,14 +7,14 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 
 ## Counters
 
-| Surface | Inventory | Scanner pass | Analyst report present | Six-lens complete | Synthesis complete |
-|---|---:|---:|---:|---:|---:|
-| Gem responsibilities | 27/27 | 27/27 | 27/27 | 27/27 | 27/27 |
-| Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
-| Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 |
-| Support scripts (`script/` 45 entries + nested quality file + `scripts/` 1 file) | 47/47 | 47/47 | 47/47 item-level | 47/47 item-level | 47/47 |
-| Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
-| Cross-gem flows | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 |
+| Surface | Inventory | Scanner pass | Independent analyst | Six-lens complete | Synthesis complete | Audit row closed |
+|---|---:|---:|---:|---:|---:|---:|
+| Gem responsibilities | 27/27 | 27/27 | 27/27 | 27/27 | 27/27 | 27/27 |
+| Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
+| Gem and `bin/` executables | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 | 9/9 |
+| Support scripts (`script/` 45 entries + nested quality file + `scripts/` 1 file) | 47/47 | 47/47 | 47/47 item-level | 47/47 item-level | 47/47 | 47/47 |
+| Root `Rakefile` | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
+| Cross-gem flows | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 | 13/13 |
 
 All functionality rows have completed the review and synthesis stages; open
 findings keep their verdicts at `IMPROVE` where the bar requires it. The standalone
@@ -30,8 +30,10 @@ All 27 gem reports and all app/executable rows now have a scalability assessment
 The coordinator addendum `analyses/scalability-lens-review.md` records the eight
 rows whose local bounds are proved but whose sustained-load measurements are
 absent. A row cannot be closed by an inventory count, a historical report, a
-scanner signal, or an issue-only analysis. See [BAR.md](BAR.md) for verdict and
-finding rules.
+scanner signal, or an issue-only analysis. Here, `Audit row closed` means the
+full audit gates and coordinator disposition are recorded; it does not mean
+production remediation or a `PASS`. See [FINAL-STATUS.md](FINAL-STATUS.md) and
+[BAR.md](BAR.md) for the reconciled counters, verdict, and finding rules.
 
 ## Synthesis progress — W1
 

@@ -352,5 +352,6 @@ decision; the observed admission behavior remains confirmed.
 
 A challenge record is required for every critical/major finding per [BAR.md](BAR.md).
 No coordinator-indexed critical/major row is currently marked `pending`; the
-scanner, missing-lens, cross-flow, and item-level inventories still keep the
-audit incomplete under [BAR.md](BAR.md).
+scanner, six-lens, cross-flow, and item-level inventories are complete. Open
+findings and evidence limits remain remediation work; they do not make a row
+`INCOMPLETE` under [BAR.md](BAR.md).
