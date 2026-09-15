@@ -17,10 +17,12 @@ the aggregate script/Rakefile rows. The declared row counters are 33
 reconciled JSON counters both yield 188 finding records. `rollup.py` reports
 those counters and is read-only.
 
-All 27 gem IDs now have a standalone JSON row record. Twenty-five gem reports
-cover all six lenses; F12 and F17 still lack scalability evidence. The app and
-five executable rows also lack a scalability lens. Eight rows therefore remain
-incomplete even before scanner and cross-flow gates are considered.
+All 27 gem IDs now have a standalone JSON row record. All 27 gem reports and
+the app/executable rows have a scalability assessment. Eight rows retain an
+explicit sustained-load measurement gap in
+[analyses/scalability-lens-review.md](analyses/scalability-lens-review.md), but
+the lens itself is no longer unreviewed. Scanner and cross-flow gates still
+keep every row incomplete.
 
 ## Completed coordinator waves
 
@@ -45,8 +47,9 @@ coordinator ownership.
 
 1. Record a standalone scanner pass for each functionality and update the
    scanner counters; an analyst report alone does not close a row.
-2. Complete the eight missing scalability-lens reviews and reconcile the
-   report `counts` fields with their `findings` arrays.
+2. Preserve explicit throughput evidence gaps for the eight rows listed in
+   `analyses/scalability-lens-review.md`; run bounded load/soak work only when
+   deployment-level throughput evidence is required.
 3. Preserve independent challenge coverage for any new critical/major finding;
    F20-REL-02 was re-reviewed after the challenger introduced it, and no
    coordinator-indexed critical/major entry is now pending.

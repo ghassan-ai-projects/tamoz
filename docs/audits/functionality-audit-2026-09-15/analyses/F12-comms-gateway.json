@@ -5,7 +5,7 @@
   "counts": {"critical": 0, "major": 0, "minor": 5, "info": 0},
   "lenses": {"correctness": "reviewed", "security": "reviewed",
              "reliability": "reviewed", "observability": "reviewed",
-             "scalability": "not evidenced", "maintenance": "reviewed"},
+             "scalability": "reviewed", "maintenance": "reviewed"},
   "carried_forward": [
     {"id": "comms-unknown-ordering", "severity": "major", "confidence": "high",
      "status": "open", "title": "an unknown delivery does not fence later same-conversation parts",

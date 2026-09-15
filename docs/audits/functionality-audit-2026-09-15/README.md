@@ -38,9 +38,10 @@ dispositions, and blind spots are recorded in [COVERAGE.md](COVERAGE.md).
 The shared audit package now contains 29 JSON analyst records expanding to 40
 row surfaces: all 27 gem responsibilities, the reference app and executable
 surfaces, and the aggregate script/Rakefile rows. The current analyst snapshot
-has 33 `IMPROVE` and 7 `PASS` verdicts. Eight rows still lack a completed
-scalability lens (`A01`, `E01`, `E05`, `E06`, `E07`, `E09`, `F12`, and `F17`),
-so no row is closed under the six-lens bar.
+has 33 `IMPROVE` and 7 `PASS` verdicts. All rows now have a scalability
+assessment; eight retain explicit sustained-load measurement gaps documented in
+`analyses/scalability-lens-review.md`. No row is closed under the scanner,
+cross-flow, and synthesis gates.
 
 The latest bounded waves added standalone F13 (approval), F18 (capabilities),
 F21 (profile), F25 (runtime), and F26 (evals evidence) reports and independent

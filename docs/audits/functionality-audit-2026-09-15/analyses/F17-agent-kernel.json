@@ -8,7 +8,7 @@
     "security": "reviewed",
     "reliability": "reviewed",
     "observability": "reviewed",
-    "scalability": "not evidenced",
+    "scalability": "reviewed",
     "maintenance": "reviewed"
   },
   "findings": [

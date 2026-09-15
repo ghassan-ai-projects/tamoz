@@ -9,9 +9,9 @@ responsibility or surface was inventoried; it is not a review or a PASS.
 
 | Surface | Inventory | Scanner pass | Analyst report present | Six-lens complete | Synthesis complete |
 |---|---:|---:|---:|---:|---:|
-| Gem responsibilities | 27/27 | 0/27 | 27/27 | 25/27 | 6/27 |
-| Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 0/1 | 1/1 | 0/1 | 0/1 |
-| Gem and `bin/` executables | 9/9 | 0/9 | 9/9 | 4/9 | 0/9 |
+| Gem responsibilities | 27/27 | 0/27 | 27/27 | 27/27 | 6/27 |
+| Reference app (`apps/tamoz-agent`, 2 files) | 1/1 | 0/1 | 1/1 | 1/1 | 0/1 |
+| Gem and `bin/` executables | 9/9 | 0/9 | 9/9 | 9/9 | 0/9 |
 | Support scripts (`script/` 45 files + `scripts/` 1 file) | 46/46 | 0/46 | 0/46 item-level | 0/46 item-level | 0/46 |
 | Root `Rakefile` | 1/1 | 0/1 | 1/1 | 1/1 | 0/1 |
 | Cross-gem flows | 13/13 | 0/13 | 1/13 partial | 0/13 | 0/13 |
@@ -20,10 +20,12 @@ No functionality row has met the closure bar at this checkpoint. The scanner
 counter remains `0` because no standalone scanner lane has been recorded for a
 complete responsibility; analyst reports and scanner leads are separate gates.
 The filesystem currently contains 29 JSON analyst records expanding to 40 row
-surfaces, including all 27 gem IDs. Twenty-five gem reports cover all six
-lenses; F12 and F17 still lack scalability evidence. A row cannot be closed by
-an inventory count, a historical report, a scanner signal, or an issue-only
-analysis. See [BAR.md](BAR.md) for verdict and finding rules.
+surfaces, including all 27 gem IDs. All 27 gem reports and all app/executable
+rows now have a scalability assessment. The coordinator addendum
+`analyses/scalability-lens-review.md` records the eight rows whose local bounds
+are proved but whose sustained-load measurements are absent. A row cannot be
+closed by an inventory count, a historical report, a scanner signal, or an
+issue-only analysis. See [BAR.md](BAR.md) for verdict and finding rules.
 
 ## Synthesis progress — W1
 
