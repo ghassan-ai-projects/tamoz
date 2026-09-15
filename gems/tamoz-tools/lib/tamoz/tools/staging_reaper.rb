@@ -10,7 +10,10 @@ module Tamoz
     # :reek:TooManyStatements :reek:UtilityFunction
     # rubocop:disable Layout/LineLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     class StagingReaper
-      PATTERN = /\A\.tamoz-(?:create-)?[A-Za-z0-9_.-]+\.tmp\z/
+      # Only the Tempfile-produced shape is provenance: date-pid-random, which no
+      # operator file wears. A file merely starting `.tamoz-` (e.g. `.tamoz-notes.tmp`)
+      # is the operator's and must survive.
+      PATTERN = /\A\.tamoz-(?:create-)?\d{8}-\d+-[a-z0-9]+\.tmp\z/
       IGNORED_DIRECTORIES = %w[.git vendor node_modules].freeze
       MAX_FILES = 200
       DEFAULT_AGE = 60.0
