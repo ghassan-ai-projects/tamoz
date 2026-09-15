@@ -404,7 +404,10 @@ module Tamoz
         description = entry&.description
         return if description.nil? || description.empty?
 
-        [name, prompt_safe(description)]
+        # A server authors this text; bounding it is not marking it. Attribute it
+        # in the planner prompt the way Invocation attributes remote blocks, so a
+        # remote description is not indistinguishable from a trusted local one.
+        [name, "remote content from server #{descriptor.source_id}: #{prompt_safe(description)}"]
       end
     end
     # rubocop:enable Metrics/ClassLength, Metrics/ParameterLists
