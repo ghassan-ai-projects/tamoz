@@ -40,8 +40,9 @@ row surfaces: all 27 gem responsibilities, the reference app and executable
 surfaces, and the aggregate script/Rakefile rows. The current analyst snapshot
 has 33 `IMPROVE` and 7 `PASS` verdicts. All rows now have a scalability
 assessment; eight retain explicit sustained-load measurement gaps documented in
-`analyses/scalability-lens-review.md`. No row is closed under the scanner,
-cross-flow, and synthesis gates.
+`analyses/scalability-lens-review.md`. The standalone scanner pass covers every
+gem/app/executable/support/Rakefile inventory; cross-flow scanning and synthesis
+remain open, so no row is closed.
 
 The latest bounded waves added standalone F13 (approval), F18 (capabilities),
 F21 (profile), F25 (runtime), and F26 (evals evidence) reports and independent

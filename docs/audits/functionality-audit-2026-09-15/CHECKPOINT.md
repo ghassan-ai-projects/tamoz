@@ -6,7 +6,7 @@
 | Code baseline | branch `audit-15-09`, commit `582ae5566de1ae073aea82b69bb2bbf444494d3b` |
 | Mode | Read-only functionality audit; no implementation requested |
 | Package state | Documentation and analyst/challenge reports are in the shared audit folder; production code, tests, and configuration remain untouched |
-| Closure | No row is closed; scanner completion and cross-flow closure remain pending under [BAR.md](BAR.md) |
+| Closure | No row is closed; cross-flow scanning, item-level support review, and synthesis remain pending under [BAR.md](BAR.md) |
 
 ## Filesystem evidence snapshot
 
@@ -35,7 +35,11 @@ keep every row incomplete.
 | F25 — runtime | `analyses/F25-agent-runtime.md` and `.json` | `analyses/challenge-f25-runtime.md` | Two major findings remain open: cancellation projection and inert accepted budgets |
 | F26 — evals evidence | `analyses/F26-evals.md` and `.json` | `analyses/challenge-f26-evidence.md` | Two major findings and one minor generator gap remain open; stale-artifact ownership narrowed |
 
-The coordinator entries are in [FINDINGS.md](FINDINGS.md). Four confirmed
+The coordinator entries are in [FINDINGS.md](FINDINGS.md). The standalone
+inventory/search scanner pass is recorded in
+[analyses/scanner-pass.md](analyses/scanner-pass.md); it covers all gem,
+app/executable, support-script, and Rakefile surfaces, while CF01–CF13 remain
+without an end-to-end scanner lane. Four confirmed
 critical findings remain F07-SEC-01, F08-SEC-01, F09-SEC-02, and F25-SEC-01.
 F23-SEC-01 and F20-REL-01 are recorded as major after challenge/demotion.
 The CF07 occurrence report and its schedule challenge are also indexed as two
@@ -45,8 +49,9 @@ coordinator ownership.
 
 ## Remaining work
 
-1. Record a standalone scanner pass for each functionality and update the
-   scanner counters; an analyst report alone does not close a row.
+1. Record a standalone scanner pass for each cross-gem flow and update the
+   remaining scanner counters; the gem/app/executable/support/Rakefile scanner
+   pass is complete, and an analyst report alone does not close a row.
 2. Preserve explicit throughput evidence gaps for the eight rows listed in
    `analyses/scalability-lens-review.md`; run bounded load/soak work only when
    deployment-level throughput evidence is required.
