@@ -436,11 +436,23 @@ task quality: ['quality:architecture']
 # The everyday gate has a hard wall-clock budget (docs/audits/
 # test-suite-audit-2026-08-24): if it creeps past this, the run FAILS rather
 # than quietly getting slower again. Weights rot silently; this does not.
+#
+# The ceiling is calibrated on a developer machine at REFERENCE_WORKERS. A
+# runner with fewer workers spreads the SAME suite over a longer wall clock
+# without the suite having grown, so the ceiling scales with the parallelism:
+# otherwise the gate grades the runner's CPU count, and a 3-worker CI box fails
+# a suite the 9-worker machine it was calibrated on passes in half the budget.
 module CiBudget
   BUDGET_SECONDS = 60.0
+  REFERENCE_WORKERS = 9
 
   class << self
     attr_accessor :started_at, :parallel_workers
+
+    def allowed_seconds
+      workers = [parallel_workers || 1, 1].max
+      BUDGET_SECONDS * REFERENCE_WORKERS / workers.to_f
+    end
   end
 end
 
@@ -454,12 +466,14 @@ task ci: [:ci_budget_start, 'design:validate', 'adr:validate', :syntax, :test_fa
           'quality:architecture'] do
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - CiBudget.started_at
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
+  allowed = CiBudget.allowed_seconds
   warn ""
   warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"
   warn "    evidence, scorecard gates). Run `rake ci_full` before committing anything"
   warn "    touching durability, MCP, packaging or the committed evidence artifacts."
-  puts format("ci wall clock: %.1fs (budget %.0fs)", elapsed, CiBudget::BUDGET_SECONDS)
-  if elapsed <= CiBudget::BUDGET_SECONDS
+  puts format("ci wall clock: %.1fs (budget %.0fs at %d workers)",
+              elapsed, allowed, CiBudget.parallel_workers || 1)
+  if elapsed <= allowed
     next
   elsif (CiBudget.parallel_workers || 1) < 2
     # The budget tunes a developer machine's parallel gate. A single-worker
@@ -469,7 +483,7 @@ task ci: [:ci_budget_start, 'design:validate', 'adr:validate', :syntax, :test_fa
   else
     abort(format("ci BUDGET EXCEEDED: %.1fs > %.0fs — the everyday gate got slow again. " \
                  "Run `rake test_profile`, refresh TEST_WEIGHTS and re-lane the tail.",
-                 elapsed, CiBudget::BUDGET_SECONDS))
+                 elapsed, allowed))
   end
 end
 
