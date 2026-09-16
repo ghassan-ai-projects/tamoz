@@ -65,8 +65,6 @@ module Tamoz
       # process, so it gets the in-memory stores — never the worker's SQLite
       # engine (ADR §2.3).
       approval_engine = build_approval_engine(profile_name: "implement")
-      # Read-only healing shadow: classifies a failed turn's typed failure against
-      # the operator's staged rules (empty by default). Executes nothing (ADR-028).
       healing = SelfHealingAssessor.new(rules: healing_rules)
       Runtime.new(model:, toolbox:, max_plan_attempts:, ask:, routing:, recorder:, approval_engine:, healing:)
     end

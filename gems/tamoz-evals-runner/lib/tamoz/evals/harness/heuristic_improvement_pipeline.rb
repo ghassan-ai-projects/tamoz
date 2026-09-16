@@ -3,28 +3,16 @@
 module Tamoz
   module Evals
     module Harness
-      # ADR-023 self-improvement, composed end to end (non-runtime, ADR-025):
-      # generate one bounded heuristic from verified trajectories, evaluate it on
-      # a DISTINCT holdout, decide pass/fail, and assemble the immutable
-      # provenance — producing one vetted, promotion-ready bundle.
-      #
-      # It STOPS at the human gate. It returns the bundle a human approves and a
-      # durable promoter records; it never mutates behavior itself. The pieces are
-      # the production ones (`Improvement::Generator`, the paired evaluation whose
-      # seal `Improvement::EvaluationReport` verifies, `Improvement::Provenance`),
-      # so a promoter re-derives and re-checks exactly what this produced.
+      # Composes the production pieces end to end (non-runtime, ADR-025): generate
+      # -> distinct-holdout evaluation -> pass/fail decision -> immutable provenance,
+      # producing one promotion-ready bundle. Stops at the human gate; never mutates.
       class HeuristicImprovementPipeline
-        # `candidate` is nil when the trajectories do not clear the evidence floor
-        # — the honest empty outcome, not a weaker heuristic.
         Bundle = Data.define(:candidate, :report, :provenance, :decision) do
           def generated? = !candidate.nil?
           def passed? = generated? && decision.fetch("passed") == true
-          # Promotion-ready: a candidate that passed and carries complete provenance.
           def promotable? = passed? && !provenance.nil? && provenance.complete?
 
-          # The on-disk hand-off `tamoz improve promote` reads back. Only the
-          # candidate, its sealed report, and its provenance are needed to
-          # promote; the decision is carried for the operator's inspection.
+          # The on-disk hand-off `tamoz improve promote` reads back.
           def to_h
             {
               "candidate" => candidate&.to_h, "report" => report,

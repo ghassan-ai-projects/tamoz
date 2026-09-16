@@ -458,10 +458,8 @@ module Tamoz
         action_result(state)
       end
 
-      # ADR-028 shadow stage: when the bounded repair loop gives up on a typed
-      # failure, surface the healing vertical's read-only verdict — is this a
-      # known remediable class, and which rule would own it — as a turn event.
-      # Executes nothing; off unless an assessor was wired in.
+      # ADR-028 shadow stage: on a failed action turn, emit the healing vertical's
+      # read-only verdict for the typed failure. Off unless an assessor is wired in.
       def assess_healing(state)
         return unless @healing
 

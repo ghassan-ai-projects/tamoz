@@ -2,28 +2,13 @@
 
 module Tamoz
   module Agent
-    # The composition-root seam ADR-052 §3 reserves for `tamoz-agent`: it wires
-    # the healing vertical onto a real failure path. Given a typed
-    # `Healing::FailureRecord`, it finds the versioned rule that triggers on it,
-    # enforces a durable circuit and a durable, fingerprint-keyed attempt bound,
-    # and runs `Healing::Remediation.run` — or escalates.
-    #
-    # The shipped default is an EMPTY `RuleRegistry`: no rule triggers, so every
-    # failure escalates and the runtime behaves exactly as it did before healing
-    # was wired. An operator makes remediation live by staging a rule (ADR-028);
-    # only then are the per-call remediation collaborators (critic, perform,
-    # reconcile) reached.
-    #
-    # F20-REL-01: the healing gem takes `attempt:` from its caller and never
-    # bounds it, so a caller that passes `attempt: 1` every cycle is unbounded.
-    # This coordinator owns that bound instead — on a durable counter the caller
-    # cannot reset by re-invoking — and refuses before the protocol runs.
+    # Runs bounded remediation for a matching rule, or escalates. The gem takes
+    # `attempt:` from its caller and never bounds it (F20-REL-01); the durable
+    # fingerprint-keyed counter here is that bound, refused before the protocol runs.
     class SelfHealingCoordinator
       MAX_DURABLE_ATTEMPTS = 3
       ATTEMPTS_NAMESPACE = "tamoz.healing.attempts"
 
-      # Uniform result: `recovered?` is the one predicate the failure path reads;
-      # `remediation` carries the gem's own `Remediation::Outcome` when a rule ran.
       Decision = Data.define(:state, :reason, :remediation) do
         def recovered? = state == :recovered
         def escalated? = state == :escalated
@@ -40,9 +25,6 @@ module Tamoz
         raise ArgumentError, "max_durable_attempts must be >= 1" if @max_durable_attempts < 1
       end
 
-      # `record` is a `Healing::FailureRecord`. The remediation collaborators are
-      # supplied per call by the staged program; they are only touched once a rule
-      # matches, so the default empty-registry path never needs them.
       def remediate(record, toolbox:, critic: nil, original_invariant: nil,
                     minimal_change: nil, stop_conditions: [], perform: nil,
                     reconcile: nil, compensation: nil, escalation_sink: nil)
@@ -60,8 +42,7 @@ module Tamoz
         circuit = build_circuit(rule)
         return escalated("circuit_open") if circuit.open?
 
-        # Durable-first: persist the increment BEFORE the protocol runs, so a crash
-        # mid-remediation cannot reset the bound to zero on the next claim.
+        # Persist before running so a crash mid-remediation cannot reset the bound.
         record_attempt(fingerprint, attempts)
 
         outcome = @remediation.run(

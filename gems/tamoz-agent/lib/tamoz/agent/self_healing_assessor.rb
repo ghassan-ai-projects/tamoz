@@ -2,28 +2,18 @@
 
 module Tamoz
   module Agent
-    # ADR-028 shadow stage, wired live. When a turn's bounded repair loop gives
-    # up on a typed failure, the assessor asks the healing vertical — read-only,
-    # executing nothing — "is this a known, remediable failure, and which rule
-    # would own it?" and returns a typed verdict.
-    #
-    # This is the first stage a healing rule passes through before it earns the
-    # authority to act (replay → shadow → fault-injection → canary → active). It
-    # is safe by construction: it runs classification only, never a plan, effect,
-    # or verification, so it can be on by default with an empty rule set — an
-    # empty set simply reports every failure as "escalate", with its typed
-    # category, instead of the runtime's opaque failure reason.
+    # ADR-028 shadow stage: classify a failed turn's typed failure against the
+    # staged rules, read-only. Runs no plan, effect, or verification, so it is safe
+    # on by default; an empty rule set reports the typed category and escalates.
     class SelfHealingAssessor
-      # error class → healing category, keyed by the class's short name so both the
-      # fully-qualified spelling (real tool errors) and the bare one (denials) map.
+      # Keyed by short name so both the fully-qualified spelling (tool errors) and
+      # the bare one (denials) map.
       TOOL_ERROR_CATEGORY = {
         "ToolPolicyError" => :policy_denied,
         "ToolArgumentError" => :malformed_recoverable_output,
         "ModelCallError" => :dependency_unavailable
       }.freeze
 
-      # A ToolError whose reason points at a moved/stale target is a stale
-      # precondition (a remediable class); anything else is left unclassified.
       STALE_HINTS = ["expected_sha256", "file changed", "stale", "no longer"].freeze
 
       Assessment = Data.define(
@@ -49,7 +39,6 @@ module Tamoz
         @policy_version = String(policy_version)
       end
 
-      # `tool_failure` is the runtime's typed failure hash (see StepExecution).
       def assess_tool_failure(tool_failure)
         tool = tool_failure["tool"]
         assess(build_record(
@@ -71,10 +60,8 @@ module Tamoz
         ))
       end
 
-      # The durable path (worker `settle_failed_view`) carries the same typed
-      # failure shape the ephemeral runtime does, inside `view.state[:observations]`:
-      # the last observation with a `failure` record, or a failed `check` record.
-      # Returns nil when a failed turn carries no typed failure to classify.
+      # Classify the last typed failure in a durable turn's observation list
+      # (`view.state[:observations]`), or nil when there is none.
       def assess_observations(observations)
         entries = Array(observations).select { |entry| entry.is_a?(Hash) }
         failure = entries.reverse.find { |entry| entry["failure"] }

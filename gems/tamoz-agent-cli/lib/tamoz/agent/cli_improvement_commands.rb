@@ -4,17 +4,9 @@ require "optparse"
 
 module Tamoz
   module Agent
-    # `tamoz improve` — the operator entry point onto `tamoz-agent-improvement`.
-    #
-    # ADR-023: self-improvement is candidate generation, never live self-mutation.
-    # This command runs ONLY the deterministic, provider-free, read-only generation
-    # half over an operator-supplied trajectory corpus and prints the single
-    # candidate heuristic (or none). It never promotes: promotion requires a
-    # distinct holdout, immutable provenance, and a human gate, which are separate
-    # operator steps by design.
+    # `tamoz improve --corpus DIR [--principal ID] [--json]` (generate), or
+    # `tamoz improve promote --bundle FILE --approval human:<actor> [--actor ID]`.
     module CLIImprovementCommands
-      # `tamoz improve --corpus DIR [--principal ID] [--json]`, or
-      # `tamoz improve promote --bundle FILE --approval human:<actor> [--actor ID]`.
       def cmd_improve(options, argv)
         argv = Array(argv)
         return cmd_improve_promote(options, argv.drop(1)) if argv.first == "promote"
@@ -26,7 +18,6 @@ module Tamoz
         end
 
         root = File.realpath(corpus)
-        # Read-only by construction: the generator refuses a mutation capability.
         toolbox = Toolbox.new(root:, allow_changes: false)
         trajectory_paths = Dir.children(root).select { |name| name.end_with?(".json") }.sort
         if trajectory_paths.empty?
@@ -43,13 +34,9 @@ module Tamoz
         1
       end
 
-      # Record the durable, human-gated promotion of a vetted candidate bundle
-      # (the artifact the improvement pipeline produces). ADR-023: this records a
-      # transition that activates at the next thread's first intake — it never
-      # touches an in-flight thread — and every gate is the gem's own: the sealed
-      # report must verify and resolve, the candidate cannot self-promote, the
-      # human gate must be present, the holdout must pass, and the provenance must
-      # be complete. This command supplies operator artifacts; it weakens nothing.
+      # Records a promotion through the gem's own gates (report verifies/resolves,
+      # no self-promotion, human gate, holdout passed, provenance complete). ADR-023:
+      # it activates at the next thread's first intake, never an in-flight thread.
       def cmd_improve_promote(options, argv)
         bundle_path, approval, actor = parse_promote_options(argv)
         unless bundle_path && File.exist?(bundle_path)

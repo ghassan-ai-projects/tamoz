@@ -767,12 +767,9 @@ module Tamoz
         PROGRESSED
       end
 
-      # ADR-028 shadow stage on the durable path (worker/session) — the one Telegram
-      # and every queued/scheduled turn ride. On a failed turn it classifies the
-      # typed failure against the operator's staged rules and emits an operator
-      # event; it executes nothing, and an empty rule set simply reports the typed
-      # category and escalates. Correspondents are unaffected — this is operator
-      # telemetry, not a chat message.
+      # ADR-028 shadow stage on the durable path (worker/queue/schedule/Telegram):
+      # classify the failed turn's typed failure and emit an operator event.
+      # Executes nothing; correspondents are unaffected (operator telemetry).
       def emit_healing_assessment(view, thread_id, occurrence_id)
         return unless @healing
 
