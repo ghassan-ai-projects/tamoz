@@ -4,10 +4,17 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 
 - Ruby version pinned in `.ruby-version`; gems live in `gems/`, entry points in `apps/` and `bin/`.
 - Tests: `test/` (Minitest), run via `rake`. One test FILE per command — `ruby -Itest a_test.rb b_test.rb` runs only the first.
+- Rules learned in real sessions live in `.agent/rules/` (index: `.agent/README.md`).
 - Ask before changing cross-gem interfaces; most bugs live at gem boundaries.
 - When delegating work to background subagents, follow the standing protocol in
   `docs/subagent-orchestration.md` (file-ownership contracts, behavior model in the brief,
   named gates + known-red list, fixed report format).
+
+## Keep these rules current (standing directive)
+
+- Record a reusable lesson in the SAME change that taught it — here, or in
+  `.agent/rules/<topic>.md` when it needs evidence.
+- Ground it in the real seam; rewrite a rule a new lesson contradicts, never keep both.
 
 ## Quality gates and coding standard
 
@@ -79,6 +86,8 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 - Lint a changed file directly: `bundle exec rubocop <path>...`. Check that your diff
   adds no NEW offense — several files already carry pre-existing ones (e.g. long
   methods); compare against `git stash` if unsure rather than autocorrecting unrelated code.
+- **Never pay real time in a test** — inject the wait; fast because it *fails early* is not
+  fast. Lanes, weights and the `ci` budget: `.agent/rules/testing.md`.
 
 ## Functionality audit remediation (docs/audits/functionality-audit-2026-09-15)
 
