@@ -5,6 +5,8 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 - Ruby version pinned in `.ruby-version`; gems live in `gems/`, entry points in `apps/` and `bin/`.
 - Tests: `test/` (Minitest), run via `rake`. One test FILE per command — `ruby -Itest a_test.rb b_test.rb` runs only the first.
 - Rules learned in real sessions live in `.agent/rules/` (index: `.agent/README.md`).
+- **Never force-push.** No rewriting published commits, on any branch — amend locally, then
+  publish a new commit. See `.agent/rules/git.md`.
 - Ask before changing cross-gem interfaces; most bugs live at gem boundaries.
 - When delegating work to background subagents, follow the standing protocol in
   `docs/subagent-orchestration.md` (file-ownership contracts, behavior model in the brief,
