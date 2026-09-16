@@ -13,8 +13,12 @@ module Tamoz
     # distinct holdout, immutable provenance, and a human gate, which are separate
     # operator steps by design.
     module CLIImprovementCommands
-      # `tamoz improve --corpus DIR [--principal ID] [--json]`
+      # `tamoz improve --corpus DIR [--principal ID] [--json]`, or
+      # `tamoz improve promote --bundle FILE --approval human:<actor> [--actor ID]`.
       def cmd_improve(options, argv)
+        argv = Array(argv)
+        return cmd_improve_promote(options, argv.drop(1)) if argv.first == "promote"
+
         corpus, principal, as_json = parse_improve_options(argv, options)
         unless corpus && Dir.exist?(corpus)
           @err.puts "improve: --corpus DIR is required and must exist"
@@ -39,7 +43,82 @@ module Tamoz
         1
       end
 
+      # Record the durable, human-gated promotion of a vetted candidate bundle
+      # (the artifact the improvement pipeline produces). ADR-023: this records a
+      # transition that activates at the next thread's first intake — it never
+      # touches an in-flight thread — and every gate is the gem's own: the sealed
+      # report must verify and resolve, the candidate cannot self-promote, the
+      # human gate must be present, the holdout must pass, and the provenance must
+      # be complete. This command supplies operator artifacts; it weakens nothing.
+      def cmd_improve_promote(options, argv)
+        bundle_path, approval, actor = parse_promote_options(argv)
+        unless bundle_path && File.exist?(bundle_path)
+          @err.puts "improve promote: --bundle FILE is required and must exist"
+          return 2
+        end
+        unless approval.to_s.start_with?("human:")
+          @err.puts 'improve promote: --approval "human:<actor>" is required'
+          return 2
+        end
+
+        bundle = JSON.parse(File.read(bundle_path))
+        candidate = load_candidate(bundle.fetch("candidate"))
+        provenance = load_provenance(bundle.fetch("provenance"))
+        report = bundle.fetch("report")
+        body = Improvement::EvaluationReport.verify!(report)
+        resolver = ->(seal) { seal == Improvement::EvaluationReport.seal(body) ? report : nil }
+
+        with_worker_runtime(options) do |runtime|
+          engine = runtime.memory_engine
+          unless engine
+            @err.puts "improve promote: memory is not enabled for this runtime"
+            next 1
+          end
+          result = Improvement::Promotion.new(engine).promote(
+            candidate:, provenance:, report:, human_gate_evidence: approval,
+            actor: actor || "operator", evidence_resolver: resolver
+          )
+          transition = result.fetch("transition")
+          state = result.fetch("activated") ? "activated" : "pending activation at the next thread's first intake"
+          @out.puts "improve promote: recorded #{transition.transition_id} (#{state})."
+          0
+        end
+      rescue KeyError => error
+        @err.puts "improve promote: malformed bundle (missing #{error.message})"
+        2
+      rescue Improvement::ImprovementError => error
+        @err.puts "improve promote: refused — #{error.class.name.split("::").last}: #{error.message}"
+        1
+      end
+
       private
+
+      def parse_promote_options(argv)
+        bundle = nil
+        approval = nil
+        actor = nil
+        OptionParser.new do |value|
+          value.banner = "Usage: tamoz improve promote --bundle FILE --approval human:<actor> [--actor ID]"
+          value.on("--bundle FILE", "The vetted candidate bundle from the improvement pipeline") { |path| bundle = path }
+          value.on("--approval EVIDENCE", "Human approval, e.g. human:operator-1") { |evidence| approval = evidence }
+          value.on("--actor ID", "The promoting principal (default: operator)") { |id| actor = id }
+        end.parse!(Array(argv).dup)
+        [bundle, approval, actor]
+      end
+
+      def load_candidate(hash)
+        Improvement::Heuristic.new(
+          heuristic_id: hash.fetch("heuristic_id"), surface: hash.fetch("surface").to_sym,
+          precursor_tool: hash.fetch("precursor_tool"), subject_tool: hash.fetch("subject_tool"),
+          support: hash.fetch("support"), trials: hash.fetch("trials"),
+          confidence: hash.fetch("confidence"), statement: hash.fetch("statement"),
+          generator_principal: hash.fetch("generator_principal")
+        )
+      end
+
+      def load_provenance(hash)
+        Improvement::Provenance.new(**hash.transform_keys(&:to_sym))
+      end
 
       def parse_improve_options(argv, options)
         corpus = nil

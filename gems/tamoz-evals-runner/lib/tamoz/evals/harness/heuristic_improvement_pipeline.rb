@@ -21,6 +21,16 @@ module Tamoz
           def passed? = generated? && decision.fetch("passed") == true
           # Promotion-ready: a candidate that passed and carries complete provenance.
           def promotable? = passed? && !provenance.nil? && provenance.complete?
+
+          # The on-disk hand-off `tamoz improve promote` reads back. Only the
+          # candidate, its sealed report, and its provenance are needed to
+          # promote; the decision is carried for the operator's inspection.
+          def to_h
+            {
+              "candidate" => candidate&.to_h, "report" => report,
+              "provenance" => provenance&.to_h, "decision" => decision
+            }
+          end
         end
 
         def initialize(corpus:, generator_principal:, evaluator_principal:, promoter_principal:,

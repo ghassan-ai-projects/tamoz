@@ -200,6 +200,18 @@ Two surfaces, matching the ADR-025 runtime/non-runtime split:
    at the human gate — it returns the bundle a human approves and a durable promoter records; it
    never mutates behavior itself.
 
+3. **Durable promotion (runtime CLI, operator verb).** `tamoz improve promote --bundle FILE
+   --approval human:<actor> [--actor ID]`
+   ([cli_improvement_commands.rb](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_improvement_commands.rb))
+   reads a pipeline bundle, reconstructs the typed candidate/provenance/report, and records the
+   promotion via the **durable** `Improvement::Promotion` against the worker runtime's
+   `Memory::Engine`. It weakens no gate — the sealed report must verify and resolve, the candidate
+   cannot self-promote, the human gate must be present, the holdout must pass, the provenance must
+   be complete — and it records a transition that activates only at the next thread's first intake,
+   never on an in-flight thread. Proven by
+   [cli_improve_promote_test.rb](../test/cli_improve_promote_test.rb) against a real runtime
+   directory + engine (usage/gate errors, and a real durable record pending activation).
+
 **The loop is closed and proven end to end.**
 [heuristic_improvement_pipeline_test.rb](../test/heuristic_improvement_pipeline_test.rb) drives a
 pipeline bundle through the **real** durable `Improvement::Promotion` against a real
