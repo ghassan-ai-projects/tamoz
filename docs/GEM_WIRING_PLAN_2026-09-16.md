@@ -185,16 +185,30 @@ authored healing rule that has earned authority through the `tamoz-evals` stages
 replay → shadow → fault-injection → canary → active). Active remediation is deliberately not
 shipped on by default; the shadow stage above is the safe, useful increment that makes it real.
 
-### Improvement — a real production entry point shipped
+### Improvement — the full loop, finished and proven end to end
 
-`tamoz improve --corpus DIR`
-([cli_improvement_commands.rb](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_improvement_commands.rb))
-makes `tamoz-agent-improvement` reachable from production for the first time. It runs the actual
-`Improvement::Generator` (deterministic, provider-free, read-only) over an operator corpus and
-prints the single candidate heuristic or none. It **never promotes** — ADR-023's holdout +
-immutable provenance + human gate remain separate operator steps. Three end-to-end tests in
-[cli_improve_test.rb](../test/cli_improve_test.rb) cover the usage error, the no-candidate report,
-and a real candidate emitted from verified trajectories.
+Two surfaces, matching the ADR-025 runtime/non-runtime split:
+
+1. **Generation (runtime CLI).** `tamoz improve --corpus DIR`
+   ([cli_improvement_commands.rb](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_improvement_commands.rb))
+   runs the real `Improvement::Generator` (deterministic, read-only) and prints the candidate.
+2. **The full pipeline (evals layer, ADR-025 home for evaluation).**
+   `Harness::HeuristicImprovementPipeline`
+   ([heuristic_improvement_pipeline.rb](../gems/tamoz-evals-runner/lib/tamoz/evals/harness/heuristic_improvement_pipeline.rb))
+   composes the production pieces into one vetted, promotion-ready bundle:
+   **generate → paired holdout evaluation → pass/fail decision → immutable provenance.** It stops
+   at the human gate — it returns the bundle a human approves and a durable promoter records; it
+   never mutates behavior itself.
+
+**The loop is closed and proven end to end.**
+[heuristic_improvement_pipeline_test.rb](../test/heuristic_improvement_pipeline_test.rb) drives a
+pipeline bundle through the **real** durable `Improvement::Promotion` against a real
+`Memory::Engine`, then activates the transition, asserting the behavior version advances
+(`session/2 → session/3`) — i.e. raw trajectories become a live, reversible behavior change through
+generate → evaluate → human-gated promote → activate, using the production components (no doubles).
+The activation half (`SessionMemory#claim_behavior_transition` at first intake) was already wired;
+this connects the producing half to it. ADR-023's guarantees hold throughout: distinct holdout,
+immutable provenance, human gate, reversible promotion, evaluator ≠ generator.
 
 ## 8. Quality bar for this change — and the check
 
