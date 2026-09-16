@@ -12,6 +12,7 @@ require "tamoz/agent_kernel"
 require "tamoz/agent_capabilities"
 require_relative "agent/episode_graph"
 require_relative "agent/lane_config"
+require_relative "agent/self_healing_assessor"
 require_relative "agent/runtime"
 require "tamoz/agent_session"
 require "tamoz/agent_memory"
@@ -23,6 +24,7 @@ require_relative "agent/runtime_directory"
 require_relative "agent/worker_runtime"
 require_relative "agent/child_environments"
 require_relative "agent/durable_recorder"
+require_relative "agent/self_healing_coordinator"
 require_relative "agent/worker"
 
 module Tamoz
@@ -52,7 +54,8 @@ module Tamoz
       ask: nil,
       skills: Skills::Snapshot.empty,
       routing: :legacy,
-      recorder: Tamoz::Observability::Recorder::Null::INSTANCE
+      recorder: Tamoz::Observability::Recorder::Null::INSTANCE,
+      healing_rules: Healing::RuleRegistry.new
     )
       # `skills` is a compiled snapshot supplied by the caller — operator authority.
       # It is never discovered by scanning the workspace, so repository content can
@@ -62,7 +65,10 @@ module Tamoz
       # process, so it gets the in-memory stores — never the worker's SQLite
       # engine (ADR §2.3).
       approval_engine = build_approval_engine(profile_name: "implement")
-      Runtime.new(model:, toolbox:, max_plan_attempts:, ask:, routing:, recorder:, approval_engine:)
+      # Read-only healing shadow: classifies a failed turn's typed failure against
+      # the operator's staged rules (empty by default). Executes nothing (ADR-028).
+      healing = SelfHealingAssessor.new(rules: healing_rules)
+      Runtime.new(model:, toolbox:, max_plan_attempts:, ask:, routing:, recorder:, approval_engine:, healing:)
     end
 
     # An ephemeral engine over memory stores for processes that own their own

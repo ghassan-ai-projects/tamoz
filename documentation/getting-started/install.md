@@ -183,6 +183,7 @@ request inboxes and the checkpoints.
 | `trace` | Reconstruct the journal view for one thread from durable correlation identity |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
 | `config` | Explicit configuration migration (`migrate`) |
+| `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz init --workspace .

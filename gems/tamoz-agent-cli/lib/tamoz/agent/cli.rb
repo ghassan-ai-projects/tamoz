@@ -20,6 +20,7 @@ module Tamoz
       # own file; it is the same CLI object, split only so neither half becomes
       # unreadable.
       include CLIWorkerCommands
+      include CLIImprovementCommands
       include CLIScheduleCommands
       include CLIProfileCommands
       include CLISessionCommands
@@ -55,6 +56,7 @@ module Tamoz
         "init" => :cmd_init,
         "queue" => :cmd_queue,
         "worker" => :cmd_worker,
+        "improve" => :cmd_improve,
         "status" => :cmd_status,
         "schedule" => :cmd_schedule,
         "approve" => :cmd_approve,
@@ -893,6 +895,18 @@ module Tamoz
             @err.puts "Approval required for #{event.data.fetch("tool")}:"
             @err.puts event.data.fetch("preview")
           end
+        when :healing_assessment
+          render_healing_assessment(event.data)
+        end
+      end
+
+      def render_healing_assessment(data)
+        if data.fetch("remediable")
+          @err.puts "Self-healing: this failure (#{data.fetch("category")}) is remediable by " \
+                    "rule #{data.fetch("rule_id")} [#{data.fetch("action_family")}] — staged, not executed."
+        else
+          reason = data["never_mutate_class"] ? "never-mutate class #{data.fetch("never_mutate_class")}" : "no matching rule"
+          @err.puts "Self-healing: this failure (#{data.fetch("category")}) is not auto-remediable (#{reason}); escalating."
         end
       end
 

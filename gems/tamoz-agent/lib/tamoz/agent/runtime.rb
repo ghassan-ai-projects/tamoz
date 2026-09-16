@@ -118,7 +118,7 @@ module Tamoz
 
       def initialize(model:, toolbox:, max_plan_attempts: 3, ask: nil, routing: :legacy,
                      recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil,
-                     effects: nil)
+                     effects: nil, healing: nil)
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
           raise ArgumentError, "max_plan_attempts must be between 1 and 10"
@@ -137,6 +137,7 @@ module Tamoz
         @model_call_count = 0
         @effects = effects || EffectsJournal.new
         @capabilities = CapabilityBinding.build(toolbox:)
+        @healing = healing
       end
 
       def run(task)
@@ -453,7 +454,26 @@ module Tamoz
         end
         state = ActionLoopState.new(discovery_observations)
         run_action_repair_loop(task, state) { |event| yield event }
+        assess_healing(state) { |event| yield event }
         action_result(state)
+      end
+
+      # ADR-028 shadow stage: when the bounded repair loop gives up on a typed
+      # failure, surface the healing vertical's read-only verdict — is this a
+      # known remediable class, and which rule would own it — as a turn event.
+      # Executes nothing; off unless an assessor was wired in.
+      def assess_healing(state)
+        return unless @healing
+
+        assessment =
+          if state.tool_failure
+            @healing.assess_tool_failure(state.tool_failure)
+          elsif state.check_receipt&.failed?
+            @healing.assess_check_failure(state.check_receipt)
+          end
+        return unless assessment
+
+        emit(:healing_assessment, assessment.to_h) { |event| yield event }
       end
 
       def discover_action_observations(task, discovery:)
