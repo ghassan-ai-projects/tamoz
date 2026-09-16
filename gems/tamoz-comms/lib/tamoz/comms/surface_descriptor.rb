@@ -41,17 +41,17 @@ module Tamoz
       MAX_IDS = 1024
 
       attr_reader :surface_id, :revision, :kind, :transport, :identity,
-                  :admission, :threading, :profile_id, :approvals, :rendering,
+                  :admission, :threading, :profile_id, :profile_digest, :approvals, :rendering,
                   :limits, :classification, :definition_digest
 
       def initialize(
         surface_id:, revision:, kind:, transport:, identity:, admission:,
         threading:, profile_id:, approvals:, rendering:, limits:,
-        classification:, definition_digest:
+        classification:, definition_digest:, profile_digest: nil
       )
         validate!(surface_id:, revision:, kind:, transport:, identity:,
                   admission:, threading:, profile_id:, approvals:, rendering:,
-                  limits:, classification:, definition_digest:)
+                  limits:, classification:, definition_digest:, profile_digest:)
         @surface_id = surface_id
         @revision = revision
         @kind = kind
@@ -60,6 +60,7 @@ module Tamoz
         @admission = deep_freeze(admission)
         @threading = threading
         @profile_id = profile_id
+        @profile_digest = profile_digest
         @approvals = deep_freeze(approvals)
         @rendering = deep_freeze(rendering)
         @limits = deep_freeze(limits)
@@ -70,16 +71,19 @@ module Tamoz
 
       # Builds the descriptor and computes its content-address (the digest
       # covers every field, so any change is a new digest and a new revision).
+      # `profile_digest` is the authority the deployed surface pins; a surface
+      # deployed without one cannot execute a bound thread (the worker refuses
+      # an unpinned binding) — see `Gateway::AdmissionBinding`.
       # @return [SurfaceDescriptor]
       def self.build(surface_id:, revision:, transport:, identity:, admission:, threading:, profile_id:, approvals:,
-                     rendering:, limits:, kind: 'telegram', classification: 'restricted')
+                     rendering:, limits:, kind: 'telegram', classification: 'restricted', profile_digest: nil)
         digest = Canonical.hexdigest(
           DIGEST_DOMAIN,
           [surface_id, revision, kind, transport, identity, admission,
-           threading, profile_id, approvals, rendering, limits, classification]
+           threading, profile_id, profile_digest, approvals, rendering, limits, classification]
         )
         new(surface_id:, revision:, kind:, transport:, identity:, admission:,
-            threading:, profile_id:, approvals:, rendering:, limits:,
+            threading:, profile_id:, profile_digest:, approvals:, rendering:, limits:,
             classification:, definition_digest: digest)
       end
 
@@ -93,6 +97,7 @@ module Tamoz
           'admission' => self.class.symbol_keys_to_strings(@admission),
           'threading' => @threading,
           'profile_id' => @profile_id,
+          'profile_digest' => @profile_digest,
           'approvals' => self.class.symbol_keys_to_strings(@approvals),
           'rendering' => self.class.symbol_keys_to_strings(@rendering),
           'limits' => self.class.symbol_keys_to_strings(@limits),
@@ -111,6 +116,7 @@ module Tamoz
           admission: strings_to_symbol_keys(wire.fetch('admission')),
           threading: wire.fetch('threading'),
           profile_id: wire.fetch('profile_id'),
+          profile_digest: wire['profile_digest'],
           approvals: strings_to_symbol_keys(wire.fetch('approvals')),
           rendering: strings_to_symbol_keys(wire.fetch('rendering')),
           limits: strings_to_symbol_keys(wire.fetch('limits')),
@@ -141,7 +147,7 @@ module Tamoz
       def validate!(
         surface_id:, revision:, kind:, transport:, identity:, admission:,
         threading:, profile_id:, approvals:, rendering:, limits:,
-        classification:, definition_digest:
+        classification:, definition_digest:, profile_digest:
       )
         unless Shapes.bounded_string?(surface_id, max_bytes: MAX_IDS)
           raise ValidationError, 'surface_id must be a bounded string'
@@ -159,6 +165,9 @@ module Tamoz
         )
         unless Shapes.bounded_string?(profile_id, max_bytes: MAX_IDS)
           raise ValidationError, 'profile_id must be a bounded string'
+        end
+        unless profile_digest.nil? || profile_digest.to_s.start_with?('sha256:')
+          raise ValidationError, 'profile_digest must be a sha256: digest'
         end
         unless Shapes.hex?(definition_digest.to_s)
           raise ValidationError,

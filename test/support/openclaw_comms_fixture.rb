@@ -234,6 +234,7 @@ module Tamoz
             identity: { expected_bot_id: BOT_ID, bot_username: BOT_USERNAME },
             admission: admission_spec(mode),
             threading: 'conversation', profile_id: PROFILE_ID,
+            profile_digest: @runtime.profile(PROFILE_ID).canonical_digest,
             approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
             rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
             limits: { max_inbound_bytes: 8192, max_open_requests: 50,

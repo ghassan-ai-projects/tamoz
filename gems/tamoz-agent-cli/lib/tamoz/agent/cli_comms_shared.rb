@@ -84,6 +84,7 @@ module Tamoz
           admission: symbolize({ 'direct' => 'disabled' }.merge(entry.fetch('admission', {}))),
           threading: entry.fetch('threading', 'conversation'),
           profile_id: entry.fetch('profile'),
+          profile_digest: pinned_profile_digest(entry.fetch('profile')),
           approvals: symbolize({ 'mode' => 'none', 'prompt_ttl_s' => 900 }.merge(entry.fetch('approvals', {}))),
           rendering: symbolize({
             'format' => 'plain', 'max_parts' => 5, 'part_characters' => 3500, 'overflow' => 'truncate'
@@ -95,6 +96,15 @@ module Tamoz
             'global_messages_per_s' => 25.0
           }.merge(entry.fetch('limits', {})))
         )
+      end
+
+      # The authority a deployed surface pins: the digest the worker compares a
+      # bound thread against (F25-SEC-01). Resolved and adopted through the same
+      # guarded path the worker uses, so a deploy cannot pin a profile the
+      # worker would refuse.
+      def pinned_profile_digest(profile_id)
+        path = Profile.resolve_path(profile: profile_id, env: @env)
+        Profile.load(path, env: @env, confirm_adoption: ->(_document) { true }).canonical_digest
       end
 
       def symbolize(value)
