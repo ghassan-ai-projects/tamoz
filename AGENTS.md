@@ -57,6 +57,11 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
   an unanswered call is resolved by its safety class (`:idempotent` grants a fresh
   attempt, `:unsafe` stops as unknown). The one-shot ephemeral runtime journals
   through the same dispatcher over in-memory stores by design.
+- **Pin authority; never re-derive it by id.** A reloaded profile must match the
+  `canonical_digest` recorded at bind time (`WorkerRuntime#child_profile_for`,
+  `validate_thread_profile`); effect mutations bind to the active lease
+  (`EffectReconciler#reconcile`); a failed store or authority lookup fails closed — never
+  the permissive default.
 - **Approval policy is data too.** Whether an action needs approval, and under
   what evidence, lives only in `gems/tamoz-approval/policy/*.yaml` (base +
   digest-pinned profiles); the engine in `gems/tamoz-approval` interprets it.
@@ -90,22 +95,6 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
   methods); compare against `git stash` if unsure rather than autocorrecting unrelated code.
 - **Never pay real time in a test** — inject the wait; fast because it *fails early* is not
   fast. Lanes, weights and the `ci` budget: `.agent/rules/testing.md`.
-
-## Functionality audit remediation (docs/audits/functionality-audit-2026-09-15)
-
-- `FINDINGS.md` is the coordinator index (severity/status/owning seam per finding);
-  `analyses/<row>.md` carries the full evidence, `file:line` citations, five-whys, and a
-  concrete "smallest action at the existing seam" recommendation. Read the analysis before
-  fixing — each finding was reproduced and names the exact seam.
-- Verify every claim against live source first (line numbers may have drifted), fix at the
-  named seam, add the regression test the finding asks for, and confirm it fails without the
-  fix (`git stash push <prod files>`), then commit per finding.
-- Recurring theme — **authority must be pinned, never re-derived by id.** The canonical fence
-  is `WorkerRuntime#child_profile_for` (compares a reloaded profile's `canonical_digest`
-  against the digest recorded at bind time); `validate_thread_profile` mirrors it. Effect
-  mutations must bind `(thread_id, namespace)` to the active lease (`EffectReconciler#reconcile`
-  is the pattern). When a store/authority lookup fails, fail closed (see
-  `agent_worker_fail_closed_test.rb`), never return the permissive default.
 
 ## Comments
 
