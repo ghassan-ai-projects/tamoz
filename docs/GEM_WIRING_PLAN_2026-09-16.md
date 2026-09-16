@@ -176,6 +176,17 @@ authority to act, and is safe on by default with an empty rule set. Wired at
 `remediable: true` verdict) and [self_healing_live_turn_test.rb](../test/self_healing_live_turn_test.rb)
 (a real failed turn emits the assessment).
 
+**The shadow stage now fires on the DURABLE path too (worker / queue / schedule / Telegram).**
+`Worker#settle_failed_view` classifies a failed durable turn's typed failure — read from the
+turn's own `view.state[:observations]` (the same `failure`/`check` shape the ephemeral runtime
+produces) — via the shared `SelfHealingAssessor` and emits a `healing.assessment` operator event.
+Correspondents are unaffected (it is operator telemetry, not a chat message). This means a
+Telegram-driven turn that fails now produces the same typed assessment as `tamoz TASK`. Tests:
+`SelfHealingAssessor#assess_observations` unit cases and
+[self_healing_worker_test.rb](../test/self_healing_worker_test.rb) (the worker emits the event
+from a failed view; a clean turn emits nothing). Self-improvement already reaches Telegram: a
+promoted heuristic activates at any durable thread's first intake, Telegram threads included.
+
 **What remains for ACTIVE (effect-executing) remediation** — the next gated stage: the ephemeral
 turn already does model-recompute-and-retry, so healing's differentiated value (durable circuit,
 oracle-verified reconciliation, compensation across turns) lives in the durable worker. That path

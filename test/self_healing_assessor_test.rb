@@ -73,6 +73,32 @@ class SelfHealingAssessorTest < Minitest::Test
     assert_equal "rule.malformed_recoverable_output", verdict.rule_id
   end
 
+  # The durable path (worker/session, which Telegram rides) hands the assessor the
+  # turn's observation list. It classifies the last typed failure in it.
+  def test_assess_observations_reads_a_tool_failure
+    obs = [
+      {"tool" => "read_file", "output" => "ok"},
+      {"tool" => "apply_patch", "failure" => {"tool" => "apply_patch",
+                                              "error_class" => "Tamoz::Agent::ToolArgumentError", "reason" => "bad"}}
+    ]
+    verdict = Assessor.new(rules: registry_with(rule_on(:malformed_recoverable_output)))
+                      .assess_observations(obs)
+    assert verdict.remediable
+    assert_equal :malformed_recoverable_output, verdict.category
+  end
+
+  def test_assess_observations_reads_a_failed_check
+    obs = [{"tool" => "run_check", "check" => {"name" => "values", "outcome" => "exit_1", "passed" => false}}]
+    verdict = Assessor.new(rules: Healing::RuleRegistry.new).assess_observations(obs)
+    assert_equal :verification_failed, verdict.category
+    assert_equal :escalated, verdict.route
+  end
+
+  def test_assess_observations_returns_nil_without_a_typed_failure
+    assert_nil Assessor.new(rules: Healing::RuleRegistry.new)
+                       .assess_observations([{"tool" => "read_file", "output" => "fine"}])
+  end
+
   # A generic ToolError whose reason points at a moved target is a stale
   # precondition — a recoverable class — not an opaque unknown.
   def test_stale_hint_maps_to_stale_precondition

@@ -61,12 +61,29 @@ module Tamoz
       end
 
       def assess_check_failure(check_receipt)
+        assess_failed_check(name: check_receipt.name)
+      end
+
+      def assess_failed_check(name:)
         assess(build_record(
-          failure_code: "check.#{check_receipt.name}",
-          category: :verification_failed,
-          operation: "check.#{check_receipt.name}",
-          tool: nil, effect_state: :completed
+          failure_code: "check.#{name}", category: :verification_failed,
+          operation: "check.#{name}", tool: nil, effect_state: :completed
         ))
+      end
+
+      # The durable path (worker `settle_failed_view`) carries the same typed
+      # failure shape the ephemeral runtime does, inside `view.state[:observations]`:
+      # the last observation with a `failure` record, or a failed `check` record.
+      # Returns nil when a failed turn carries no typed failure to classify.
+      def assess_observations(observations)
+        entries = Array(observations).select { |entry| entry.is_a?(Hash) }
+        failure = entries.reverse.find { |entry| entry["failure"] }
+        return assess_tool_failure(failure.fetch("failure")) if failure
+
+        check = entries.reverse.find { |entry| entry["check"].is_a?(Hash) && entry["check"]["passed"] == false }
+        return assess_failed_check(name: check.fetch("check").fetch("name")) if check
+
+        nil
       end
 
       private
