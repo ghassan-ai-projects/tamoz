@@ -1,0 +1,227 @@
+{
+  "row": "F11",
+  "surface": "gems/tamoz-comms",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 6, "minor": 3, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "prior_findings": [
+    {
+      "id": "F12-REL-01",
+      "source": "analyses/comms-unknown-ordering.md",
+      "status": "open, confirmed, reproduced at HEAD 582ae55",
+      "note": "Independent probe reproduced it: multipart A(part_index=0)/B(part_index=1) in one conversation, A's transport raised AmbiguousDeliveryError, one drain pass produced outcome=:drained, attempts=[\"A-part0\",\"B-part1\"], durable A=unknown, B=succeeded. tamoz-comms ships no ordering primitive and its CommsStore contract exposes no conversation sequence or predecessor-eligibility operation, so the missing contract is at this row's seam; finding remains owned by F12."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F11-COR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "truncate overflow discards the remainder with no marker, against the written rendering contract",
+      "seam": "rendering.rb#split",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/rendering.rb:42-51",
+        "gems/tamoz-comms/lib/tamoz/comms/rendering.rb:9-10",
+        "documentation/design/comms.md:113",
+        "gems/tamoz-comms/lib/tamoz/comms/rendering.rb:21"
+      ],
+      "five_whys": true,
+      "recommendation": "At the existing Rendering.plain seam, append one bounded marker part (or a marker suffix on the last part) when the truncate branch drops characters, naming the thread and `tamoz show`, exactly as design/comms.md:113 already specifies. One branch in split plus one test.",
+      "evidence": "Probe /tmp/f11/probe_render.rb: 12000 chars, max_parts 3, part_characters 100 -> 3 parts, joined length 300, contains_marker false. comms_rendering_test.rb:35-41 asserts only part length."
+    },
+    {
+      "id": "F11-SEC-01",
+      "severity": "major",
+      "confidence": "medium",
+      "status": "open",
+      "title": "rendered channel text is never scrubbed or escaped, and the declared render format is validated but never read",
+      "seam": "rendering.rb#plain",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/rendering.rb:21-32",
+        "gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb:37",
+        "gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb:234-246",
+        "gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb:115-119",
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_delivery.rb:17",
+        "gems/tamoz-telegram/lib/tamoz/telegram/transport.rb:53-64"
+      ],
+      "five_whys": true,
+      "recommendation": "At the existing Rendering seam, add the escaper the contract already names (restricted_html closed tag set, `&<>` escaped) and have outbox_delivery_sink.rb / gateway_delivery.rb select it from the surface's rendering.format, which they already hold. Keep plain default and unchanged. If unsupported, remove restricted_html from RENDER_FORMATS instead of accepting-and-ignoring it.",
+      "evidence": "grep across repo: only the constants and the design prose; zero consumers. Probe: \\x00 \\x07 \\x1b[31m \\r \\t pass through byte-identical; '<b>&amp;<a href=...>' returned unescaped. No test asserts escaping -- not found. Impact graded medium because the shipped adapter sets no parse_mode and no live bot was exercised."
+    },
+    {
+      "id": "F11-SEC-02",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "binding revocation does not take effect while the correspondent is also on the configured allowlist",
+      "seam": "admission.rb#decide",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/admission.rb:97-99",
+        "gems/tamoz-comms/lib/tamoz/comms/admission.rb:70-71",
+        "gems/tamoz-comms/lib/tamoz/comms/admission.rb:40",
+        "documentation/design/comms.md:66-67"
+      ],
+      "five_whys": true,
+      "recommendation": "At Admission.decide's existing binding guard (admission.rb:40), treat a `revoked` binding as terminal for the correspondent rather than as a non-grant, before the allowlist is consulted, using existing :rejected/:unbound vocabulary. One guard reorder plus one admission test.",
+      "evidence": "admission.rb:97-99 ORs the configured list against the binding, so a revoked binding never vetoes a listed id. comms_store.rb:195-200 revoke_binding is correctly implemented and simply never consulted. No test covers revoked-and-listed -- not found."
+    },
+    {
+      "id": "F11-SEC-03",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "a channel callback reaches the decision path without any allowlist or pairing check",
+      "seam": "admission.rb#decide",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/admission.rb:41",
+        "gems/tamoz-comms/lib/tamoz/comms/admission.rb:124-126",
+        "gems/tamoz-comms/lib/tamoz/comms/admission.rb:67-113",
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_callbacks.rb:30-33",
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_callbacks.rb:66-71",
+        "documentation/design/comms.md:62"
+      ],
+      "five_whys": true,
+      "recommendation": "At admission.rb:41, route callbacks through the same allowlist/pairing correspondence check command_admission and text_disposition already use, returning the existing :ignored/:pairing_pending vocabulary, and keep the prompt binding compare as the second independent control. Add one test pressing a callback from an unlisted sender.",
+      "evidence": "The callback branch short-circuits before both correspondence checks; probe shows an unlisted correspondent sending kind=callback yields :decision under both allowlist and pairing. Impact bounded by gateway_callbacks.rb:35-38 evidence gate and :66-71 binding compare, which currently hold; no test presses a callback from an unadmitted sender -- not found."
+    },
+    {
+      "id": "F11-ERR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "mark_delivery records any status from any claimed row, so the delivery state machine has no legal-transition guard",
+      "seam": "comms_store.rb#mark_delivery",
+      "citations": [
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:235-246",
+        "gems/tamoz-comms/lib/tamoz/comms/comms_store.rb:120-133",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:137-147",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:124-133",
+        "gems/tamoz-comms/lib/tamoz/comms/lifecycle.rb:44-50"
+      ],
+      "five_whys": true,
+      "recommendation": "At the existing CommsStore#mark_delivery contract (comms_store.rb:126-133), state the precondition that a succeeded/unknown outcome applies only to a claimed row whose send boundary marker is set, and add `AND send_started_at_ms IS NOT NULL` to the SQLite UPDATE. One clause, one contract sentence, one drainer test.",
+      "evidence": "The WHERE guards only status='claimed' plus owner/fence; status is written from the caller's argument. delivery_drainer_test.rb:184-209 asserts only the fence guard. Implementation owned by F07; recorded at this contract's seam."
+    },
+    {
+      "id": "F11-ERR-02",
+      "severity": "major",
+      "confidence": "medium",
+      "status": "open",
+      "title": "the store never verifies content_digest against the text it persists, so a corrected re-render is silently dropped as a duplicate",
+      "seam": "comms_store.rb#append_delivery",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/delivery.rb:13-16",
+        "gems/tamoz-comms/lib/tamoz/comms/delivery.rb:76-85",
+        "gems/tamoz-comms/lib/tamoz/comms/delivery.rb:154",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:35-38",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:66-74"
+      ],
+      "five_whys": true,
+      "recommendation": "At the existing append_delivery seam (comms_store.rb:63-70), when the id already exists compare the stored content_digest with the incoming one and return a typed conflict instead of :duplicate when they differ. One comparison in comms_outbox.rb plus one store test.",
+      "evidence": "Delivery.build validates the digest's shape only; append dedups on id existence. delivery_drainer_test.rb:317-322 builds deliveries with Digest::SHA256.hexdigest(text) rather than Rendering.content_digest and they are accepted and delivered. No test asserts a digest mismatch is refused -- not found."
+    },
+    {
+      "id": "F11-ERR-03",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "max_response_bytes is written as optional and is actually required, raising an untyped KeyError",
+      "seam": "surface_descriptor.rb#validate_transport!",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb:184-186",
+        "gems/tamoz-comms/lib/tamoz/comms/errors.rb:5-6"
+      ],
+      "five_whys": false,
+      "recommendation": "At surface_descriptor.rb:184, use transport[:max_response_bytes] (or .fetch(..., nil)) so the existing nil tolerance is reachable, or drop the tolerance and validate the key like its siblings. One character of change plus one descriptor test.",
+      "evidence": "`cap = transport.fetch(:max_response_bytes); return if cap.nil? || ...` -- fetch raises before the nil branch. Probe reproduced `KeyError: key not found: :max_response_bytes` from :184. No test builds a descriptor without the key -- not found."
+    },
+    {
+      "id": "F11-OBS-01",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "a successful send whose fence was lost leaves its approval prompt permanently inactive with no reason recorded",
+      "seam": "delivery_drainer.rb#send_row",
+      "citations": [
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb:95-105",
+        "gems/tamoz-comms/lib/tamoz/comms/comms_store.rb:183-187"
+      ],
+      "five_whys": false,
+      "recommendation": "At delivery_drainer.rb:103, when marked != :marked for an approval_request row, record the same reason_code vocabulary already used for the authentication failure (:108-115) so the skipped activation is durable and diagnosable.",
+      "evidence": "activate_after_receipt runs only when marked == :marked && status == 'succeeded'; no record is emitted on the :not_claimable branch. delivery_drainer_test.rb:184-209 never pairs the stale-owner write with an approval_request row -- not found. The row state itself stays honest (claimed -> unknown by reconciliation), so this is observability only."
+    },
+    {
+      "id": "F11-SCAL-01",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "milestone card lookup scans all succeeded rows for the surface on every push",
+      "seam": "outbox_delivery_sink.rb#delivered_card_message_id",
+      "citations": [
+        "gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb:218-223",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:197-205",
+        "gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb:194"
+      ],
+      "five_whys": false,
+      "recommendation": "At the existing call site, pass the limit the store already supports and stop after the first match while the newest row still belongs to the reference; or add a request_ref-filtered read to the existing CommsStore outbox reader.",
+      "evidence": "outbox_rows is called with no limit on every milestone push; the store orders by created_at_ms. Bounded by outbox capacity via admission (comms_store.rb:30-42), hence minor. agent_outbox_delivery_sink_test.rb is small-fixture only -- no bounds assertion found."
+    }
+  ],
+  "info": [
+    {"id": "F11-INFO-01", "text": "Group chats and unknown kinds are refused twice over: admission.rb:39 and admission.rb:38, with envelope construction permitting those prefixes (inbound_envelope.rb:165-168) but never admitting them."},
+    {"id": "F11-INFO-02", "text": "The thread digest is generation-aware and deterministic (admission.rb:56-61, v2 domain); /new bumps the generation and rotates the thread without deleting audit history."},
+    {"id": "F11-INFO-03", "text": "An allowlisted first contact writes a Binding with bound_by 'gateway:allowlist' (gateway_admission_binding.rb:41-51). The value is truthful and whoami echoes the envelope, so no authority is forged."},
+    {"id": "F11-INFO-04", "text": "restricted_html is dead configuration -- declared and validated at surface_descriptor.rb:37,234-246 and consumed by nothing. Folded into F11-SEC-01."},
+    {"id": "F11-INFO-05", "text": "F12-REL-01 (unknown-ordering) reproduced at HEAD 582ae55 by an independent probe; still open, still confirmed, still owned by F12 with F07/F11 follow-up."}
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/comms_rendering_test.rb", "runs": 6, "assertions": 35, "failures": 0},
+    {"command": "ruby -Itest test/comms_admission_test.rb", "runs": 15, "assertions": 51, "failures": 0},
+    {"command": "ruby -Itest test/comms_values_test.rb", "runs": 20, "assertions": 78, "failures": 0},
+    {"command": "ruby -Itest test/comms_seams_test.rb", "runs": 9, "assertions": 31, "failures": 0},
+    {"command": "ruby -Itest test/comms_lifecycle_test.rb", "runs": 9, "assertions": 68, "failures": 0},
+    {"command": "ruby -Itest test/comms_authority_evidence_test.rb", "runs": 6, "assertions": 24, "failures": 0},
+    {"command": "ruby -Itest test/comms_decision_record_test.rb", "runs": 15, "assertions": 52, "failures": 0},
+    {"command": "ruby -Itest test/comms_evidence_gated_approval_test.rb", "runs": 15, "assertions": 27, "failures": 0},
+    {"command": "ruby -Itest test/delivery_drainer_test.rb", "runs": 10, "assertions": 50, "failures": 0},
+    {"command": "ruby -Itest test/callback_ack_crash_test.rb", "runs": 2, "assertions": 20, "failures": 0},
+    {"command": "ruby -Itest test/comms_command_parity_test.rb", "runs": 11, "assertions": 203, "failures": 0},
+    {"command": "ruby -Itest test/comms_cli_test.rb", "runs": 12, "assertions": 60, "failures": 0},
+    {"command": "ruby -Itest test/comms_cli_ops_test.rb", "runs": 7, "assertions": 52, "failures": 0},
+    {"command": "ruby -Itest test/agent_outbox_delivery_sink_test.rb", "runs": 18, "assertions": 101, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_comms_store_test.rb", "runs": 45, "assertions": 246, "failures": 0},
+    {"command": "ruby -Itest test/comms_gateway_test.rb", "runs": 39, "assertions": 242, "failures": 0}
+  ],
+  "tests_not_run": [
+    {"command": "ruby -Itest test/comms_store_test.rb", "reason": "not found -- the brief's named file does not exist; the store contract is tested by test/sqlite_comms_store_test.rb, which was run"},
+    {"command": "rake ci / rake ci_full", "reason": "excluded by the brief"}
+  ],
+  "probes": [
+    {"path": "/tmp/f11/probe_render.rb", "purpose": "control characters, escaping, truncation marker, code-fence split, grapheme safety"},
+    {"path": "/tmp/f11/probe_order.rb", "purpose": "same-pass ambiguous predecessor with a multipart successor, over the real SQLite store and DeliveryDrainer"},
+    {"path": "/tmp/f11/probe_admission.rb", "purpose": "admission decision table: unknown/revoked/group/pairing/listed-revoked/callback; empty allowlist; max_response_bytes"}
+  ],
+  "blind_spots": [
+    "No live Telegram endpoint: whether an entity injection or link preview is actually produced from unescaped text is an external fact not exercised; this is why F11-SEC-01 is medium.",
+    "tamoz-sqlite comms_store.rb read selectively (admission, append, claim, mark, reconcile, resolve, revoke regions); the projection/status/receipt queries were not read line by line -- row F07 owns them.",
+    "tamoz-comms-gateway read for the caller trace only; gateway_answers.rb, gateway_context_controls.rb and gateway_status.rb were skimmed, not audited -- row F12 owns them.",
+    "No rake ci/ci_full, RuboCop, Reek, SimpleCov or Enola snapshot; maintainability graded from source and gemspec, not from a lint result.",
+    "The delivered_card_message_id and comms_delivery resolve scans were reasoned from source, not measured under a large outbox.",
+    "No new concurrency probe; the existing two-drainer and stale-owner tests were run but no additional race was constructed."
+  ],
+  "coordinator_flags": [
+    "F12-REL-01 reproduced independently at HEAD 582ae55 -- keep open, keep owned by F12",
+    "F11-ERR-01 and F11-ERR-02 cite tamoz-sqlite implementations: check overlap with F07's row before recording them as F11-only",
+    "F11-SEC-01 needs independent challenge on severity: the absent-escaping fact is proven in-repo, the exploitability is not",
+    "F11-SEC-03 is a contract-ordering finding, not a proven authority bypass -- do not promote to critical",
+    "F11-COR-01, F11-SEC-02, F11-SEC-03 each name a one-place fix at an existing seam; none needs new machinery"
+  ]
+}

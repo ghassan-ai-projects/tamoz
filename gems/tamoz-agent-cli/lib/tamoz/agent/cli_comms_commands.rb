@@ -50,7 +50,7 @@ module Tamoz
 
         with_comms_runtime(options) do |directory, adapter, store, checkpoints|
           descriptors = selected_surfaces(directory, surface_filter).map do |surface_id|
-            build_descriptor(surface_id, directory.channels.fetch(surface_id))
+            build_descriptor(surface_id, directory.channels.fetch(surface_id), directory)
           end
           if descriptors.empty?
             @err.puts 'tamoz: no enabled channel surfaces are configured'

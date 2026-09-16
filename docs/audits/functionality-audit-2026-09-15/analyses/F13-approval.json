@@ -1,0 +1,170 @@
+{
+  "row": "F13",
+  "surface": "gems/tamoz-approval",
+  "verdict": "IMPROVE",
+  "counts": {
+    "critical": 0,
+    "major": 7,
+    "minor": 0,
+    "info": 1
+  },
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F13-COR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Persisted schedule approval profiles are ignored at execution",
+      "seam": "tamoz-agent-cli schedule enqueue -> tamoz-agent schedule materialization and approval-session binding",
+      "citations": [
+        "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb:35-40",
+        "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb:205-220",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb:50-52",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb:84-96",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:147-165",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb:413-432",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:700-706",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:1171-1185"
+      ],
+      "five_whys": true,
+      "recommendation": "Carry schedule.approval_profile into the trusted thread/session binding at materialization and load that profile for the occurrence; add an end-to-end test in both profile directions, or remove the field until it is wired."
+    },
+    {
+      "id": "F13-COR-02",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Reload drops the configured profile overlay",
+      "seam": "active-policy pointer (tamoz-agent-cli/tamoz-sqlite) -> WorkerRuntime#sync_approval_policy",
+      "citations": [
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb:396-407",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_active_policy.rb:5-8",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_active_policy.rb:15-35",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:756-774",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:1179-1192",
+        "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:42-50",
+        "gems/tamoz-approval/policy/base.yaml:42-49",
+        "gems/tamoz-approval/policy/profiles/review.yaml:1-5"
+      ],
+      "five_whys": true,
+      "recommendation": "Persist the selected profile with the active-policy pointer, or have the worker reapply the configured profile and compare the effective revision before Engine#reload; add a profile-sensitive reload test."
+    },
+    {
+      "id": "F13-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Tool overrides can reintroduce :session for no-session tiers",
+      "seam": "Tamoz::Approval::PolicyDocument#validate_tool_tiers!",
+      "citations": [
+        "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:209-228",
+        "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:239-255",
+        "gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256",
+        "documentation/adr/approval-policy-redesign/00-acceptance-bar.md:67-73",
+        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:370-376"
+      ],
+      "five_whys": true,
+      "recommendation": "Reject :session for NO_SESSION_SCOPE_TIERS before the current next guard and validate every tool override against the tier no-session rule; add a network tool override regression."
+    },
+    {
+      "id": "F13-SEC-02",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Grant-scope vocabulary is open-ended",
+      "seam": "PolicyDocument scope normalization/validation -> Engine#mint_grant",
+      "citations": [
+        "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:116-142",
+        "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:201-255",
+        "gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256",
+        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-376"
+      ],
+      "five_whys": true,
+      "recommendation": "Validate grant_scopes against the supported :once and :session set at policy load, retaining Engine membership checks as defense in depth."
+    },
+    {
+      "id": "F13-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Resolution can commit without a repairable session grant",
+      "seam": "Engine#resolve decision-log / grant-store handoff",
+      "citations": [
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:73-100",
+        "gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:5-11",
+        "gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:93-112",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:63-87",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-45",
+        "documentation/adr/approval-policy-redesign/00-acceptance-bar.md:76-84"
+      ],
+      "five_whys": true,
+      "recommendation": "Make replay of a session resolution idempotently ensure the grant row exists before returning it, and allow SQLite-backed resolution and grant writes to commit together."
+    },
+    {
+      "id": "F13-REL-02",
+      "severity": "major",
+      "confidence": "medium",
+      "status": "open",
+      "title": "Mode rebind publishes memory before its durable audit",
+      "seam": "Engine#rebind_session -> DecisionLog#record_mode_switch and Worker#apply_mode_switch",
+      "citations": [
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:135-157",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:183-199",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:988-1033",
+        "gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:29-43",
+        "documentation/adr/approval-policy-redesign/00-acceptance-bar.md:135-140",
+        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:464-498"
+      ],
+      "five_whys": true,
+      "recommendation": "Record the mode switch successfully before exposing the new in-memory revision, or roll the revision back and leave the request retryable when audit recording fails; add a failure-injected mode-switch test."
+    },
+    {
+      "id": "F13-SEC-03",
+      "severity": "major",
+      "confidence": "medium",
+      "status": "open",
+      "title": "Crash cleanup does not bound durable session grants",
+      "seam": "WorkerRuntime/Worker approval-session lifecycle -> SQLite ApprovalGrantStore",
+      "citations": [
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:491-500",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:106-112",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:1171-1176",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:160-179",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:282-296",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-55",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1085-1099",
+        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-386"
+      ],
+      "five_whys": true,
+      "recommendation": "Rotate a durable session/run epoch in the session id at worker start, or set bounded expiry tied to the session budget and revoke old epochs on startup; make cleanup failure observable."
+    },
+    {
+      "id": "F13-SCA-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "unconfirmed",
+      "title": "Append-only decision records have no retention seam",
+      "seam": "SQLite approval decision-log lifecycle",
+      "citations": [
+        "gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:5-11",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:43-53",
+        "gems/tamoz-approval/lib/tamoz/approval/engine.rb:315-334",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:31-52",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1101-1137",
+        "documentation/adr/approval-policy-redesign/04-review-simplicity.md:97-100"
+      ],
+      "five_whys": false,
+      "recommendation": "Document an operator-owned retention or archival bound for decision records, or explicitly accept unbounded retention before calling the append-only table production-complete."
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "row": "CF03",
+  "surface": "reviewed plan, approval, execution, verification, and repair",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": [
+    "F13-COR-01", "F13-COR-02", "F13-SEC-01", "F13-SEC-02", "F13-SEC-03",
+    "F13-REL-01", "F13-REL-02", "F20-REL-02", "F20-SEC-01", "F09-SEC-01",
+    "F09-SEC-02", "F22-SEC-01", "F07-SEC-01", "CF04-REL-01"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/agent_acceptance_workflow_test.rb", "runs": 1, "assertions": 33, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/approval_engine_test.rb", "runs": 26, "assertions": 95, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_decision_flow_test.rb", "runs": 5, "assertions": 23, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/healing_remediation_test.rb", "runs": 13, "assertions": 74, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "blind_spots": [
+    "No crash was induced between approval-engine resolution and graph resume.",
+    "No multi-process approval-resolution race or grant-store failure was run here.",
+    "No sustained approval-log retention or worker throughput measurement was run.",
+    "Real provider and external MCP execution were not used."
+  ],
+  "coordinator_flags": [
+    "CF03 direct review completed without subagent delegation per owner request.",
+    "Carried findings are excluded from CF03 counts to avoid double-counting."
+  ]
+}

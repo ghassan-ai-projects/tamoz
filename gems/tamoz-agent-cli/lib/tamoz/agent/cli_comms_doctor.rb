@@ -41,7 +41,7 @@ module Tamoz
           with_comms_runtime(options) do |directory, _adapter, store, _checkpoints|
             checks << ['runtime permissions', true]
             selected_surfaces(directory, nil).each do |surface_id|
-              descriptor = build_descriptor(surface_id, directory.channels.fetch(surface_id))
+              descriptor = build_descriptor(surface_id, directory.channels.fetch(surface_id), directory)
               checks.concat(doctor_surface(store, descriptor))
             end
           end

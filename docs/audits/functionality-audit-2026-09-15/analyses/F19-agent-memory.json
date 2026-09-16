@@ -1,0 +1,119 @@
+{
+  "row": "F19",
+  "surface": "gems/tamoz-agent-memory",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 3, "minor": 2, "info": 0},
+  "lenses": {"correctness": "reviewed", "security": "reviewed",
+             "reliability": "reviewed", "observability": "reviewed",
+             "scalability": "reviewed", "maintenance": "reviewed"},
+  "findings": [
+    {"id": "F19-SEC-01", "severity": "major", "confidence": "high",
+     "status": "open",
+     "title": "Deletion receipt overclaims: 'removed' names sinks that were not removed, and derived_consolidations counts the deleted record's own rows",
+     "seam": "lifecycle.rb#deletion_sinks",
+     "citations": ["gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:96",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:201",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:235",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:88",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:243"],
+     "five_whys": true,
+     "recommendation": "At deletion_sinks, report a derived or cached row in 'removed' only when this call removed or rekeyed it; otherwise move it to 'pending' (the receipt already carries that list and MemoryDeletionError consumes it at lifecycle.rb:93). Exclude the deleted key's own versions from the LIKE self-match. No new deletion machinery."},
+
+    {"id": "F19-DEL-01", "severity": "major", "confidence": "high",
+     "status": "open",
+     "title": "No production caller deletes a memory and no retention pass is scheduled, so deleted plaintext persists and memory grows without bound",
+     "seam": "lifecycle.rb#purge / memory_store.rb#purge_expired",
+     "citations": ["gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:105",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb:156",
+                   "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:377",
+                   "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:133",
+                   "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:511",
+                   "gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:311",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/limits.rb:20",
+                   "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:894"],
+     "five_whys": true,
+     "recommendation": "Schedule the pass that already exists: invoke MemoryStore#purge_expired from the worker's existing maintenance/sweep seam (where the toolbox stale-staging sweep runs). Separately make Lifecycle#delete tombstone the store head so the h.deleted = 1 branch is reachable; append already accepts deleted: (store.rb:65) and IndexRow#state already carries 'deleted', so this is one flag at lifecycle.rb:156. Confirm maintenance-pass ownership with the worker_runtime.rb owner first."},
+
+    {"id": "F19-REL-01", "severity": "major", "confidence": "high",
+     "status": "open",
+     "title": "The behavior-transition crash-recovery path release_or_finalize has no production caller, so a crash between claim and finalize wedges the registry",
+     "seam": "transition_registry.rb#release_or_finalize",
+     "citations": ["gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:230",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:70",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:154",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb:90",
+                   "gems/tamoz-agent-session/lib/tamoz/agent/session_memory.rb:25",
+                   "gems/tamoz-agent-session/lib/tamoz/agent/session_memory.rb:74",
+                   "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:23"],
+     "five_whys": true,
+     "recommendation": "At the existing first-intake seam (session_bindings.rb:23, immediately before claim_behavior_transition), call release_or_finalize for the observed pending_transition_id using the session-store reader as the session_references lambda. No recovery daemon. Route to the tamoz-agent-session row."},
+
+    {"id": "F19-OBS-01", "severity": "minor", "confidence": "high",
+     "status": "open",
+     "title": "Every negative admission outcome on the session path is swallowed; AdmissionResult#stored? from the 089 fix has no production consumer",
+     "seam": "session_memory.rb#record_episode_memory",
+     "citations": ["gems/tamoz-agent-session/lib/tamoz/agent/session_memory.rb:84",
+                   "gems/tamoz-agent-session/lib/tamoz/agent/session_memory.rb:92",
+                   "gems/tamoz-agent-session/lib/tamoz/agent/session_lifecycle.rb:48",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb:42",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb:457"],
+     "five_whys": false,
+     "recommendation": "At the existing session_memory.rb:92 rescue, log AdmissionResult#reason and #stored? through the logger the session already holds and count them on the existing memory-summary projection (worker_runtime.rb:908). No new signal catalog entries."},
+
+    {"id": "F19-REL-02", "severity": "minor", "confidence": "medium",
+     "status": "open",
+     "title": "cas_control ignores its expected argument and CASes against a re-read version, widening the control-record window beyond the caller's validated read",
+     "seam": "transition_registry.rb#cas_control",
+     "citations": ["gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:316",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:306",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:88",
+                   "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:197"],
+     "five_whys": false,
+     "recommendation": "Pass the caller's expected through to if_version: and delete the internal re-read, so the fail-closed behaviour the surrounding comments claim is the behaviour that runs."}
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/memory_engine_test.rb", "runs": 26, "assertions": 164, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_store_test.rb", "runs": 16, "assertions": 112, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_treatment_profile_test.rb", "runs": 14, "assertions": 218, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_repository_adapter_test.rb", "runs": 10, "assertions": 104, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_session_integration_test.rb", "runs": 4, "assertions": 24, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/improvement_candidate_test.rb", "runs": 14, "assertions": 284, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_episode_skills_memory_test.rb", "runs": 12, "assertions": 49, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "tests_not_run": [
+    {"command": "ruby -Itest test/stream_learning_loop_test.rb", "reason": "time budget; admission assertions overlap the tamoz-stream row more than F19's"},
+    {"command": "ruby -Itest test/stream_invariants_test.rb", "reason": "time budget; same overlap"},
+    {"command": "rake ci / rake ci_full", "reason": "excluded by the brief"}
+  ],
+  "probes": [
+    {"path": "/tmp/f19_probe_delete.rb", "claim": "after Lifecycle#delete the store head still has deleted=0, 2 live ciphertext versions and 2 index rows remain, and the receipt reports derived_consolidations=2 with no derived record present"},
+    {"path": "/tmp/f19_probe2.rb", "claim": "recall returns [] after delete (active-recall exclusion correct) while repository.version still returns the plaintext statement"},
+    {"path": "inline ruby -e (derived-record survival)", "claim": "with a genuine derived record citing the deleted memory_id appended, the receipt reports derived_consolidations=3 and store.get still returns that derived record unchanged"},
+    {"path": "inline ruby -e (scope isolation)", "claim": "alice/p1 sees only alice/p1; alice/p2 sees []; bob/p2 sees only bob — no cross-user or cross-project leak"}
+  ],
+  "prior_findings_status": [
+    {"id": "089-admission", "carried": "ERR fix verified present and correct at admission.rb:457-462 with stored? folded into AdmissionResult at :42-50 and :239/:255; doc comment now matches code",
+     "residual": "the flag has no production consumer and the session-path caller swallows all StandardError — recorded as F19-OBS-01, not a re-litigation of 089"},
+    {"id": "034-memory_store", "carried": "security-lockstep DUP fix verified: search and scan_matched_restricted share authorized_scan_body (memory_store.rb:410) and differ only in the sensitivity predicate; existence-oracle guard holds",
+     "residual": "the deferred STATE item (IndexRow crossing the boundary rather than a nil-degraded to_h) is unchanged and still consistent with retrieval.rb:96"}
+  ],
+  "confirmed_sound": [
+    "admission cannot be steered by untrusted content on any of the three gates; :observed requires the authenticated reconciled-outcome reference and the bare independently_observed boolean has no power",
+    "the consolidation model call is routed through EffectDispatcher.run with a deterministic logical key (consolidation.rb:194-210); no raw model call inside a node — no FX violation",
+    "retrieval is scoped correctly: no cross-thread, cross-user, or cross-project leak; superseded and deleted versions leave active recall via the head-join",
+    "bounds are declared and enforced for statement bytes, source refs, lexical hits, token budget, injection count, consolidation batch, and query terms"
+  ],
+  "blind_spots": [
+    "purge_expired was read and grepped but not executed, so its still_pending list shape on a real tombstone set is a lead, not a finding",
+    "F19-REL-01 rests on a repo-wide grep for release_or_finalize by name; a dynamic dispatch or eval surface would not be found",
+    "Consolidation#consolidate also has no production caller; not raised separately because no source comment claims a scheduled caller for it, unlike the retention pass",
+    "tamoz-evals-runner MemoryRepositoryAdapter builds a second engine over the same store; its treatment paths were not traced",
+    "deletion of :sensitive records was not probed (probes used :internal records with no protection codec)"
+  ],
+  "coordinator_flags": [
+    "needs independent challenge — F19-SEC-01 rests on a synthetic derived record rather than the consolidation pipeline",
+    "F19-DEL-01 and F19-REL-01 both bottom out in missing callers owned by other rows (worker_runtime maintenance pass; tamoz-agent-session recovery seam) — route before recording a fix",
+    "F19-OBS-01 is the carried-forward residual of top-100 089, not a new defect in admission.rb",
+    "possible duplicate of F07-REL-01 only in the 'unreachable pass' shape; the seams are unrelated (SQLite inbox claimer vs memory retention)"
+  ]
+}

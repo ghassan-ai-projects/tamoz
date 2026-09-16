@@ -1,0 +1,31 @@
+{
+  "row": "CF04",
+  "surface": "model/tool effect identity, journal, unknown outcome, and replay",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": ["CF04-REL-01", "F07-SEC-01", "F04-OBS-01"],
+  "tests_run": [
+    {"command": "ruby -Itest test/sqlite_effect_journal_test.rb", "runs": 9, "assertions": 37, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_session_effect_test.rb", "runs": 19, "assertions": 78, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_runtime_effects_test.rb", "runs": 10, "assertions": 44, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_mcp_capability_source_test.rb", "runs": 14, "assertions": 102, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "blind_spots": [
+    "No new mixed-attempt probe was run; the committed reproduction and challenge were rechecked.",
+    "No simultaneous cross-process resolver race was exercised.",
+    "No provider or MCP network call was used.",
+    "No sustained effect-history retention or load measurement was run."
+  ],
+  "coordinator_flags": [
+    "CF04 direct review completed without subagent delegation per owner request.",
+    "Carried findings are excluded from CF04 counts to avoid double-counting."
+  ]
+}

@@ -116,7 +116,8 @@ module Tamoz
         parts = @rendering.plain(terminal_text(event, kind),
                                  max_parts: render_limits.fetch('max_parts'),
                                  part_characters: render_limits.fetch('part_characters'),
-                                 overflow: render_limits.fetch('overflow'))
+                                 overflow: render_limits.fetch('overflow'),
+                                 thread: event.fetch(:thread_id))
         reserved_request_id = event[:request_id] if TERMINAL_KINDS.include?(kind)
         parts.each do |part|
           @store.append_delivery(
@@ -254,6 +255,7 @@ module Tamoz
         @rendering.plain(
           question,
           max_parts: 1,
+          thread: event.fetch(:thread_id),
           part_characters: render_limits.fetch('part_characters'),
           overflow: render_limits.fetch('overflow')
         ).fetch(0)
@@ -328,7 +330,7 @@ module Tamoz
       def approval_part(event, actions, surface)
         limits = surface.fetch('rendering')
         @rendering.plain(
-          approval_text(event, actions), max_parts: 1,
+          approval_text(event, actions), max_parts: 1, thread: event.fetch(:thread_id),
           part_characters: limits.fetch('part_characters'), overflow: limits.fetch('overflow')
         ).fetch(0)
       end

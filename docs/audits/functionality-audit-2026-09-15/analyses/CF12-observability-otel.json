@@ -1,0 +1,61 @@
+{
+  "row": "CF12",
+  "surface": "signal recording, metrics/traces, bounded drains, and OTLP export",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 1, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "CF12-OBS-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Durable model-call signals disappear when settlement stops early or the effect is not successful",
+      "seam": "gems/tamoz-agent/lib/tamoz/agent/worker.rb#settle and #emit_durable_model_calls",
+      "citations": [
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:635-649",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:1278-1288",
+        "gems/tamoz-agent/lib/tamoz/agent/worker.rb:1301-1320",
+        "gems/tamoz-observability/lib/tamoz/observability/catalog.rb:30-42"
+      ],
+      "five_whys": false,
+      "recommendation": "Project the committed model effect before the budget-stop return and carry failed/unknown terminal outcomes into the existing tamoz.model.call signal, reusing the current effect record and de-duplication set."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/observability_catalog_test.rb", "runs": 10, "assertions": 26, "failures": 0},
+    {"command": "ruby -Itest test/observability_runtime_test.rb", "runs": 13, "assertions": 53, "failures": 0},
+    {"command": "ruby -Itest test/observability_correlation_test.rb", "runs": 6, "assertions": 16, "failures": 0},
+    {"command": "ruby -Itest test/observability_signal_test.rb", "runs": 10, "assertions": 26, "failures": 0},
+    {"command": "ruby -Itest test/concurrency_drain_test.rb", "runs": 7, "assertions": 36, "failures": 0},
+    {"command": "ruby -Itest test/otel_test.rb", "runs": 6, "assertions": 17, "failures": 0},
+    {"command": "ruby -Itest test/observability_cli_test.rb", "runs": 2, "assertions": 11, "failures": 0},
+    {"command": "ruby -Itest gems/tamoz-evals/test/agent_observability_durability_test.rb", "runs": 2, "assertions": 5, "failures": 0},
+    {"command": "ruby -Itest test/agent_budget_test.rb", "runs": 7, "assertions": 20, "failures": 0},
+    {"command": "ruby -Itest test/agent_worker_test.rb", "runs": 25, "assertions": 122, "failures": 0},
+    {"command": "ruby -Itest test/agent_worker_fail_closed_test.rb", "runs": 5, "assertions": 10, "failures": 0},
+    {"command": "ruby -Itest test/agent_worker_failure_reason_test.rb", "runs": 6, "assertions": 14, "failures": 0},
+    {"command": "ruby -Itest test/agent_cli_mcp_test.rb", "runs": 6, "assertions": 28, "failures": 0},
+    {"command": "ruby -Itest test/agent_runtime_effects_test.rb", "runs": 10, "assertions": 44, "failures": 0},
+    {"command": "ruby -Itest test/agent_worker_mcp_test.rb", "runs": 11, "assertions": 32, "failures": 1, "errors": 1, "note": "Errno::EPERM loopback fixture bind; environment-known red"}
+  ],
+  "blind_spots": [
+    "No real OTLP collector or TLS endpoint was contacted; the adapter remains unwired in production.",
+    "Failed/unknown model-effect worker run was not constructed end to end; the source filter excludes those states, while the budget-stop omission was reproduced through the CLI fixture path.",
+    "Interactive durable ask and one-shot paths do not construct the worker journal; whether they should share this recorder is an owner contract question.",
+    "No sustained-load measurement for the reserved lane, exporter queue, or 10,000-row census.",
+    "Full rake ci and rake ci_full were not run; the loopback fixture error is environment-bound."
+  ],
+  "coordinator_flags": [
+    "CF12 direct review completed without subagent delegation per owner request",
+    "CF12-OBS-01 is a new upstream worker projection finding; F15/F16 findings are carried without duplicate counts",
+    "carried F15/F16 majors keep the flow IMPROVE even though CF12's incremental machine count is one minor"
+  ]
+}

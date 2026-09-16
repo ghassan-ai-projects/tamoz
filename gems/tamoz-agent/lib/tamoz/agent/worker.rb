@@ -676,7 +676,12 @@ module Tamoz
 
       def settle_view(view, thread_id, occurrence_id, duration_ms)
         case view.status
-        when :completed then settle_completed_view(view, thread_id, occurrence_id, duration_ms)
+        when :completed
+          if cancellation_terminal?(view)
+            settle_cancelled_view(view, thread_id, occurrence_id, duration_ms)
+          else
+            settle_completed_view(view, thread_id, occurrence_id, duration_ms)
+          end
         when :failed then settle_failed_view(view, thread_id, occurrence_id, duration_ms)
         when :blocked then settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
         when :paused then settle_paused_view(view, thread_id, occurrence_id, duration_ms)
@@ -712,6 +717,26 @@ module Tamoz
         return 'direct_response' if view.terminal&.fetch('reason', nil) == 'direct_response'
 
         nil
+      end
+
+      # The graph checkpoint status of a cancellation terminal is :completed, but
+      # its terminal reason is a cancellation, so dispatching on status alone
+      # delivered it as request.completed/Verified — contradicting a body that
+      # says verification was not satisfied. A cancelled turn is a stop, never a
+      # verified completion.
+      def cancellation_terminal?(view)
+        view.terminal&.fetch('reason', nil) == 'cancelled_by_user'
+      end
+
+      def settle_cancelled_view(view, thread_id, occurrence_id, duration_ms)
+        settle_terminal_delivery(thread_id, "request.stopped", occurrence_id,
+                                 stop_text(view, reason: 'cancelled_by_user'))
+        emit("request.stopped",
+             thread: thread_id, request_id: occurrence_id, reason: "cancelled_by_user",
+             duration_ms:,
+             status_projection: pending_status_projection(view, occurrence_id),
+             observability: {execution_id: view.execution_id})
+        PROGRESSED
       end
 
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
@@ -993,8 +1018,10 @@ module Tamoz
         thread_id = request.thread_id
         profile_id = @runtime.thread_profile(thread_id)
         # Bind before rebinding: a lazy session build stamps the live global
-        # rev onto this key, which would silently discard the switch.
-        @runtime.session_for_profile(profile_id)
+        # rev onto this key, which would silently discard the switch. Go through
+        # session_for so the bound profile digest is validated, not a widened
+        # on-disk profile.
+        @runtime.session_for(thread_id)
 
         @runtime.checkpoints.open_writer(
           thread_id: thread_id,

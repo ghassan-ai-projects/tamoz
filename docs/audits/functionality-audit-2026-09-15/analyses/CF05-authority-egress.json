@@ -1,0 +1,38 @@
+{
+  "row": "CF05",
+  "surface": "trusted authority, capability intersection, and governed egress",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": [
+    "CF05-SEC-01", "F10-SEC-03", "F25-SEC-01", "F22-SEC-01",
+    "F18-SEC-01", "F09-SEC-01", "F09-SEC-02", "F10-SEC-01",
+    "F10-SEC-02", "F18-SCL-01"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/capability_host_test.rb", "runs": 21, "assertions": 91, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_cli_mcp_test.rb", "runs": 6, "assertions": 28, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_profile_test.rb", "runs": 44, "assertions": 130, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/websearch_egress_test.rb", "runs": 10, "assertions": 74, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/websearch_adapter_test.rb", "runs": 14, "assertions": 58, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_worker_mcp_test.rb", "runs": 11, "assertions": 32, "failures": 0, "errors": 1, "skips": 0}
+  ],
+  "blind_spots": [
+    "The combined profile-plus-MCP probe used an in-process fake source; no real MCP server, provider, or model was called.",
+    "The worker HTTP fixture could not bind a local socket under the sandbox (Errno::EPERM).",
+    "No concurrent profile reload/restart race, egress DNS rebinding run, catalog growth run, or sustained provider load was performed.",
+    "No test combines a restrictive trusted profile with configured MCP and asserts the selected authority contract."
+  ],
+  "coordinator_flags": [
+    "CF05 direct review completed without subagent delegation per owner request.",
+    "CF05-SEC-01 is retained as info/documentation gap after challenge-profile-authority.md; F10-SEC-03 is merged into the same contract axis.",
+    "Carried findings are excluded from CF05 counts to avoid double-counting."
+  ]
+}

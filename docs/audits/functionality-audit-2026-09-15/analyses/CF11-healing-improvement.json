@@ -1,0 +1,93 @@
+{
+  "row": "CF11",
+  "surface": "failure classification, safe remediation, candidate improvement, and promotion/rollback",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [],
+  "reviewed_duplicate_leads": [
+    {
+      "id": "CF11-COR-01",
+      "original_severity": "major",
+      "confidence": "high",
+      "status": "duplicate",
+      "title": "a failed remediation effect returns a transitions Array before verification and escalation",
+      "owner_finding": "F20-REL-02",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/attempt_evidence.rb:27-31",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:48-54",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:168-186",
+        "/tmp/cf11_rel02b.rb"
+      ],
+      "disposition": "The branch is confirmed, but F20-REL-02 owns the same failed-effect return contract and its challenge/re-review. Excluded from CF11 counts."
+    },
+    {
+      "id": "CF11-REL-01",
+      "original_severity": "major",
+      "confidence": "high",
+      "status": "duplicate",
+      "title": "the healing layer has no cross-run repetition bound while the session layer owns the production bound",
+      "owner_finding": "F20-REL-01",
+      "citations": [
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb:63",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/session.rb:19,46,84,258",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_evidence.rb:124-151",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb:26,103-105"
+      ],
+      "disposition": "The split ownership and missing healing-side bound are F20-REL-01. The shipped session repair path is bounded; no second count."
+    },
+    {
+      "id": "CF11-MNT-01",
+      "original_severity": "major",
+      "confidence": "high",
+      "status": "duplicate",
+      "title": "promotion accepts a consumer-minted human-gate string instead of an approval-policy artifact",
+      "owner_finding": "F23-SEC-01",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:220-235",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:38-65",
+        "gems/tamoz-agent-improvement/tamoz-agent-improvement.gemspec:14-17",
+        "gems/tamoz-approval/policy/base.yaml"
+      ],
+      "disposition": "F23-SEC-01 owns the unbound promotion gate after its challenge demoted critical to major. The improvement path has no production caller and records a pending, inactive transition."
+    }
+  ],
+  "carried_forward_findings": [
+    "F20-REL-01", "F20-REL-02", "F20-SEC-01", "F23-SEC-01",
+    "F23-COR-01", "F23-COR-02", "F23-REL-01", "F23-MNT-01"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/healing_remediation_test.rb", "runs": 13, "assertions": 74, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/healing_failure_contract_test.rb", "runs": 35, "assertions": 264, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/improvement_candidate_test.rb", "runs": 14, "assertions": 284, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_improvement_lifecycle_test.rb", "runs": 6, "assertions": 13, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "probes": [
+    {"path": "/tmp/cf11_rel02b.rb", "claim": "the failed healing branch returns a truthy transitions Array and bypasses the Outcome path"},
+    {"path": "/tmp/cf11_rel02_probe.rb", "claim": "three public Remediation.run cycles with changing trace/call identity returned ordinary escalated Outcomes in this setup; the failed dispatcher branch was not reached"}
+  ],
+  "caller_sweeps": [
+    {"scope": "gems apps bin script production Ruby", "patterns": ["Remediation.run", "Promotion#promote", "RuleRegistry"], "result": "no shipped caller; only comments/definitions"},
+    {"scope": "gems/tamoz-approval/policy/*.yaml", "patterns": ["improvement", "heuristic", "candidate", "promotion"], "result": "zero matches"}
+  ],
+  "blind_spots": [
+    "no production caller for the healing remediation or improvement promotion APIs",
+    "the public end-to-end probe did not force a failed dispatcher outcome; the direct branch probe covers the unconditional return path",
+    "no healing test drives attempt beyond one or asserts a cross-run repetition stop",
+    "the eval-side promotion producer and future transition consumer were not exercised with a real provider or multi-process race",
+    "no sustained load, long-lived memory, or real approval-service measurement was run"
+  ],
+  "coordinator_flags": [
+    "CF11 direct review completed without subagent delegation per owner request",
+    "all three lead proposals are confirmed observations but duplicate existing F20/F23 findings",
+    "CF11 contributes zero new machine-counted findings and remains IMPROVE because carried majors are open",
+    "carried findings and reviewed duplicate leads are excluded from CF11 counts"
+  ]
+}

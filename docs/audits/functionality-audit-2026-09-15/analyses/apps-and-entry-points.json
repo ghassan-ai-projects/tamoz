@@ -1,0 +1,367 @@
+{
+  "rows": [
+    {
+      "row": "A01",
+      "surface": "apps/tamoz-agent/ (README.md, app.json)",
+      "verdict": "IMPROVE",
+      "counts": {"critical": 0, "major": 1, "minor": 1, "info": 1},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [
+        {"id": "A01-COR-01", "severity": "major", "confidence": "high",
+         "status": "open",
+         "title": "app.json declares namespace Tamoz::App, which does not exist; the only test pins the string without resolving it",
+         "seam": "apps/tamoz-agent/app.json#namespace",
+         "citations": ["apps/tamoz-agent/app.json:5", "test/public_api_test.rb:468-476",
+                       "test/public_api_test.rb:477-490"],
+         "five_whys": true,
+         "recommendation": "In test_reference_application_manifest_identifies_the_bounded_repair_slice, resolve the declared namespace with the const_get walk assert_public_entry already uses, and either point app.json at the real owning namespace (Tamoz::Agent) or drop the key."},
+        {"id": "A01-MNT-01", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "format_version is written in app.json and read by no consumer",
+         "seam": "apps/tamoz-agent/app.json#format_version",
+         "citations": ["apps/tamoz-agent/app.json:3", "test/public_api_test.rb:468-476"],
+         "five_whys": false,
+         "recommendation": "None. Nothing depends on the key yet; adding a reader now would be speculative machinery."},
+        {"id": "A01-MNT-02", "severity": "minor", "confidence": "high",
+         "status": "open",
+         "title": "apps/tamoz-agent/README.md is outside the documentation surface check",
+         "seam": "test/documentation_surface_test.rb#page-list",
+         "citations": ["test/documentation_surface_test.rb:17-20",
+                       "test/documentation_surface_test.rb:32-74",
+                       "apps/tamoz-agent/README.md:6-11"],
+         "five_whys": false,
+         "recommendation": "Add apps/tamoz-agent/README.md to the page list used by the flag scan, or move the app usage block into install.md where it is already checked."}
+      ],
+      "tests_run": [
+        {"command": "ruby -Itest test/public_api_test.rb", "runs": 3, "assertions": 1051, "failures": 0},
+        {"command": "ruby -Itest test/documentation_surface_test.rb", "runs": 9, "assertions": 87, "failures": 0},
+        {"command": "bundle exec ruby -e 'require \"tamoz/agent_cli\"; Tamoz::App'", "runs": 1, "assertions": 1, "failures": 0, "note": "negative proof: NameError: uninitialized constant Tamoz::App"},
+        {"command": "bundle exec rake test --dry-run", "runs": 1, "assertions": 1, "failures": 0, "note": "disproves a suspected stale 'rake test' claim in the app README"}
+      ],
+      "blind_spots": [
+        "Read the dispatch table, error policy, and routing helpers of cli.rb (919 lines), not every command body; A01 claims nothing about command behavior beyond flag existence.",
+        "Any out-of-repo consumer of app.json is invisible from the checkout."
+      ],
+      "coordinator_flags": [
+        "A01-COR-01 needs independent challenge (major)",
+        "the namespace key and its string-only test may be intentional forward metadata; severity assumes a consumer resolves it"
+      ]
+    },
+    {
+      "row": "E01",
+      "surface": "gems/tamoz-agent-cli/exe/tamoz",
+      "verdict": "PASS",
+      "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [],
+      "tests_run": [
+        {"command": "bundle exec gems/tamoz-agent-cli/exe/tamoz --version", "runs": 1, "assertions": 1, "failures": 0, "note": "printed 0.1.0.alpha.1, exit 0"},
+        {"command": "RUBYLIB=<gems/*/lib> ruby gems/tamoz-agent-cli/exe/tamoz --version  (cwd /tmp)", "runs": 1, "assertions": 1, "failures": 0, "note": "installed-like load path, exit 0"},
+        {"command": "RUBYLIB=<gems/*/lib> ruby gems/tamoz-agent-cli/exe/tamoz  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 64, stderr 'tamoz: missing argument: TASK'"},
+        {"command": "ruby -Itest test/agent_cli_test.rb", "runs": 34, "assertions": 764, "failures": 0},
+        {"command": "ruby -Itest test/documentation_surface_test.rb", "runs": 9, "assertions": 87, "failures": 0}
+      ],
+      "blind_spots": [
+        "test/packaging_test.rb not run (installs 27 gems into separate GEM_HOMEs); its executables policy was read at :756-762.",
+        "The --json path and individual subcommands were exercised in-process via CLI.run, not through the exe/ shim."
+      ],
+      "coordinator_flags": []
+    },
+    {
+      "row": "E02",
+      "surface": "gems/tamoz-evals/exe/tamoz-eval",
+      "verdict": "PASS",
+      "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [],
+      "tests_run": [
+        {"command": "ruby bin/tamoz-eval --help", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 0"},
+        {"command": "ruby bin/tamoz-eval  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 64, usage on stderr"},
+        {"command": "ruby bin/tamoz-eval verify /tmp/does-not-exist.json", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 2 (INVALID_EVIDENCE)"},
+        {"command": "ruby -I.../tamoz-core/lib -I.../tamoz-evals/lib .../exe/tamoz-eval --help  (cwd /tmp)", "runs": 1, "assertions": 1, "failures": 0, "note": "installed-like, exit 0"}
+      ],
+      "blind_spots": [
+        "The verify success path (exit 0, decision verified) was not reproduced; it needs a real signed artifact.",
+        "No dedicated suite found that asserts Tamoz::Evals::CLI's exit ladder; every documented code was reproduced by running the command instead.",
+        "documentation/guides/evaluation.md is not covered by test/documentation_surface_test.rb; it was matched by hand."
+      ],
+      "coordinator_flags": []
+    },
+    {
+      "row": "E03",
+      "surface": "gems/tamoz-evals-runner/exe/tamoz-eval-runner",
+      "verdict": "PASS",
+      "counts": {"critical": 0, "major": 0, "minor": 1, "info": 0},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [
+        {"id": "E03-ERR-01", "severity": "minor", "confidence": "high",
+         "status": "open",
+         "title": "The shipped runner has no --help or --version path; --help exits 64 with usage on stderr, unlike its sibling verifier",
+         "seam": "gems/tamoz-evals-runner/lib/tamoz/evals/runner/cli.rb#run",
+         "citations": ["gems/tamoz-evals-runner/lib/tamoz/evals/runner/cli.rb:27-29",
+                       "gems/tamoz-evals-runner/lib/tamoz/evals/runner/cli.rb:45-55",
+                       "gems/tamoz-evals/lib/tamoz/evals/cli.rb:34-36",
+                       "documentation/guides/evaluation.md:10-24"],
+         "five_whys": false,
+         "recommendation": "Add the same two-line terminal-flag guard the verifier already has at tamoz/evals/cli.rb:34-36 to the top of Runner::CLI#run, printing help on out and returning SUCCESS."}
+      ],
+      "tests_run": [
+        {"command": "ruby bin/tamoz-eval-runner  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 64, usage on stderr"},
+        {"command": "ruby bin/tamoz-eval-runner --help", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 64, usage on stderr - E03-ERR-01 evidence"},
+        {"command": "ruby bin/tamoz-eval-runner scorecard agent-smoke --input-manifest /tmp/nope.json", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 3, 'runner input manifest is required'"},
+        {"command": "ruby -I.../tamoz-evals-runner/lib -I.../tamoz-evals/lib -I.../tamoz-core/lib .../exe/tamoz-eval-runner --help  (cwd /tmp)", "runs": 1, "assertions": 1, "failures": 0, "note": "installed-like; LoadError gone, exit 64"}
+      ],
+      "blind_spots": [
+        "A successful scorecard agent-smoke run was not run; it needs an external pinned runner-input-v1 manifest and corpora by design.",
+        "InputAdapters and InputManifest were read only through their call sites in cli.rb; their internals belong to the tamoz-evals-runner gem row."
+      ],
+      "coordinator_flags": [
+        "verdict-threshold ambiguity: single minor - recorded PASS per BAR.md's literal no-threshold-met branch, E04 with the same count recorded IMPROVE"
+      ]
+    },
+    {
+      "row": "E04",
+      "surface": "bin/tamoz-chat-probe",
+      "verdict": "IMPROVE",
+      "counts": {"critical": 0, "major": 0, "minor": 1, "info": 2},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [
+        {"id": "E04-COR-01", "severity": "minor", "confidence": "high",
+         "status": "open",
+         "title": "An unknown probe name exits 0; the script has no exit call, so its status never reflects whether any probe ran",
+         "seam": "bin/tamoz-chat-probe#PROBES-dispatch",
+         "citations": ["bin/tamoz-chat-probe:159-165",
+                       "bin/tamoz-chat-probe:161-162",
+                       "bin/tamoz-chat-sim:31",
+                       "docs/openclaw-chat-study-refresh/implementation-plan/06-observed-chat-findings.md:677"],
+         "five_whys": false,
+         "recommendation": "Track a missing flag in the :161-162 branch and exit 64 after the loop, or abort in that branch as bin/tamoz-chat-sim:31 already does. Two lines."},
+        {"id": "E04-MNT-01", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "No ensure around the harness for a raising probe, unlike the sim",
+         "seam": "bin/tamoz-chat-probe#probe-call",
+         "citations": ["bin/tamoz-chat-probe:164", "bin/tamoz-chat-sim:88-90",
+                       "test/support/openclaw_comms_fixture.rb:225"],
+         "five_whys": false,
+         "recommendation": "None required; the residual leak is an in-process object and a tmpdir, not durable state."},
+        {"id": "E04-MNT-02", "severity": "info", "confidence": "medium",
+         "status": "open",
+         "title": "The OF-N probe keys are not verified against the findings document they mirror",
+         "seam": "bin/tamoz-chat-probe#PROBES-keys",
+         "citations": ["bin/tamoz-chat-probe:4-5", "bin/tamoz-chat-probe:14-15",
+                       "bin/tamoz-chat-probe:53-157"],
+         "five_whys": false,
+         "recommendation": "None now; keep the header list in step if a probe is added or removed."}
+      ],
+      "tests_run": [
+        {"command": "bundle exec ruby bin/tamoz-chat-probe OF-4", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 0, labeled transcript printed"},
+        {"command": "bundle exec ruby bin/tamoz-chat-probe NOPE", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 0 with stderr warning - E04-COR-01 evidence"},
+        {"command": "ruby -Itest test/experience_harness_test.rb", "runs": 14, "assertions": 81, "failures": 0}
+      ],
+      "blind_spots": [
+        "Only OF-4 was run; the other nine share the same construction and print helpers.",
+        "openclaw_comms_fixture.rb was read at its write sites and model_factory seam, not end to end.",
+        "Did not verify the ten probes still reproduce their documented findings; re-litigating those findings is outside this row."
+      ],
+      "coordinator_flags": [
+        "verdict-threshold ambiguity: single minor - recorded IMPROVE, E03 with the same count recorded PASS",
+        "confirmed deterministic only: no real provider call on any probe path, so no probe is evidence of reasoning"
+      ]
+    },
+    {
+      "row": "E05",
+      "surface": "bin/tamoz-chat-sim",
+      "verdict": "PASS",
+      "counts": {"critical": 0, "major": 0, "minor": 0, "info": 1},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [
+        {"id": "E05-MNT-01", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "The sim's REPL wrapper has no test of its own; its correctness rests on the shared harness suite plus the verified abort path",
+         "seam": "bin/tamoz-chat-sim#preflight-and-REPL",
+         "citations": ["bin/tamoz-chat-sim:27-37", "bin/tamoz-chat-sim:68-90",
+                       "test/experience_harness_test.rb:10"],
+         "five_whys": false,
+         "recommendation": "None. The wrapper is 90 lines with one loop and preflight! was verified by running it."}
+      ],
+      "tests_run": [
+        {"command": "env -u DEEPSEEK_API_KEY bundle exec ruby bin/tamoz-chat-sim </dev/null", "runs": 1, "assertions": 1, "failures": 0, "note": "abort, exit 1, actionable export hint naming the variable not its value"},
+        {"command": "ruby -Itest test/experience_harness_test.rb", "runs": 14, "assertions": 81, "failures": 0}
+      ],
+      "blind_spots": [
+        "The live-provider path is not run by instruction; everything downstream of a successful preflight! is read-only evidence.",
+        "experience_harness.rb's wire_delivery_pipeline and the fixture gateway wiring were read but not exercised in this row."
+      ],
+      "coordinator_flags": [
+        "this is the designated real-provider harness (experience_harness.rb:11-13); it cannot be run with the deterministic provider without editing the file, so it is correctly not mistakable for reasoning evidence"
+      ]
+    },
+    {
+      "row": "E06",
+      "surface": "bin/tamoz-eval",
+      "verdict": "PASS",
+      "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [],
+      "tests_run": [
+        {"command": "ruby bin/tamoz-eval --help", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 0, identical to exe/tamoz-eval"},
+        {"command": "ruby bin/tamoz-eval  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 64"},
+        {"command": "ruby bin/tamoz-eval verify /tmp/does-not-exist.json", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 2"}
+      ],
+      "blind_spots": [
+        "No test pins the wrapper/executable equivalence; it was established by running both and comparing output.",
+        "script/generate_release_evaluation_manifest and script/release_rehearsal reference bin/tamoz-eval; those callers belong to the S01 row."
+      ],
+      "coordinator_flags": [
+        "no double-shell and no wrong-gem risk: the wrapper requires the library and calls CLI.run directly, and unshifts exactly the two gems the command declares"
+      ]
+    },
+    {
+      "row": "E07",
+      "surface": "bin/tamoz-eval-runner",
+      "verdict": "PASS",
+      "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [],
+      "tests_run": [
+        {"command": "ruby bin/tamoz-eval-runner  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 64, usage on stderr"},
+        {"command": "ruby bin/tamoz-eval-runner scorecard agent-smoke --input-manifest /tmp/nope.json", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 3, identical to exe/tamoz-eval-runner"}
+      ],
+      "blind_spots": [
+        "No test pins the wrapper/executable equivalence.",
+        "A successful scorecard run was not run (needs an external pinned manifest and corpora by design)."
+      ],
+      "coordinator_flags": [
+        "no double-shell and no wrong-gem risk; note the wrapper is a bundle-context entry point: it unshifts only tamoz-evals-runner and tamoz-evals and relies on the bundle for the other ~15 runtime dependencies, which the documented `rbenv exec bundle exec` form respects"
+      ]
+    },
+    {
+      "row": "E08",
+      "surface": "bin/tamoz-stream-subscriber",
+      "verdict": "IMPROVE",
+      "counts": {"critical": 0, "major": 1, "minor": 0, "info": 2},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [
+        {"id": "E08-REL-01", "severity": "major", "confidence": "high",
+         "status": "open",
+         "title": "The subscriber retries a failing endpoint forever at a fixed ~1/s with no backoff, no ceiling, and no health signal a supervisor can read",
+         "seam": "bin/tamoz-stream-subscriber#run-loop",
+         "citations": ["bin/tamoz-stream-subscriber:85-94",
+                       "bin/tamoz-stream-subscriber:18-35",
+                       "bin/tamoz-stream-subscriber:78-83",
+                       "gems/tamoz-stream/lib/tamoz/stream/outcome_subscriber.rb:72-86"],
+         "five_whys": true,
+         "recommendation": "Bound the loop at :85-94: count consecutive failures, warn with the count, and exit non-zero after a ceiling (a --max-consecutive-failures option fits the existing grammar at :18-35). The fixed sleep(1) can stay; the ceiling is the missing property."},
+        {"id": "E08-MNT-01", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "The approval-relay path is resolved against the cwd and the header does not say so",
+         "seam": "bin/tamoz-stream-subscriber#approval-relay-require",
+         "citations": ["bin/tamoz-stream-subscriber:29-31", "bin/tamoz-stream-subscriber:46"],
+         "five_whys": false,
+         "recommendation": "None required; if documented for operators, state that the path resolves against the cwd, or require an absolute path."},
+        {"id": "E08-MNT-02", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "The launcher has no test; only ADR prose references it",
+         "seam": "bin/tamoz-stream-subscriber",
+         "citations": ["documentation/adr/approval-policy-redesign/02-current-state-audit.md:598-599"],
+         "five_whys": false,
+         "recommendation": "The dead-endpoint case recommended in E08-REL-01 would be the first test; no separate action."}
+      ],
+      "tests_run": [
+        {"command": "ruby bin/tamoz-stream-subscriber  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 2, usage on stderr"},
+        {"command": "ruby bin/tamoz-stream-subscriber --help", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 0"},
+        {"command": "ruby bin/tamoz-stream-subscriber --bogus", "runs": 1, "assertions": 1, "failures": 0, "note": "OptionParser::InvalidOption backtrace, exit 1"},
+        {"command": "ruby bin/tamoz-stream-subscriber --tenant t --database /nonexistent-dir/x.sqlite3 --events-url ftp://x/y --subscriber-token tok --approval-ttl-seconds 60", "runs": 1, "assertions": 1, "failures": 0, "note": "TransportError / PermissionError backtrace, exit 1"},
+        {"command": "timeout 30 bundle exec ruby bin/tamoz-stream-subscriber --events-url http://127.0.0.1:1/e --log /tmp/tamoz-e09/sub.log ...", "runs": 1, "assertions": 1, "failures": 0, "note": "E08-REL-01 evidence: 8 logged 'SSE reconnect error' in 30s, process still running when timeout killed it"}
+      ],
+      "blind_spots": [
+        "A live Channel-B SSE endpoint is unavailable; the transport success path (sse_transport.rb:119-158) was read, not run. Everything measured is the failure path.",
+        "A working approval relay was not exercised; it needs a real approval receipt flow.",
+        "LiveLearningHandlers internals belong to the tamoz-stream gem row."
+      ],
+      "coordinator_flags": [
+        "E08-REL-01 needs independent challenge (major)",
+        "the gauge is retry rate and process liveness, not correctness: the durable cursor means the loop is wasteful rather than corrupting, which is what caps severity at major"
+      ]
+    },
+    {
+      "row": "E09",
+      "surface": "bin/tamoz-stream-worker",
+      "verdict": "IMPROVE",
+      "counts": {"critical": 0, "major": 1, "minor": 0, "info": 2},
+      "lenses": {"correctness": "reviewed", "security": "reviewed",
+                 "reliability": "reviewed", "observability": "reviewed",
+                 "scalability": "reviewed", "maintenance": "reviewed"},
+      "findings": [
+        {"id": "E09-REL-01", "severity": "major", "confidence": "high",
+         "status": "open",
+         "title": "SIGTERM and SIGINT both abort the worker with SIGABRT (exit 134) instead of stopping it, because the trap calls GRPC::RpcServer#stop which synchronizes in a trap context",
+         "seam": "bin/tamoz-stream-worker#signal-traps",
+         "citations": ["bin/tamoz-stream-worker:142-143",
+                       "bin/tamoz-stream-worker:144",
+                       "gems/tamoz-stream/lib/tamoz/stream/worker_server.rb:64-73",
+                       "gems/tamoz-stream/lib/tamoz/stream/worker_server.rb:80",
+                       "test/stream_worker_server_test.rb:126-129",
+                       "gems/tamoz-stream/lib/tamoz/stream/worker_server.rb:11-15"],
+         "five_whys": true,
+         "recommendation": "Make the handler trap-safe by deferring, the way bin/tamoz-stream-subscriber:78-83 already does: the trap sets a flag and the normal-context caller performs server.stop. Then assert the exit status at test/stream_worker_server_test.rb:126-127. WorkerServer#stop's logic stays as it is."},
+        {"id": "E09-MNT-01", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "The socket-or-port choice is validated only after the adapter, memory engine, and graph are built",
+         "seam": "bin/tamoz-stream-worker#required-key-gate",
+         "citations": ["bin/tamoz-stream-worker:67-70", "bin/tamoz-stream-worker:86-135",
+                       "bin/tamoz-stream-worker:137", "gems/tamoz-stream/lib/tamoz/stream/worker_server.rb:31-33"],
+         "five_whys": false,
+         "recommendation": "Optional: extend the :67-70 gate with options[:socket].nil? ^ options[:port].nil? to fail before opening SQLite. Not required for correctness."},
+        {"id": "E09-MNT-02", "severity": "info", "confidence": "high",
+         "status": "open",
+         "title": "The launcher's only test sends SIGTERM and discards the exit status it depends on",
+         "seam": "test/stream_worker_server_test.rb#bin-launcher-case",
+         "citations": ["test/stream_worker_server_test.rb:126-127",
+                       "test/stream_worker_server_test.rb:129",
+                       "test/stream_worker_server_test.rb:44-92"],
+         "five_whys": false,
+         "recommendation": "Assert the status in the same test as part of the E09-REL-01 fix."}
+      ],
+      "tests_run": [
+        {"command": "ruby -Itest test/stream_worker_server_test.rb", "runs": 4, "assertions": 11, "failures": 0},
+        {"command": "kill -TERM <serving launcher pid>; wait", "runs": 2, "assertions": 2, "failures": 0, "note": "E09-REL-01 evidence: exit 134 (SIGABRT) both times; ThreadError 'can't be called from trap context' at grpc rpc_server.rb:250 via worker_server.rb:67 via bin/tamoz-stream-worker:142, then Abort trap: 6"},
+        {"command": "kill -INT <serving launcher pid>; wait", "runs": 1, "assertions": 1, "failures": 0, "note": "E09-REL-01 evidence: exit 134, same ThreadError"},
+        {"command": "ruby bin/tamoz-stream-worker  (no args)", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 2, usage"},
+        {"command": "ruby bin/tamoz-stream-worker --help", "runs": 1, "assertions": 1, "failures": 0, "note": "exit 0"},
+        {"command": "ruby bin/tamoz-stream-worker --profile <valid> --database <valid> --tenant acme --port 0 --socket X", "runs": 1, "assertions": 1, "failures": 0, "note": "ServerError 'choose exactly one of socket or port', exit 1"},
+        {"command": "ruby bin/tamoz-stream-worker --profile <valid> ... --lane-config bogus", "runs": 1, "assertions": 1, "failures": 0, "note": "ArgumentError 'malformed lane config', exit 1"},
+        {"command": "ruby bin/tamoz-stream-worker --profile /tmp/nope.yaml --database /tmp/w.sqlite3 --tenant t --port 0", "runs": 1, "assertions": 1, "failures": 0, "note": "ValidationError 'profile file does not exist', exit 1"}
+      ],
+      "blind_spots": [
+        "No real episode was executed end to end; the model-call factory would call a live provider, which this brief forbids.",
+        "The --skills-source path was read but not exercised with a real skills JSON map.",
+        "mTLS at the socket boundary is a deployment concern outside the checkout; :this_port_is_insecure was confirmed by reading.",
+        "EpisodeNode internals belong to the kernel/agent rows."
+      ],
+      "coordinator_flags": [
+        "E09-REL-01 needs independent challenge (major)",
+        "same-path green suite: test/stream_worker_server_test.rb passes while the identical launch-and-SIGTERM path aborts with 134, because Process.wait's result is never asserted",
+        "distinct from E08-REL-01 (missing ceiling) and from the F24 CLI row (exit-code taxonomy); this is a trap-context violation at the launcher seam"
+      ]
+    }
+  ]
+}

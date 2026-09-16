@@ -770,6 +770,9 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       assert plan_call, "a plan call must have happened"
       assert_includes plan_call[:prompt], "mcp:test-server/set_answer"
       assert_includes plan_call[:prompt], "Set the answer value"
+      # The server-authored description is attributed as remote, so the planner
+      # can tell it from a trusted local description (F09-SEC-01).
+      assert_includes plan_call[:prompt], "remote content from server test-server"
       refute_includes plan_call[:prompt], "\x00"
     end
   end

@@ -53,6 +53,7 @@ CANCELLATION_GEM_LIB = ENV.fetch(
 $LOAD_PATH.unshift(WEBSEARCH_GEM_LIB, MCP_GEM_LIB, CORE_GEM_LIB, CANCELLATION_GEM_LIB)
 
 require "json"
+require "uri"
 require "mcp"
 require "tamoz/mcp/websearch"
 
@@ -103,7 +104,7 @@ module WebsearchAdapter
       grant = ENV[GRANT_ENV]
       return refusal("the operator grant #{GRANT_ENV} is not set") unless grant == "1"
 
-      provider = load_provider
+      provider = load_provider(policy)
       return refusal(provider) if provider.is_a?(String)
 
       query = query.to_s
@@ -132,7 +133,7 @@ module WebsearchAdapter
       "the egress declaration is invalid: #{error.message}"
     end
 
-    def load_provider
+    def load_provider(policy)
       raw = ENV[PROVIDER_ENV]
       return "the provider configuration #{PROVIDER_ENV} is not set" if raw.to_s.empty?
 
@@ -140,14 +141,29 @@ module WebsearchAdapter
       unless config.is_a?(Hash) && %w[fixture http].include?(config["provider"])
         return "the provider configuration must name a fixture or http provider"
       end
-      if config["provider"] == "http"
-        endpoint = config["endpoint"]
-        return "the http provider needs an endpoint" unless endpoint.is_a?(String) && endpoint.start_with?("https://")
-      end
+      return endpoint_refusal(config, policy) || config if config["provider"] == "http"
 
       config
     rescue JSON::ParserError
       "the provider configuration #{PROVIDER_ENV} is not valid JSON"
+    end
+
+    # The endpoint is not a free redirect target within the allowlist: the first
+    # declared host IS the provider identity, so a third party that sets
+    # PROVIDER_ENV cannot repoint the search at another allowlisted host/path.
+    def endpoint_refusal(config, policy)
+      endpoint = config["endpoint"]
+      unless endpoint.is_a?(String) && endpoint.start_with?("https://")
+        return "the http provider needs an endpoint"
+      end
+
+      host = URI.parse(endpoint).host&.downcase
+      expected = policy.allowlisted_hosts.first
+      return if host == expected
+
+      "the http provider endpoint host must be the declared provider #{expected.inspect}"
+    rescue URI::InvalidURIError
+      "the http provider endpoint is not a valid URL"
     end
 
     def fixture_result(query, max_results, policy)

@@ -1,0 +1,355 @@
+{
+  "rows": [
+    {
+      "row": "S01",
+      "surface": "script/ (45 entry points + script/quality/coverage_totals.rb)",
+      "verdict": "IMPROVE",
+      "counts": { "critical": 0, "major": 1, "minor": 8, "info": 0 },
+      "lenses": {
+        "correctness": "reviewed",
+        "security": "reviewed",
+        "reliability": "reviewed",
+        "observability": "reviewed",
+        "scalability": "reviewed",
+        "maintenance": "reviewed"
+      },
+      "findings": [
+        {
+          "id": "S01-BEN-01",
+          "severity": "major",
+          "confidence": "high",
+          "status": "open",
+          "title": "Five runner/evidence scripts shell out with no bounded timeout, bypassing the repo's own SubprocessRunner",
+          "seam": "script/generate_requirements_audit:78, script/autonomy_scorecard:82, script/regenerate_quality_baseline:157, script/generate_graph_surface_audit:74, script/generate_release_evaluation_manifest:62",
+          "citations": [
+            "script/generate_requirements_audit:78",
+            "script/autonomy_scorecard:82",
+            "script/regenerate_quality_baseline:38",
+            "script/regenerate_quality_baseline:70",
+            "script/regenerate_quality_baseline:131",
+            "script/regenerate_quality_baseline:157",
+            "script/regenerate_quality_baseline:179",
+            "script/generate_graph_surface_audit:74",
+            "script/generate_release_evaluation_manifest:62",
+            "script/capture_phase2_receipt:32",
+            "script/live_alms_telegram:332",
+            "gems/tamoz-evals-runner/lib/tamoz/evals/harness/subprocess_runner.rb:143",
+            "gems/tamoz-evals-runner/lib/tamoz/evals/harness/subprocess_runner.rb:18",
+            "script/run_m1_conformance:128"
+          ],
+          "five_whys": true,
+          "recommendation": "Migrate the three highest-consequence call sites (generate_requirements_audit:78, autonomy_scorecard:82, regenerate_quality_baseline:157) to the existing Tamoz::Evals::Harness::SubprocessRunner#capture(timeout_ms:) seam, or wrap the Open3.capture3 in Timeout.timeout where the full runner is disproportionate. No new machinery."
+        },
+        {
+          "id": "S01-GEN-01",
+          "severity": "minor",
+          "confidence": "high",
+          "status": "open",
+          "title": "adr_graph.rb and adr_traceability.rb write committed artifacts that nothing verifies",
+          "seam": "script/adr_graph.rb:60, script/adr_traceability.rb:76",
+          "citations": [
+            "script/adr_graph.rb:60",
+            "script/adr_traceability.rb:76",
+            "script/adr_catalog.rb:83",
+            "script/adr_validate.rb:108",
+            "documentation/adr/README.md:43",
+            "documentation/adr/README.md:44"
+          ],
+          "five_whys": false,
+          "recommendation": "Add a --check mode to both scripts following script/adr_catalog.rb:83-90, and have adr_validate.rb invoke them the way it already invokes adr_catalog.rb:108. rake adr:validate is already in ci."
+        },
+        {
+          "id": "S01-GEN-02",
+          "severity": "minor",
+          "confidence": "high",
+          "status": "open",
+          "title": "rake fixtures:refresh omits two of the six fixture generators",
+          "seam": "Rakefile:272-281",
+          "citations": [
+            "Rakefile:274",
+            "Rakefile:280",
+            "test/evals_verifier_test.rb:41",
+            "test/evals_verifier_test.rb:48",
+            "script/generate_agent_memory_repository_fixtures:10"
+          ],
+          "five_whys": false,
+          "recommendation": "Add ruby \"script/generate_agent_memory_repository_fixtures\" at Rakefile:280. One line."
+        },
+        {
+          "id": "S01-GEN-03",
+          "severity": "minor",
+          "confidence": "high",
+          "status": "open",
+          "title": "Two generators write to stdout while their committed artifacts are hand-redirected with no recorded command",
+          "seam": "script/generate_benchmark_protocol:129, script/generate_calibration_artifact:52",
+          "citations": [
+            "script/generate_benchmark_protocol:129",
+            "script/generate_calibration_artifact:52",
+            "script/adr_catalog.rb:83",
+            "script/generate_release_evaluation_manifest:122"
+          ],
+          "five_whys": false,
+          "recommendation": "Add --out PATH (defaulting to the committed path) plus --check to both, matching adr_catalog.rb; or, if that is unwanted, document the exact redirect in each header. Do one, not both."
+        },
+        {
+          "id": "S01-QUAL-01",
+          "severity": "minor",
+          "confidence": "high",
+          "status": "open",
+          "title": "The committed quality baseline is stamped as a dirty, non-HEAD tree and nothing reconciles it",
+          "seam": "script/check_baseline_drift:18-30",
+          "citations": [
+            "docs/code-quality-baseline.json",
+            "script/regenerate_quality_baseline:44",
+            "script/check_baseline_drift:20",
+            "script/check_baseline_drift:28",
+            "docs/QUALITY_PROGRAM_STATE.md:409"
+          ],
+          "five_whys": false,
+          "recommendation": "Add one clause to drift_problems: fail when the committed baseline's git.dirty is true or git.commit does not match the current HEAD. The fields already exist."
+        },
+        {
+          "id": "S01-BEN-02",
+          "severity": "minor",
+          "confidence": "high",
+          "status": "open",
+          "title": "autonomy_scorecard rewrites its committed artifact on every run, including a red non-strict run",
+          "seam": "script/autonomy_scorecard:142",
+          "citations": [
+            "script/autonomy_scorecard:142",
+            "script/autonomy_scorecard:148",
+            "Rakefile:221",
+            "Rakefile:226",
+            "script/regenerate_quality_baseline:237"
+          ],
+          "five_whys": false,
+          "recommendation": "Add \"strict\" => strict and the git state to the document at :118-140, exactly as regenerate_quality_baseline:244 already does."
+        },
+        {
+          "id": "S01-CONF-01",
+          "severity": "minor",
+          "confidence": "high",
+          "status": "open",
+          "title": "capture_phase2_receipt embeds a per-run PID temp path in a committed evidence artifact",
+          "seam": "script/capture_phase2_receipt:113",
+          "citations": [
+            "script/capture_phase2_receipt:113",
+            "script/capture_phase2_receipt:45",
+            "script/capture_phase2_receipt:145",
+            "docs/QUALITY_PROGRAM_STATE.md:424"
+          ],
+          "five_whys": false,
+          "recommendation": "Use a fixed filename inside the Dir.mktmpdir block instead of Process.pid, or normalize tmpdir-prefixed argv entries in command_result:31-53."
+        },
+        {
+          "id": "S01-ADR-01",
+          "severity": "minor",
+          "confidence": "medium",
+          "status": "open",
+          "title": "adr_verify.rb's fixed +/-60-character absence window can invert a true citation's expected polarity",
+          "seam": "script/adr_verify.rb:35",
+          "citations": [
+            "script/adr_verify.rb:18",
+            "script/adr_verify.rb:35",
+            "script/adr_verify.rb:45",
+            "script/adr_verify.rb:47",
+            "Rakefile:471"
+          ],
+          "five_whys": false,
+          "recommendation": "Scope the absence decision to the sentence containing the citation rather than a fixed character radius."
+        },
+        {
+          "id": "S01-ADR-02",
+          "severity": "minor",
+          "confidence": "medium",
+          "status": "open",
+          "title": "The four ADR scripts disagree on how an ADR's state is derived",
+          "seam": "script/adr_traceability.rb:27",
+          "citations": [
+            "script/adr_validate.rb:41",
+            "script/adr_catalog.rb:26",
+            "script/adr_traceability.rb:27",
+            "script/adr_validate.rb:59"
+          ],
+          "five_whys": false,
+          "recommendation": "Align adr_traceability.rb:27 and adr_validate.rb:41 to the two-clause test already in adr_catalog.rb:26-30, or add a corpus-wide agreement assertion to adr_validate. Prefer the one-line alignment."
+        }
+      ],
+      "tests_run": [
+        { "command": "ruby -Itest test/sqlite_raw_oracle_test.rb", "runs": 20, "assertions": 1261, "failures": 0 },
+        { "command": "ruby -Itest test/evals_verifier_test.rb", "runs": 23, "assertions": 294, "failures": 0 },
+        { "command": "ruby -Itest test/agent_latency_smoke_test.rb", "runs": 2, "assertions": 18, "failures": 0 },
+        { "command": "ruby -Itest test/openclaw_benchmark_readiness_test.rb", "runs": 10, "assertions": 41, "failures": 0 },
+        { "command": "ruby -Itest test/benchmark_controls_test.rb", "runs": 14, "assertions": 42, "failures": 0 }
+      ],
+      "blind_spots": [
+        "No script/ entry point was executed; every script claim is a source trace.",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/* not read - the nine benchmark scripts delegate verdicts to engines outside this row.",
+        "EnvironmentLoader not read - which keys from the repo .env reach the real-provider child of benchmark_openclaw_run:79 is not evidenced.",
+        "test/m2_evidence_test.rb, test/graph_surface_audit_test.rb, test/dependency_review_test.rb, test/legacy_session_resume_test.rb not run (budget / subprocess-spawning).",
+        "docs/P15_RELEASE_PLAN.md not read, so R01-GATE-02's intent is unsettled.",
+        "COVERAGE.md:114 says 45 files; git ls-files script/ reports 46 (script/quality/coverage_totals.rb is tracked and nested). The 45 named entries are correct as entries; the count is one short of the tracked file count."
+      ],
+      "coordinator_flags": [
+        "S01-RT-01: invariant 19's kill evidence RUNS GREEN on this checkout (sqlite_raw_oracle_test 20/1261/0F, kill test not skipped) - docs/requirements-audit.json may be stale for invariant 19.",
+        "S01-RT-02: objective 4's third supporting case (agent_session_kill_matrix_test) is in SLOW_TESTS and is never reached by release_rehearsal, which runs `rake ci`. Environment-bound and lane-bound are two separate causes; limitations.md names only the first.",
+        "S01-BEN-01 needs independent challenge across all nine unbounded call sites, not just the three recommended.",
+        "The '45 files' inventory in COVERAGE.md:114 is one short of git ls-files script/ (46)."
+      ]
+    },
+    {
+      "row": "S02",
+      "surface": "scripts/start-tamoz-comms.sh",
+      "verdict": "IMPROVE",
+      "counts": { "critical": 0, "major": 0, "minor": 2, "info": 0 },
+      "lenses": {
+        "correctness": "reviewed",
+        "security": "reviewed",
+        "reliability": "reviewed",
+        "observability": "reviewed",
+        "scalability": "reviewed",
+        "maintenance": "reviewed"
+      },
+      "findings": [
+        {
+          "id": "S02-SEC-01",
+          "severity": "minor",
+          "confidence": "medium",
+          "status": "open",
+          "title": "The launcher exports the whole .env into every Bundler/Ruby child it spawns, contradicting its own C7 comment",
+          "seam": "scripts/start-tamoz-comms.sh:42",
+          "citations": [
+            "scripts/start-tamoz-comms.sh:42",
+            "scripts/start-tamoz-comms.sh:10",
+            "scripts/start-tamoz-comms.sh:65",
+            "scripts/start-tamoz-comms.sh:66",
+            "scripts/start-tamoz-comms.sh:67",
+            "scripts/start-tamoz-comms.sh:114",
+            "scripts/start-tamoz-comms.sh:139",
+            "scripts/start-tamoz-comms.sh:156"
+          ],
+          "five_whys": false,
+          "recommendation": "Run the four Bundler helper calls at :65-67 and :114 through `env -i` with the same short allowlist already written at :139-140, or stop exporting in load_env and pass values to start_one explicitly. The first reuses an existing list."
+        },
+        {
+          "id": "S02-REL-03",
+          "severity": "minor",
+          "confidence": "medium",
+          "status": "open",
+          "title": "pkill/pgrep match on the literal $TAMOZ_RUNTIME_DIR, so --stop can report success while the previous worker survives",
+          "seam": "scripts/start-tamoz-comms.sh:79-80",
+          "citations": [
+            "scripts/start-tamoz-comms.sh:47",
+            "scripts/start-tamoz-comms.sh:79",
+            "scripts/start-tamoz-comms.sh:80",
+            "scripts/start-tamoz-comms.sh:171",
+            "scripts/start-tamoz-comms.sh:172"
+          ],
+          "five_whys": false,
+          "recommendation": "Normalize TAMOZ_RUNTIME_DIR to an expanded absolute path once (after load_env, next to :47) and use that value in both the pkill patterns and the child argv, so the two forms cannot diverge."
+        }
+      ],
+      "tests_run": [],
+      "blind_spots": [
+        "The shell script was not executed; every claim is a source read.",
+        "Whether the worker treats an empty TAMOZ_ALMS_MCP_ENDPOINT (:161) as unset or as configured-to-nothing was not verified - gems/tamoz-agent was not read.",
+        "pgrep -f behaviour against a pattern containing an unexpanded '~' is asserted from reading, not from execution.",
+        "No test covers this script: grep -rn 'start-tamoz-comms' test/ returns nothing."
+      ],
+      "coordinator_flags": [
+        "The launcher does start BOTH processes (gateway :138, worker :155) - the 'silently starts only half' failure is NOT present; the failure is a liveness check that can report RUNNING for a process dying after the 8s sleep.",
+        "docs/openclaw-chat-study-refresh/product-engineering-reviews/03-implementation-evidence.md:85 already records the downstream consequence; cite it rather than re-deriving it."
+      ]
+    },
+    {
+      "row": "R01",
+      "surface": "Rakefile",
+      "verdict": "IMPROVE",
+      "counts": { "critical": 0, "major": 3, "minor": 0, "info": 0 },
+      "lenses": {
+        "correctness": "reviewed",
+        "security": "reviewed",
+        "reliability": "reviewed",
+        "observability": "reviewed",
+        "scalability": "reviewed",
+        "maintenance": "reviewed"
+      },
+      "findings": [
+        {
+          "id": "R01-GATE-01",
+          "severity": "major",
+          "confidence": "high",
+          "status": "open",
+          "title": "rake ci does not run the quality gates its own documentation claims, and the one it does run no-ops without enola",
+          "seam": "Rakefile:444, Rakefile:367",
+          "citations": [
+            "Rakefile:444",
+            "Rakefile:471",
+            "Rakefile:367",
+            "Rakefile:371",
+            "Rakefile:289",
+            "Rakefile:299",
+            "docs/QUALITY_PROGRAM.md:187",
+            "docs/QUALITY_PROGRAM_STATE.md:122",
+            "docs/QUALITY_PROGRAM_STATE.md:64",
+            ".github/workflows/ci.yml:38",
+            "test/ci_configuration_test.rb:30"
+          ],
+          "five_whys": true,
+          "recommendation": "Two edits at the existing owner: add 'quality:rubocop_gate' and 'quality:reek' to the ci array (Rakefile:444) and 'quality:coverage' and 'quality:baseline_drift' to ci_full (Rakefile:471); change the warn at Rakefile:371 to a raise so an absent enola fails rather than skips. Add one test that loads the Rakefile and asserts ci and ci_full's prerequisite sets. No provisioning step, no new abstraction."
+        },
+        {
+          "id": "R01-GATE-02",
+          "severity": "major",
+          "confidence": "high",
+          "status": "open",
+          "title": "The release rehearsal runs `rake ci` while its own comment and the release plan call it the full gate",
+          "seam": "script/release_rehearsal:157",
+          "citations": [
+            "script/release_rehearsal:20",
+            "script/release_rehearsal:157",
+            "docs/release-rehearsal.json",
+            "Rakefile:150",
+            "Rakefile:154",
+            "Rakefile:40",
+            "Rakefile:63",
+            "test/release_rehearsal_evidence_test.rb:80",
+            "test/release_rehearsal_evidence_test.rb:67"
+          ],
+          "five_whys": true,
+          "recommendation": "Change :157 to \"ci_full\", record the rake task name in the step note, and assert it in test/release_rehearsal_evidence_test.rb. If the intent is genuinely `ci`, correct the comment at :20 and plan section 10 instead - but the two must agree."
+        },
+        {
+          "id": "R01-GATE-04",
+          "severity": "major",
+          "confidence": "high",
+          "status": "open",
+          "title": "rake quality is enola-only, so the aggregate quality command reports success without checking quality",
+          "seam": "Rakefile:425",
+          "citations": [
+            "Rakefile:425",
+            "Rakefile:367",
+            "Rakefile:371",
+            "docs/QUALITY_PROGRAM.md:115"
+          ],
+          "five_whys": true,
+          "recommendation": "Change Rakefile:425 to `task quality: %w[quality:rubocop quality:reek quality:architecture]`. One line, existing seam."
+        }
+      ],
+      "tests_run": [
+        { "command": "ruby /tmp/rake_tasks_check.rb (loads Rakefile, prints Task#prerequisites, invokes nothing)", "runs": 0, "assertions": 0, "failures": 0 }
+      ],
+      "blind_spots": [
+        "rake ci / ci_full / quality:* were not executed (explicitly forbidden and over budget), so the wall-clock effect of adding quality:reek to ci is not measured.",
+        "No test asserts any ci/ci_full prerequisite list - not found - so the divergence could not be caught by the suite.",
+        "gems/tamoz-agent/lib/tamoz/agent/child_environments.rb was not read."
+      ],
+      "coordinator_flags": [
+        "R01-GATE-01 and R01-GATE-04 share a root cause; consider merging into one finding with two citations.",
+        "R01-GATE-02 needs an intent decision (fix the script to ci_full vs fix the plan to ci) before the recommendation is final.",
+        "The R01-GATE-01 challenge must MEASURE the ci wall clock after adding quality:reek against CiBudget::BUDGET_SECONDS = 60.0 (Rakefile:431), which is where this recommendation could backfire.",
+        "ci_full adds exactly [adr:verify, test, test_slow] over ci and nothing more - confirmed by enumerating the loaded task graph."
+      ]
+    }
+  ]
+}

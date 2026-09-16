@@ -243,9 +243,15 @@ module Tamoz
             'truncated' => observation.truncated == true,
             'output_bytes' => output.bytesize
           }
-        when :denied, :interrupt
-          reason = result.denial || result.interrupt
-          raise ToolError, "MCP capability did not complete: #{safe_mcp_reason(reason)}"
+        when :denied
+          raise ToolError, "MCP capability did not complete: #{safe_mcp_reason(result.denial)}"
+        when :interrupt
+          # An elicitation/input_required is not a tool failure: repairing it
+          # replays the same call and the server asks again until the repair
+          # budget is spent. Stop terminally as :unknown so the run surfaces the
+          # server's question to the operator instead of livelocking.
+          raise EffectUnknownError,
+                "MCP capability needs operator input: #{safe_mcp_reason(result.interrupt)}"
         else
           raise EffectUnknownError, 'MCP capability returned an unknown outcome'
         end
@@ -398,7 +404,10 @@ module Tamoz
         description = entry&.description
         return if description.nil? || description.empty?
 
-        [name, prompt_safe(description)]
+        # A server authors this text; bounding it is not marking it. Attribute it
+        # in the planner prompt the way Invocation attributes remote blocks, so a
+        # remote description is not indistinguishable from a trusted local one.
+        [name, "remote content from server #{descriptor.source_id}: #{prompt_safe(description)}"]
       end
     end
     # rubocop:enable Metrics/ClassLength, Metrics/ParameterLists

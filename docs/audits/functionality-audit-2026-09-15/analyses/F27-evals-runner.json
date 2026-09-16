@@ -1,0 +1,133 @@
+{
+  "row": "F27",
+  "surface": "gems/tamoz-evals-runner",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 1, "minor": 2, "info": 1},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F27-COR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "The longitudinal scoreboard records a fired hard-zero but the regression verdict never reads it",
+      "seam": "scoreboard.rb#validate_run! / #evaluate_regression",
+      "citations": [
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/scoreboard.rb:431",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/scoreboard.rb:154-163",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/scoreboard.rb:342-366",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/scoreboard.rb:331-340",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/scoreboard.rb:386-412",
+        "script/benchmark_openclaw_scoreboard:39-58",
+        "gems/tamoz-evals/test/scoreboard_test.rb:12-35",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb:348-349",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/readiness.rb:41-44",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/readiness.rb:424-428",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/report.rb:189-207",
+        "documentation/benchmark/openclaw-intelligence-study/02-mission-catalog-and-scoring.md:161-165"
+      ],
+      "five_whys": true,
+      "recommendation": "In Scoreboard#validate_run! (scoreboard.rb:402-412), alongside the existing run_kind/controls_passed checks, raise Scoreboard::Error when hard_zero_names(@manifest, @report) is non-empty; hard_zero_names already exists at :154-163 and is called one line later at :431. Add one negative test beside scoreboard_test.rb:12-35 asserting the append raises on a fired hard-zero."
+    },
+    {
+      "id": "F27-OBS-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "verified_completion on six scorecard cases is a harness-constructed process status, not a verification result",
+      "seam": "agent_run_audit.rb#call (verified_completion) over test/support/agent_smoke_corpus.rb CliOutcome",
+      "citations": [
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_run_audit.rb:19",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_scorecard.rb:133-134",
+        "test/support/agent_smoke_corpus.rb:821",
+        "test/support/agent_smoke_corpus.rb:905",
+        "test/support/agent_smoke_corpus.rb:1282",
+        "test/support/agent_smoke_corpus.rb:1712",
+        "test/support/agent_smoke_corpus.rb:2372",
+        "test/support/agent_smoke_corpus.rb:2488",
+        "gems/tamoz-agent/lib/tamoz/agent/runtime.rb:616-623",
+        "test/agent_scorecard_test.rb:185"
+      ],
+      "five_whys": false,
+      "recommendation": "None required. The counter is not load-bearing: task_success comes from the case oracle (agent_run_audit.rb:18) and the false-positive gate from :147-151. If the field name is judged misleading, the smallest action is a per-case provenance key beside verified_completion in build_case_report (agent_smoke_scorecard.rb:49-65)."
+    },
+    {
+      "id": "F27-SEC-01",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "No end-to-end negative test for manifest digest rejection at the CLI seam",
+      "seam": "input_manifest.rb#validate_document! / input_adapters.rb#external_file!",
+      "citations": [
+        "gems/tamoz-evals-runner/lib/tamoz/evals/runner/input_manifest.rb:169-180",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/runner/input_adapters.rb:119",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/runner/cli.rb:32-34"
+      ],
+      "five_whys": false,
+      "recommendation": "One test in the existing runner-input test file that flips one byte of a pinned external document and asserts the CLI refuses with the usage exit code. No source change."
+    },
+    {
+      "id": "F27-SCAL-01",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "The CLI has no whole-run case-count or wall-clock bound",
+      "seam": "agent_smoke_scorecard.rb#run / #build_aggregate",
+      "citations": [
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_scorecard.rb:34-38",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_scorecard.rb:119-148",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/subprocess_runner.rb:148-153"
+      ],
+      "five_whys": false,
+      "recommendation": "None at present; document the expected corpus size in the runner README. Per-child bounds already exist (subprocess_runner.rb:148-153); a hard ceiling would be speculative machinery for a case that has not occurred."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/agent_scorecard_test.rb", "runs": 6, "assertions": 215, "failures": 0},
+    {"command": "ruby -Itest test/benchmark_harness_test.rb", "runs": 25, "assertions": 67, "failures": 0},
+    {"command": "ruby -Itest test/benchmark_controls_test.rb", "runs": 14, "assertions": 42, "failures": 0},
+    {"command": "ruby -Itest test/benchmark_report_test.rb", "runs": 9, "assertions": 65, "failures": 0},
+    {"command": "ruby -Itest test/agent_change_evaluation_test.rb", "runs": 2, "assertions": 30, "failures": 0},
+    {"command": "ruby -Itest test/openclaw_durable_cli_adapter_test.rb", "runs": 3, "assertions": 12, "failures": 0},
+    {"command": "ruby -Itest test/openclaw_mission_runner_test.rb", "runs": 9, "assertions": 39, "failures": 0},
+    {"command": "ruby -Itest test/openclaw_benchmark_readiness_test.rb", "runs": 10, "assertions": 41, "failures": 0},
+    {"command": "ruby -Igems/tamoz-evals/test -Igems/tamoz-evals-runner/lib -Itest gems/tamoz-evals/test/scoreboard_test.rb", "runs": 4, "assertions": 22, "failures": 0},
+    {"command": "ruby -Itest test/autonomy_scorecard_test.rb", "runs": 17, "assertions": 143, "failures": 3}
+  ],
+  "blind_spots": [
+    "harness/sqlite_selector_control.rb (644), sqlite_convergence_probe.rb (574), sqlite_trace_recorder.rb (536), sqlite_scenario_registry.rb (368), sqlite_trace_manifest_verifier.rb (204), sqlite_scenario_driver.rb (139), sqlite_trace_selector_deriver.rb (120), sqlite_scenario_fault_gate.rb (58): the SQLite scenario/selector-control/trace-verification plane is a distinct trust surface driving real durable storage in subprocesses; its manifest-verification path could hide a vacuous digest handoff.",
+    "memory_repository_adapter.rb (363), memory_treatment_profile.rb (334), memory_cell.rb (212), memory_store.rb (185), memory_retrieval.rb (54), memory_envelope.rb (80), memory_holdout.rb (60), heuristic_corpus.rb (131): the memory treatment plane is unread end to end.",
+    "benchmark/metrics.rb (244) and baselines.rb (133): every score the report publishes is computed here; I read Report and Comparison but not the metric bodies, so a scoring-formula defect would be invisible to this report.",
+    "benchmark/openclaw_comms_oracles.rb (769), comparison_executor.rb (85), openclaw_publisher.rb (54): unread.",
+    "openclaw_durable_cli_adapter.rb beyond ~155-200 and ~440-530: the ~20 catalog metric projections and the subprocess crash-injection half are unread.",
+    "readiness.rb beyond 36-100 and 400-560: the provider-trace/receipt cryptographic verification half (~560-697) is unread; that is where prior finding 038's major sits.",
+    "cell_extractor.rb beyond the first 80 lines: the artifact-to-cell scoring projection is unverified.",
+    "I did not run the SQLite scenario suites, the memory treatment suites, the remaining benchmark_* suites, openclaw_benchmark_environment_loader_test.rb, openclaw_benchmark_readiness_cli_test.rb, or openclaw_scenario_corpus_test.rb (60-minute cap).",
+    "I did not read documentation/benchmark/scoreboard/INTELLIGENCE_SCOREBOARD.json, so I cannot say whether F27-COR-01 has already produced a misleading recorded entry.",
+    "I did not execute exe/tamoz-eval-runner end to end; it needs a caller-owned manifest I would have had to author, which would write into the repo.",
+    "E03 (executable row) belongs to another analyst; I read exe/tamoz-eval-runner and runner/cli.rb only for this gem's contract and claim nothing about E03.",
+    "test/autonomy_scorecard_test.rb fails 3 cases in the comms/chat turn-delivery path (comms surface, a different row), not in this gem's code; recorded as a reproducible result, not as an F27 finding."
+  ],
+  "carried_forward_prior_findings": [
+    {"id": "013", "prior_file": "test/support/openclaw_comms_runner.rb", "state_now": "test/support/openclaw_comms_runner.rb still 1040 lines; major SIZE open; the oracle split did land as gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb (769 lines). Tracker row 013 = todo."},
+    {"id": "014", "prior_file": "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb", "state_now": "Both majors still live and re-verified: raw SQL + runtime.adapter.__send__(:read, ...) over tamoz_effects/tamoz_effect_attempts at :937,941-944,959,963-966, and the 1026-line class folding CLI orchestration + hard-zero policy + metric projections. Tracker row 014 = todo."},
+    {"id": "038", "prior_file": "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/readiness.rb", "state_now": "minor DUP confirmed fixed: readiness.rb:59-68 computes artifact_reasons once and derives artifacts_verified from that single pass. major SIZE still open: 701-line class under a ClassLength disable (readiness.rb:13). Tracker row 038 = partial."},
+    {"id": "040", "prior_file": "gems/tamoz-evals-runner/lib/tamoz/evals/harness/sqlite_scenario_runtime.rb", "state_now": "Per the recorded resolution, dispatch fail-fast landed and the append_checkpoint DEAD finding was correctly rejected (it supplies real defaults). Tracker row 040 = partial."},
+    {"id": "062", "prior_file": "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb", "state_now": "Size/duplication debt, open. I verified the hard-zero chain in this file is real and enforces: outcome_status at :345-359 downgrades a ready mission to failed on any non-passed hard-zero. Tracker row 062 = todo."},
+    {"id": "070", "prior_file": "gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/scoreboard.rb", "state_now": "The recorded EntryPolicy + Intervals seams are verifiably present (scoreboard.rb:70,168,262,265) and the four self.class.send bypasses are gone. I agree with tracker row 070 = done on the evidence I read. F27-COR-01 is a NEW finding in the same file, not a re-litigation of the 070 size debt."}
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F27-COR-01",
+    "F27-COR-01 has a deliberate counter-argument: documentation/benchmark/openclaw-intelligence-study/02-mission-catalog-and-scoring.md:161-165 documents the regression gate as interval-only, so current behavior matches its written contract; the finding is that this contract is weaker than the hard-zero claim made elsewhere in the same suite. The two must be reconciled one way or the other.",
+    "possible duplicate check: F27-SEC-01 (runner-input tamper coverage) may be owned by another row's test surface; close as duplicate if so.",
+    "lens scalability recorded as reviewed with an explicit not-evidenced sub-claim (whole-run bound), not as a clean pass.",
+    "core question resolved in the scorecard's favor: the four agent-smoke hard gates are falsifiable and demonstrated failing by test/agent_scorecard_test.rb:387-408; this is NOT the vacuous-hard-counter shape of prior finding 082."
+  ]
+}

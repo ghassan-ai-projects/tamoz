@@ -95,7 +95,7 @@ module Tamoz
             :succeeded, decision.record, key, reconciliation:, value: attempt&.result, reused: true
           )
         when :failed
-          attempt = terminal_attempt(decision.record)
+          attempt = failed_attempt(decision.record)
           recorded_outcome(
             :failed, decision.record, key, reconciliation:, error: attempt&.error, reused: true
           )
@@ -279,6 +279,16 @@ module Tamoz
 
       def terminal_attempt(record)
         record.attempts.reverse.find { |attempt| attempt.status == :succeeded } ||
+          record.attempts.last
+      end
+
+      # The failed branch must report the failure, not a historical late success:
+      # a `:failed` head with a prior succeeded attempt would otherwise project
+      # `error: nil` and hide why the repair path was skipped. Prefer the failed
+      # attempt's error, falling back to the current attempt.
+      def failed_attempt(record)
+        record.attempts.reverse.find { |attempt| attempt.status == :failed } ||
+          record.attempts.find { |attempt| attempt.attempt_number == record.current_attempt } ||
           record.attempts.last
       end
 

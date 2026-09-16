@@ -1,0 +1,38 @@
+{
+  "row": "CF06",
+  "surface": "request, worker, and multi-turn control routing",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": [
+    "F07-REL-01", "F25-COR-01", "F25-SEC-01", "F22-COR-01",
+    "F22-SEC-01", "F22-REL-02", "F24-ERR-01", "F24-ERR-02", "F24-ERR-03"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/agent_worker_test.rb", "runs": 25, "assertions": 122, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/sqlite_stale_request_test.rb", "runs": 26, "assertions": 176, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/sqlite_request_inbox_test.rb", "runs": 8, "assertions": 46, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_cli_test.rb", "runs": 34, "assertions": 764, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/graph_resume_answers_test.rb", "runs": 2, "assertions": 7, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/reconnection_resume_protocol_test.rb", "runs": 1, "assertions": 18, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/graph_durable_request_executor_test.rb", "runs": 2, "assertions": 5, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "blind_spots": [
+    "No new eight-row-plus starvation probe was run; the existing reproduction and challenge were read and the LIMIT 8 path was rechecked.",
+    "No new end-to-end worker cancellation probe was run; the committed F25 worker-to-outbox probe remains the evidence.",
+    "No paused-with-live-interrupts Session#recover probe was run; F22 retains medium confidence.",
+    "No concurrent worker race, multi-process lease test, large backlog benchmark, real model, network service, or external transport was used."
+  ],
+  "coordinator_flags": [
+    "CF06 direct review completed without subagent delegation per owner request.",
+    "CF06 carries existing control-routing findings without double-counting.",
+    "F24 parser/help findings are adjacent CLI evidence and retain F24 ownership."
+  ]
+}
