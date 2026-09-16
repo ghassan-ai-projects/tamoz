@@ -8,6 +8,7 @@ module CommsRuntimeProfile
 
   def write(runtime_dir, workspace, profile_id: 'ops')
     tools = %w[list_directory read_file search_text apply_patch create_file]
+    digest = catalog_digest(workspace, tools)
     document = {
       'profile' => { 'schema_version' => 1, 'profile_id' => profile_id,
                      'profile_version' => '1.0', 'canonical_root' => workspace },
@@ -16,8 +17,8 @@ module CommsRuntimeProfile
       'policy' => {
         'allow_changes' => true, 'default_check_safety' => 'read_only',
         'graph_version' => '1', 'behavior_version' => '1.0',
-        'tool_catalog_digest' => catalog_digest(workspace, tools),
-        'unattended_catalog_digest' => catalog_digest(workspace, tools)
+        'tool_catalog_digest' => digest,
+        'unattended_catalog_digest' => digest
       }
     }
     directory = File.join(runtime_dir, 'profiles')
