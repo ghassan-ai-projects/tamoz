@@ -40,6 +40,22 @@ class CommsRenderingTest < Minitest::Test
     assert_equal(300, parts.sum { |part| part.fetch('text').length })
   end
 
+  def test_overflow_appends_a_marker_naming_the_thread_and_recovery
+    parts = Comms::Rendering.plain('x' * 10_000, max_parts: 3, part_characters: 100, thread: 'th-42')
+    joined = parts.map { |part| part.fetch('text') }.join
+
+    assert_includes joined, 'tamoz show th-42'
+    assert_includes joined, '…'
+    assert_equal 3, parts.length
+    parts.each { |part| assert_operator part.fetch('text').length, :<=, 100 }
+  end
+
+  def test_untruncated_text_carries_no_overflow_marker
+    parts = Comms::Rendering.plain('hello', max_parts: 3, part_characters: 100, thread: 'th')
+
+    refute_includes parts.map { |part| part.fetch('text') }.join, 'truncated'
+  end
+
   def test_parts_never_split_a_grapheme_cluster
     cluster = "\u{1F469}\u{200D}\u{1F4BB}"
     text = cluster * 10

@@ -27,10 +27,17 @@ module Tamoz
           end
         end
 
+        # The binding pins the authority the deployed surface carries, so the
+        # worker can refuse a bound thread whose on-disk profile no longer
+        # matches (F25-SEC-01). A surface deployed without a pinned digest
+        # records none, and the worker refuses that thread rather than running
+        # it under unverified authority.
         def bind_thread_profile(thread)
           @adapter.store.put(
             THREAD_PROFILE_NAMESPACE, thread,
-            { 'profile' => @descriptor.profile_id, 'recorded_at' => Time.now.utc.iso8601(6) },
+            { 'profile' => @descriptor.profile_id,
+              'profile_digest' => @descriptor.profile_digest,
+              'recorded_at' => Time.now.utc.iso8601(6) }.compact,
             if_version: nil
           )
         rescue StoreConflictError

@@ -560,7 +560,11 @@ module Tamoz
             raise InvalidArtifactError, "#{path}: #{kind} exceeds #{max_bytes} bytes"
           end
 
+          # A zero-byte file is at EOF on the first read, so File#read returns nil,
+          # not "". Refuse it typed here, or a NoMethodError escapes the fail-closed
+          # CLI contract downstream.
           bytes = file.read(max_bytes + 1)
+          raise InvalidArtifactError, "#{path}: #{kind} is empty" if bytes.nil?
           if bytes.bytesize > max_bytes
             raise InvalidArtifactError, "#{path}: #{kind} exceeds #{max_bytes} bytes"
           end

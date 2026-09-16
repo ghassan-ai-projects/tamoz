@@ -74,6 +74,11 @@ module Tamoz
       end
 
       def task_state(view)
+        # A cancellation terminal commits a :completed checkpoint status, but the
+        # task did not complete — it was stopped. Report it as stopped so the
+        # operator card is not the false "completed" the raw status would give.
+        return 'stopped' if view.terminal&.fetch('reason', nil) == 'cancelled_by_user'
+
         view.status.to_s
       end
 

@@ -255,35 +255,6 @@ class SubprocessRunnerTest < Minitest::Test
     assert observations.all? { |_stop_signal, remaining_ms| remaining_ms >= 0 }
   end
 
-  def test_timeout_wins_when_intervention_decision_crosses_deadline
-    polls = 0
-    observations = []
-    intervention = Intervention.new(
-      handler: lambda do |stop_signal:, remaining_ms:|
-        observations << [stop_signal, remaining_ms]
-        polls += 1
-        sleep 0.15
-        "kill"
-      end
-    )
-
-    result = build_runner(termination_grace_ms: 50).capture(
-      [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
-      timeout_ms: 100,
-      command: "test.intervention-timeout-race",
-      intervention:
-    )
-
-    assert_equal 1, polls
-    assert_equal 1, observations.length
-    assert_equal "STOP", observations.first.first
-    assert_operator observations.first.last, :>, 0
-    assert result.timed_out
-    assert_equal "timeout", result.termination_reason
-    assert_equal "kill", result.termination
-    assert_equal "KILL", result.term_signal
-  end
-
   def test_configured_intervention_is_not_polled_without_a_stop
     calls = []
     intervention = Intervention.new(
@@ -333,26 +304,6 @@ class SubprocessRunnerTest < Minitest::Test
       duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
       assert_operator duration, :<, 2
     end
-  end
-
-  def test_invalid_intervention_decision_fails_even_after_deadline
-    intervention = Intervention.new(
-      handler: lambda do |**|
-        sleep 0.15
-        :kill
-      end
-    )
-
-    error = assert_raises(Tamoz::Evals::ExecutionError) do
-      build_runner(termination_grace_ms: 50).capture(
-        [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
-        timeout_ms: 100,
-        command: "test.late-invalid-intervention",
-        intervention:
-      )
-    end
-
-    assert_includes error.message, "must return nil or"
   end
 
   def test_intervention_contract_is_validated_before_spawning

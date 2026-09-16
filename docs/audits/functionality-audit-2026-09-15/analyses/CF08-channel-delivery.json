@@ -1,0 +1,51 @@
+{
+  "row": "CF08",
+  "surface": "channel admission, rendering, outbox delivery, and approval relay",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "carried_forward_findings": [
+    "F11-COR-01", "F11-SEC-01", "F11-SEC-03", "F11-ERR-01", "F11-ERR-02",
+    "F11-ERR-03", "F11-OBS-01", "F11-SCAL-01", "F12-REL-01", "F12-COR-01",
+    "F12-REL-02", "F12-SEC-01", "F12-OBS-01", "F12-MNT-01", "F14-COR-01",
+    "F14-REL-01", "F14-RES-01", "F14-OBS-01", "F14-SEC-02", "F14-MNT-02",
+    "F14-MNT-01"
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/comms_admission_test.rb", "runs": 15, "assertions": 51, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_rendering_test.rb", "runs": 6, "assertions": 35, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_evidence_gated_approval_test.rb", "runs": 15, "assertions": 27, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_gateway_test.rb", "runs": 39, "assertions": 242, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/delivery_drainer_test.rb", "runs": 10, "assertions": 50, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/sqlite_comms_store_test.rb", "runs": 45, "assertions": 246, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_cli_ops_test.rb", "runs": 7, "assertions": 52, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_pairing_first_contact_test.rb", "runs": 7, "assertions": 40, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_deny_callback_test.rb", "runs": 3, "assertions": 8, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_lifecycle_test.rb", "runs": 9, "assertions": 68, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_values_test.rb", "runs": 20, "assertions": 78, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/canonical_cross_surface_composition_test.rb", "runs": 1, "assertions": 106, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/tamoz_telegram_transport_test.rb", "runs": 23, "assertions": 8, "failures": 0, "errors": 19, "skips": 0},
+    {"command": "ruby -Itest test/telegram_normalizer_test.rb", "runs": 10, "assertions": 28, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/comms_serve_supervision_test.rb", "runs": 1, "assertions": 6, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/stream_approval_relay_test.rb", "runs": 17, "assertions": 94, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "blind_spots": [
+    "Telegram transport fixture could not bind a loopback socket under the sandbox; no live Bot API call was made.",
+    "No two-process drainer/poller race, multipart ambiguity, send-side 409 against the real client, or external approval operator was run.",
+    "No sustained outbox/Telegram load or long-lived failure-loop measurement was performed.",
+    "Callback and approval conclusions use source plus in-process/fake-store tests only."
+  ],
+  "coordinator_flags": [
+    "CF08 direct review completed without subagent delegation per owner request.",
+    "F12-REL-01 and F14-COR-01 are upheld open majors at the cross-gem boundary.",
+    "F11-SEC-02 is closed and F11-SEC-03/F14-REL-01 are demoted per independent challenges.",
+    "Carried findings are excluded from CF08 counts to avoid double-counting."
+  ]
+}

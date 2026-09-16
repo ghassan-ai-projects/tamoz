@@ -6,21 +6,32 @@ require 'timeout'
 module Tamoz
   module Tools
     # Runs one configured argv with bounded output and a credential-free environment.
+    # The check child is the model's only subprocess effector and its stdout is
+    # captured into the model prompt and the durable log, so any secret-shaped
+    # variable is stripped and the agent's own TAMOZ_ namespace is withheld
+    # wholesale — an external check never reads Tamoz's config or secrets.
     # :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:TooManyStatements
     # :reek:UncommunicativeVariableName :reek:UtilityFunction
     # rubocop:disable Layout/LineLength, Metrics/AbcSize
     class CheckRunner
-      ENV_PATTERN = /(?:\A|_)(?:API_?KEYS?|ACCESS_?KEYS?|SECRET_?KEYS?|PRIVATE_?KEYS?|SESSION_?KEYS?|TOKENS?|SECRETS?|PASSWORD|PASSWD|CREDENTIALS?|PASSPHRASE)(?:\z|_)/
+      ENV_PATTERN = /(?:\A|_)(?:KEYS?|TOKENS?|SECRETS?|PASSWORD|PASSWD|CREDENTIALS?|PASSPHRASE|DSN)(?:\z|_)/
       ENV_NAMES = %w[AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN ANTHROPIC_API_KEY
                      DEEPSEEK_API_KEY GEMINI_API_KEY MISTRAL_API_KEY OLLAMA_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY PERPLEXITY_API_KEY XAI_API_KEY].freeze
+      AGENT_NAMESPACE = 'TAMOZ_'
 
       def self.credential_free_env(env = ENV)
-        env.keys.each_with_object({}) { |name, redactions| redactions[name] = nil if credential_env?(name) }
+        env.keys.each_with_object({}) do |name, redactions|
+          redactions[name] = nil if credential_env?(name) || agent_namespace?(name)
+        end
       end
 
       def self.credential_env?(name)
         value = String(name).upcase
         ENV_NAMES.include?(value) || ENV_PATTERN.match?(value)
+      end
+
+      def self.agent_namespace?(name)
+        String(name).upcase.start_with?(AGENT_NAMESPACE)
       end
 
       def self.shell_display(value)

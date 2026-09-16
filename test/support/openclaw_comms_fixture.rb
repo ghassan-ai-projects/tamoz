@@ -234,6 +234,7 @@ module Tamoz
             identity: { expected_bot_id: BOT_ID, bot_username: BOT_USERNAME },
             admission: admission_spec(mode),
             threading: 'conversation', profile_id: PROFILE_ID,
+            profile_digest: @runtime.profile(PROFILE_ID).canonical_digest,
             approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
             rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
             limits: { max_inbound_bytes: 8192, max_open_requests: 50,
@@ -393,9 +394,18 @@ module Tamoz
 
         def wire_delivery_pipeline(admission_mode)
           @transport = FakeTransport.new(surface_id: SURFACE_ID, surface_revision: SURFACE_REVISION)
+          surface = descriptor(admission_mode)
           @gateway = Tamoz::Comms::Gateway.new(
             adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
-            descriptor: descriptor(admission_mode), poller_owner: 'fixture:gateway',
+            descriptor: surface, poller_owner: 'fixture:gateway',
+            # Production paces a conversation at one message per second and the
+            # drainer really sleeps for it. These tests assert the sent chain,
+            # not its pacing, so the drainer the gateway drives skips the wait —
+            # the send, the scheduled stamp, and the receipt are unchanged.
+            drainer: Tamoz::Comms::DeliveryDrainer.new(
+              store: @store, transport: @transport, descriptor: surface,
+              owner: 'fixture:gateway:drainer', batch_size: 50, sleeper: ->(_) {}
+            ),
             controls: ->(thread_id) { @runtime.session_for(thread_id) }
           )
           sink = Tamoz::Comms::OutboxDeliverySink.new(

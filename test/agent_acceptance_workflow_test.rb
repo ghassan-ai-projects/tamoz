@@ -134,14 +134,17 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
       path: ENV.fetch("TAMOZ_DB"),
       limits: Tamoz::SQLite::Limits.new(lease_ttl: 0.5, effect_attempt_ttl: 0.2)
     )
+    # The check child runs credential-free: CheckRunner withholds the whole
+    # TAMOZ_ namespace from it (F08-SEC-01), so the marker channel this script
+    # writes to has to use a name that survives that filter.
     check_script = <<~CHECK
-      File.open(ENV.fetch("TAMOZ_EVENT_LOG"), "ab") { |f| f.write("check:ran\\n") }
+      File.open(ENV.fetch("ACCEPTANCE_EVENT_LOG"), "ab") { |f| f.write("check:ran\\n") }
       value = File.read("app.rb")
       unless value == "value = 2\\n"
-        File.open(ENV.fetch("TAMOZ_EVENT_LOG"), "ab") { |f| f.write("check:failed\\n") }
+        File.open(ENV.fetch("ACCEPTANCE_EVENT_LOG"), "ab") { |f| f.write("check:failed\\n") }
         abort("expected value = 2, found \#{value.strip}")
       end
-      File.open(ENV.fetch("TAMOZ_EVENT_LOG"), "ab") { |f| f.write("check:passed\\n") }
+      File.open(ENV.fetch("ACCEPTANCE_EVENT_LOG"), "ab") { |f| f.write("check:passed\\n") }
     CHECK
     toolbox = Tamoz::Agent::Toolbox.new(
       root: WORKSPACE,
@@ -325,6 +328,7 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
       "TAMOZ_RESULT" => context.fetch(:result),
       "TAMOZ_TASK" => "make the configured check pass",
       "TAMOZ_KILL_AFTER_PUBLISH" => kill_after_publish&.to_s,
+      "ACCEPTANCE_EVENT_LOG" => context.fetch(:log),
       "RUBYOPT" => nil,
       "BUNDLER_SETUP" => nil
     }

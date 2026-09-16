@@ -63,16 +63,21 @@ module Tamoz
         end
       end
 
-      # Broadcasts the stop and joins the drain thread within the grace.
+      # Broadcasts the stop and joins the drain thread within the grace. Returns
+      # the count that could not be drained, like `flush`, so a caller can tell a
+      # clean shutdown from an abandoned backlog. A join failure is not a clean
+      # drain: it falls through to report the real outstanding count, never nil.
       def close(deadline_ms: 1_000)
         synchronize do
           @closed = true
           @condition.broadcast
         end
-        @thread.join(Float(deadline_ms) / 1_000)
-        nil
-      rescue StandardError
-        nil
+        begin
+          @thread.join(Float(deadline_ms) / 1_000)
+        rescue StandardError
+          nil
+        end
+        synchronize { outstanding }
       end
 
       private

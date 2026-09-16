@@ -565,6 +565,16 @@ module Tamoz
         end
       end
 
+      # A model for a read-only durable command: it is never expected to run, so
+      # a call is a defect and fails closed rather than silently generating.
+      def read_only_model
+        model = Object.new
+        def model.generate(**)
+          raise Tamoz::Core::ToolError, "a read-only command must not generate"
+        end
+        model
+      end
+
       def build_list_session(adapter, options)
         dummy_model = Object.new
         def dummy_model.generate(**) = "{}"
@@ -582,7 +592,10 @@ module Tamoz
         require "tamoz/sqlite"
 
         session_dir = provision_private_session_dir!(options)
-        model = build_model(options, profile:)
+        # A read-only command (show/usage/context) only reads the durable store:
+        # it must not demand a model credential or spawn MCP subprocesses. Use an
+        # inert model that fails closed, so a stray generate is loud, not silent.
+        model = read_only ? read_only_model : build_model(options, profile:)
         toolbox = build_toolbox(options, profile:)
         adapter = Tamoz::SQLite::Adapter.new(
           path: File.join(session_dir, "#{thread_id}.sqlite3"),
@@ -590,7 +603,7 @@ module Tamoz
         )
         mcp = nil
         begin
-          mcp = build_mcp_source(options, profile:)
+          mcp = build_mcp_source(options, profile:) unless read_only
           # Interactive default gates mutations behind a confirm: the
           # operator opts into autonomy by naming a looser profile.
           @approval_engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')

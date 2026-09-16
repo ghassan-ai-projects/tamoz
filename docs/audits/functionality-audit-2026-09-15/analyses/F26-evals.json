@@ -1,0 +1,112 @@
+{
+  "row": "F26",
+  "surface": "gems/tamoz-evals",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 2, "minor": 1, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F26-EVD-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Committed release-evidence audit is stale: a pass row cites a test that does not exist, and six rows limitations.md calls failing are recorded pass",
+      "seam": "script/generate_requirements_audit -> docs/requirements-audit.json#evidence_status",
+      "citations": [
+        "docs/requirements-audit.json",
+        "docs/requirements-manifest.json",
+        "test/approval_policy_document_test.rb:35-337",
+        "script/generate_requirements_audit:84-100",
+        "script/generate_requirements_audit:146-155",
+        "test/requirements_manifest_test.rb:183-192",
+        "test/requirements_manifest_test.rb:15-16",
+        "test/benchmark_protocol_test.rb:39-53",
+        "documentation/limitations.md:19-29",
+        "documentation/limitations.md:31-40",
+        "documentation/limitations.md:51",
+        "documentation/limitations.md:67",
+        "documentation/limitations.md:73",
+        "documentation/limitations.md:142",
+        "README.md:144-146"
+      ],
+      "five_whys": true,
+      "recommendation": "Add one non-executing test beside test_the_committed_audit_covers_every_manifest_row in test/requirements_manifest_test.rb asserting every audit evidence reference also appears in the committed manifest row with the same id and that manifest_requirements/named_cases_run match the manifest-derived counts; then regenerate docs/requirements-audit.json + docs/REQUIREMENTS_AUDIT.md and reconcile the six limitations.md paragraphs with the measured result. Reuse the regenerate-plus-pin pattern already proven in test/benchmark_protocol_test.rb:39-53.",
+      "note": "ADR-053 is pass while citing test/approval_policy_document_test.rb#test_digest_changes_on_content_edit, which does not exist (filter run yields 0 runs, exit 0). The manifest was corrected at 81e4a90 (2026-09-13 22:37:50) while the audit dates from adb2346 (2026-09-12 04:51:22) and was never regenerated. INV-18, INV-19, INV-20, MIG-15, OBJ-4, PHASE-DR-3 are all pass and absent from release_blocking_gaps although limitations.md describes them as failing."
+    },
+    {
+      "id": "F26-ERR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "A zero-byte artifact raises an uncaught NoMethodError, breaking fail-closed verification at the CLI boundary",
+      "seam": "gems/tamoz-evals/lib/tamoz/evals/verifier.rb#read_stable_file",
+      "citations": [
+        "gems/tamoz-evals/lib/tamoz/evals/verifier.rb:563",
+        "gems/tamoz-evals/lib/tamoz/evals/verifier.rb:564",
+        "gems/tamoz-evals/lib/tamoz/evals/verifier.rb:556",
+        "gems/tamoz-evals/lib/tamoz/evals/verifier.rb:81",
+        "gems/tamoz-evals/lib/tamoz/evals/verifier.rb:61-64",
+        "gems/tamoz-evals/lib/tamoz/evals/cli.rb:68-74",
+        "gems/tamoz-evals/lib/tamoz/evals/cli.rb:15-29",
+        "gems/tamoz-evals/exe/tamoz-eval:6"
+      ],
+      "five_whys": true,
+      "recommendation": "One line at verifier.rb:563: bytes = file.read(max_bytes + 1).to_s. This preserves the existing downstream comparisons and routes an empty document through JSON.parse, which already yields the correct typed InvalidArtifactError and CLI exit code 2 with no CLI change. Add the regression case beside the existing malformed-input coverage in test/evals_verifier_test.rb.",
+      "note": "File#read returns nil (not \"\") at EOF for a zero-length file opened File::RDONLY|File::NONBLOCK; confirmed on Ruby 3.3.11 (size 0 -> nil, size 1 -> 1 byte). Probe: verify(<0-byte file>) -> NoMethodError at verifier.rb:564; CLI.run([\"verify\", <0-byte file>]) -> uncaught NoMethodError with empty stdout and stderr and no exit code. Whitespace-only files correctly return exit 2. The other eight malformed-input probes (absent, truncated, unknown type, digest absent/null, non-JSON, duplicate key, directory) all fail closed with typed errors."
+    },
+    {
+      "id": "F26-EVD-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "A pass row is decided by exit status and a nonzero run count, so a zero-assertion case would be recorded pass",
+      "seam": "script/generate_requirements_audit#run_case",
+      "citations": [
+        "script/generate_requirements_audit:73",
+        "script/generate_requirements_audit:84-100",
+        "test/requirements_manifest_test.rb:110-126"
+      ],
+      "five_whys": false,
+      "recommendation": "Add one clause to run_case's outcome chain treating summary[:assertions].to_i.zero? as not-run, exactly as skips is already treated at script/generate_requirements_audit:93-95. SUMMARY_LINE already captures the value.",
+      "note": "Mechanism proven with a synthetic zero-assertion case (1 runs, 0 assertions -> exit 0 -> pass). Measured across all 251 distinct evidence references backing the 499 pass rows using the generator's own filter: 0 vacuous cases, so the hole has no current occupant. Recorded as a contract gap, not a present falsehood."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/evidence_artifact_test.rb", "runs": 11, "assertions": 75, "failures": 0},
+    {"command": "ruby -Itest test/requirements_manifest_test.rb", "runs": 11, "assertions": 3018, "failures": 0},
+    {"command": "ruby -Itest test/benchmark_protocol_test.rb", "runs": 10, "assertions": 60, "failures": 0},
+    {"command": "ruby -Itest test/release_rehearsal_evidence_test.rb", "runs": 9, "assertions": 44, "failures": 0},
+    {"command": "ruby -Itest test/documentation_surface_test.rb", "runs": 9, "assertions": 87, "failures": 0},
+    {"command": "ruby -Itest test/evals_verifier_test.rb", "runs": 23, "assertions": 294, "failures": 0},
+    {"command": "ruby -Itest test/canonical_json_test.rb", "runs": 6, "assertions": 8, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_raw_oracle_test.rb -n \"/\\Atest_before_commit_kills_are_old_and_after_commit_kills_are_new\\z/\"", "runs": 1, "assertions": 312, "failures": 0},
+    {"command": "ruby -Itest test/agent_session_kill_matrix_test.rb -n \"/\\Atest_a_kill_during_a_check_pauses_the_session_and_never_repeats_the_command\\z/\"", "runs": 1, "assertions": 13, "failures": 0},
+    {"command": "ruby -Itest test/approval_policy_document_test.rb -n \"/\\Atest_bundled_base_loads_and_validates\\z/\"", "runs": 1, "assertions": 5, "failures": 0},
+    {"command": "ruby -Itest test/approval_policy_document_test.rb -n \"/\\Atest_digest_changes_on_content_edit\\z/\"", "runs": 0, "assertions": 0, "failures": 0, "note": "the cited case does not exist; exit 0"}
+  ],
+  "tests_not_run": [
+    {"command": "ruby -Itest test/packaging_test.rb", "reason": "1052-line serial packaging suite on the Rakefile SERIAL_TESTS list; prior finding 009 covers it; E-row surface rather than F26 evidence-machine behavior; budget"},
+    {"command": "script/generate_requirements_audit --jobs 4", "reason": "regenerates three committed artifacts; the brief forbids writing into the repo and it is outside the read-only budget"}
+  ],
+  "blind_spots": [
+    "test/packaging_test.rb not run; gem packaging and exe/tamoz-eval install behavior unverified.",
+    "The 284 test executions the audit generator performs were not re-run, so the correct current status of all 529 rows is not established; only the disagreement between audit, manifest and limitations.md is proven.",
+    "Which side is stale for the six environment-bound rows is unresolved: INV-19's and OBJ-4's supporting kill-window cases both pass here (312 and 13 assertions).",
+    "case.schema.json and evidence.schema.json were read structurally (every $defs object, additionalProperties, anyOf and $ref enumerated programmatically) rather than line by line.",
+    "E02 (exe/tamoz-eval) is another analyst's row; read only for this gem's CLI contract, no E02 verdict claimed.",
+    "script/generate_requirements_manifest (1181 lines) was not read; the manifest output was verified, not its generator."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F26-EVD-01 (major) and F26-ERR-01 (major)",
+    "F26-EVD-01 crosses out of this gem into script/generate_requirements_audit and docs/*; the owning row may belong to the support-script (S01) or Rakefile (R01) inventory rather than F26",
+    "F26-EVD-01 touches documentation/limitations.md, which test/documentation_surface_test.rb:98-146 binds to the audit; a regeneration will move that binding",
+    "F26-EVD-02 is a verified contract gap with no current occupant; consider whether it is worth recording as info instead of minor"
+  ]
+}

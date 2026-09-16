@@ -333,6 +333,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
       identity: { expected_bot_id: Fixture::BOT_ID, bot_username: Fixture::BOT_USERNAME },
       admission: { direct: 'pairing', correspondents: [] },
       threading: 'conversation', profile_id: Fixture::PROFILE_ID,
+      profile_digest: fixture.runtime.profile(Fixture::PROFILE_ID).canonical_digest,
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
       rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
       limits: { max_inbound_bytes:, max_open_requests: 50,

@@ -73,12 +73,7 @@ module Tamoz
         when Net::HTTPUnauthorized
           raise Comms::AuthenticationError, 'bot token refused'
         when Net::HTTPConflict
-          # 409 is the remote saying another getUpdates holds this bot, or a
-          # webhook does. `doctor` catches that before serving, but only for
-          # THIS runtime directory: the competitor can be another host or a
-          # webhook set later. Fatal and named, never a retry — two pollers
-          # reading one update stream is a correctness problem.
-          raise Comms::PollerConflictError, conflict_message(body)
+          raise conflict_failure(idempotent, body)
         else
           raise transport_failure(idempotent, "telegram api error #{response.code}")
         end
@@ -93,6 +88,19 @@ module Tamoz
       end
 
       private
+
+      # A 409 on a poll (idempotent read) is the poller-conflict condition:
+      # another getUpdates or a webhook holds this bot — fatal and named, never
+      # retried, because two pollers on one stream is a correctness problem. A
+      # 409 on a send is not that: PollerConflictError is a class the delivery
+      # drainer cannot read, so it would kill the drainer thread and strand the
+      # row. A send's 409 takes the ambiguous mapping, so the send lands unknown.
+      def conflict_failure(idempotent, body)
+        message = conflict_message(body)
+        return Comms::PollerConflictError.new(message) if idempotent
+
+        transport_failure(idempotent, message)
+      end
 
       # The API's own description names WHICH competitor holds the stream, so
       # it is worth carrying; a malformed body still gets a usable message.

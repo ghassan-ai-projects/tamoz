@@ -4,10 +4,19 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 
 - Ruby version pinned in `.ruby-version`; gems live in `gems/`, entry points in `apps/` and `bin/`.
 - Tests: `test/` (Minitest), run via `rake`. One test FILE per command — `ruby -Itest a_test.rb b_test.rb` runs only the first.
+- Rules learned in real sessions live in `.agent/rules/` (index: `.agent/README.md`).
+- **Never force-push.** No rewriting published commits, on any branch — amend locally, then
+  publish a new commit. See `.agent/rules/git.md`.
 - Ask before changing cross-gem interfaces; most bugs live at gem boundaries.
 - When delegating work to background subagents, follow the standing protocol in
   `docs/subagent-orchestration.md` (file-ownership contracts, behavior model in the brief,
   named gates + known-red list, fixed report format).
+
+## Keep these rules current (standing directive)
+
+- Record a reusable lesson in the SAME change that taught it — here, or in
+  `.agent/rules/<topic>.md` when it needs evidence.
+- Ground it in the real seam; rewrite a rule a new lesson contradicts, never keep both.
 
 ## Quality gates and coding standard
 
@@ -48,6 +57,11 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
   an unanswered call is resolved by its safety class (`:idempotent` grants a fresh
   attempt, `:unsafe` stops as unknown). The one-shot ephemeral runtime journals
   through the same dispatcher over in-memory stores by design.
+- **Pin authority; never re-derive it by id.** A reloaded profile must match the
+  `canonical_digest` recorded at bind time (`WorkerRuntime#child_profile_for`,
+  `validate_thread_profile`); effect mutations bind to the active lease
+  (`EffectReconciler#reconcile`); a failed store or authority lookup fails closed — never
+  the permissive default.
 - **Approval policy is data too.** Whether an action needs approval, and under
   what evidence, lives only in `gems/tamoz-approval/policy/*.yaml` (base +
   digest-pinned profiles); the engine in `gems/tamoz-approval` interprets it.
@@ -70,6 +84,17 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 - **Report in plain terms, grounded in the real code.** When explaining to the owner,
   name actual files and seams, not invented abstractions or jargon; say plainly what
   is a real model result versus a plumbing test, and never overclaim.
+
+## Running tests and lint (fast path)
+
+- Tests need the pinned Ruby on PATH, one file per command:
+  `export PATH="$HOME/.rbenv/bin:$HOME/.rbenv/versions/3.3.11/bin:$PATH" && ruby -Itest test/<file>.rb`
+  (a second file on the same command line is ignored). Filter with `-n "/pattern/"`.
+- Lint a changed file directly: `bundle exec rubocop <path>...`. Check that your diff
+  adds no NEW offense — several files already carry pre-existing ones (e.g. long
+  methods); compare against `git stash` if unsure rather than autocorrecting unrelated code.
+- **Never pay real time in a test** — inject the wait; fast because it *fails early* is not
+  fast. Lanes, weights and the `ci` budget: `.agent/rules/testing.md`.
 
 ## Comments
 

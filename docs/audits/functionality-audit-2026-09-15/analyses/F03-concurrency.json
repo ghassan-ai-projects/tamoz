@@ -1,0 +1,142 @@
+{
+  "row": "F03",
+  "surface": "gems/tamoz-concurrency",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 2, "minor": 2, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F03-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "StreamSink#finish closes the queue under a producer blocked in emit, killing it with StreamClosedError and dropping the backlog",
+      "seam": "stream_sink.rb#finish",
+      "citations": [
+        "gems/tamoz-concurrency/lib/tamoz/stream_sink.rb:58",
+        "gems/tamoz-concurrency/lib/tamoz/stream_sink.rb:87-100",
+        "gems/tamoz-concurrency/lib/tamoz/stream_sink.rb:61-62",
+        "gems/tamoz-concurrency/lib/tamoz/stream_sink.rb:30",
+        "gems/tamoz-graph/lib/tamoz/graph/lifecycle_executor.rb:82",
+        "gems/tamoz-graph/lib/tamoz/graph/lifecycle_executor.rb:90",
+        "gems/tamoz-graph/lib/tamoz/graph/stream_emitter.rb:32-35"
+      ],
+      "five_whys": true,
+      "recommendation": "Take @emit_mutex inside finish before closing the queue so an in-progress emit lands, and return the count of discarded queued parts instead of a bare boolean. Preserve the existing lock order (@emit_mutex then @state_mutex).",
+      "evidence": "Reproduced by /tmp/f03/probe15_final.rb: capacity 4, producer thread status 'sleep' (blocked in push), then after sink.finish the thread is dead with captured == Tamoz::StreamClosedError and sink.size == 4 discarded. /tmp/f03/probe18_lossless.rb shows the intended slow-but-live consumer path is lossless (50/50, contiguous sequences), isolating finish as the trigger. No *_stream_sink_test.rb exists."
+    },
+    {
+      "id": "F03-REL-02",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Drain#close returns nil, so a close that abandons accepted work is indistinguishable from a clean one",
+      "seam": "concurrency/drain.rb#close",
+      "citations": [
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:67-76",
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:74-75",
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:53-64",
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:137-139",
+        "gems/tamoz-agent/lib/tamoz/agent/durable_recorder.rb:26",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:99-102"
+      ],
+      "five_whys": true,
+      "recommendation": "Have close return outstanding (the value flush already computes at drain.rb:62) after the join, and stop swallowing its own join failure into the same nil as success. No new class; callers that ignore the value are unaffected.",
+      "evidence": "Reproduced by /tmp/f03/probe9_grace_drop.rb: close(deadline_ms: 50) returned nil after 0.055s with depths + in_flight == 10 and delivered == 0/10. test/concurrency_drain_test.rb:143-157 asserts only elapsed < 5.0, never completeness. DurableRecorder#close discards the flush leftover count."
+    },
+    {
+      "id": "F03-OBS-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "A drained or closed stream's queued backlog is discarded with no counter and no reason tally",
+      "seam": "stream_sink.rb#close",
+      "citations": [
+        "gems/tamoz-concurrency/lib/tamoz/stream_sink.rb:107-117",
+        "gems/tamoz-concurrency/lib/tamoz/stream_sink.rb:131-137",
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:10-11",
+        "gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb:111-115"
+      ],
+      "five_whys": false,
+      "recommendation": "None beyond F03-REL-01. If finish/close return the discarded count, this property is delivered with no new machinery; closing F03-REL-01 closes this subordinate gap.",
+      "evidence": "Probe 15 measured sink.size == 4 discarded at finish with no exposed counter; the class exposes only size and closed_reason. Drain delegates accounting to subclasses (drain.rb:10-11) and StreamSink is not a Drain subclass, so no branch of the design owns the counter. No test asserts an abandoned-event count."
+    },
+    {
+      "id": "F03-MNT-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "DeliveryDrainer is a drain that does not use the shared drain base class; 'drain' names two unrelated mechanisms",
+      "seam": "comms/delivery_drainer.rb#serve_loop",
+      "citations": [
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb:12",
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb:28-57",
+        "gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb:61-128",
+        "gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb:12-27"
+      ],
+      "five_whys": false,
+      "recommendation": "None. The designs are genuinely different (durable SQLite rows with claim/fence/receipt vs in-memory bounded lanes), so the simple path already delivers the property. Record it as a coverage scoping note: F03's 'shared-budget drain base class' claim covers Drain, not every class named drain.",
+      "evidence": "grep -rn '< Drain' returned exactly two subclasses (Journal, AsyncExporter); delivery_drainer.rb matched only the substring in its own name. It hand-rolls @stopping/serve_loop/drain_once with no bounded queue, mutex/condition pair, flush, or drop ledger. test/delivery_drainer_test.rb -> 10 runs, 50 assertions, 0 failures."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/concurrency_drain_test.rb", "runs": 7, "assertions": 36, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/core_pool_test.rb", "runs": 11, "assertions": 137, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/delivery_drainer_test.rb", "runs": 10, "assertions": 50, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/observability_runtime_test.rb", "runs": 13, "assertions": 53, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "tests_not_run": [
+    {"file": "test/observability_cli_test.rb", "reason": "budget; exercises observability gem surface, not F03 bounds"},
+    {"file": "test/observability_catalog_test.rb", "reason": "budget; observability gem surface"},
+    {"file": "test/observability_correlation_test.rb", "reason": "budget; observability gem surface"},
+    {"file": "test/observability_signal_test.rb", "reason": "budget; observability gem surface"},
+    {"file": "test/agent_outbox_delivery_sink_test.rb", "reason": "budget; comms gem surface"}
+  ],
+  "tests_not_found": [
+    "test/*_stream_sink_test.rb",
+    "test/*_event_stream_test.rb"
+  ],
+  "rejected_leads": [
+    {
+      "lead": "Journal#health (recorder_journal.rb:59-71) self-deadlocks by calling lane_depths inside synchronize, since drain.rb:96 documents that lane_depths requires the mutex",
+      "judgment": "rejected as false",
+      "evidence": "/tmp/f03/probe10_doublelock.rb and /tmp/f03/probe12.rb: 'synchronize { lane_depths }' returns normally. probe12 separately proves nested synchronize DOES raise ThreadError on this Mutex ('deadlock; recursive locking'), so health must wrap only once. probe11 confirms the shape works both with and without the lock. No finding recorded.",
+      "confidence": "high"
+    }
+  ],
+  "boundedness_inventory": {
+    "claim": "every queue in the gem is bounded, validated at construction, and enforced on the producer side",
+    "bounds": [
+      {"surface": "Drain lane", "bound": "per-lane positive Integer limit", "enforced_at": "drain.rb:107", "on_bound": "returns false; caller counts the drop"},
+      {"surface": "StreamSink queue", "bound": "1..MAX_STREAM_BUFFER (65536), default 32", "enforced_at": "stream_sink.rb:141-145", "on_bound": "blocks the producer (SizedQueue#push)"},
+      {"surface": "StreamSink namespaces", "bound": "max_namespaces <= 65536, default 1024", "enforced_at": "stream_sink.rb:176-178", "on_bound": "typed StateLimitError"},
+      {"surface": "Pool max_tasks", "bound": "<= 1000000, default 10000", "enforced_at": "pool.rb:46-48,64-77", "on_bound": "ConfigurationError"},
+      {"surface": "Pool queue_capacity", "bound": "<= 65536, default size*2", "enforced_at": "pool.rb:178-183", "on_bound": "blocks the submitter"},
+      {"surface": "Pool size", "bound": "<= Configuration::MAX_POOL_SIZE (256)", "enforced_at": "pool.rb:172-176", "on_bound": "ConfigurationError"},
+      {"surface": "EventStream join_grace", "bound": "<= 60.0s, default 1.0", "enforced_at": "event_stream.rb:14-18", "on_bound": "synthesises PoolWorkerError at event_stream.rb:95-97"}
+    ],
+    "verified_by_probe": "probe16 (100 tasks through size=2/capacity-4 pool, 100/100 results, 0.68s), probe18 (50 events through capacity-8 sink, slow consumer saw 50, contiguous)"
+  },
+  "blind_spots": [
+    "Clock.monotonic not read; assumed monotonic and non-decreasing, which every deadline in flush/close/join_all depends on",
+    "SafeText.normalize internals not read; only its observable raise contract was exercised",
+    "Graph node emitter call sites past StreamEmitter not traced, so emit frequency relative to capacity is unbounded in this analysis",
+    "Observability::Producer and the recorders.rb fanout guarded(UNAVAILABLE_HEALTH) wrapper only skimmed",
+    "tamoz-otel's wrapped real exporter not read, so AsyncExporter's deadline_ms: 2000 is unverified as honored",
+    "No load/soak test run; bounds proven by construction and unit tests, not by saturation evidence",
+    "Test assertions were run once each, not repeated under varied seeds, so timing-sensitive assertions are proven to pass once, not to be stable"
+  ],
+  "coordinator_flags": [
+    "needs independent challenge for F03-REL-01 and F03-REL-02",
+    "F03-REL-01 has a lock-order hazard to verify before any fix: emit takes @emit_mutex then @state_mutex, finish currently takes only @state_mutex",
+    "possible overlap with the prior top-100 flush-crash + DropLedger finding on the observability recorders; that finding is about the flush crash and drop ledger, while F03-REL-02 is about Drain#close returning nil and dropping its leftover count. Same seam, different defect — do not merge without checking the prior record.",
+    "F03-OBS-01 and F03-MNT-01 are subordinate: OBS-01 closes with REL-01, MNT-01 is a coverage scoping note, not a defect to schedule"
+  ]
+}

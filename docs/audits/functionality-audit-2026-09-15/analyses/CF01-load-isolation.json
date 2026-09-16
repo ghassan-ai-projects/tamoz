@@ -1,0 +1,30 @@
+{
+  "row": "CF01",
+  "surface": "cross-gem load and dependency isolation",
+  "verdict": "PASS",
+  "counts": {"critical": 0, "major": 0, "minor": 0, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "tests_run": [
+    {
+      "command": "ruby -Itest test/dependency_isolation_test.rb",
+      "runs": 22,
+      "assertions": 221,
+      "failures": 0,
+      "errors": 0,
+      "skips": 0
+    }
+  ],
+  "blind_spots": [
+    "Full package-build/install execution was not run in this bounded review.",
+    "No external registry provenance or signature verification was exercised.",
+    "No external application was tested against installed entry points."
+  ],
+  "coordinator_flags": []
+}

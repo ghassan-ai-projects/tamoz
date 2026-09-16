@@ -17,6 +17,8 @@ module Tamoz
     #   runtime-open sequence, one config->descriptor projection, one lazy
     #   adapter load. Splitting the helpers would scatter the ordering
     #   invariant (ADR-042: no Session, no model, no workspace file).
+    # rubocop:disable Metrics/ModuleLength -- one shared seam, per the :reek
+    #   rationale above: splitting these helpers scatters the ordering invariant.
     module CLICommsShared
       class MissingAdapterError < Tamoz::Agent::Error; end
 
@@ -68,7 +70,7 @@ module Tamoz
       # omit get the design defaults; every mandatory field of the descriptor
       # contract is filled here. YAML keys are strings; the descriptor
       # contract is symbol-keyed, so the nested sections are converted.
-      def build_descriptor(surface_id, entry)
+      def build_descriptor(surface_id, entry, directory)
         Tamoz::Comms::SurfaceDescriptor.build(
           surface_id:,
           revision: entry.fetch('revision'),
@@ -84,6 +86,7 @@ module Tamoz
           admission: symbolize({ 'direct' => 'disabled' }.merge(entry.fetch('admission', {}))),
           threading: entry.fetch('threading', 'conversation'),
           profile_id: entry.fetch('profile'),
+          profile_digest: pinned_profile_digest(directory, entry.fetch('profile')),
           approvals: symbolize({ 'mode' => 'none', 'prompt_ttl_s' => 900 }.merge(entry.fetch('approvals', {}))),
           rendering: symbolize({
             'format' => 'plain', 'max_parts' => 5, 'part_characters' => 3500, 'overflow' => 'truncate'
@@ -95,6 +98,16 @@ module Tamoz
             'global_messages_per_s' => 25.0
           }.merge(entry.fetch('limits', {})))
         )
+      end
+
+      # The authority a deployed surface pins: the digest the worker compares a
+      # bound thread against (F25-SEC-01). Resolved and adopted through the same
+      # guarded path the worker uses, out of the runtime directory the worker
+      # reads, so a deploy cannot pin a profile the worker would refuse.
+      def pinned_profile_digest(directory, profile_id)
+        env = { 'TAMOZ_CONFIG_HOME' => directory.path }
+        path = Profile.resolve_path(profile: profile_id, env:)
+        Profile.load(path, env:, confirm_adoption: ->(_document) { true }).canonical_digest
       end
 
       def symbolize(value)
@@ -158,5 +171,6 @@ module Tamoz
 
       # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
     end
+    # rubocop:enable Metrics/ModuleLength
   end
 end

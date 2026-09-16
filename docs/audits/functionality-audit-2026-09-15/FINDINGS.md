@@ -1,0 +1,357 @@
+# Functionality audit — synthesized findings
+
+Baseline: branch `audit-15-09`, commit `582ae55`, 2026-09-15. This index is the
+coordinator's disposition of every accepted finding. It reconciles three inputs:
+the independent analyst record in `analyses/<row>.md`, the adversarial challenge
+record in `analyses/challenge-*.md`, and the coordinator's own reading of the cited
+source. A finding's severity and status here are the audit's decision, not the
+analyst's proposal — where a challenge changed a grade, the challenge governs and
+the disagreement is recorded in `## Challenge outcomes`.
+
+Read [BAR.md](BAR.md) for the severity, confidence, and closure rules, and
+[COVERAGE.md](COVERAGE.md) for which rows have met the closure bar. Open findings
+remain open; challenged, refuted, duplicate, and closed leads retain their
+disposition below. This is a read-only audit and writing a report closes
+nothing in production.
+
+## Critical findings
+
+| ID | Row | Severity | Confidence | Status | Owning seam | Challenge |
+|---|---|---|---|---|---|---|
+| F07-SEC-01 | F07 | critical | high | open, confirmed | `tamoz-sqlite` `EffectReconciler#resolve` row-scope guard | UPHELD — reproduced; reachability stronger than reported |
+| F08-SEC-01 | F08 | critical | high | open, confirmed | `tamoz-tools` `check_runner.rb#credential_free_env` | UPHELD — live production path |
+| F09-SEC-02 | F09 | critical | high | open, confirmed | `tamoz-agent-session` `session_effects.rb#mcp_payload` | UPHELD — corrected: terminal interrupt and misleading scorecard evidence |
+| F25-SEC-01 | F25 | critical | high | open, confirmed | `tamoz-agent` `WorkerRuntime#session_for` thread profile binding | UPHELD — widened thread reached the model |
+
+Four coordinator-confirmed critical findings survive independent challenge.
+The raw analyst records still contain five critical proposals; `F09-SEC-02`
+survived at critical after its consequence was corrected, while `F23-SEC-01`
+and `F20-REL-01` were demoted to major for lack of a production caller.
+
+## Dispositioned findings
+
+The table preserves accepted findings after challenge, including demoted
+minor/info items and closed leads. Severity reflects the current coordinator
+disposition. `Challenge` is `pending` where a critical/major challenge is still
+owed.
+
+| ID | Row | Severity | Confidence | Owning seam | Challenge |
+|---|---|---|---|---|---|
+| A01-COR-01 | A01 | minor | high | `apps/tamoz-agent/app.json` namespace | DEMOTED — inert metadata, no consumer |
+| A01-MNT-01 | A01 | info | high | `apps/tamoz-agent/app.json#format_version` | OPEN — metadata is written and unread |
+| A01-MNT-02 | A01 | minor | high | `apps/tamoz-agent/README.md` documentation surface | OPEN — page is outside the documentation check |
+| E03-ERR-01 | E03 | minor | high | `tamoz-evals-runner` CLI terminal flags | OPEN — `--help` exits usage error |
+| E04-COR-01 | E04 | minor | high | `bin/tamoz-chat-probe` probe dispatch | OPEN — unknown probe exits zero |
+| E04-MNT-01 | E04 | info | high | `bin/tamoz-chat-probe` harness cleanup | OPEN — no ensure around a raising probe |
+| E04-MNT-02 | E04 | info | medium | `bin/tamoz-chat-probe` probe key list | OPEN — keys are not checked against findings |
+| E05-MNT-01 | E05 | info | high | `bin/tamoz-chat-sim` wrapper coverage | OPEN — wrapper has no dedicated test |
+| E08-REL-01 | E08 | major | high | `bin/tamoz-stream-subscriber` reconnect loop | UPHELD — bounded cursor does not prevent retry waste |
+| E08-MNT-01 | E08 | info | high | `bin/tamoz-stream-subscriber` approval-relay path | OPEN — cwd resolution is implicit |
+| E08-MNT-02 | E08 | info | high | `bin/tamoz-stream-subscriber` launcher coverage | OPEN — no launcher test |
+| E09-REL-01 | E09 | major | high | `bin/tamoz-stream-worker` trap context | UPHELD — exit 134 is not asserted |
+| E09-MNT-01 | E09 | info | high | `bin/tamoz-stream-worker` option validation order | OPEN — invalid socket/port is checked late |
+| E09-MNT-02 | E09 | info | high | `test/stream_worker_server_test.rb` launcher assertion | OPEN — exit status is discarded |
+| F01-COR-01 | F01 | info | high | `tamoz-core` `jcs.rb#integer_to_s` | DEMOTED — exemption is pinned as intended |
+| F01-SEC-01 | F01 | minor | high | `tamoz-core` `error.rb#DisclosableMessage` | REFUTED — no reachable leak; test gap remains |
+| F02-SEC-01 | F02 | minor | high | `tamoz-cancellation` `process_group.rb#signal` | DEMOTED — no reachable unsafe caller |
+| F02-OBS-01 | F02 | minor | high | `tamoz-agent` `Executor#cancelled` durable terminal fact | REFUTED as written — see replacement note |
+| F03-REL-01 | F03 | major | high | `tamoz-concurrency` `stream_sink.rb#finish` | UPHELD — fix order verified deadlock-free |
+| F03-REL-02 | F03 | major | high | `tamoz-concurrency` `drain.rb#close` | UPHELD — production consumers confirmed |
+| F05-REL-04 | F05 | minor | high | `tamoz-scheduler` misfire ledger bound | DEMOTED — bounded per scan, deduped per cadence |
+| F05-REL-05 | F05 | major | high | `tamoz-scheduler` `schedule_store.rb#materialize_due` | UPHELD — no CLI path clears the wedge |
+| F05-REL-01 | F05 | minor | high | `tamoz-scheduler` `Schedule#definition_digest` validation | OPEN — forged digest metadata is durable but not an authority input |
+| CF07-ARCH-01 | CF07 | major | high | scheduler store contract versus worker settlement methods | OPEN — a conforming non-SQLite store can remain enqueued forever |
+| CF07-REL-02 | CF07 | major | high | SQLite occurrence completion execution-id fence | OPEN — wrong execution identity can complete a running occurrence |
+| F06-SEC-01 | F06 | minor | high | `tamoz-stream` `situation_request.rb#wire_payload` | DEMOTED — contract/comment accuracy |
+| F06-SEC-03 | F06 | info | medium | `tamoz-sqlite` `memory_store.rb#situation_boundary` | DEMOTED — documented design decision, no production pairing |
+| F07-REL-01 | F07 | major | high | `tamoz-sqlite` `request_inbox_claimer.rb#candidate_rows` | UPHELD — threshold corrected to 8 |
+| F08-REL-01 | F08 | major | high | `tamoz-tools` `staging_reaper.rb#collect` | UPHELD — reserved-prefix deletion |
+| F09-COR-01 | F09 | minor | medium | `tamoz-mcp` descriptor effect/read-only contract | DEMOTED — no production reachability |
+| F09-SEC-01 | F09 | major | high | `tamoz-agent-session` `session_effects.rb#mcp_planning_surface` | UPHELD — citation corrected |
+| CF09-SEC-01 | CF09 | major | high | `tamoz-agent-memory` `Retrieval#recall` automatic layer/trust allowlist | UPHELD — active Experience and reported Knowledge reach automatic planning |
+| CF09-OBS-01 | CF09 | minor | high | `tamoz-agent-session` `SessionPlanningContext#add_memory_context` | UPHELD — no admission-to-plan recall correlation |
+| CF09-MNT-01 | CF09 | info | high | episode admission versus behavior promotion vocabulary | DEMOTED/DUPLICATE — F23-SEC-01 owns the unbound promotion gate |
+| CF10-REL-01 | CF10 | major | high | `tamoz-agent` worker maintenance → `MemoryStore#purge_expired` | UPHELD — working retention pass has no production caller |
+| F10-SEC-01 | F10 | major | high | `script/websearch_adapter#load_provider` | UPHELD — exact-host contract applies |
+| F10-SEC-03 | F10 | info | medium | `tamoz-agent-capabilities` MCP/websearch configuration | MERGED into CF05-SEC-01 — documentation/contract axis |
+| CF05-SEC-01 | CF05 | info | medium | `CapabilityBinding#admission_set` and profile/runtime authority contract | DEMOTED — verified behavior, unresolved documentation contract; see `challenge-profile-authority.md` |
+| F10-SEC-04 | F10 | closed | high | `tamoz-agent-capabilities` `mcp_source_builder.rb#build_validator` | REFUTED — production controls are present |
+| F11-COR-01 | F11 | major | high | `tamoz-comms` `rendering.rb#split` | UPHELD — truncation marker absent |
+| F11-SEC-01 | F11 | minor | high | `tamoz-comms` `rendering.rb#plain` | DEMOTED — no caller selects `restricted_html` |
+| F11-SEC-02 | F11 | closed | high | `tamoz-comms` `admission.rb#decide` | REFUTED — revoked binding IS rejected |
+| F11-SEC-03 | F11 | minor | high | `tamoz-comms` `admission.rb` callback branch | DEMOTED — second guard fails closed |
+| F11-ERR-01 | F11→F07 | minor | high | `tamoz-sqlite` `comms_outbox.rb#mark_delivery` | DEMOTED — callers gated on the marker |
+| F11-ERR-02 | F11→F07 | minor | medium | `tamoz-sqlite` `comms_outbox.rb#append_delivery` | DEMOTED — no producer makes a mismatch |
+| F12-REL-01 | F12 | major | high | `tamoz-comms-gateway` delivery ordering | UPHELD — irreversible, contract violated verbatim |
+| F13-COR-01 | F13 | major | high | schedule approval profile → approval-session binding | UPHELD — persisted profile is ignored at execution |
+| F13-COR-02 | F13 | major | high | active-policy reload → `WorkerRuntime#sync_approval_policy` | UPHELD — profile overlay is dropped |
+| F13-SEC-01 | F13 | major | high | `PolicyDocument#validate_tool_tiers!` no-session guard | UPHELD — tool override can mint reusable authority |
+| F13-SEC-02 | F13 | minor | high | policy scope normalization/validation | DEMOTED — unsupported scope is currently inert |
+| F13-REL-01 | F13 | major | high | `Approval::Engine#resolve` decision/grant handoff | UPHELD — resolution can outlive the grant row |
+| F13-REL-02 | F13 | major | high | `Approval::Engine#rebind_session` durable mode-switch audit | UPHELD — memory changes before durable audit |
+| F13-SEC-03 | F13 | major | medium | durable approval session grant lifecycle | QUALIFIED — supported session scope can survive a crash |
+| F13-SCA-01 | F13 | info | high | SQLite approval decision retention | CLOSED — append-only retention is an accepted design |
+| F14-COR-01 | F14 | major | high | `tamoz-telegram` `client.rb#call` 409 classification | UPHELD — bounded stall, not a lost row |
+| F14-REL-01 | F14 | minor | high | `tamoz-telegram` `transport.rb#poll` | DEMOTED — rescued per thread, cost is exit 1 |
+| F15-SEC-01 | F15 | major | medium | `tamoz-observability` `reason` attribute | UPHELD — retargeted to the live default path |
+| F16-OBS-01 | F16 | major | high | `tamoz-otel` `async_exporter.rb#delivery_result` | UPHELD — `outcome` dropped |
+| F16-SEC-01 | F16 | minor | high | `tamoz-otel` exporter has no enable path | DEMOTED — docs/ownership debt |
+| F16-SEC-02 | F16 | major | high | `tamoz-otel` `http_exporter.rb#resource_spans` | UPHELD — not critical, gem unreachable |
+| CF12-OBS-01 | CF12 | minor | high | `tamoz-agent` `worker.rb#settle` / `#emit_durable_model_calls` | ACCEPTED — budget-stop and non-success effects are absent from the model-call projection |
+| F17-COR-01 | F17 | info | high | `tamoz-agent-kernel` `session_steps.rb#journaled_verdict` | DEMOTED — `deep_freeze` closes the exploit |
+| F17-REL-01 | F17 | major | high | same defect as CF04-REL-01 — do not double-count | UPHELD |
+| F17-B9-01 | F17 | minor | high | `episode_nodes.rb` RISK_RANK duplication | DEMOTED + merged with B9-02 |
+| F18-SEC-01 | F18 | major | high | MCP builder sidecar policy → session source digest | UPHELD — policy drift bypasses the resume pin |
+| F18-COR-01 | F18 | minor | high | Core capability registry source identity | UPHELD — duplicate source IDs misalign dispatch |
+| F18-SCL-01 | F18 | minor | high | MCP builder aggregate server/descriptor admission | UPHELD — no global resource bound |
+| F18-OBS-01 | F18 | info | medium | caller-supplied MCP source provenance map | UNCONFIRMED — optional public contract |
+| F18-MNT-01 | F18 | info | high | governed browser adapter reachability | CLOSED — injected-only phase boundary is documented |
+| F19-DEL-01 | F19 | major | high | `tamoz-agent-memory` retention pass has no caller | UPHELD — mechanism corrected |
+| F19-REL-01 | F19 | major | high | `transition_registry.rb#release_or_finalize` | UPHELD — fix larger than reported |
+| F19-SEC-01 | F19 | major | high | admission → planning-context injection path | UPHELD — subject changed |
+| F20-REL-01 | F20 | major | high | `remediation/session.rb` repetition bound | DEMOTED — no production caller |
+| F20-REL-02 | F20 | major | high | `attempt_evidence.rb` raw Array instead of Outcome | UPHELD — independently re-reviewed after challenger addition |
+| F20-SEC-01 | F20 | major | high | `rule_registry.rb#assert_reviewed_diff!` | UPHELD — second unaudited verdict source |
+| F21-SEC-01 | F21 | major | high | `Profile.from_authority` pinned snapshot digest | UPHELD — challenge retained major grade |
+| F21-REL-01 | F21 | minor | high | `Profile::AdoptionRegistry#activate` shared-file update | OPEN — concurrent activation can be lost |
+| F21-SEC-02 | F21 | info | high | secure profile load and authority validators | INFO — fail-closed trust boundary |
+| F21-REL-02 | F21 | info | high | transition registry consume fence | INFO — identity-bound and flocked |
+| F21-SCL-01 | F21 | info | medium | adoption/transition history size | UNCONFIRMED — no measured bound |
+| F22-COR-01 | F22 | major | high | `session_bindings.rb#intake` cancel precondition | UPHELD — live state also loses receipts and check status |
+| F22-REL-01 | F22 | major | high | same defect as F07-REL-01 — do not double-count | UPHELD (via F07) |
+| F22-SEC-01 | F22 | major | high | `session.rb#guard_state!` never reads profile digest | UPHELD — independent downstream enforcement site |
+| F23-COR-01 | F23 | major | high | `promotion.rb#assert_evidence_resolves!` | UPHELD — unkeyed seal |
+| F23-COR-02 | F23 | major | high | `promotion.rb#rollback` | UPHELD — ledger claim, not served bytes |
+| F23-MNT-01 | F23 | major | high | docs contradiction on the improvement pipeline | UPHELD |
+| F23-REL-01 | F23 | major | medium | `candidate_lifecycle.rb#stage_result_phase` | UPHELD — weaker reproduction, recorded |
+| F23-SEC-01 | F23 | major | high | `evaluation_report.rb#assert_human_gate!` | DEMOTED — no production caller |
+| F24-ERR-01 | F24 | major | high | `cli.rb#run_durable` read-only `show` | UPHELD — fix precedent exists in-repo |
+| F24-ERR-02 | F24 | minor | high | `cli.rb#parse_resume_options` `exit()` | DEMOTED — under-scoped, third victim found |
+| F25-COR-01 | F25 | major | high | `worker.rb#settle_view` cancelled shown completed | UPHELD — worker-to-outbox probe |
+| F25-SEC-02 | F25 | major | high | `worker.rb#exhausted_budget` inert budgets | UPHELD — four accepted budgets have no usage evidence |
+| F26-ERR-01 | F26 | major | high | `verifier.rb#read_stable_file` zero-byte file | UPHELD — zero-byte probe raises `NoMethodError` |
+| F26-EVD-01 | F26 | major | high | `docs/requirements-audit.json` is stale | UPHELD — stale artifact provenance; S01/R01 owner |
+| F26-EVD-02 | F26 | minor | high | `script/generate_requirements_audit#run_case` assertion-count gate | OPEN — mechanism confirmed; no committed zero-assertion row |
+| F27-COR-01 | F27 | minor | high | `scoreboard.rb#validate_run!` | DEMOTED — doc splits the responsibility |
+| R01-GATE-01 | R01 | major | high | `Rakefile:444` `ci` omits the quality gates | UPHELD — add budget evidence to the fix |
+| R01-GATE-02 | R01 | major | high | `script/release_rehearsal:157` runs `ci` not `ci_full` | UPHELD — script and plan disagree |
+| R01-GATE-04 | R01 | major | high | `Rakefile:425` `quality` aggregate is enola-only | MERGED into R01-GATE-01 — same gate composition root cause |
+| S01-BEN-01 | S01 | major | high | nine unbounded `Open3.capture*` call sites | UPHELD — seven scripts, nine call sites |
+| S01-GEN-01 | S01 | minor | high | `script/adr_graph.rb`, `script/adr_traceability.rb` generated artifacts | OPEN — no verify counterpart |
+| S01-GEN-02 | S01 | minor | high | `Rakefile:274-280` fixture refresh | OPEN — two fixture generators are omitted |
+| S01-GEN-03 | S01 | minor | high | stdout-only benchmark/protocol generators | OPEN — redirected artifacts have no recorded command |
+| S01-QUAL-01 | S01 | minor | high | `script/regenerate_quality_baseline` artifact provenance | OPEN — committed baseline tree state is not reconciled |
+| S01-BEN-02 | S01 | minor | high | `script/autonomy_scorecard` artifact write | OPEN — non-strict red runs overwrite the artifact |
+| S01-CONF-01 | S01 | minor | high | `script/capture_phase2_receipt` command evidence | OPEN — PID temp path prevents reproducibility |
+| S01-ADR-01 | S01 | minor | medium | `script/adr_verify.rb` absence context window | OPEN — fixed window can invert citation polarity |
+| S01-ADR-02 | S01 | minor | medium | ADR state classifiers | OPEN — scripts derive retirement differently |
+| S02-SEC-01 | S02 | minor | medium | `scripts/start-tamoz-comms.sh` child environment | OPEN — whole `.env` is exported to both children |
+| S02-REL-03 | S02 | minor | medium | `scripts/start-tamoz-comms.sh#stop_all` process match | OPEN — `--stop` may leave a worker alive |
+
+## Additional row-level dispositions
+
+The detailed analyst JSON records also contain the following minor/info
+observations. They are explicitly dispositioned here so the coordinator index
+does not silently omit a row finding; their full citations and test evidence
+remain in the corresponding `analyses/F*.md` report.
+
+| Row | Findings | Coordinator disposition |
+|---|---|---|
+| F01 | `F01-MNT-01`, `F01-MNT-02`, `F01-REL-02`, `F01-COR-04` | OPEN as bounded foundation maintenance/circuit-contract findings |
+| F01 | `F01-MNT-03` | CLOSED as a corrected historical explanation; no production defect reopened |
+| F02 | `F02-MNT-01`, `F02-REL-01`, `F02-COR-01` | OPEN as local cancellation/process-group contract observations |
+| F03 | `F03-OBS-01`, `F03-MNT-01` | OPEN as bounded backlog visibility and ownership debt |
+| F04 | `F04-REL-01`, `F04-OBS-01` | OPEN as minor lease/error observability documentation gaps; PASS remains below the three-minor threshold |
+| F05 | `F05-COR-01`, `F05-OBS-06` | OPEN as occurrence delivery/correlation minors |
+| F05 | `F05-INF-03`, `F05-INF-07`, `F05-SEC-02` | OPEN as documented contract/design questions, not authority bypasses |
+| F06 | `F06-COR-01`, `F06-COR-02`, `F06-REL-01` | OPEN as typed serialization/failure-path minors |
+| F06 | `F06-REL-02`, `F06-REL-03`, `F06-SEC-02`, `F06-MNT-01` | OPEN as info-level evidence, endpoint, retention, and architecture limitations |
+| F07 | `F07-INT-01`, `F07-BND-02` | OPEN as digest and pagination/resource-bound minors |
+| F08 | `F08-REL-02`, `F08-SEC-02`, `F08-MNT-01` | OPEN as bounded workspace/reaper contract minors |
+| F09 | `F09-INFO-01` | OPEN as an informational frame-budget mismatch |
+| F10 | `F10-SEC-02` | OPEN as a model-controlled request-size minor |
+| F10 | `F10-REL-01`, `F10-REL-02`, `F10-MNT-01` | OPEN as circuit/retry/descriptor contract observations; no duplicate of CF05 |
+| F11 | `F11-ERR-03`, `F11-OBS-01`, `F11-SCAL-01` | OPEN as typed error, approval visibility, and lookup-cost minors |
+| F12 | `F12-COR-01`, `F12-REL-02`, `F12-SEC-01`, `F12-OBS-01`, `F12-MNT-01` | OPEN as outbox retry, process-local state, pairing, terminal visibility, and lifecycle minors |
+| F14 | `F14-RES-01`, `F14-OBS-01`, `F14-SEC-02`, `F14-MNT-02` | OPEN as transport response, token observability, TLS-test, and vocabulary minors |
+| F14 | `F14-MNT-01` | OPEN as an informational timeout-injection limitation |
+| F15 | `F15-OBS-01`, `F15-COR-01`, `F15-SCAL-01`, `F15-SCAL-02`, `F15-OBS-02` | OPEN as recorder, metric, lock, and trace projection minors |
+| F15 | `F15-INFO-01` | CLOSED — the limitations section was verified claim by claim |
+| F16 | `F16-REL-01`, `F16-COR-01`, `F16-MNT-01` | OPEN as exporter deadline, OTLP typing, and conformance minors |
+| F16 | `F16-COR-02` | OPEN as an informational mapping/documentation gap |
+| F17 | `F17-B9-02` | MERGED into the kernel B9 catalog finding; no second count |
+| F17 | `F17-ERR-01`, `F17-INFO-01`, `F17-INFO-02` | OPEN/recorded as failed-effect diagnostic and durable-journal facts |
+| F19 | `F19-OBS-01`, `F19-REL-02` | OPEN as admission visibility and CAS-window minors |
+| F20 | `F20-OBS-01`, `F20-COR-01`, `F20-MNT-01` | OPEN as loader/abstention/reachability minors; major authority findings remain separate |
+| F22 | `F22-COR-02`, `F22-REL-02`, `F22-REL-03` | OPEN as continuation/recovery/transcript-bound minors |
+| F22 | `F22-DOC-01`, `F22-DOC-02` | OPEN as tracker/limitations documentation drift |
+| F23 | `F23-SCA-01`, `F23-SEC-03` | OPEN as generator-bound and policy-compare minors |
+| F23 | `F23-INF-01`, `F23-INF-02` | OPEN as rollback and score-floor informational limitations |
+| F24 | `F24-ERR-03`, `F24-SEC-01`, `F24-REL-01` | OPEN as CLI help, terminal escaping, and follow-mode minors |
+| F24 | `F24-INFO-01`, `F24-INFO-02` | OPEN as exit-taxonomy and safety-counter informational limits |
+| F25 | `F25-REL-01` | UNCONFIRMED; no production child-MCP consequence was proven |
+| F25 | `F25-OBS-01`, `F25-SCL-02` | OPEN as counter and repeated-census minors |
+| F27 | `F27-OBS-01` | OPEN as a non-load-bearing provenance/naming note |
+| F27 | `F27-SEC-01`, `F27-SCAL-01` | OPEN as CLI tamper-test and whole-run-bound minors |
+
+## Coordinator dispositions
+
+- **Four criticals stand.** `F07-SEC-01` (a thread-B lease resolves a thread-A
+  effect), `F08-SEC-01` (the `run_check` child inherits operator credentials the
+  deny-list does not name, on a live production path, against a written
+  `SECURITY.md` guarantee), `F09-SEC-02` (durable MCP interruption is destroyed
+  and a scorecard counter is misleading), and `F25-SEC-01` (a thread restarted
+  under a widened profile reaches the model). Each survived an adversarial
+  challenge that attempted reproduction and severity attack.
+- **Two other critical proposals did not survive.** `F23-SEC-01` was demoted
+  because the promotion gate has no production caller and the gem activates
+  nothing. `F20-REL-01` was demoted to major for the same reachability reason.
+- **Findings refuted or closed.** `F11-SEC-02` is `closed`: a revoked binding IS
+  rejected before the allowlist. `F01-SEC-01` is refuted as a leak (the residual is
+  a test-coverage gap). `F02-OBS-01` is refuted as written — the cited method does
+  not exist and a token cancel writes *nothing* durable; the surviving fact is a
+  narrower finding at `Executor#cancelled`, recorded as `minor`.
+- **Duplicates collapsed.** `F17-REL-01` = `CF04-REL-01`; `F22-REL-01` = `F07-REL-01`;
+  `F17-B9-02` merged into `F17-B9-01`; `F17-B9-01` merged into `F01-MNT-01`'s family
+  by the challenger's ruling. These are indexed once, under their owning row.
+- **Ownership moves.** `F11-ERR-01` and `F11-ERR-02` are owned by **F07**: `tamoz-comms`
+  ships no store implementation. `F14-COR-01` stays on F14 with F12 as co-owner of
+  the handling half.
+- **The single systemic theme.** Three independent gates decide approval from an
+  unbound `"human:"`-prefixed String rather than from the policy data seam
+  (`F20-SEC-01`, `F23-SEC-01`, and the healing/improvement family). AGENTS.md makes
+  `gems/tamoz-approval/policy/*.yaml` the only legitimate source of a verdict. This
+  is the highest-value architectural finding in the audit even though each instance
+  is graded `major` rather than `critical` for want of a reachable unsafe caller.
+- **Evidence-quality theme.** Several rows have correct mechanisms with unreached
+  or unwired callers (`F19-DEL-01`, `F20-REL-01`, `F16-SEC-01`). The pattern is a
+  shared one: a capability is implemented, tested in isolation, and documented,
+  but nothing in the shipped system calls it. F26-EVD-01 is a separate generated-
+  artifact freshness gap: the committed evidence no longer matches its manifest.
+- **F13 approval disposition.** The independent challenge upheld six major
+  findings: schedule approval profiles are not carried into execution, reload
+  drops the selected overlay, tool overrides bypass no-session tiers, resolution
+  and grant persistence can split, mode rebinding can publish before its audit,
+  and a supported durable session grant can survive a crash. `F13-SEC-02` is
+  demoted to minor because unsupported scopes are currently inert; `F13-SCA-01`
+  is closed as an explicitly accepted append-only retention design.
+- **F18 capability disposition.** `F18-SEC-01` remains major: MCP sidecar policy
+  changes are absent from the resume source pin. Duplicate source IDs and the
+  missing aggregate MCP bound remain minor. The optional provenance map is an
+  unconfirmed info contract, and the browser item is closed as a documented
+  injected-only phase boundary.
+- **F21 profile disposition.** `F21-SEC-01` remains major after the existing
+  profile challenge qualified the threat model to the local operator trust root.
+  `F21-REL-01` records the concurrent adoption-write race as minor; the secure
+  loader, transition fence, and history-bound notes are recorded as info.
+- **CF05 authority disposition.** `CF05-SEC-01` is a verified profile/MCP
+  admission behavior, but the independent challenge demoted it to an open info
+  documentation/contract gap: the profile schema has no MCP allowlist and the
+  owning runtime code states that the operator runtime directory is the authority.
+  `F10-SEC-03` is merged into this same contract axis. The combined-path regression
+  recommendation remains, while `F25-SEC-01`, `F22-SEC-01`, `F18-SEC-01`, and the
+  F09/F10 egress findings retain their existing owners and severities.
+- **CF06 control-routing disposition.** The direct six-lens trace confirms the
+  request identity, fenced claim/recovery, open-occurrence priority, and
+  paused-resume paths. It adds no machine-counted finding. `F07-REL-01` remains
+  the owning major for an eight-row deferred-turn starvation window;
+  `F22-COR-01`/`F22-SEC-01` and `F25-COR-01`/`F25-SEC-01` remain the owning
+  control, cancellation-projection, and profile-authority findings. `F22-REL-02`
+  remains a minor public-recovery precondition gap. Existing challenge records
+  uphold those dispositions; no CF06 duplicate is indexed.
+- **CF07 schedule-settlement disposition.** The direct six-lens trace confirms
+  revision-checked admission, atomic request/occurrence materialization,
+  deterministic identity, fenced acknowledgement, and the ordinary worker
+  execution path. The independent schedule challenge upholds `CF07-ARCH-01`
+  (the worker settlement methods are absent from the versioned store contract)
+  and `CF07-REL-02` (completion does not fence the acknowledged execution id).
+  `F05-REL-04` remains minor after challenge, `F05-REL-05` remains major, and
+  the schedule digest, zero-concurrency, and correlation gaps retain F05
+  ownership. The lease/reclaim mismatch is recorded as a deferred design
+  decision. CF07 adds no machine-counted duplicate.
+- **CF08 channel/delivery disposition.** The direct six-lens trace confirms
+  offset-after-admission ordering, typed admission and refusal, durable outbox
+  capacity and fences, approval evidence binding, and no-blind-retry handling.
+  `F12-REL-01` remains an open major because an unknown multipart predecessor
+  does not block its successor; `F14-COR-01` remains an open major because a
+  send-side HTTP 409 is classified as an unhandled poller conflict; and
+  `F11-COR-01` remains an open major because rendering drops overflow without
+  the promised marker. The independent challenges close `F11-SEC-02` and
+  demote `F11-SEC-03`, `F11-SEC-01`, and `F14-REL-01`; the F11 store leads move
+  to F07 ownership. CF08 adds no machine-counted duplicate.
+- **CF09 stream/learning disposition.** The direct six-lens trace and the
+  coordinator's real-store probe uphold `CF09-SEC-01` as an open major: the
+  automatic retrieval flag filters sensitivity but does not enforce the
+  documented Knowledge/Wisdom-only layer and trust policy, so an active
+  Experience row reaches action planning. `CF09-OBS-01` remains an open minor
+  because the planning recall supplies no trace. The lead's two-human-gates
+  statement is demoted to an information duplicate of `F23-SEC-01`; episode
+  admission is automatic by design. `F19-SEC-01`, `F19-OBS-01`, `F19-REL-01`,
+  `F23-SEC-01`, and the stream notes are carried without double-counting.
+- **CF10 memory/lifecycle disposition.** The direct source trace and retention
+  probes uphold `CF10-REL-01` as an open major boundary finding: the existing
+  retention pass removes the record from versions, heads, and index rows, but
+  no production worker or maintenance caller invokes it. `F19-DEL-01` remains
+  the owning component symptom with its `deleted: false` mechanism corrected;
+  the flow counts only the missing worker caller. The deletion-receipt and
+  transition-recovery leads are carried under F19 without duplicate counts.
+- **CF12 observability/OTLP disposition.** The direct six-lens trace and real
+  budget-stop probe confirm `CF12-OBS-01`: settlement returns before the durable
+  model-call projection when a configured budget is exhausted, and the projector
+  itself selects only successful effects. The SQLite effect journal and the
+  `request.stopped` event remain present, so this is accepted as one bounded
+  minor observability finding at the worker seam. F15 recorder/trace findings
+  and F16 exporter findings remain their existing owners and are carried without
+  double-counting.
+- **App, executable, support, and Rakefile disposition.** The grouped item-level
+  reports in `analyses/apps-and-entry-points.md` and `analyses/scripts-and-rake.md`
+  were reconciled against the live files. A01's `Tamoz::App` namespace claim is
+  demoted to minor because the manifest is inert; E08/E09 and S01/R01 majors
+  retain their independent challenge outcomes. E03/E04 and the S01/S02 minor
+  observations are accepted as open at their existing seams; info items remain
+  documented limitations. `R01-GATE-04` is merged into `R01-GATE-01`, and the
+  nested `script/quality/coverage_totals.rb` file is included in the support
+  inventory. The coordinator adds no duplicate cross-flow finding.
+- **F20 healing disposition.** The challenger-added `F20-REL-02` was independently
+  re-reviewed against the failed-effect path and remains major/open: the public
+  remediation entry point can return the transition `Array` before verification,
+  compensation, terminal validation, or escalation. `F20-REL-01` remains major
+  after its critical proposal was demoted for the absence of a production caller;
+  `F20-SEC-01` remains a separate major authority-contract finding.
+- **F25 runtime disposition.** The independent challenge upheld `F25-COR-01`: a
+  cancellation redirect can be emitted as `request.completed`/`Verified` while
+  its terminal reason and body say cancellation and unsatisfied verification.
+  It also upheld `F25-SEC-02`: four accepted profile budget keys are carried and
+  pinned but never compared with runtime usage. Both remain major/open at the
+  worker seams; the existing target-request race control is not a duplicate.
+- **F26 evidence disposition.** The independent challenge upheld `F26-ERR-01`:
+  a zero-byte artifact escapes the typed verifier/CLI error contract. It upheld
+  `F26-EVD-01` with a narrower stale-manifest/audit provenance scope owned by
+  S01/R01, and confirmed `F26-EVD-02` as a minor generator contract gap with no
+  current zero-assertion occupant. All remain open; no artifact was regenerated.
+- **Cross-flow disposition.** `CF07-ARCH-01` and `CF07-REL-02` are accepted as
+  open major boundary findings after the schedule challenge. CF09, CF10, and
+  CF11 now have coordinator reports and syntheses. CF11's raw-array, repetition,
+  and promotion-gate proposals are confirmed observations but duplicate the
+  challenged F20/F23 records, so they add no machine-counted findings.
+
+## Challenge outcomes
+
+Sixteen challenge records are indexed under `analyses/challenge-*.md`. The
+current waves added independent challenges for F13, F18, F25, and F26; F21 uses
+the existing `challenge-profile-authority.md` record. Each challenge states
+whether the finding reproduced, the control case, ownership, and the resulting
+severity. F13's challenge demoted one major to minor and closed one design lead;
+F18's challenge closed the browser reachability lead while retaining its major
+and minor dispositions; F25 upheld both pending majors; and F26 upheld both
+pending majors while narrowing their ownership. The challenger-added F20-REL-02
+was then independently re-reviewed in `review-f20-rel02.md` and accepted as
+major/open. The profile-authority challenge also demoted CF05-SEC-01 from a
+major contract lead to an info/documentation gap and merged F10-SEC-03 into that
+decision; the observed admission behavior remains confirmed.
+
+A challenge record is required for every critical/major finding per [BAR.md](BAR.md).
+No coordinator-indexed critical/major row is currently marked `pending`; the
+scanner, six-lens, cross-flow, and item-level inventories are complete. Open
+findings and evidence limits remain remediation work; they do not make a row
+`INCOMPLETE` under [BAR.md](BAR.md).

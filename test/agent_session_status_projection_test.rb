@@ -32,6 +32,20 @@ class AgentSessionStatusProjectionTest < Minitest::Test
     refute lifecycle.key?('output')
   end
 
+  # A cancellation commits a :completed checkpoint status, but the task did not
+  # complete — the operator card must say stopped, not completed (F25-COR-01).
+  def test_a_cancellation_terminal_projects_task_state_stopped
+    view = session_view(
+      status: :completed, lifecycle_events: [],
+      terminal: { 'reason' => 'cancelled_by_user' }
+    )
+
+    document = Tamoz::Agent::SessionStatusProjection.document(view, delivery_state: 'pending')
+
+    assert_equal 'stopped', document.fetch('task_state')
+    assert_equal 'cancelled_by_user', document.fetch('terminal_reason')
+  end
+
   def test_unknown_lifecycle_kind_is_rejected
     event = {
       'event_type' => 'model_output', 'thread_id' => 'thread-1', 'request_id' => 'request-1',
@@ -47,12 +61,12 @@ class AgentSessionStatusProjectionTest < Minitest::Test
 
   private
 
-  def session_view(status:, lifecycle_events:, interrupts: [])
+  def session_view(status:, lifecycle_events:, interrupts: [], terminal: nil)
     Tamoz::Agent::SessionView.new(
       thread_id: 'thread-1', checkpoint_id: 'checkpoint-1', sequence: 4,
       execution_id: 'execution-1', request_id: 'request-1', status:, phase: :action,
       accepted_plan: nil, approvals: [], effect_receipts: [], blocked: false,
-      terminal: nil, provider_ambiguity: nil, interrupts:, state: { lifecycle_events: }
+      terminal:, provider_ambiguity: nil, interrupts:, state: { lifecycle_events: }
     )
   end
 end

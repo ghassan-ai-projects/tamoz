@@ -37,7 +37,15 @@ AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 # agent_scorecard / memory_treatment_profile are scorecard/data-profile GATES,
 # not behaviour probes (49.8s / 15.7s measured); parked here so they cannot set
 # the floor of the everyday lane (docs/audits/test-suite-audit-2026-08-24 §6).
+# The benchmark and thermal-evidence gates are the same shape: they score a
+# corpus end to end (the C8/B0 pair re-runs the whole catalog twice to prove
+# byte-identical output) rather than probing behaviour, so the everyday lane
+# skips them and `ci_full` still runs every one.
 SLOW_TESTS = %w[
+  test/benchmark_comms_b0_test.rb
+  test/benchmark_holdout_test.rb
+  test/thermal_manifest_test.rb
+  test/thermal_tournament_test.rb
   test/sqlite_raw_oracle_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
@@ -102,35 +110,36 @@ LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
 # almost nothing, whereas being wrong about a slow one costs the whole run, so
 # only the slow tail needs to be accurate.
 #
-# Numbers re-measured 2026-08-24 (docs/audits/test-suite-audit-2026-08-24);
-# files that died early during that audit carry their healthy-run estimate.
+# Numbers re-measured 2026-09-16 (`rake test_profile`). The previous table
+# predated the B0/thermal evidence gates, so bin-packing treated a 20-second
+# file as a default-weight one and left a whole shard trailing it.
 DEFAULT_WEIGHT = 0.7
 TEST_WEIGHTS = {
-  "test/agent_scorecard_test.rb" => 49.8,
-  "test/mcp_invocation_test.rb" => 22.4,
-  "test/memory_treatment_profile_test.rb" => 15.7,
-  "test/sqlite_convergence_probe_test.rb" => 16.2,
-  "test/agent_session_kill_matrix_test.rb" => 20.9,
-  "test/sqlite_raw_oracle_test.rb" => 23.4,
-  "test/mcp_supervisor_test.rb" => 12.6,
-  "test/m2_evidence_test.rb" => 9.2,
-  "test/sqlite_scenario_driver_test.rb" => 7.3,
-  "test/tamoz_telegram_transport_test.rb" => 4.8,
-  "test/agent_session_operations_test.rb" => 4.2,
-  "test/websearch_invocation_test.rb" => 3.9,
-  "test/evals_verifier_test.rb" => 3.9,
+  "test/packaging_test.rb" => 62.3,
+  "test/graph_surface_audit_test.rb" => 58.4,
+  "test/agent_scorecard_test.rb" => 51.5,
+  "test/agent_session_kill_matrix_test.rb" => 37.8,
+  "test/sqlite_raw_oracle_test.rb" => 34.1,
+  "test/sqlite_convergence_probe_test.rb" => 26.5,
+  "test/autonomy_scorecard_test.rb" => 25.7,
+  "test/mcp_invocation_test.rb" => 23.0,
+  "test/benchmark_comms_b0_test.rb" => 20.0,
+  "test/memory_treatment_profile_test.rb" => 15.1,
+  "test/sqlite_scenario_driver_test.rb" => 12.4,
+  "test/mcp_supervisor_test.rb" => 12.4,
+  "test/thermal_manifest_test.rb" => 6.4,
+  "test/websearch_invocation_test.rb" => 5.4,
+  "test/tamoz_telegram_transport_test.rb" => 4.7,
+  "test/agent_session_operations_test.rb" => 4.6,
+  "test/thermal_tournament_test.rb" => 4.3,
+  "test/agent_mcp_adversarial_test.rb" => 4.0,
   "test/agent_unattended_policy_test.rb" => 3.9,
-  "test/agent_mcp_capability_source_test.rb" => 3.9,
-  "test/agent_worker_test.rb" => 3.7,
-  "test/benchmark_holdout_test.rb" => 3.5,
-  "test/mcp_catalog_test.rb" => 3.4,
-  "test/agent_cli_test.rb" => 3.4,
+  "test/agent_cli_test.rb" => 3.8,
+  "test/benchmark_holdout_test.rb" => 3.7,
+  "test/dependency_isolation_test.rb" => 3.6,
+  "test/agent_mcp_capability_source_test.rb" => 3.4,
   "test/agent_profile_machinery_test.rb" => 3.3,
-  "test/sqlite_crash_recovery_test.rb" => 2.9,
-  "test/p8_rollout_test.rb" => 2.9,
-  "test/graph_execution_test.rb" => 2.7,
-  "test/subprocess_runner_test.rb" => 2.6,
-  "test/graph_determinism_property_test.rb" => 2.4
+  "test/agent_worker_test.rb" => 3.2
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the
@@ -427,11 +436,23 @@ task quality: ['quality:architecture']
 # The everyday gate has a hard wall-clock budget (docs/audits/
 # test-suite-audit-2026-08-24): if it creeps past this, the run FAILS rather
 # than quietly getting slower again. Weights rot silently; this does not.
+#
+# The ceiling is calibrated on a developer machine at REFERENCE_WORKERS. A
+# runner with fewer workers spreads the SAME suite over a longer wall clock
+# without the suite having grown, so the ceiling scales with the parallelism:
+# otherwise the gate grades the runner's CPU count, and a 3-worker CI box fails
+# a suite the 9-worker machine it was calibrated on passes in half the budget.
 module CiBudget
   BUDGET_SECONDS = 60.0
+  REFERENCE_WORKERS = 9
 
   class << self
     attr_accessor :started_at, :parallel_workers
+
+    def allowed_seconds
+      workers = [parallel_workers || 1, 1].max
+      BUDGET_SECONDS * REFERENCE_WORKERS / workers.to_f
+    end
   end
 end
 
@@ -445,12 +466,14 @@ task ci: [:ci_budget_start, 'design:validate', 'adr:validate', :syntax, :test_fa
           'quality:architecture'] do
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - CiBudget.started_at
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
+  allowed = CiBudget.allowed_seconds
   warn ""
   warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"
   warn "    evidence, scorecard gates). Run `rake ci_full` before committing anything"
   warn "    touching durability, MCP, packaging or the committed evidence artifacts."
-  puts format("ci wall clock: %.1fs (budget %.0fs)", elapsed, CiBudget::BUDGET_SECONDS)
-  if elapsed <= CiBudget::BUDGET_SECONDS
+  puts format("ci wall clock: %.1fs (budget %.0fs at %d workers)",
+              elapsed, allowed, CiBudget.parallel_workers || 1)
+  if elapsed <= allowed
     next
   elsif (CiBudget.parallel_workers || 1) < 2
     # The budget tunes a developer machine's parallel gate. A single-worker
@@ -460,7 +483,7 @@ task ci: [:ci_budget_start, 'design:validate', 'adr:validate', :syntax, :test_fa
   else
     abort(format("ci BUDGET EXCEEDED: %.1fs > %.0fs — the everyday gate got slow again. " \
                  "Run `rake test_profile`, refresh TEST_WEIGHTS and re-lane the tail.",
-                 elapsed, CiBudget::BUDGET_SECONDS))
+                 elapsed, allowed))
   end
 end
 

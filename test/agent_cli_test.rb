@@ -207,6 +207,33 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  # `show` is documented read-only, so it must render a thread with no model
+  # credential and no model_factory — never demand one to read a local
+  # checkpoint (F24-ERR-01).
+  def test_show_needs_no_model_credential
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      factory = ->(_options) do
+        ScriptedModel.new(
+          plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
+          review: [accepted_review],
+          verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+        )
+      end
+      assert_equal 0, run_cli(["ask", "read note.txt"], session: "shown", workspace:, session_dir:, factory:)
+
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Agent::CLI.run(
+        ["--session-dir", session_dir, "--root", workspace, "--json", "show", "shown"],
+        out:, err:, input: StringIO.new, env: {}, model_factory: nil
+      )
+
+      assert_equal 0, status, err.string
+      assert_equal "shown", JSON.parse(out.string).fetch("thread_id")
+    end
+  end
+
   # `continue` drives a paused thread forward with no new input. Without a test
   # the verb could stop resolving its thread, or silently start a second turn,
   # and nothing in the corpus would notice.

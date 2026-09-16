@@ -23,6 +23,31 @@ module Tamoz
       # further milestones replace the newest live row instead of growing.
       MILESTONE_BOUND = 32
 
+      # Per-request FIFO: a pending part is ineligible while an earlier part of
+      # the same request is `unknown` (its send crossed the transport boundary
+      # but is not yet resolved), so a later part cannot be delivered before an
+      # ambiguous predecessor is decided. Rows of one render share a
+      # `created_at_ms` and `delivery_id` is a content digest, so only `rowid`
+      # orders them by append. A NULL `request_id` never matches here, which
+      # keeps control replies and other requests draining; resolving the
+      # predecessor unblocks the row.
+      CLAIM_DELIVERY_SQL = <<~SQL
+        UPDATE tamoz_comms_outbox
+        SET status = 'claimed', claim_owner = ?, claim_fence = ?, claim_expires_at_ms = ?
+        WHERE delivery_id = ? AND (
+          status = 'pending' OR
+          (status = 'claimed' AND claim_expires_at_ms <= ? AND send_started_at_ms IS NULL)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM tamoz_comms_outbox AS pred
+          WHERE pred.surface_id = tamoz_comms_outbox.surface_id
+            AND pred.conversation_id = tamoz_comms_outbox.conversation_id
+            AND pred.request_id = tamoz_comms_outbox.request_id
+            AND pred.status = 'unknown'
+            AND pred.rowid < tamoz_comms_outbox.rowid
+        )
+      SQL
+
       def initialize(adapter:)
         @adapter = adapter
       end
@@ -86,14 +111,8 @@ module Tamoz
           SQL
           next :missing unless existing
 
-          txn.execute('comms.outbox.claim', <<~SQL, [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
-            UPDATE tamoz_comms_outbox
-            SET status = 'claimed', claim_owner = ?, claim_fence = ?, claim_expires_at_ms = ?
-            WHERE delivery_id = ? AND (
-              status = 'pending' OR
-              (status = 'claimed' AND claim_expires_at_ms <= ? AND send_started_at_ms IS NULL)
-            )
-          SQL
+          txn.execute('comms.outbox.claim', CLAIM_DELIVERY_SQL,
+                      [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
           txn.changes == 1 ? :claimed : :not_claimable
         end
       end

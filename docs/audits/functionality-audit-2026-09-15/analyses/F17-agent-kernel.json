@@ -1,0 +1,201 @@
+{
+  "row": "F17",
+  "surface": "gems/tamoz-agent-kernel",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 3, "minor": 2, "info": 2},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F17-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "A late success after a human :failed resolution replays as a FAILED outcome with a nil error (carried forward from CF04-REL-01)",
+      "seam": "effect_dispatcher.rb#resolve_decision / #terminal_attempt",
+      "citations": [
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb:97-101",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb:162-173",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb:280-283",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_completion.rb:126-142",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb:188-206",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_preparation.rb:150-152",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_evidence.rb:88-92",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb:221-227"
+      ],
+      "five_whys": true,
+      "recommendation": "In EffectDispatcher#resolve_decision make the :failed branch read the current head attempt and return its error and identity; keep the succeeded-attempt lookup for :return. Add one regression driving expiry -> attempt 2 repairable failure -> late attempt 1 success -> operator :failed resolution.",
+      "carried_forward_as": "CF04-REL-01",
+      "reverified": true,
+      "probe": "/tmp/f17_probe_cf04.rb -> REPLAY status=failed reused=true error=nil attempt=2",
+      "narrowing": "Not reachable on the in-memory Runtime::EffectsJournal, which refuses a non-owner attempt token (/tmp/f17_probe_late.rb). Durable-journal-only."
+    },
+    {
+      "id": "F17-B9-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "EpisodeNodes::RISK_RANK is a Ruby-literal risk-class table, duplicating IntentCatalog::RISK_CLASSES with no shared definition",
+      "seam": "episode_nodes.rb#risk_above_ceiling?",
+      "citations": [
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb:31",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb:260-263",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb:26",
+        "test/fixtures/domains/cold-chain.json:15"
+      ],
+      "five_whys": true,
+      "recommendation": "Derive the ordering from IntentCatalog's ordered RISK_CLASSES instead of a second literal; if the coordinator rules the wire enum exempt from B9, keep the table but assert it equals IntentCatalog::RISK_CLASSES. No new class.",
+      "qualifier": "Fail-closed: fetch(risk_class, 99) ranks an unknown class above every ceiling, so no unsafe action was proven. Major, not critical."
+    },
+    {
+      "id": "F17-COR-01",
+      "severity": "major",
+      "confidence": "medium",
+      "status": "open",
+      "title": "The approval records a plan_digest that is never compared against the plan it approves; the replay path reuses approvals by plan_id/step_id only",
+      "seam": "session_steps.rb#journaled_verdict / session_evidence.rb#find_intent",
+      "citations": [
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb:115-122",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb:158-178",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_evidence.rb:20-28",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_plan_attempt.rb:92",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_plan_outcomes.rb:130-140",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:281-291",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:88-98"
+      ],
+      "five_whys": true,
+      "recommendation": "In SessionSteps#journaled_verdict require the matched approval's plan_digest to equal accepted.fetch('plan_digest') before returning its stored verdict, raising the existing typed error on mismatch.",
+      "note": "The patch half IS bound three ways (arguments_digest, preview_digest, expected_sha256 re-verified against the live workspace). Only the plan half is unverified. Exploit path unproven."
+    },
+    {
+      "id": "F17-B9-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Tamoz::Core::INTENT_WATCH_TYPE is a Ruby-literal domain vocabulary word consumed by the kernel catalog",
+      "seam": "intent_catalog.rb#initialize / episode_nodes.rb#watch_intent",
+      "citations": [
+        "gems/tamoz-core/lib/tamoz/core.rb:28",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb:29",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb:189-191",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb:216-231",
+        "test/fixtures/domains/aquaculture.json:14"
+      ],
+      "five_whys": true,
+      "recommendation": "Take the watch type from the catalog's own declaration (an explicit watch_type key in the domain JSON, defaulted by test/support/domain_loader.rb), or record the wire-constant exemption in the B9 note. One change, no new module.",
+      "qualifier": "gems/tamoz-agent-kernel/lib contains zero intent type names other than through this alias; the catalog itself is clean."
+    },
+    {
+      "id": "F17-ERR-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "The episode path collapses every failed effect into one untyped ProtocolError with no diagnostic",
+      "seam": "episode_nodes.rb#enforce_successful_outcome!",
+      "citations": [
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb:591-598",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb:87-91",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb:102-105",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/errors.rb:47-75",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb:243-267"
+      ],
+      "five_whys": false,
+      "recommendation": "At enforce_successful_outcome! raise a class reflecting the outcome (EffectUnknownError/ModelCallError for the model subject, the existing ToolError family for the tool subject) carrying result.outcome.error, instead of collapsing both into ProtocolError.",
+      "note": "Local blur only: the taxonomy elsewhere is boundary-correct and error identity survives replay (code defaults to \"replayed\" at errors.rb:52-54)."
+    },
+    {
+      "id": "F17-INFO-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "CF04-REL-01 is durable-journal-only; the in-memory Runtime journal refuses a non-owner attempt token",
+      "seam": "gems/tamoz-agent/lib/tamoz/agent/runtime/effects_journal.rb#complete",
+      "citations": [
+        "gems/tamoz-agent/lib/tamoz/agent/runtime/effects_journal.rb",
+        "test/agent_runtime_effects_test.rb:42-66"
+      ],
+      "five_whys": false,
+      "recommendation": "None. Recorded so the coordinator does not widen CF04-REL-01's blast radius.",
+      "probe": "/tmp/f17_probe_late.rb -> late success REJECTED: Tamoz::CheckpointConflictError: effect attempt token is stale or does not own current attempt"
+    },
+    {
+      "id": "F17-INFO-02",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "Every non-deterministic and external call site across gems/*/lib routes through EffectDispatcher.run; no FX violation found",
+      "seam": "effect_dispatcher.rb#run",
+      "citations": [
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb:70",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb:79",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb:70",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb:149-160",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb:183-196",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:22",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb:85",
+        "gems/tamoz-agent/lib/tamoz/agent/runtime.rb:664",
+        "gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation/effect_execution.rb:34",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb:194",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:48"
+      ],
+      "five_whys": false,
+      "recommendation": "None. The two raw HTTP clients in this gem (EpisodeModelTransport, WitnessGateway) are the dispatcher's own perform block and the server-side signing gateway respectively, not bypasses."
+    }
+  ],
+  "carried_forward": [
+    {"prior_id": "CF04-REL-01", "current_id": "F17-REL-01", "status": "open, re-verified by probe on current source at 582ae55"},
+    {"prior_id": "033-episode_nodes", "status": "closed — frame-assembler DUP fixed at episode_nodes.rb:317-329; dead snapshot param removed at episode_nodes.rb:233; decision_builder dual spelling re-checked and the upstream decline upheld (info)"},
+    {"prior_id": "055-verifier", "status": "not this gem — the shared verify_terminal_diagnostic_status! table landed at gems/tamoz-evals/lib/tamoz/evals/verifier.rb:377-399 in commit 55a9fed. F17 has no verifier.rb"},
+    {"prior_id": "050-executor", "status": "not this gem — gems/tamoz-graph/lib/tamoz/graph/executor.rb is outside the F17 source surface"}
+  ],
+  "readme_loop_verification": {
+    "separately reviewed action plan": "backed — deliberation.rb:208-215, 312-327",
+    "exact diff shown before approval": "backed — session_steps.rb:147, 173-176",
+    "digest-bound atomic patch": "backed for the patch (session_effects.rb:88-98, 287); plan-digest half unverified — see F17-COR-01",
+    "configured verification command": "backed — deliberation.rb:266-281",
+    "up to two newly reviewed repairs": "backed — session_evidence.rb:124-148, session_nodes.rb:26",
+    "fresh approvals": "backed — approval_id = plan_id.step_id, session_steps.rb:187",
+    "repeated action stops safely": "backed — deliberation.rb:349-356, session_plan_outcomes.rb:117-119",
+    "repeated failure stops safely": "backed — session_evidence.rb:130-132"
+  },
+  "tests_run": [
+    {"command": "ruby -Itest test/agent_runtime_effects_test.rb", "runs": 10, "assertions": 44, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_decision_flow_test.rb", "runs": 5, "assertions": 23, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_repair_evaluation_test.rb", "runs": 8, "assertions": 55, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_session_effect_test.rb", "runs": 19, "assertions": 78, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_acceptance_workflow_test.rb", "runs": 1, "assertions": 33, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_reasoning_document_test.rb", "runs": 25, "assertions": 75, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_intent_catalog_test.rb", "runs": 14, "assertions": 19, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_diagnosis_catalog_test.rb", "runs": 15, "assertions": 53, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby /tmp/f17_probe_cf04.rb", "note": "durable SQLite journal + public EffectDispatcher — reproduces F17-REL-01"},
+    {"command": "ruby /tmp/f17_probe_late.rb", "note": "in-memory EffectsJournal — late receipt refused; finding not reachable there"}
+  ],
+  "tests_not_run": [
+    "test/stream_episode_reconsider_test.rb (would pin F17-B9-01's risk table)",
+    "test/stream_episode_intent_authority_test.rb",
+    "test/agent_model_receipt_test.rb",
+    "test/effect_identity_test.rb",
+    "test/agent_mcp_capability_source_test.rb",
+    "test/reasoning_document_test.rb -> not found (real file is test/agent_reasoning_document_test.rb)"
+  ],
+  "blind_spots": [
+    "The 16 test/stream_episode_* integration files were not run; they are where RECONSIDER/risk_above_ceiling? actually executes.",
+    "tamoz-graph executor.rb (prior finding 050) is outside this gem's source surface and was not read.",
+    "session_records.rb was read only for the plan_digest schema lines; the accepted_plan immutability question behind F17-COR-01 is unresolved.",
+    "effect_preparation.rb was read from line 130; the :wait deadline comparison above it was not fully traced.",
+    "No load/soak evidence exists for the scalability lens — the bounds are proven constants, the measurement is not."
+  ],
+  "coordinator_flags": [
+    "F17-REL-01 IS CF04-REL-01 — keep one finding, do not double-count; F17 owns the dispatcher half, F07 the journal half, F22 the session consumer",
+    "needs independent challenge: F17-COR-01 (medium) — attempt to mutate accepted_plan between step_gate and step_execute; if it fails, downgrade to info",
+    "needs independent challenge: F17-REL-01 per FINDINGS.md:19-21",
+    "contract decision required: F17-B9-01/B9-02 — is the R0-R4 wire enum and the watch type name exempt from the B9 zero-domain-content-in-Ruby rule?",
+    "possible duplicate: F17-B9-01's duplicate-authority half overlaps IntentCatalog::RISK_CLASSES ownership in the same gem"
+  ]
+}

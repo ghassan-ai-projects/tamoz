@@ -704,6 +704,50 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # Per-request FIFO: while an earlier part of the same request is `unknown`, a
+  # later part must not be claimed and sent out of order. Another request in the
+  # same conversation and a different conversation stay drainable, and resolving
+  # the predecessor unblocks the row (F12-REL-01).
+  def test_an_unknown_predecessor_blocks_only_later_parts_of_its_own_request
+    with_engine do |store|
+      store.deploy_surface(descriptor.wire, now:)
+      # A render's parts share one millisecond and their content-addressed
+      # delivery ids run opposite to append order, so only rowid orders them.
+      first = delivery(part_index: 0, part_count: 2, content_digest: 'a' * 64).merge('delivery_id' => 'part-z')
+      second = delivery(part_index: 1, part_count: 2, content_digest: 'd' * 64).merge('delivery_id' => 'part-a')
+      peer = delivery(content_digest: 'c' * 64).merge('delivery_id' => 'peer-request')
+      other = delivery(conversation_id: 'telegram:chat:33333333',
+                       content_digest: 'e' * 64).merge('delivery_id' => 'other-conversation')
+      store.append_delivery(
+        first, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: 'req-multipart', now:
+      )
+      store.append_delivery(
+        second, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: 'req-multipart', now:
+      )
+      store.append_delivery(
+        peer, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: 'req-peer', now:
+      )
+      store.append_delivery(other, surface_id: 'telegram-ops', capacity: 500, now:)
+
+      claim_and_mark!(store, 'part-z', 'unknown')
+
+      assert_equal :not_claimable, claim_row(store, 'part-a'),
+                   'a later part of the same request is blocked while its predecessor is unknown'
+      assert_equal :claimed, claim_row(store, 'peer-request'),
+                   'another request in the same conversation is not blocked'
+      assert_equal :claimed, claim_row(store, 'other-conversation'),
+                   'a different conversation is not blocked'
+
+      assert_equal :resolved, store.resolve_delivery(delivery_id: 'part-z', status: 'succeeded', now: now + 1)
+      assert_equal :claimed, claim_row(store, 'part-a'),
+                   'resolving the predecessor unblocks the later part'
+    end
+  end
+
+  def claim_row(store, delivery_id)
+    store.claim_delivery(delivery_id:, owner: 'gateway:a', fence: 7, claim_expires_at: now + 30, now:)
+  end
+
   def test_request_status_filters_delivery_by_request_and_aggregate_keeps_conversation_scope
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
@@ -721,8 +765,21 @@ class SQLiteCommsStoreTest < Minitest::Test
         delivered, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: second_id,
         now: now + 1
       )
-      claim_and_mark!(store, unknown.fetch('delivery_id'), 'unknown')
-      claim_and_mark!(store, delivered.fetch('delivery_id'), 'succeeded')
+      # Claim both while pending (the per-conversation unknown barrier only
+      # blocks claiming a successor once a predecessor is unknown), then record
+      # the mixed terminal states this projection asserts over.
+      [unknown, delivered].each do |row|
+        assert_equal :claimed, store.claim_delivery(
+          delivery_id: row.fetch('delivery_id'), owner: 'gateway:a', fence: 7,
+          claim_expires_at: now + 30, now:
+        )
+      end
+      assert_equal :marked, store.mark_delivery(
+        delivery_id: unknown.fetch('delivery_id'), owner: 'gateway:a', fence: 7, status: 'unknown', now: now + 1
+      )
+      assert_equal :marked, store.mark_delivery(
+        delivery_id: delivered.fetch('delivery_id'), owner: 'gateway:a', fence: 7, status: 'succeeded', now: now + 1
+      )
 
       assert_equal 'unknown', store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',

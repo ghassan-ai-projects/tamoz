@@ -1,0 +1,265 @@
+{
+  "row": "F23",
+  "surface": "gems/tamoz-agent-improvement",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 1, "major": 4, "minor": 2, "info": 2},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "prior_findings": [
+    {
+      "id": "082 (top-100, autonomy_case.rb, 'vacuous hard-counter gate')",
+      "source": "row control / prior top-100 package",
+      "status": "checked at HEAD 582ae55, NOT reproduced",
+      "note": "The suggested vacuity does not exist here. EvaluationReport.assert_paired! (evaluation_report.rb:136-164) is harsher than the harness that feeds it: it re-derives paired_task_digest from the two per-partition digests (157-163) and refuses an identical development/holdout set (152-155). Probe /tmp/f23_probe_vacuous.rb confirms equalizing the two partition digests does not pass the gate unless the sets are byte-identical; CanonicalJSON.normalize_object sorts keys (canonical_json.rb:70-75), which is why distinct insertion orders collapse but distinct content does not. The absence of an absolute-score floor is recorded separately as F23-INF-02."
+    },
+    {
+      "id": "CF04-REL-01",
+      "source": "FINDINGS.md:13",
+      "status": "open, adjacent, not re-litigated",
+      "note": "F23-COR-02 involves transition/effect terminal-state selection like CF04-REL-01, but at a different seam (Memory::BehaviorTransition row status via Improvement::Promotion#rollback, not EffectDispatcher receipt selection). Recorded as an overlap for the coordinator; not merged."
+    },
+    {
+      "id": "F07-REL-01",
+      "source": "FINDINGS.md:14",
+      "status": "open, adjacent, not re-litigated",
+      "note": "CandidateLifecycle routes all four stages through EffectDispatcher.run (candidate_lifecycle.rb:187-191); the claimer behaviour underneath is F07's row and was not re-audited."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F23-SEC-01",
+      "severity": "critical",
+      "confidence": "high",
+      "status": "open",
+      "title": "The promotion human gate is an unbound string; the approval policy data seam is not on the path",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb#assert_human_gate!",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:220",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:228-233",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:50",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:51",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:42",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:350",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_proposal.rb:45-48",
+        "gems/tamoz-agent-improvement/tamoz-agent-improvement.gemspec:14-17",
+        "gems/tamoz-approval/policy/base.yaml"
+      ],
+      "five_whys": true,
+      "recommendation": "Extend EvaluationReport.assert_human_gate! to take the artifact it authorizes (evidence: plus digest:) and require the evidence to be the already-existing CandidateLifecycle.approval_digest (candidate_lifecycle.rb:29-43), which covers proposal, candidate, candidate-content, operation, actor, and authority digests. Promotion#promote already holds candidate.digest and EvaluationReport.seal(body) at the call site (promotion.rb:49-51), so the binding is one argument and one comparison. The approval-policy lookup itself belongs to tamoz-approval and should be a follow-up owned by that gem.",
+      "evidence": "Probe /tmp/f23_probe_human.rb: 'human:anybody', 'human:1', 'human:x', 'human:the_candidate_itself' are all accepted; assert_human_gate! parameters are [[:keyreq, :gate_classes], [:keyreq, :evidence]] - no digest, no actor, no report. Probe /tmp/f23_probe_reverify.rb: the identical string 'human:operator-1' passes the gate for two candidates with different report seals. Repo-wide grep finds no Tamoz::Approval reference in the gem and zero improvement/heuristic/candidate/promotion matches in gems/tamoz-approval/policy/.",
+      "contract": "AGENTS.md: approval policy is data too - whether an action needs approval, and under what evidence, lives only in gems/tamoz-approval/policy/*.yaml. Not hardcode a verdict, approval constant, or bypass flag elsewhere."
+    },
+    {
+      "id": "F23-COR-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "A promotion can be recorded from a forged-but-correctly-sealed report produced inside this gem, with the resolver supplied by the promoter",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb#assert_evidence_resolves!",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:59",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:63-70",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:52-55",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:169-173",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:44-45",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:200-227",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:342-361",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb:16"
+      ],
+      "five_whys": true,
+      "recommendation": "Keep the seal and assert_evidence_resolves!, and narrow who may supply the resolver: take it as a construction-time collaborator on Promotion.new (promotion.rb:30-33) bound to the evaluator principal, and refuse a resolver whose resolved artifact names a generator_principal/candidate_digest other than the candidate's. Simpler alternative at the same seam: derive the resolver from the existing BehaviorTransition::EVIDENCE_NAMESPACE (behavior_transition.rb:16), declared but unused by this gem, which is the durable seam already shaped for this artifact.",
+      "evidence": "Probe /tmp/f23_probe_promote.rb, using only public API plus an in-memory BehaviorTransition history (no corpus, trajectory, holdout partition, or scorer): 'baseline active: tamoz.agent.session/2' then '!! PROMOTED with a forged report + promoter-supplied resolver: activated=false tx=bfe6c4a00ec37bff reserved_version=2 decision={\"development_margin\"=>8, \"holdout_margin\"=>8, \"passed\"=>true}'. The real harness on the same corpus yields development_margin 2 / holdout_margin 1 (test/improvement_candidate_test.rb:373-374). Probe /tmp/f23_probe_vacuous.rb: a report with no per-task outcomes key at all verifies and decides normally."
+    },
+    {
+      "id": "F23-COR-02",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Rollback restores the pre-promotion epoch and never marks the heuristic epoch undone; the byte-identity proof is relative to the rollback's own target",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb#rollback",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:82",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:88-89",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:109",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:117-126",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:133",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:142-161",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:304-331",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:104",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/transition_registry.rb:352-372",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb:22",
+        "gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb:40"
+      ],
+      "five_whys": true,
+      "recommendation": "Two lines at promotion.rb:117-126: pass the undone transition_id into the recorded rollback (or set it after) and have TransitionRegistry write status: :rolled_back, rolled_back_at: on that row; then read 'live' from status in assert_one_live_heuristic! (promotion.rb:315-325) instead of the 'rollback.' prefix scan. Keep assert_rolled_back_byte_identical! but state it against the pre-heuristic snapshot digest captured before the promotion, so the proof is not relative to the rollback's own output.",
+      "evidence": "Probe /tmp/f23_probe_rollback_scope.rb: after promotion at session/3, the heuristic row's rollback_target is {\"behavior_version\"=>\"tamoz.agent.session/2\", ...} - the PRE-heuristic epoch - and the row's status is still 'activated'. grep -rn 'rolled_back' across both gems returns only the constant, the Data members, this gem's unrelated phase map (candidate_lifecycle.rb:227), and the liveness-gate filter; no writer for the row status exists. test/improvement_candidate_test.rb:635-663 asserts byte-identity using digests taken from the rollback it just performed (651-652), so the test pins target-relative identity."
+    },
+    {
+      "id": "F23-REL-01",
+      "severity": "major",
+      "confidence": "medium",
+      "status": "open",
+      "title": "A partially completed activation is not retried and is not rollback-able; the candidate is stranded in :verified",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb#stage_result_phase",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:120-125",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:187-196",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:223-228",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:128-132",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:236-245",
+        "gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb:179-203",
+        "gems/tamoz-agent/lib/tamoz/agent/runtime/effects_journal.rb:114-118",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_preparation.rb:158-159"
+      ],
+      "five_whys": true,
+      "recommendation": "Add one branch to stage_result_phase mapping :failed to a :failed phase (a one-word addition to the same hash pattern already used at candidate_lifecycle.rb:227), and let rollback! accept :failed alongside :active in its require_phase!. Two lines plus one test driving a :failed outcome, which test/agent_improvement_lifecycle_test.rb's EffectRunner can already produce via next_status.",
+      "evidence": "Probe /tmp/f23_probe_partial.rb: 'activate raised Tamoz::Core::ToolError: activation crashed after recording the transition' then 'phase after a FAILED activation: :verified'. The retry cannot double-apply (a :failed effect is terminal at both journals: effects_journal.rb:114-118 and effect_preparation.rb:158-159), so the harm is a stuck candidate, not a duplicate effect - which is why this is major, not critical. The :unknown sibling case IS handled correctly and is pinned by test/agent_improvement_lifecycle_test.rb:49-64.",
+      "confidence_note": "The in-gem half (failed leaves the phase unchanged; rollback! then refuses) is directly probed. The durable half is source-read at both journal implementations, not executed, because no caller wires a SQLite-backed effect journal into CandidateLifecycle at HEAD."
+    },
+    {
+      "id": "F23-MNT-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "limitations.md states there is no skill self-improvement pipeline while this gem implements scope: 'skill' end to end",
+      "seam": "documentation/limitations.md#skill-installation-and-update-invariant-43 (against README.md:42 and documentation/design/self-healing.md:13)",
+      "citations": [
+        "documentation/limitations.md:88-94",
+        "README.md:42",
+        "documentation/design/self-healing.md:13",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_proposal.rb:13",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_proposal.rb:60-66",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:105-132",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb:236-245",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb:45-55",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_policy.rb:20-27"
+      ],
+      "five_whys": true,
+      "recommendation": "One sentence in documentation/limitations.md section 'Skill installation and update (invariant 43)' naming what the candidate pipeline does implement (candidate provenance, paired evaluation, staged durable lifecycle, digest-bound operator approval) and what it explicitly does not (no artifact is installed, written to disk, or loaded as executable content; promotion records a next-boundary transition and returns activated: false). No code change.",
+      "evidence": "Row question answered directly: the gem promotes NOTHING that is installed anywhere. Nothing writes a skill tree to disk and nothing writes the runtime skill snapshot; the only write is a Profile::Transition row (candidate_proposal.rb:60-65) or an adoption-registry entry (candidate_lifecycle.rb:239), and promote! returns 'activated' => false (candidate_proposal.rb:66). The limitations claim is true about the executable artifact; the README/design claims are true about the candidate record; neither document says which half it means. The code-side bound that makes the limitation safe is candidate_policy.rb:23-26, which refuses any authority on a non-profile scope.",
+      "verdict_note": "Documentation contradiction with a real reader consequence and no code defect, so major under BAR.md's maintainability band rather than critical. Routable to the docs owner instead of this row."
+    },
+    {
+      "id": "F23-SCA-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "Every generation bound is per-instance and per-call; nothing bounds generator instances, candidates, or evaluation rounds per tenant",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb#generate",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb:29",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb:57",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb:102-105",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb:118",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:28",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:305",
+        "gems/tamoz-agent-improvement/tamoz-agent-improvement.gemspec:14-17"
+      ],
+      "five_whys": false,
+      "recommendation": "None required for v1. If a bounded-rounds contract is wanted, the existing seam is assert_one_live_heuristic! (promotion.rb:304) - the store already holds every transition row and already distinguishes rollback. rows, so a per-tenant recorded|claimed|activated count is one extra filter, not new machinery. Record limit: 64 explicitly as a known view bound either way.",
+      "evidence": "ONE_CANDIDATE_LIMIT = 1 is enforced on the instance counter @generated (generator.rb:29,57,102-105) and consumed before the candidate is validated (:118). test/improvement_candidate_test.rb:226-229 proves the second call on the same generator is refused; :579-633 proves a follow-up round is allowed after a rollback. Not found: any per-tenant or per-process bound. promotion.rb:305's limit: 64 is a view bound: assert_one_live_heuristic! is a safety gate that weakens as the transition namespace grows past 64 rows."
+    },
+    {
+      "id": "F23-SEC-03",
+      "severity": "minor",
+      "confidence": "medium",
+      "status": "open",
+      "title": "CandidatePolicy compares policy.allow_changes with a hand-rolled guard that the pinned catalog digest cannot substitute for",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_policy.rb#policy_without_surface",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_policy.rb:86",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_policy.rb:93-95",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_policy.rb:67",
+        "gems/tamoz-tools/lib/tamoz/tools/tool_catalog.rb:44-52",
+        "gems/tamoz-tools/lib/tamoz/tools/tool_catalog.rb:59-70",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_options.rb:149-156"
+      ],
+      "five_whys": false,
+      "recommendation": "Move the allow_changes guard out of the 'return false if' prefix and into the comparison body next to the immutable loop at candidate_policy.rb:67, so every protected field is checked in one place and the exclusion at :94 reads as the deliberate exception it is. Cosmetic; no behaviour change.",
+      "evidence": "Probe /tmp/f23_probe_digest_gap.rb: a Toolbox built with allow_changes: false and one with allow_changes: true and the same allowed_tools produce the IDENTICAL catalog_digest (sha256:4344901f2da07a1fc610d904894bca2dbe1c74bc48ed644ab259531cbd6aa91a), because ToolCatalog#descriptions_for keeps only names in @allowed_tools (tool_catalog.rb:59-70). So the pin at session_options.rb:149-156 cannot distinguish the two either, and the boolean guard at candidate_policy.rb:86 is the only thing standing between a candidate and a write-capable toolbox. The guard IS correct - no live bypass is demonstrated. Not found: any test of CandidatePolicy.validate_profile!.",
+      "confidence_note": "The exclusion and the digest collision are both proven; whether the candidate path needs allow_changes to round-trip is not, because no production caller invokes CandidateLifecycle at HEAD."
+    },
+    {
+      "id": "F23-INF-01",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "A superseded heuristic epoch cannot be rolled back and blocks all further promotion",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb#rollback",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:82-86",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb:315-325"
+      ],
+      "five_whys": false,
+      "recommendation": "None for v1. When a second heuristic lane opens, the natural seam is Promotion#rollback's target selection (promotion.rb:76-88): accept an explicit transition_id to undo, subject to the same snapshot proof, instead of reading active_transition_id.",
+      "evidence": "Probe /tmp/f23_probe_wipe2.rb on a three-epoch history (session/2 baseline, session/3 heuristic, session/4 wisdom): rollback raises RollbackIntegrityError 'the active transition <tx> is not a heuristic promotion', while assert_one_live_heuristic! still counts the session/3 row live, so no further heuristic can be promoted either. Not a defect at HEAD because no production caller invokes Promotion and the intended usage always has the heuristic newest; recorded because the combined state is reachable from public API plus the shared P11-W registry and is represented by no test."
+    },
+    {
+      "id": "F23-INF-02",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "The promotion decision has no absolute-score floor; the pair-margin is the entire gate",
+      "seam": "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb#decide",
+      "citations": [
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:199-211",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:175-193",
+        "gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb:136-164",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/heuristic_paired_evaluation.rb:112-117",
+        "gems/tamoz-evals-runner/lib/tamoz/evals/harness/heuristic_paired_evaluation.rb:50-53"
+      ],
+      "five_whys": false,
+      "recommendation": "None at HEAD; if a floor is wanted it belongs in assert_arm! (evaluation_report.rb:175) as one more predicate, and the per-task outcomes map the harness already writes would be the honest input.",
+      "evidence": "Probe /tmp/f23_probe_gate.rb: a report with total = 1 on both partitions, baseline 0/1 and candidate 1/1, decides passed=true. assert_arm! enforces total.positive? (185-187) but no minimum total; verify! never reads the outcomes map (heuristic_paired_evaluation.rb:112-117), so total is a self-reported integer. In production the corpus is evaluator-owned and the injected regression case exists to make the heuristic lose on holdout (heuristic_paired_evaluation.rb:50-53), which is why this is info. The earlier lead that the PAIRING check itself was vacuous is disproved - see prior_findings 082."
+    }
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/improvement_candidate_test.rb", "runs": 14, "assertions": 284, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_improvement_lifecycle_test.rb", "runs": 6, "assertions": 13, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/memory_engine_test.rb", "runs": 26, "assertions": 164, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/public_api_test.rb", "runs": 3, "assertions": 1051, "failures": 0, "errors": 0, "skips": 0},
+    {"command": "ruby -Itest test/agent_phase4_capability_test.rb", "runs": 7, "assertions": 31, "failures": 0, "errors": 0, "skips": 0}
+  ],
+  "tests_not_run": [
+    {"command": "rake ci / rake ci_full", "reason": "excluded by the brief"},
+    {"command": "ruby -Itest test/benchmark_harness_test.rb", "reason": "not this row's surface; the paired evaluation was exercised for real through test/improvement_candidate_test.rb"},
+    {"command": "ruby -Itest test/experience_harness_test.rb", "reason": "not this row's surface"}
+  ],
+  "probes": [
+    {"path": "/tmp/f23_probe_isolation.rb", "result": "absolute holdout path refused ('path must be relative to the workspace root'); ../protected/holdout/<file> via read_file, list_directory and search_text all refused ('path escapes the workspace root') - grant confinement confirmed"},
+    {"path": "/tmp/f23_probe_leak.rb", "result": "a generator with protected_paths: [] is still refused by the grant for the same traversal; Generator#source_refs labels every readable record partition=train/verified=true"},
+    {"path": "/tmp/f23_probe_gate.rb", "result": "decide: dev 1->3/hold 1->2 passed=true; dev 0->0 passed=false; total=1 partitions promote"},
+    {"path": "/tmp/f23_probe_vacuous.rb", "result": "paired_task_digest re-derivation holds; a report with no outcomes map verifies"},
+    {"path": "/tmp/f23_probe_human.rb", "result": "human:anybody, human:1, human:x, human:the_candidate_itself all accepted; one string passes two candidates"},
+    {"path": "/tmp/f23_probe_promote.rb", "result": "promotion recorded from a fully forged report with a promoter-supplied resolver; decision dev margin 8 / holdout margin 8"},
+    {"path": "/tmp/f23_probe_reverify.rb", "result": "the same human:operator-1 artifact reused for a structurally different report"},
+    {"path": "/tmp/f23_probe_stale.rb", "result": "two competing promotions from one baseline: second record refused with BehaviorTransitionClaimConflictError; rollback cannot be recorded while a promotion is pending"},
+    {"path": "/tmp/f23_probe_wipe2.rb", "result": "on a three-epoch history rollback raises RollbackIntegrityError 'not a heuristic promotion' while the heuristic row is still counted live"},
+    {"path": "/tmp/f23_probe_rollback_scope.rb", "result": "the heuristic row's rollback_target is the PRE-heuristic epoch and its status stays 'activated'; no writer for :rolled_back exists"},
+    {"path": "/tmp/f23_probe_partial.rb", "result": "a raising activate perform leaves phase = :verified, so the candidate can neither activate nor roll back"},
+    {"path": "/tmp/f23_probe_digest_gap.rb", "result": "allow_changes false and true with the same allowed_tools yield the identical catalog_digest"},
+    {"path": "/tmp/f23_probe_seam.rb", "result": "Tamoz::Approval is not loaded by requiring this gem; no approval action id exists for this path"}
+  ],
+  "blind_spots": [
+    "No production caller exercises either entry seam at HEAD: repo-wide grep finds Improvement::Promotion and CandidateLifecycle only in this gem's lib/ and two test files.",
+    "The durable effect path for CandidateLifecycle was read, not executed - test/agent_improvement_lifecycle_test.rb:150-168 substitutes an effect-runner double, which is why F23-REL-01 is medium confidence.",
+    "Memory::TransitionRegistry concurrency covered only the two-writer and pending-then-record cases; lease expiry, fence changes, and release_or_finalize were read but not executed. Row F07 owns that file.",
+    "Profile::TransitionRegistry and the adoption registry were not read; validate_profile_registries! only checks that they respond to record/activate.",
+    "promotion.rb:305's limit: 64 is an unbounded-growth caveat on a safety gate that could not be turned into a reachable state within v1's one-live-heuristic bound.",
+    "The 'human:' prefix convention is repo-wide (gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb:105-123 uses the same check for wisdom_promotion); that lane was not audited here, and a fix to F23-SEC-01 should decide whether it applies there too."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F23-SEC-01 (critical)",
+    "needs independent challenge: F23-COR-01 (major)",
+    "possible duplicate/overlap of CF04-REL-01 (FINDINGS.md:13) in domain - transition/effect terminal-state selection - but different seam; F23-COR-02, do not merge",
+    "F23-MNT-01 is documentation-only and may be routed to the docs owner instead of this row",
+    "prior top-100 finding 082 (autonomy_case.rb vacuous hard-counter gate) checked and NOT reproduced; see prior_findings",
+    "F23-REL-01 is the cheapest major to close (two lines plus a test the existing double can already drive)"
+  ]
+}

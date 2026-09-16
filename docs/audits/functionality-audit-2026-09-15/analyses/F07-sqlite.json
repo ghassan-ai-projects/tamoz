@@ -1,0 +1,167 @@
+{
+  "row": "F07",
+  "surface": "gems/tamoz-sqlite",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 1, "major": 1, "minor": 2, "info": 0},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F07-SEC-01",
+      "severity": "critical",
+      "confidence": "high",
+      "status": "open",
+      "title": "effect resolution accepts a foreign lease and has no row-scope binding",
+      "seam": "effect_reconciler.rb#resolve",
+      "citations": [
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb:173-206",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb:86-92",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal_rows.rb:10-23",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal_key.rb:138-179",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_preparation.rb:139-149",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_completion.rb:63",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/effect_completion.rb:104"
+      ],
+      "five_whys": true,
+      "recommendation": "At EffectReconciler#resolve validate the lease inside the transaction as #reconcile already does, require the loaded row's thread_id/namespace to equal the lease's, and include both columns in the conditional UPDATE, raising CheckpointConflictError before appending a transition. Add a shared-adapter A/B test.",
+      "reproduced_at_head": true,
+      "reproduction": "Shared-adapter probe: thread.b writer holding a valid thread.b lease resolved a thread.a unsafe effect to succeeded; returned record still reports thread_id=thread.a.",
+      "carried_forward": true,
+      "new_supporting_fact": "resolve is the only effect mutation path with neither a lease check nor an attempt-token check; prepare, start, reconcile and complete each have one of the two."
+    },
+    {
+      "id": "F07-REL-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "the eight-row claim window makes a valid queued resume unreachable",
+      "seam": "request_inbox_claimer.rb#candidate_rows",
+      "citations": [
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:220-231",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:160-181",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:188-190",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_claimer.rb:33"
+      ],
+      "five_whys": true,
+      "recommendation": "In claim_request_in_transaction, when every row in the window was deferred as an early turn, add the oldest eligible :resume for the open occurrence beyond the window and run it through the same validator and fence. Merely raising 8 relocates the hole. Add a regression with 8 early turns plus a valid resume.",
+      "reproduced_at_head": true,
+      "reproduction": "Probe at 582ae55: early_turns=7 -> run_next=resume; early_turns=8/9/12 -> run_next=nil on three consecutive attempts, with resume.1 left status=queued at enqueue_sequence=9.",
+      "carried_forward": true,
+      "boundary_correction": "Starvation begins at 8 deferred turns, not 9 as recorded in analyses/request-claim-starvation.md; with exactly 8 the LIMIT 8 window is full."
+    },
+    {
+      "id": "F07-INT-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "a schedule's canonical digest is accepted unverified and survives the SQLite round-trip",
+      "seam": "schedule_store.rb#put_schedule",
+      "citations": [
+        "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb:69",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb:90",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb:703"
+      ],
+      "five_whys": false,
+      "root_cause": "The shared Schedule value object treats a supplied definition_digest as authority rather than as a claim to verify; this gem then faithfully persists and re-reads it without recomputation, so the false provenance becomes durable.",
+      "recommendation": "Mirror Capability::Descriptor: compute the canonical digest after validate!, require exact equality when a digest is supplied, and freeze the retained value. Add a SQLite round-trip test proving a forged row cannot materialize.",
+      "reproduced_at_head": true,
+      "reproduction": "Override accepted while differing from canonical and not frozen; after put_schedule the stored digest reads back as the forged sha256:000...0.",
+      "carried_forward": true
+    },
+    {
+      "id": "F07-BND-02",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "three comms/inbox read paths are unbounded",
+      "seam": "request_inbox_rows.rb#request_history",
+      "citations": [
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_rows.rb:44-63",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:709-717",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:747-774",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:50",
+        "gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_queries.rb:110"
+      ],
+      "five_whys": false,
+      "root_cause": "The shared REQUEST_SELECT history helper and two comms status helpers were written for the reading caller's convenience; the bounding convention applied to the sibling projections in the same files was not applied to them.",
+      "recommendation": "Apply the convention already present in these files: give request_history a limit: via the existing history_limit bound, and add LIMIT to the two comms status helpers.",
+      "reproduced_at_head": false,
+      "carried_forward": false
+    }
+  ],
+  "carried_forward_by_reference": [
+    {"id": "CF04-REL-01", "severity": "major", "status": "open", "verified": true,
+     "note": "Gem half correct: effect_completion.rb:153-167 retains the late receipt and sets reconcile; effect_reconciler.rb:188-206 keeps requires_reconciliation for a non-success resolution. The defective receipt selection is EffectDispatcher#terminal_attempt (gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb:280-283), owned by the kernel."},
+    {"id": "CF07-ARCH-01", "severity": "major", "status": "open", "verified": true,
+     "note": "Versioned ScheduleStore contract (gems/tamoz-scheduler/lib/tamoz/scheduler/schedule_store.rb:17-75) does not declare acknowledge_occurrence or occurrence_for_request; both are concrete extensions at schedule_store.rb:487-559."},
+    {"id": "CF07-REL-02", "severity": "major", "status": "open", "verified": true,
+     "note": "complete_occurrence CASes on occurrence_id AND state='running' only (schedule_store.rb:511-535) and never compares the execution id acknowledged at schedule_store.rb:487-505."},
+    {"id": "F07-lease_for-noop", "severity": "minor", "status": "deferred", "verified": true,
+     "note": "materialize_due accepts lease_for: and never reads it (schedule_store.rb:168-199); prior audit 026."}
+  ],
+  "tests_run": [
+    {"command": "ruby -Itest test/sqlite_boundary_registry_test.rb", "runs": 5, "assertions": 1576, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_trace_recorder_test.rb", "runs": 11, "assertions": 952, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_schedule_store_test.rb", "runs": 21, "assertions": 73, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_effect_journal_test.rb", "runs": 9, "assertions": 37, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_request_inbox_test.rb", "runs": 8, "assertions": 46, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_stale_request_test.rb", "runs": 26, "assertions": 176, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_store_test.rb", "runs": 6, "assertions": 68, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_checkpoint_test.rb", "runs": 6, "assertions": 23, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_backup_test.rb", "runs": 3, "assertions": 16, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_crash_recovery_test.rb", "runs": 3, "assertions": 30, "failures": 0},
+    {"command": "ruby -Itest test/memory_store_test.rb", "runs": 16, "assertions": 112, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_approval_stores_test.rb", "runs": 10, "assertions": 45, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_deletion_test.rb", "runs": 3, "assertions": 19, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_comms_store_test.rb", "runs": 45, "assertions": 246, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_circuit_store_test.rb", "runs": 11, "assertions": 48, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_kernel_test.rb", "runs": 8, "assertions": 63, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_checkpoint_seams_test.rb", "runs": 7, "assertions": 14, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_boundary_source_audit_test.rb", "runs": 7, "assertions": 55, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_schedule_determinism_test.rb", "runs": 4, "assertions": 15, "failures": 0},
+    {"command": "ruby -Itest test/comms_decision_store_test.rb", "runs": 11, "assertions": 26, "failures": 0},
+    {"command": "ruby -Itest test/effect_identity_test.rb", "runs": 5, "assertions": 12, "failures": 0},
+    {"command": "ruby -Itest test/sqlite_convergence_probe_test.rb", "runs": 5, "assertions": 1162, "failures": 0}
+  ],
+  "tests_not_run": [
+    "test/sqlite_raw_oracle_test.rb - environment-bound SIGKILL/selector harness, marked unproven in documentation/limitations.md",
+    "test/sqlite_selector_control_test.rb - same selector-control harness",
+    "test/sqlite_scenario_driver_test.rb, test/sqlite_scenario_registry_test.rb - slow; belongs to a scenario row",
+    "test/agent_session_effect_test.rb, test/agent_runtime_effects_test.rb - F17/F22 rows",
+    "test/release_rehearsal_evidence_test.rb, test/release_evaluation_manifest_test.rb - slow release-evidence rows",
+    "test/scheduler_contract_test.rb - F05 row"
+  ],
+  "probes": [
+    {"name": "F07-SEC-01 cross-thread resolve", "path": "/tmp/f07_probe_a.rb", "wrote_repo": false, "result": "reproduces"},
+    {"name": "F07-REL-01 claim starvation", "path": "/tmp/f07_probe_c.rb", "wrote_repo": false, "result": "reproduces at 8 deferred turns"},
+    {"name": "schedule digest round-trip", "path": "/tmp/f07_probe_d.rb", "wrote_repo": false, "result": "reproduces"}
+  ],
+  "no_backwards_compat_check": {
+    "grep": "legacy|backward|compat shim|migrate-on-read|read-time toleran|deprecated|old row",
+    "hits": 3,
+    "verdict": "honored",
+    "detail": "Only two no-compat rule comments (migrator.rb:973, migrator.rb:1193) and a clock-rollback message (lease_operations.rb:221). Migrations 13/18/19/20/21 are DROP+CREATE rebuilds with no INSERT..SELECT carrying old rows forward; no read path tolerates a NULL for a later-added column."
+  },
+  "blind_spots": [
+    "migrator.rb read selectively: apply/verify path in full plus migrations 1, 9-13, 15, 16, 18-22 in full; migrations 2-8, 14, 17 not read statement by statement, so their DDL constraint adequacy was not audited.",
+    "comms_store.rb (1301 lines) read in structure: poller lease, offset, projections, history/effect-status helpers, outbox bound. Conversation-status projection builders (:487-650) and comms_store_rows.rb not read line by line; prior finding 006 not re-derived.",
+    "memory_store.rb read at header contract, MAX_LIMIT, index row, search build. Retirement/purge and the sensitivity filter not verified end to end; prior finding 034 not re-derived.",
+    "Not read: boundary_registry.rb (prior 083 PASS, not re-derived), boundary_source_audit.rb, verification_store.rb, artifact_store.rb, approval_* stores, durable_subscriber_store.rb, circuit_store.rb, thread_tombstone.rb, thread_purge.rb, deletion_report_codec.rb, backup.rb, checkpoint_wire.rb, checkpoint_pruner.rb internals.",
+    "No cross-process test run; both reproductions use one in-process adapter with two writers. No end-to-end graph-unblock claim is made for F07-SEC-01.",
+    "No load, soak, or memory-profile measurement for F07-BND-02; the finding is from source.",
+    "Environment-bound gates (sqlite_raw_oracle_test.rb, agent_session_kill_matrix_test) were not attempted; the invariant-19/20 and objective-4 evidence claims were neither reproduced nor refuted."
+  ],
+  "coordinator_flags": [
+    "needs independent challenge: F07-SEC-01",
+    "correction to a recorded analysis: analyses/request-claim-starvation.md states the starvation threshold is nine queued turns; the probe shows it is eight (the LIMIT 8 window fills exactly)",
+    "F07-SEC-01 gains a narrowing fact for the fix: resolve is the only effect mutation path with neither a lease check nor an attempt-token check",
+    "CF04-REL-01 confirmed still open; the fix belongs to tamoz-agent-kernel, not this gem",
+    "possible duplicate of prior finding 026 (materialize_due lease_for: no-op) - re-confirmed, carried as deferred"
+  ]
+}

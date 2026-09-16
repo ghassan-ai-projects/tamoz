@@ -191,14 +191,17 @@ class AgentSessionKillMatrixTest < Minitest::Test
       ),
       fault_injector: fault
     )
+    # The check child runs credential-free: CheckRunner withholds the whole
+    # TAMOZ_ namespace from it (F08-SEC-01), so the fault-injection channel this
+    # script reads has to use names that survive that filter.
     check_script = <<~CHECK
-      File.open(ENV.fetch("TAMOZ_EVENT_LOG"), "ab") { |f| f.write("check:ran\\n") }
-      if ENV["TAMOZ_KILL_IN_CHECK"] == "1"
+      File.open(ENV.fetch("KILL_MATRIX_EVENT_LOG"), "ab") { |f| f.write("check:ran\\n") }
+      if ENV["KILL_MATRIX_KILL_IN_CHECK"] == "1"
         Process.kill("KILL", Process.ppid)
         sleep 0.3
         exit 1
       end
-      if ENV.fetch("TAMOZ_TOOL", "apply_patch") == "create_file"
+      if ENV.fetch("KILL_MATRIX_TOOL", "apply_patch") == "create_file"
         abort("wrong") unless File.read("greeting.txt") == "hello\\n"
       else
         abort("wrong") unless File.read("app.rb") == "value = 2\\n"
@@ -444,7 +447,7 @@ class AgentSessionKillMatrixTest < Minitest::Test
         context,
         mode: "run",
         seam: {},
-        environment: {"TAMOZ_KILL_IN_CHECK" => "1"}
+        environment: {"KILL_MATRIX_KILL_IN_CHECK" => "1"}
       )
 
       assert status.signaled?, "child was not killed: #{status.inspect}"
@@ -757,9 +760,13 @@ class AgentSessionKillMatrixTest < Minitest::Test
       "TAMOZ_KILL_OPERATION" => seam[:operation],
       "TAMOZ_KILL_SKIP" => seam[:skip]&.to_s,
       "TAMOZ_KILL_PUBLISH" => seam[:publish],
+      "KILL_MATRIX_EVENT_LOG" => context.fetch(:log),
       "RUBYOPT" => nil,
       "BUNDLER_SETUP" => nil
     }.merge(environment)
+    # The check child cannot see the TAMOZ_ namespace (F08-SEC-01); mirror the
+    # one value the check script needs onto a name that survives the filter.
+    env["KILL_MATRIX_TOOL"] = env["TAMOZ_TOOL"]
     pid = Process.spawn(
       env,
       RbConfig.ruby,

@@ -134,8 +134,10 @@ module Tamoz
                 "thread #{thread_id.inspect} is already bound to profile #{existing.fetch('profile').inspect}"
         end
 
+        digest = profile(profile_id)&.canonical_digest
         durable("thread profile binding for #{thread_id.inspect}") do
-          upsert(THREAD_BINDINGS, thread_id, {"profile" => profile_id})
+          upsert(THREAD_BINDINGS, thread_id,
+                 {"profile" => profile_id, "profile_digest" => digest}.compact)
         end
       end
 
@@ -390,7 +392,10 @@ module Tamoz
       # got sick, which is precisely when a ceiling matters most.
       def thread_budgets(thread_id)
         durable("budgets for #{thread_id.inspect}") do
-          resolved = profile(thread_profile(thread_id))
+          binding = record(THREAD_BINDINGS, thread_id)
+          next nil if binding.nil? || binding.fetch("profile", nil).nil?
+
+          resolved = validate_thread_profile(binding, thread_id)
           resolved && resolved.budgets
         end
       end
@@ -692,9 +697,26 @@ module Tamoz
       # silently downgrading it would run the work under the wrong authority
       # rather than refusing to run it.
       def thread_profile(thread_id)
+        thread_binding(thread_id)&.fetch("profile", nil)
+      end
+
+      def thread_binding(thread_id)
         durable("profile binding for #{thread_id.inspect}") do
-          record(THREAD_BINDINGS, thread_id)&.fetch("profile", nil)
+          record(THREAD_BINDINGS, thread_id)
         end
+      end
+
+      # Resolve the profile a thread is bound to, refusing if the on-disk
+      # profile drifted from the digest pinned when the thread was bound — the
+      # same fence the child authority path enforces. A widened profile must
+      # never reach the model under a stale binding.
+      def validate_thread_profile(binding, thread_id)
+        resolved = profile(binding.fetch("profile"))
+        expected = binding.fetch("profile_digest", nil)
+        return resolved if expected && resolved && resolved.canonical_digest == expected
+
+        raise ToolPolicyError,
+              "thread #{thread_id.inspect} authority profile changed after binding"
       end
 
       # The session that will drive `thread_id`, under the authority bound to it.
@@ -702,7 +724,14 @@ module Tamoz
         child = child_task(thread_id)
         return session_for_child(child) if child
 
-        session_for_profile(thread_profile(thread_id))
+        binding = thread_binding(thread_id)
+        profile_id = binding&.fetch("profile", nil)
+        return session_for_profile(nil) if profile_id.nil?
+
+        resolved = validate_thread_profile(binding, thread_id)
+        @monitor.synchronize do
+          @sessions[profile_id] ||= build_session(profile_id, resolved_profile: resolved)
+        end
       end
 
       def session_for_child(child)

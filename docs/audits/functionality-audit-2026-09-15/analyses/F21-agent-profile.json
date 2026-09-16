@@ -1,0 +1,105 @@
+{
+  "row": "F21",
+  "surface": "gems/tamoz-agent-profile",
+  "verdict": "IMPROVE",
+  "counts": {"critical": 0, "major": 1, "minor": 1, "info": 3},
+  "lenses": {
+    "correctness": "reviewed",
+    "security": "reviewed",
+    "reliability": "reviewed",
+    "observability": "reviewed",
+    "scalability": "reviewed",
+    "maintenance": "reviewed"
+  },
+  "findings": [
+    {
+      "id": "F21-SEC-01",
+      "severity": "major",
+      "confidence": "high",
+      "status": "open",
+      "title": "Profile.from_authority accepts a structurally valid widened snapshot while retaining the old canonical digest",
+      "seam": "Profile.from_authority#enforce_authority_shape!",
+      "citations": [
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:176-203",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:256-324",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:401-421",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:574-575",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/fields.rb:9-16",
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_authority.rb:166-179",
+        "gems/tamoz-agent-session/lib/tamoz/agent/session_bindings.rb:51-61",
+        "SECURITY.md:25-31",
+        "docs/design-v0.1/INVARIANTS.md:82-88",
+        "test/agent_profile_transition_test.rb:71-123"
+      ],
+      "five_whys": true,
+      "recommendation": "At Profile.from_authority, add a versioned digest over the exact pinned authority projection (or preserve every full-document field and optional-key presence) and reject a mismatch before constructing Fields; add a coherent widening regression for tools, policy, checks, roles, root, and egress."
+    },
+    {
+      "id": "F21-REL-01",
+      "severity": "minor",
+      "confidence": "high",
+      "status": "open",
+      "title": "AdoptionRegistry#activate has an unlocked in-place read-modify-write, so concurrent activations can lose an already activated digest",
+      "seam": "Profile::AdoptionRegistry#activate",
+      "citations": [
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/adoption_registry.rb:39-56",
+        "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:816-823",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/transition_registry.rb:170-198",
+        "test/agent_profile_adoption_seams_test.rb:118-145"
+      ],
+      "five_whys": false,
+      "recommendation": "Reuse the transition registry's small sidecar lock and atomic replacement for adoption updates, then add a two-process preservation and crash-readability regression."
+    },
+    {
+      "id": "F21-SEC-02",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "Profile loading and the local tool, check, and egress validators fail closed at the operator trust boundary",
+      "seam": "Profile.load_document#open_verified and validate_schema!",
+      "citations": [
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/secure_file.rb:52-88",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/secure_file.rb:111-156",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:401-421",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/authority_validator.rb:44-94",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/check_spec_validator.rb:68-139",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/egress_validator.rb:72-207"
+      ],
+      "five_whys": false,
+      "recommendation": "Preserve the descriptor-based permission, bounded-read, safe-parse, and negative validator tests when changing replay."
+    },
+    {
+      "id": "F21-REL-02",
+      "severity": "info",
+      "confidence": "high",
+      "status": "open",
+      "title": "Transition consumption is explicit, identity-bound, and flocked at the turn boundary",
+      "seam": "Profile::TransitionRegistry#consume_if_candidate!",
+      "citations": [
+        "gems/tamoz-agent-cli/lib/tamoz/agent/cli_authority.rb:94-146",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/transition_registry.rb:113-164",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/transition_registry.rb:170-198",
+        "test/agent_profile_machinery_test.rb:484-568"
+      ],
+      "five_whys": false,
+      "recommendation": "Keep candidate consumption behind the existing identity and turn-boundary gate; do not share the unlocked adoption write path."
+    },
+    {
+      "id": "F21-SCL-01",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "unconfirmed",
+      "title": "Profile input is bounded, but adoption and transition history reads have no explicit byte or entry ceiling",
+      "seam": "Profile::AdoptionRegistry and Profile::TransitionRegistry read paths",
+      "citations": [
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:45-56",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/check_spec_validator.rb:26-95",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/egress_validator.rb:164-180",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/adoption_registry.rb:63-75",
+        "gems/tamoz-agent-profile/lib/tamoz/agent/profile/transition_registry.rb:237-248"
+      ],
+      "five_whys": false,
+      "recommendation": "Establish and measure an explicit registry history bound or compaction policy before treating long-lived profile rotation as resource-complete."
+    }
+  ]
+}
