@@ -966,8 +966,13 @@ module Tamoz
           row && row.fetch('created_at_ms')
         end
 
+        # Every terminal delivery, not just a completion: F25-COR-01 routes a
+        # cancellation terminal to `stopped`, so counting only `answer` read a
+        # correctly-visible cancellation as a missing terminal.
         def terminal_send_count(fixture)
-          fixture.transport.sends.count { |send| send[:kind] == 'answer' }
+          fixture.transport.sends.count do |send|
+            OpenclawCommsOracles::TERMINAL_KINDS.include?(send[:kind])
+          end
         end
 
         def unique_effect_keys?(fixture)
