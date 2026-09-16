@@ -38,6 +38,7 @@ class CommsCliOpsTest < Minitest::Test
                                                           'channels' => channels
                                                         ))
       File.chmod(0o600, File.join(runtime_dir, 'config.yaml'))
+      CommsRuntimeProfile.write(runtime_dir, workspace)
       yield Harness.new(runtime_dir, workspace)
     end
   end
