@@ -160,10 +160,19 @@ module Tamoz
         @transport = HarnessTransport.new(
           surface_id: Fixture::SURFACE_ID, surface_revision: Fixture::SURFACE_REVISION
         )
-          @gateway = Tamoz::Comms::Gateway.new(
-            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
-            descriptor: descriptor(admission_mode), poller_owner: 'sim:gateway',
-            controls: ->(thread_id) { @runtime.session_for(thread_id) }
+        surface = descriptor(admission_mode)
+        @gateway = Tamoz::Comms::Gateway.new(
+          adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
+          descriptor: surface, poller_owner: 'sim:gateway',
+          # Production paces a conversation at one message per second and the
+          # drainer really sleeps for it; every `serve` pays that second. This
+          # harness drives turns, not pacing, so the drainer it owns skips the
+          # wait — the send, the scheduled stamp, and the receipt are unchanged.
+          drainer: Tamoz::Comms::DeliveryDrainer.new(
+            store: @store, transport: @transport, descriptor: surface,
+            owner: 'sim:gateway:drainer', batch_size: 50, sleeper: ->(_) {}
+          ),
+          controls: ->(thread_id) { @runtime.session_for(thread_id) }
         )
         sink = Tamoz::Comms::OutboxDeliverySink.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
