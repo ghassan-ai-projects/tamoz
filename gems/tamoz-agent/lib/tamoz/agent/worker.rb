@@ -56,9 +56,11 @@ module Tamoz
         batch: DEFAULT_BATCH,
         cancellation: nil,
         recorder: Tamoz::Observability::Recorder::Null::INSTANCE,
-        content_policy: Tamoz::Observability::ContentPolicy::NONE
+        content_policy: Tamoz::Observability::ContentPolicy::NONE,
+        healing: SelfHealingAssessor.new(rules: Healing::RuleRegistry.new)
       )
         @runtime = runtime
+        @healing = healing
         @session_builder = session_builder
         @emitter = emitter
         @once = once
@@ -761,7 +763,22 @@ module Tamoz
              reason: settled_failure_reason(view),
              status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
+        emit_healing_assessment(view, thread_id, occurrence_id)
         PROGRESSED
+      end
+
+      # ADR-028 shadow stage on the durable path (worker/queue/schedule/Telegram):
+      # classify the failed turn's typed failure and emit an operator event.
+      # Executes nothing; correspondents are unaffected (operator telemetry).
+      def emit_healing_assessment(view, thread_id, occurrence_id)
+        return unless @healing
+
+        assessment = @healing.assess_observations(Array(view.state[:observations]))
+        return unless assessment
+
+        emit("healing.assessment", thread: thread_id, request_id: occurrence_id, assessment: assessment.to_h)
+      rescue StandardError => error
+        emit("worker.error", reason: "healing assessment failed: #{error.message}")
       end
 
       def settle_blocked_view(view, thread_id, occurrence_id, duration_ms)

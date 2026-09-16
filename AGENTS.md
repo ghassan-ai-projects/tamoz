@@ -106,6 +106,12 @@ failure model, a rejected alternative), write one or two lines. Not a paragraph,
 a narrative of the bug it replaced, not a rationale for a decision the diff already
 shows. Commit messages and PR bodies carry history; source files do not.
 
+New classes and methods are the usual offenders: do not open one with a multi-line
+prose header explaining what it is for, how it fits the design, or which ADR blesses
+it. A bare name is the default; at most one line of "why" when the name cannot carry
+it. Cite an ADR/invariant only when a reader must have that identifier to change the
+code safely — never as decoration. This applies to new files as much as edits.
+
 <!-- enola:begin -->
 ## enola — architecture before and after a change
 

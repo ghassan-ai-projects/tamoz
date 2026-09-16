@@ -8,6 +8,7 @@ require "tamoz/comms/gateway"
 
 require_relative "agent/cli/version"
 require_relative "agent/cli_worker_commands"
+require_relative "agent/cli_improvement_commands"
 require_relative "agent/cli_schedule_commands"
 require_relative "agent/cli_profile_commands"
 require_relative "agent/cli_session_commands"
