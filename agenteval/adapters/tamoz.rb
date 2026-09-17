@@ -40,7 +40,14 @@ module Agenteval
       # moving without special-casing any prompt.
       stdin: "y\n" * 200,
       command: lambda do |scenario, dir|
-        argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", dir]
+        # The session store must not be the operator's live one. Without this the eval
+        # writes a durable thread per trial into ~/Library/Application Support/tamoz/
+        # sessions and never cleans it up, so a paid run leaves hundreds of threads
+        # behind and its state can leak between trials.
+        session_dir = File.join(ENV.fetch("AGENTEVAL_SESSION_DIR", Agenteval::ROOT), "sessions")
+        FileUtils.mkdir_p(session_dir, mode: 0o700)
+        argv = ["rbenv", "exec", "bundle", "exec", "tamoz",
+                "--root", dir, "--session-dir", session_dir]
         unless scenario.readonly
           argv += ["--allow-changes", "--check", "test=#{scenario.notes.fetch("check_command")}"]
         end

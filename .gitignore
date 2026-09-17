@@ -80,6 +80,9 @@ build-iPhoneSimulator/
 # clean checkout and `git status` stay meaningful.
 agenteval/reports/
 agenteval/tmp/
+# Per-trial durable session stores. The adapter pins these here so a run never writes
+# threads into the operator's live store; they are run output, not harness source.
+agenteval/sessions/
 
 # SQLite WAL sidecars from test runs (tracked fixture DBs opened by tests)
 *.sqlite3-shm
