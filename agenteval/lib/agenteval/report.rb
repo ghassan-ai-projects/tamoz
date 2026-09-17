@@ -95,8 +95,12 @@ module Agenteval
     # workspace alone is correct. A single blended rate averages a 100% that requires
     # nothing with a single-digit rate that requires work, which is arithmetic rather
     # than an estimate (RESEARCH §4.1).
+    #
+    # Grouped over @results, like `reliability`: grouping `scored` here would drop errored
+    # trials from one block and not the other, so the two would disagree about the same
+    # scenario.
     def composition
-      by_class = scored.group_by { |result| result.scenario.abstention? ? "inaction" : "acting" }
+      by_class = @results.group_by { |result| result.scenario.abstention? ? "inaction" : "acting" }
       by_class.transform_values do |group|
         {
           "trials" => group.length,

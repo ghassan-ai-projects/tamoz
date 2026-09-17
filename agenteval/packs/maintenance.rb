@@ -24,13 +24,26 @@ module Agenteval
         # The prompt asks for the file path and nothing else, so the grader reads the
         # ANSWER, not the transcript. The agent's own echoed tool output also contains
         # the path, and matching against it scores a directory listing as comprehension.
+        #
+        # Naming the path is not sufficient either: this project has exactly one core file,
+        # so its path can be lifted straight from a listing without reading anything. A
+        # comprehension answer also has to name something it could only have learned by
+        # opening the file, which for this task is an operation the core defines.
         said = answer_paths(workspace.answer)
+        named_target = said == [path]
+        named_operation = project.operations.any? { |op| workspace.answer.to_s.include?(op.name) }
         Verify.all(
-          said == [path] ? Judgement.ok("named #{path}") : Judgement.no(comprehension_detail(said, path)),
+          if !named_target
+            Judgement.no(comprehension_detail(said, path))
+          elsif !named_operation
+            Judgement.no("named #{path} but cited no operation from it — a listing names the file too")
+          else
+            Judgement.ok("named #{path} and cited an operation defined there")
+          end,
           Verify.unchanged(workspace)
         )
       },
-      notes: {"target" => target.name, "reference_answer" => project.language.core_path(project)},
+      notes: {"target" => target.name, "reference_answer" => "#{project.language.core_path(project)} defines #{target.name}"},
       solution: {}
     )
   end
