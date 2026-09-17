@@ -73,9 +73,13 @@ build-iPhoneSimulator/
 .cursor/
 .review-state/
 
-# User-owned evaluation workspace. Not repository content; kept out of git so a
+# Evaluation harness, minus local output. The harness is tracked on purpose: it is the
+# thing that judges the agent, so a change to how a status is assigned, or to what
+# adversity means, has to be reviewable and revertable in history — and its digest has
+# to be able to tell two different corpora apart. Only run output stays ignored, so a
 # clean checkout and `git status` stay meaningful.
-agenteval/
+agenteval/reports/
+agenteval/tmp/
 
 # SQLite WAL sidecars from test runs (tracked fixture DBs opened by tests)
 *.sqlite3-shm

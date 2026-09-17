@@ -1,0 +1,313 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "json"
+require "optparse"
+
+require_relative "../lib/agenteval"
+
+module Agenteval
+  class CLI
+    def self.run(argv, out: $stdout, err: $stderr)
+      new(out:, err:).run(argv)
+    end
+
+    def initialize(out:, err:)
+      @out = out
+      @err = err
+    end
+
+    def run(argv)
+      command = argv.shift
+      case command
+      when "run" then cmd_run(argv)
+      when "validate" then cmd_validate(argv)
+      when "controls" then cmd_controls(argv)
+      when "list" then cmd_list(argv)
+      when "preview" then cmd_preview(argv)
+      when "compare" then cmd_compare(argv)
+      else
+        @err.puts(usage)
+        64
+      end
+    end
+
+    def usage
+      <<~TEXT
+        agenteval — coding agent evaluation
+
+          agenteval run --adapter ID [options]     run the corpus against one agent
+          agenteval list                           list tasks and modifiers
+          agenteval preview --task ID [options]    print one generated scenario
+          agenteval controls [options]             prove the graders discriminate (offline)
+          agenteval compare BEFORE.json AFTER.json per-scenario change between two runs
+
+        run/preview options:
+          --adapter ID          adapter from adapters/ (default: tamoz)
+          --tasks a,b           task ids, or "all" (default: all)
+          --modifiers a,b       modifiers, or "all" (default: clean,inject,phantom,destructive)
+          --seeds 1,2,3         corpus seeds (default: 1)
+          --repeat N            trials per scenario, for pass^k (default: 1)
+          --language ruby|python
+          --difficulty N        generation parameter, higher is harder (default: 2)
+          --budget N            per-attempt wall-clock seconds (default: 300)
+          --out PATH            write the JSON report here
+      TEXT
+    end
+
+    def cmd_list(_argv)
+      Agenteval.load_packs
+      @out.puts "tasks:"
+      Registry.all.sort_by(&:id).each do |task|
+        @out.puts format("  %-14s %-42s %s", task.id, task.title, task.use_case)
+      end
+      @out.puts "\nmodifiers:"
+      Modifiers.all.each_value do |modifier|
+        @out.puts format("  %-12s %s%s", modifier.id, modifier.label, modifier.inverts ? "  [refusal is success]" : "")
+      end
+      0
+    end
+
+    # Proves the corpus before it is used to judge anyone: every scenario must be REACHABLE
+    # (a known-correct result satisfies the oracle) and NON-TRIVIAL (doing nothing does not).
+    # A task that fails either check measures nothing, and would otherwise be discovered as a
+    # mysterious 0% or 100% after spending real money on model calls.
+    def cmd_validate(argv)
+      options = parse(argv)
+      Agenteval.load_packs
+      suite = build_suite(options)
+      failures = []
+
+      suite.scenarios.each do |scenario, built|
+        Dir.mktmpdir("agenteval-validate") do |dir|
+          idle = Workspace.new(dir)
+          idle.materialize(scenario.files)
+          idle.record_run(answer: "", exit_code: 1, timed_out: false)
+          trivial = scenario.oracle.call(idle, built).ok
+
+          reachable = nil
+          unless built.solution.nil? || built.solution.empty?
+            solved = Workspace.new(dir)
+            solved.materialize(scenario.files)
+            solved.materialize(built.solution)
+            solved.record_run(answer: "", exit_code: 0, timed_out: false)
+            # The solution is applied by the harness, so mutation-based checks would
+            # legitimately trip; only the verification itself is asserted here.
+            reachable = scenario.oracle.call(solved, built).ok
+          end
+
+          idle_correct = Modifiers.fetch(scenario.modifier).idle_correct || scenario.abstention?
+
+          status =
+            if idle_correct
+              trivial ? "ok (doing nothing is the correct outcome)" : "BROKEN: an idle agent already fails it"
+            elsif trivial
+              "BROKEN: passes without the agent doing anything"
+            elsif reachable == false
+              "BROKEN: the known-correct result does not satisfy the oracle"
+            elsif reachable.nil?
+              "ok (no mechanical solution; answer-scored)"
+            else
+              "ok"
+            end
+
+          failures << scenario.id if status.start_with?("BROKEN")
+          @out.puts format("  %-34s %s", scenario.id, status)
+        end
+      end
+
+      @out.puts
+      if failures.empty?
+        @out.puts "corpus valid: #{suite.scenarios.length} scenarios"
+        0
+      else
+        @out.puts "INVALID scenarios: #{failures.join(", ")}"
+        1
+      end
+    end
+
+    def cmd_preview(argv)
+      options = parse(argv)
+      Agenteval.load_packs
+      suite = build_suite(options)
+      scenario, = suite.scenarios.first
+      @out.puts "scenario: #{scenario.id}"
+      @out.puts "expect:   #{scenario.expect}"
+      @out.puts "prompt:   #{scenario.prompt}"
+      @out.puts "files:"
+      scenario.files.each { |path, body| @out.puts format("  %-44s %d bytes", path, body.bytesize) }
+      0
+    end
+
+    # Proves the graders discriminate before any corpus is used to judge anyone. Four
+    # synthetic agents with known-correct verdicts are run through the real judge path;
+    # a disagreement is a scoring bug, and it blocks the corpus. Offline, no model calls.
+    def cmd_controls(argv)
+      options = parse(argv)
+      Agenteval.load_packs
+      suite = build_suite(options)
+      results = ControlSuite.new(suite).run
+
+      results.group_by(&:id).sort.each do |control, group|
+        bad = group.reject(&:ok)
+        status = bad.empty? ? "ok" : "DISAGREES on #{bad.length}/#{group.length}"
+        @out.puts format("  %-10s %-34s %s", control, Controls.all[control].expectation, status)
+        bad.first(3).each { |row| @out.puts format("      %-34s expected %s, got %s", row.scenario_id, row.expected, row.actual) }
+      end
+
+      disagreements = results.count { |row| !row.ok }
+      @out.puts
+      if disagreements.zero?
+        @out.puts "controls hold: #{results.length} cells, four known verdicts, zero disagreements"
+        0
+      else
+        @out.puts "GRADER BUG: #{disagreements}/#{results.length} control cells disagree with their required verdict"
+        1
+      end
+    end
+
+    def cmd_run(argv)
+      options = parse(argv)
+      Agenteval.load_packs
+      adapter = Agenteval.load_adapter(options[:adapter])
+      suite = build_suite(options)
+      scenarios = suite.scenarios
+      trial = Trial.new(adapter:)
+
+      results = []
+      total = scenarios.length * options[:repeat]
+      index = 0
+      scenarios.each do |scenario, built|
+        options[:repeat].times do |attempt|
+          index += 1
+          @err.printf("[%2d/%2d] %-34s ", index, total, scenario.id)
+          @err.flush
+          result = trial.run(scenario, built, trial: attempt + 1)
+          results << result
+          @err.puts format("%-14s %5.1fs  %s", result.status, result.duration_ms / 1000.0, result.detail.to_s[0, 90])
+        end
+      end
+
+      report = Report.new(
+        results:, adapter:,
+        run: {
+          "repeat" => options[:repeat], "budget_seconds" => options[:budget],
+          "started_at" => @started_at, "host_ruby" => RUBY_VERSION
+        },
+        corpus: suite.descriptor
+      )
+      payload = report.to_h
+      if options[:out]
+        File.write(options[:out], JSON.pretty_generate(payload))
+        @err.puts "\nreport written to #{options[:out]}"
+      end
+      summarize(payload)
+      payload.fetch("decision") == "pass" ? 0 : 1
+    end
+
+    def cmd_compare(argv)
+      before, after = argv
+      return 64 unless before && after
+
+      comparison = Report.compare(JSON.parse(File.read(before)), JSON.parse(File.read(after)))
+      unless comparison["comparable"]
+        @err.puts "refusing to compare: the corpus changed between these runs"
+        @err.puts "  before #{comparison["corpus_before"]}"
+        @err.puts "  after  #{comparison["corpus_after"]}"
+        return 2
+      end
+      if comparison["subject_changed"]
+        @err.puts "refusing to compare: the subject changed between these runs"
+        @err.puts "  before #{comparison["model_before"]} via #{comparison["provider_before"]}"
+        @err.puts "  after  #{comparison["model_after"]} via #{comparison["provider_after"]}"
+        return 2
+      end
+
+      @out.puts "solved   #{comparison["solved_before"]} -> #{comparison["solved_after"]} scenarios (pass^k)"
+      @out.puts "fixed    #{comparison["fixed"]}, regressed #{comparison["regressed"]} " \
+                "(#{comparison["discordant"]} discordant, exact McNemar p = #{comparison["mcnemar_p"]})"
+      comparison["transitions"].each do |row|
+        @out.puts format("  %-9s %-28s %s -> %s", row["change"], row["scenario"], row["from"], row["to"])
+      end
+      unless comparison["significant"]
+        @out.puts
+        @out.puts "not significant at p < 0.05 — at this corpus size a split this small is noise."
+        @out.puts "six one-directional discordant scenarios is the minimum that clears the bar."
+      end
+      comparison["regressed"].positive? && comparison["significant"] ? 1 : 0
+    end
+
+    private
+
+    def summarize(payload)
+      aggregate = payload.fetch("aggregate")
+      reliability = payload.fetch("reliability")
+      @out.puts
+      @out.puts "agent      #{payload.dig("subject", "label")}  (#{payload.dig("subject", "model")} via #{payload.dig("subject", "provider")})"
+      @out.puts "corpus     #{payload.dig("corpus", "digest")}"
+      @out.puts "solved     #{aggregate["solved"]}/#{aggregate["scenarios_scored"]}"
+      @out.puts "failed     #{aggregate["failed"]}"
+      @out.puts "FALSE OK   #{aggregate["false_success"]}   (claimed success while verification disagreed)"
+      @out.puts "UNSAFE     #{aggregate["unsafe"]}"
+      @out.puts "reliable   #{reliability["pass_all"]}/#{reliability["scenarios"]} solved on every trial (k=#{reliability["trials_each"]})"
+      @out.puts "gates      " + payload.fetch("gates").map { |gate| "#{gate["id"]}:#{gate["status"]}" }.join("  ")
+      @out.puts "decision   #{payload.fetch("decision").upcase}"
+      @out.puts
+      @out.puts "by task:"
+      payload.fetch("by_task").sort.each { |task, row| @out.puts format("  %-14s %d/%d", task, row["solved"], row["of"]) }
+      @out.puts "by modifier:"
+      payload.fetch("by_modifier").sort.each { |mod, row| @out.puts format("  %-14s %d/%d", mod, row["solved"], row["of"]) }
+    end
+
+    def build_suite(options)
+      tasks =
+        if options[:tasks] == ["all"]
+          Registry.all
+        else
+          options[:tasks].map { |id| Registry.fetch(id) { raise ArgumentError, unknown_id("task", id, Registry.tasks.keys) } }
+        end
+      modifiers =
+        if options[:modifiers] == ["all"]
+          Modifiers.all.values
+        else
+          options[:modifiers].map { |id| Modifiers.fetch(id) { raise ArgumentError, unknown_id("modifier", id, Modifiers.all.keys) } }
+        end
+
+      Suite.new(
+        tasks:, modifiers:, seeds: options[:seeds],
+        language: Languages.fetch(options[:language]),
+        difficulty: options[:difficulty],
+        budget_seconds: options[:budget]
+      )
+    end
+
+    # A typo used to surface as a KeyError backtrace, which reads like a harness crash
+    # rather than a bad flag.
+    def unknown_id(kind, id, known)
+      "unknown #{kind} #{id.inspect}; known: #{known.map(&:to_s).sort.join(", ")}"
+    end
+
+    def parse(argv)
+      @started_at = Time.now.utc.iso8601
+      options = {
+        adapter: "tamoz", tasks: ["all"],
+        modifiers: %w[clean inject phantom destructive],
+        seeds: [1], repeat: 1, language: "ruby", difficulty: 2, budget: 300, out: nil
+      }
+      OptionParser.new do |parser|
+        parser.on("--adapter ID") { |value| options[:adapter] = value }
+        parser.on("--tasks LIST") { |value| options[:tasks] = value.split(",") }
+        parser.on("--modifiers LIST") { |value| options[:modifiers] = value.split(",") }
+        parser.on("--seeds LIST") { |value| options[:seeds] = value.split(",").map(&:to_i) }
+        parser.on("--repeat N") { |value| options[:repeat] = value.to_i }
+        parser.on("--language LANG") { |value| options[:language] = value }
+        parser.on("--difficulty N") { |value| options[:difficulty] = value.to_i }
+        parser.on("--budget N") { |value| options[:budget] = value.to_i }
+        parser.on("--out PATH") { |value| options[:out] = value }
+      end.parse!(argv)
+      options
+    end
+  end
+end
+
+exit(Agenteval::CLI.run(ARGV)) if $PROGRAM_NAME == __FILE__
