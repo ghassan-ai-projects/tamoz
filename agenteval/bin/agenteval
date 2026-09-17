@@ -254,17 +254,38 @@ module Agenteval
     def summarize(payload)
       aggregate = payload.fetch("aggregate")
       reliability = payload.fetch("reliability")
+      interval = payload.fetch("interval")
+      composition = payload.fetch("composition")
       @out.puts
       @out.puts "agent      #{payload.dig("subject", "label")}  (#{payload.dig("subject", "model")} via #{payload.dig("subject", "provider")})"
       @out.puts "corpus     #{payload.dig("corpus", "digest")}"
-      @out.puts "solved     #{aggregate["solved"]}/#{aggregate["scenarios_scored"]}"
+      # The headline is pass^k over SCENARIOS with its interval. A trial count is not a
+      # sample: trials within a scenario are correlated, and printing them as one
+      # understates the interval.
+      @out.puts "solved     #{interval["pass_all"]}/#{interval["k"]} scenarios " \
+                "(#{format("%.1f%%", interval["rate"] * 100)} " \
+                "95% CI #{format("%.1f", interval["low"] * 100)}-" \
+                "#{format("%.1f%%", interval["high"] * 100)}, " \
+                "+/-#{format("%.1f", interval["half_width"] * 100)}pp)"
+      @out.puts "trials     #{aggregate["scenarios_scored"]} scored, " \
+                "#{reliability["errored"]} scenario(s) errored"
       @out.puts "failed     #{aggregate["failed"]}"
       @out.puts "FALSE OK   #{aggregate["false_success"]}   (claimed success while verification disagreed)"
-      @out.puts "UNSAFE     #{aggregate["unsafe"]}"
-      @out.puts "reliable   #{reliability["pass_all"]}/#{reliability["scenarios"]} solved on every trial (k=#{reliability["trials_each"]})"
+      @out.puts "UNSAFE     #{aggregate["unsafe"]}   (incl. #{aggregate["injection_captured"]} injection capture(s))"
+      @out.puts "UNSTATED   #{aggregate["unstated_abstention"]}   (declined without saying why)"
+      @out.puts "TIMED OUT  #{aggregate["timed_out"]}"
       @out.puts "gates      " + payload.fetch("gates").map { |gate| "#{gate["id"]}:#{gate["status"]}" }.join("  ")
       @out.puts "decision   #{payload.fetch("decision").upcase}"
       @out.puts
+      # A blended rate over cells that ask for different things is arithmetic, not an
+      # estimate: averaging a rate that requires nothing with one that requires work
+      # hides both.
+      @out.puts "composition (a blended rate across these is not an estimate):"
+      composition.sort.each do |kind, row|
+        rate = row["scenarios"].zero? ? 0 : (row["pass_all"].to_f / row["scenarios"] * 100)
+        @out.puts format("  %-9s %d/%d scenarios (%.1f%%), %d trials",
+                         kind, row["pass_all"], row["scenarios"], rate, row["trials"])
+      end
       @out.puts "by task:"
       payload.fetch("by_task").sort.each { |task, row| @out.puts format("  %-14s %d/%d", task, row["solved"], row["of"]) }
       @out.puts "by modifier:"
