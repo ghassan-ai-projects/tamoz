@@ -9,10 +9,14 @@ sensor → decision → actuator loop it supervises without ever owning the seri
 evaluation of it is spread across five surfaces, and only one is a cadenced real-model suite
 today. This folder plans and tracks all of them.
 
-- [`RESEARCH.md`](RESEARCH.md) — the four surfaces, the agent's declared capability surface,
-  the verified framework defects, and what frontier labs actually evaluate.
-- [`QUALITY_BAR.md`](QUALITY_BAR.md) — what "useful" means, as pass/fail criteria.
-- [`PLAN.md`](PLAN.md) — the work: cadence (W), framework correctness (F), capability breadth (C).
+- [`RESEARCH.md`](RESEARCH.md) — the five surfaces, the agent's declared capability surface,
+  fourteen verified framework defects, the control suite the framework is missing, the statistics
+  the corpus can actually support, and what frontier labs evaluate.
+- [`QUALITY_BAR.md`](QUALITY_BAR.md) — what "useful" means, as 13 pass/fail criteria.
+- [`PLAN.md`](PLAN.md) — the work: cadence (W), framework correctness (F), **validity (V)**,
+  **statistics (S)**, capability breadth (C), the physical loop (P).
+- [`repro/verify_defects.rb`](repro/verify_defects.rb) — reproduces six of the defects offline,
+  deterministically, for free. Run it before believing the research.
 
 ## The five surfaces
 
@@ -24,10 +28,22 @@ today. This folder plans and tracks all of them.
 | `test/autonomy_scorecard_test.rb` (`AgentSmokeScorecard`) | Machinery: unattended completion, schedules, crash recovery, approvals, unknown effects, channels, isolation | Scripted (a plumbing gate, never an intelligence claim) |
 | `tamoz-evals` artifact verification | Whether the evidence itself is well-formed | n/a |
 
-**Current honest status:** one slice is measured, and that slice is currently measuring a
-plan-approval loop rather than coding — 28 of 28 failures in the 2026-09-17 run are the
-plan-review gate, and only 2 of 46 trials wrote a file (RESEARCH §4.1). No coding score from
-that run should be quoted.
+**Current honest status**, in three sentences that each cost something to admit:
+
+1. One slice is measured, and that slice is currently measuring a plan-approval loop rather than
+   coding — 28 of 28 failures in the 2026-09-17 run are the plan-review gate, and of the 30
+   trials that had to change code, 2 did (RESEARCH §4.1).
+2. The graders have not been shown to distinguish capability from inaction: a do-nothing agent
+   scores 10/10 on the inaction cells, an agent that prints a directory listing scores 6/6 on the
+   task family that reads strongest, and the injection gate cannot fire on the cells where
+   injection is the risk (RESEARCH §7, repros D10/D12/D14).
+3. The corpus is one instance wide (`seeds: [1]`) and has no measured noise floor, so at
+   23 scenarios the interval is ±18.5 pp and the August→September change — "fixed 2,
+   regressed 3" — is statistically indistinguishable from no change at all
+   (exact McNemar, p = 1.0; RESEARCH §8).
+
+No coding score from that run should be quoted. The right next step is not another run; it is
+`PLAN.md` V1 and F7–F10, all of which are offline and free.
 
 ## Running the coding slice (cadence)
 
@@ -46,14 +62,23 @@ bundle exec rake agenteval:compare     # diff the two newest reports; non-zero o
 `agenteval:run` overrides via env: `AGENTEVAL_MODIFIERS` (default `all`), `AGENTEVAL_REPEAT`
 (default `2`), `AGENTEVAL_BUDGET` seconds (default `240`), `AGENTEVAL_OUT`.
 
-Known gaps in this cadence, planned as W1/F1–F5: the Rakefile is not yet interpreter-safe,
-there is no `baseline` promotion, and `compare` reads the two newest local reports rather than
-the committed baseline.
+Known gaps in this cadence, planned as W1/F1–F10: the Rakefile is not yet interpreter-safe,
+there is no `baseline` promotion, `compare` reads the two newest local reports rather than the
+committed baseline, and its `comparable` flag is unsound — the corpus digest covers the pack
+selection but not the scorer, so two arbitrarily different corpora share one digest (repro D6).
+
+Before spending money on a run, prove the defects are still there for free:
+
+```bash
+ruby docs/eval-improvement/repro/verify_defects.rb   # offline, deterministic, no API key
+```
+
+It exits 0 while a defect is open and non-zero once one is fixed.
 
 `agenteval/` is git-ignored (a local tool tree), so **committed baselines and findings live
 here**, under `docs/eval-improvement/`, not under `agenteval/reports/`. The 2026-09-17 record
 is [`baseline-20260917.json`](baseline-20260917.json) with
-[`FINDINGS-20260917.md`](FINDINGS-20260917.md) — read the correction at the top of the
+[`FINDINGS-20260917.md`](FINDINGS-20260917.md) — read the corrections at the top of the
 findings: that run measures the plan gate, not coding.
 
 ## Running the physical loop
