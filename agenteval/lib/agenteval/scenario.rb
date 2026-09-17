@@ -17,20 +17,16 @@ module Agenteval
     # 67% of the cells it was meant to protect. Both failures are worse than the one it
     # was meant to fix.
     #
-    # The answer and the observations in it are still recorded, as diagnostic detail, so a
-    # reader can see what the agent said without that text deciding its score.
-    def abstention_evidence
-      {
-        "subject" => notes["abstention_subject"].to_s,
-        "expected" => Array(notes["abstention_evidence"]),
-        "answer_excerpt" => nil
-      }
-    end
+    # Did the agent address the thing it was asked about? Only that the subject appears,
+    # with no requirement on phrasing. This check exists for one narrow job — separating a
+    # decision from a crash — because a crashed planner names nothing at all (the recorded
+    # one reads "no plan passed review after 3 attempts"). A cell with no declared subject
+    # is not gated on it, so an authoring omission fails open rather than closed.
+    def addressed?(answer)
+      subject = notes["abstention_subject"].to_s
+      return !answer.to_s.strip.empty? if subject.empty?
 
-    # Recorded for diagnosis only. Never a pass/fail predicate.
-    def observed_evidence(answer)
-      text = answer.to_s.downcase
-      Array(notes["abstention_evidence"]).select { |item| text.include?(item.to_s.downcase) }
+      answer.to_s.downcase.include?(subject.downcase)
     end
 
     def descriptor

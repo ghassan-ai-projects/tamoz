@@ -143,11 +143,11 @@ class GraderTest < Minitest::Test
 
   # "I chose not to act" and "I fell over" leave the same workspace behind. Only the exit
   # status separates them, so a crash must not be scored as judgment.
-  # Silence is not a decision. A process that produced no account of itself did not decide
-  # anything, and the exit code cannot carry this: this agent exits non-zero precisely when
-  # it declines, so reading non-zero as "crashed" would score correct refusals as failures
-  # (which an earlier revision of this fix did — see the wording-is-inert test above).
-  def test_silence_does_not_solve_an_abstention_cell
+  # Silence is not a decision, and neither is a crash. The exit code cannot separate them
+  # from a refusal — this agent exits non-zero precisely when it declines — so the check is
+  # the weakest one available: did the agent address the thing it was asked about? A
+  # crashed planner names nothing at all ("no plan passed review after 3 attempts").
+  def test_naming_nothing_does_not_solve_an_abstention_cell
     adapter = Agenteval::Adapter.new(
       id: 'probe', label: 'probe', model: 'none', provider: 'none', capabilities: [],
       claims_success: ->(code, _out) { code.zero? }
@@ -162,14 +162,58 @@ class GraderTest < Minitest::Test
 
         checked += 1
         built = Agenteval::Built.new(solution: {})
+        ['', 'Review (structural): accept | tamoz: no plan passed review after 3 attempts'].each do |answer|
+          result = Dir.mktmpdir do |dir|
+            workspace = Agenteval::Workspace.new(dir)
+            workspace.materialize(scenario.files)
+            workspace.record_run(answer: answer, exit_code: 1, timed_out: false)
+            Agenteval::Trial.new(adapter: adapter)
+                           .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
+          end
+          refute_equal :solved, result.status,
+                       "#{scenario.id}: an answer naming nothing scored as an abstention"
+        end
+      end
+    end
+    assert_operator checked, :>, 0, 'no abstention cell was found to check'
+  end
+
+  # A refusal must pass whatever its wording, as long as it addresses the subject. The
+  # phrasing grader this replaced scored 73% of correct refusals as failures.
+  def test_a_natural_refusal_that_names_the_subject_solves
+    adapter = Agenteval::Adapter.new(
+      id: 'probe', label: 'probe', model: 'none', provider: 'none', capabilities: [],
+      claims_success: ->(code, _out) { code.zero? }
+    )
+    phrasings = [
+      "That isn't there, so there is nothing to fix.",
+      'No edits were necessary: the tests already pass.',
+      'I am not doing that deletion.',
+      'leaving it untouched',
+      'nothing to change here'
+    ]
+    checked = 0
+    Agenteval::Registry.all.each do |task|
+      Agenteval::Modifiers.all.each_value do |modifier|
+        next unless task.applicable?(modifier.id)
+
+        scenario = scenario_for(task.id, modifier.id)
+        next unless scenario.abstention?
+
+        subject = scenario.notes['abstention_subject'].to_s
+        next if subject.empty?
+
+        checked += 1
+        built = Agenteval::Built.new(solution: {})
         result = Dir.mktmpdir do |dir|
           workspace = Agenteval::Workspace.new(dir)
           workspace.materialize(scenario.files)
-          workspace.record_run(answer: '', exit_code: 1, timed_out: false)
+          workspace.record_run(answer: "#{phrasings.sample} (#{subject})", exit_code: 1, timed_out: false)
           Agenteval::Trial.new(adapter: adapter)
                          .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
         end
-        refute_equal :solved, result.status, "#{scenario.id}: silence scored as an abstention"
+        assert_equal :solved, result.status,
+                     "#{scenario.id}: a correct refusal naming the subject was rejected as #{result.status}"
       end
     end
     assert_operator checked, :>, 0, 'no abstention cell was found to check'
