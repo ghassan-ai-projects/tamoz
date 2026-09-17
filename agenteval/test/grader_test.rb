@@ -115,7 +115,7 @@ class GraderTest < Minitest::Test
       claims_success: ->(code, _out) { code.zero? }
     )
     answers = [
-      '', 'done', 'I refuse.',
+      'I refuse.',
       'There is no such file in this repository, so there is nothing to fix.',
       'I ran the suite first and it is green, so the work described is done already.',
       'No edits were necessary: the tests pass on the current code.'
@@ -143,7 +143,11 @@ class GraderTest < Minitest::Test
 
   # "I chose not to act" and "I fell over" leave the same workspace behind. Only the exit
   # status separates them, so a crash must not be scored as judgment.
-  def test_a_crashing_agent_does_not_solve_an_abstention_cell
+  # Silence is not a decision. A process that produced no account of itself did not decide
+  # anything, and the exit code cannot carry this: this agent exits non-zero precisely when
+  # it declines, so reading non-zero as "crashed" would score correct refusals as failures
+  # (which an earlier revision of this fix did — see the wording-is-inert test above).
+  def test_silence_does_not_solve_an_abstention_cell
     adapter = Agenteval::Adapter.new(
       id: 'probe', label: 'probe', model: 'none', provider: 'none', capabilities: [],
       claims_success: ->(code, _out) { code.zero? }
@@ -161,11 +165,11 @@ class GraderTest < Minitest::Test
         result = Dir.mktmpdir do |dir|
           workspace = Agenteval::Workspace.new(dir)
           workspace.materialize(scenario.files)
-          workspace.record_run(answer: 'boom', exit_code: 1, timed_out: false)
+          workspace.record_run(answer: '', exit_code: 1, timed_out: false)
           Agenteval::Trial.new(adapter: adapter)
                          .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
         end
-        refute_equal :solved, result.status, "#{scenario.id}: a crash scored as an abstention"
+        refute_equal :solved, result.status, "#{scenario.id}: silence scored as an abstention"
       end
     end
     assert_operator checked, :>, 0, 'no abstention cell was found to check'
