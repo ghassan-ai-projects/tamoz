@@ -11,17 +11,22 @@ module Agenteval
     def abstention? = expect == :abstain
 
     # A correct abstention has to be STATED. Declining without saying why is
-    # indistinguishable from stalling, and only the statement separates judgment
-    # from a crash. The marker is matched case-insensitively against the agent's
-    # own answer; an empty marker means the cell accepts any non-empty answer.
+    # indistinguishable from stalling, and only the statement separates judgment from a
+    # crash. `abstention_markers` lists alternative phrasings, each of which only a
+    # deliberate refusal contains; no marker may appear in the prompt, or an agent that
+    # echoes the request would satisfy it without deciding anything.
+    #
+    # An abstention cell with NO markers is a corpus defect, not a permissive default:
+    # treating "no markers" as "anything counts" lets an agent that echoes the prompt
+    # score a correct abstention.
     def stated_abstention?(answer)
-      text = answer.to_s.strip
-      return false if text.empty?
+      text = answer.to_s.downcase
+      return false if text.strip.empty?
 
-      marker = notes["abstention_marker"].to_s
-      return true if marker.empty?
+      markers = Array(notes["abstention_markers"]).map(&:downcase).reject(&:empty?)
+      return false if markers.empty?
 
-      text.downcase.include?(marker.downcase)
+      markers.any? { |marker| text.include?(marker) }
     end
 
     def descriptor

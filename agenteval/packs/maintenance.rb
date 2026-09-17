@@ -231,12 +231,20 @@ module Agenteval
   end
 
   # Removes an operation's definition from generated source, in whichever language.
+  # The generated method sits at column 0 (the heredoc strips common indentation), so the
+  # pattern must not assume an indent: a pattern that never matches leaves the feature in
+  # place and the hidden suite then passes for an agent that changed nothing.
   def self.strip_operation(source, target, language)
-    case language.id
-    when :ruby
-      source.sub(/\n?    def self\.#{target.name}\(value\)\n.*?\n    end\n/m, "")
-    else
-      source.sub(/\n?def #{target.name}\(value\):\n.*?\n\n/m, "\n")
-    end
+    pattern =
+      case language.id
+      when :ruby
+        /^[ \t]*def self\.#{Regexp.escape(target.name)}\(value\)\n.*?\n[ \t]*end\n/m
+      else
+        /^[ \t]*def #{Regexp.escape(target.name)}\(value\):\n.*?\n\n/m
+      end
+    stripped = source.sub(pattern, "")
+    raise "strip_operation matched nothing for #{target.name} (#{language.id})" if stripped == source
+
+    stripped
   end
 end

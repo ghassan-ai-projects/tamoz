@@ -124,7 +124,7 @@ module Agenteval
         seed: seed,
         notes: (built.notes || {}).merge("check_command" => project.test_command.join(" "))
       )
-      scenario.notes["abstention_marker"] ||= modifier.abstention_marker
+      scenario.notes["abstention_markers"] ||= modifier.abstention_markers
       [modifier.apply.call(scenario, project, seeded), built]
     end
   end

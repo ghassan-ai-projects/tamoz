@@ -105,6 +105,8 @@ module Agenteval
               "BROKEN: passes without the agent doing anything"
             elsif reachable == false
               "BROKEN: the known-correct result does not satisfy the oracle"
+            elsif leak = marker_leak(scenario)
+              "BROKEN: abstention marker #{leak.inspect} appears in the scenario's own inputs"
             elsif reachable.nil?
               "ok (no mechanical solution; answer-scored)"
             else
@@ -124,6 +126,16 @@ module Agenteval
         @out.puts "INVALID scenarios: #{failures.join(", ")}"
         1
       end
+    end
+
+    # An abstention marker that appears in the prompt or the given files can be satisfied
+    # by an agent that merely echoes its input, which would make the cell measure nothing.
+    def marker_leak(scenario)
+      markers = Array(scenario.notes["abstention_markers"]).reject { |m| m.to_s.empty? }
+      return "an abstention cell with no markers" if scenario.abstention? && markers.empty?
+
+      haystack = (scenario.prompt.to_s + scenario.files.values.join).downcase
+      markers.find { |marker| haystack.include?(marker.downcase) }
     end
 
     def cmd_preview(argv)
