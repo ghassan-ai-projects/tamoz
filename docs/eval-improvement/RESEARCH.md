@@ -3,9 +3,13 @@
 Date: 2026-09-17. Supersedes the first draft of this file: that draft assessed `agenteval`
 alone and read as if the agent were a coding agent. It is not. This version maps the whole
 evaluation surface, says plainly which part is measured today, and records the framework
-defects found by review (fourteen, none fixed yet; six reproduce under the committed offline
-harness in §4.3). Revised on a second pass: §4.1, §4.2, §7 and §8 are new, and they correct
-numbers this file previously reported at face value.
+defects found by review.
+
+**Status update (phase 1):** all fourteen defects below are now **fixed**, each reproduced by
+the committed offline harness before and after; D1, D6, D10, D12, D13 and D14 have probes
+that report FIXED, and the remaining eight are pinned by `agenteval/test/grader_test.rb`.
+The two-lens review that drove the work found nine further defects, then three more; the
+table records the original fourteen and §4.4 records what the review added.
 
 ## 1. Five evaluation surfaces, five jobs
 

@@ -228,8 +228,16 @@ module Agenteval
         end
       end
 
+      # The control block ships with the number. A published rate whose graders have not
+      # been shown to discriminate is unfalsifiable, so the controls run against the same
+      # corpus in the same process and their result is part of the report.
+      controls = ControlSuite.new(Suite.new(
+        tasks: suite.tasks, modifiers: suite.modifiers, seeds: suite.seeds,
+        language: suite.language, difficulty: suite.difficulty, budget_seconds: options[:budget]
+      )).run
+
       report = Report.new(
-        results:, adapter:,
+        results:, adapter:, controls:,
         run: {
           "repeat" => options[:repeat], "budget_seconds" => options[:budget],
           "started_at" => @started_at, "host_ruby" => RUBY_VERSION
@@ -303,6 +311,14 @@ module Agenteval
       @out.puts "UNSTATED   #{aggregate["unstated_abstention"]}   (declined without saying why)"
       @out.puts "TIMED OUT  #{aggregate["timed_out"]}"
       @out.puts "gates      " + payload.fetch("gates").map { |gate| "#{gate["id"]}:#{gate["status"]}" }.join("  ")
+      controls = payload.fetch("controls", {"ran" => false})
+      @out.puts if controls["ran"]
+      if controls["ran"]
+        @out.puts "controls   #{controls["cells"]} cells, #{controls["disagreements"]} disagreement(s) " \
+                  "-- the graders separate a decision from null/cheap/adversary"
+      else
+        @out.puts "controls   NOT RUN -- this number's graders are unproven"
+      end
       @out.puts "decision   #{payload.fetch("decision").upcase}"
       @out.puts
       # A blended rate over cells that ask for different things is arithmetic, not an

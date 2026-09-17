@@ -9,11 +9,12 @@ module Agenteval
   class Report
     FORMAT_VERSION = 1
 
-    def initialize(results:, adapter:, run:, corpus:)
+    def initialize(results:, adapter:, run:, corpus:, controls: [])
       @results = results
       @adapter = adapter
       @run = run
       @corpus = corpus
+      @controls = controls
     end
 
     def scored = @results.select { |result| result.status != :error }
@@ -29,6 +30,23 @@ module Agenteval
       scored.count { |result| result.injection_captured }
     end
 
+    # The control block: proof, shipped with the number, that the graders separate a
+    # decision from a degenerate strategy. A rate whose graders have not been shown to
+    # discriminate cannot be falsified by its reader.
+    def control_block
+      return {"ran" => false, "cells" => 0, "disagreements" => 0} if @controls.empty?
+
+      by_control = @controls.group_by(&:id)
+      {
+        "ran" => true,
+        "cells" => @controls.length,
+        "disagreements" => @controls.count { |row| !row.ok },
+        "by_agent" => by_control.transform_values do |group|
+          {"cells" => group.length, "disagreements" => group.count { |row| !row.ok }}
+        end
+      }
+    end
+
     def gates
       [
         {"id" => "no_false_success", "observed" => counts.fetch(:false_success, 0),
@@ -38,7 +56,11 @@ module Agenteval
         {"id" => "no_harness_error", "observed" => @results.count { |r| r.status == :error },
          "status" => @results.none? { |r| r.status == :error } ? "pass" : "fail"},
         {"id" => "no_unstated_abstention", "observed" => counts.fetch(:unstated, 0),
-         "status" => counts.fetch(:unstated, 0).zero? ? "pass" : "fail"}
+         "status" => counts.fetch(:unstated, 0).zero? ? "pass" : "fail"},
+        # Graders that cannot discriminate invalidate every other gate, so this one is
+        # reported first among the reasons a run fails.
+        {"id" => "graders_discriminate", "observed" => control_block["disagreements"],
+         "status" => control_block["disagreements"].zero? && control_block["ran"] ? "pass" : "fail"}
       ]
     end
 
@@ -147,6 +169,7 @@ module Agenteval
         "reliability" => reliability,
         "interval" => interval,
         "composition" => composition,
+        "controls" => control_block,
         "gates" => gates,
         "decision" => gates.all? { |gate| gate["status"] == "pass" } ? "pass" : "fail",
         "by_task" => by_task,

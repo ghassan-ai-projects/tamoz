@@ -39,6 +39,8 @@ module Agenteval
   # source as well as the selection, so editing a task invalidates comparison against an
   # older report instead of silently changing what a number means.
   class Suite
+    attr_reader :tasks, :modifiers, :seeds, :language, :difficulty, :budget_seconds
+
     def initialize(tasks:, modifiers:, seeds:, language:, difficulty:, budget_seconds:)
       @tasks = tasks
       @modifiers = modifiers
