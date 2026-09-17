@@ -1,8 +1,9 @@
 # Plan — make the eval measure the agent, not just its coding slice
 
-Targets: `agenteval/` (coding slice) and the breadth suites in
-`gems/tamoz-evals/lib/tamoz/evals/benchmark/`. Bar: [`QUALITY_BAR.md`](QUALITY_BAR.md).
-Findings: [`RESEARCH.md`](RESEARCH.md).
+Targets: `agenteval/` (coding slice), the physical/supervisory loop
+(`docs/real-world-sensor-tamoz/`, `test/fixtures/domains/thermal-lab.json`), and the breadth
+suites in `gems/tamoz-evals/lib/tamoz/evals/benchmark/`. Bar:
+[`QUALITY_BAR.md`](QUALITY_BAR.md). Findings: [`RESEARCH.md`](RESEARCH.md).
 
 The framework shapes are sound. The deficits are operational (no cadence), epistemic (the
 live suite measures the plan gate, not the agent — RESEARCH §4.1), and structural (the
@@ -72,6 +73,36 @@ axes), the chat study (9 scenarios), the autonomy scorecard (17 cases). No new t
 - C8 (horizon). Add task *length* as an axis (METR's lesson). Today every task is minutes;
   the agent's durability story is about long horizons, which nothing currently measures.
 
+### P — The physical world (the main claim)
+
+The agent is defined as one that makes sense of the physical world and acts on it. That loop is
+already landed (`docs/real-world-sensor-tamoz/`, WP-T0…T5 green) and appears in **no** eval
+cadence. Extend it; do not rebuild it. The authority invariant is fixed: **Tamoz proposes typed
+intent; deterministic policy actuates** (ADR-038, "do not give Tamoz the serial port").
+
+- P1. **Put the axis on the map.** This folder, the suite index, and the scoreboard name the
+  physical loop as a first-class surface (done in RESEARCH §1/§1a; keep it true).
+- P2. **Size the corpus for a verdict.** The thermal paired comparison is `inconclusive` at 8
+  cells; add the per-family cells the go-rule needs, so the claim can be earned or honestly
+  refused rather than left dangling.
+- P3. **Close HIL-0/M2.** Produce one immutable bench run artifact with the `arduino-bench-v1`
+  manifest gates (p0–p8) filled from measured values; `physical_claims_allowed` flips only on
+  that evidence.
+- P4. **Independent feedback is the oracle.** Verification must not be the device's own
+  acknowledgement. Capture an independent instrument observation — the lab's own open finding —
+  and make the eval treat board-reported state as evidence, never as verification.
+- P5. **Safety gates on the real-model path.** Fail-closed on weak/contradictory/stale evidence
+  (M0 `physical-evidence-gate`), unknown-outcome-stops-work, no out-of-catalog operation, risk is
+  the catalog's — exercised with the real model, not only the fixture player.
+- P6. **Sensor quality must change the decision.** Disconnected / stale / out-of-range /
+  warming-up is the #1 research gap, and the real run already shows one genuine miss (ambient
+  attribution). Score the divergence, not merely the presence of the facts.
+- P7. **Promote to the frozen protocol deliberately.** Decide when `thermal-lab` enters
+  `BENCHMARK_PROTOCOL.json`, with the Go mirror and SHA bump in the same reviewed change — or
+  keep it local and record why in the scoreboard.
+- P8. **Soak.** The 8-hour physical fault soak (G5/M3) is this loop's durability and length axis.
+  Not started, and the honest home for the long-horizon claim (C8).
+
 ## Sequence
 
 1. **F1–F5** — the scoring logic must be trustworthy before anything is pinned or published.
@@ -81,6 +112,9 @@ axes), the chat study (9 scenarios), the autonomy scorecard (17 cases). No new t
    something.
 5. **C5 + C6** — land the breadth, one axis at a time, each with its scoreboard entry.
 6. **C7 + C8** — the differentiators, once the shared harness is honest.
+7. **P1–P6** — the physical loop runs alongside C5/C6: its fixture machinery is already green,
+   so P2 (corpus size) and P4 (independent feedback) are the only blockers between it and an
+   earned `go`.
 
 ## Deliverables
 
@@ -89,6 +123,8 @@ axes), the chat study (9 scenarios), the autonomy scorecard (17 cases). No new t
 - `docs/eval-improvement/FINDINGS-<date>.md` — gate diagnoses and answered questions.
 - One published `real_provider` intelligence run with a scoreboard entry, and one chat run.
 - Cost/turn/token metrics in the report; a stage on every trial.
+- One physical run whose manifest gates justify a `go` — or an explicit, recorded refusal —
+  with independent instrument feedback rather than the device's own ack.
 
 ## Non-goals
 
@@ -105,5 +141,7 @@ The coding slice is quotable when (a) a `repeat>=2` baseline is committed agains
 scoring logic, (b) every trial carries a stage and a cost, and (c) every gate hit is
 diagnosed to agent or harness. The agent is measured when the breadth suites produce at least
 one published real-provider run per landed axis, with the scoreboard entry and its
-confidence intervals. Until then the honest statement is: **one slice measured, and it is
-currently measuring a plan gate.**
+confidence intervals, **and** the physical loop has one run whose evidence licenses its
+`physical_claims_allowed` flag. Until then the honest statement is: **one slice measured, and it
+is currently measuring a plan gate; the physical loop is landed but its own verdict is
+`inconclusive` and its HIL gates are open.**

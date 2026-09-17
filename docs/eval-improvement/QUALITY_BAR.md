@@ -39,6 +39,13 @@ pass/fail criteria.
     A capability claim comes only from a real-provider run; the scorer itself is versioned or
     digested so a scoring change invalidates comparison.
 
+11. **An actuation claim is earned, not asserted.** A claim about acting on the physical world
+    requires all four: (a) the effect was dispatched by deterministic policy over current state,
+    never by model output (ADR-038); (b) weak, contradictory, or stale evidence failed closed;
+    (c) the effect was observed by an **independent instrument**, not the device's own
+    acknowledgement; (d) the run is an immutable artifact with the bench manifest's gates
+    (p0–p8) filled from measured values. Until then `physical_claims_allowed` stays false.
+
 ## Explicitly out of scope
 
 - Chasing a higher score (that is agent work, downstream of an honest signal).
@@ -54,3 +61,7 @@ diffed against that baseline.
 The agent passes when bar 2 holds: the declared axes each have either a landed real-provider
 measurement or an explicit gap entry — and no coding-only number is presented as the agent's
 capability.
+
+The physical loop passes when bar 11 holds and bar 2 names it: one bench run whose manifest
+gates and independent feedback license the claim — or an explicit, recorded refusal, which is
+also a result.

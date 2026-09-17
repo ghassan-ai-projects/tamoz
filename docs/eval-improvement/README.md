@@ -2,22 +2,24 @@
 
 Date: 2026-09-17
 
-Tamoz's agent is a durable, approval-governed operator: sessions that survive `kill -9`,
-reviewed change plans, capability sources (tools/skills/MCP/websearch), memory, healing,
-improvement, scheduling, and Telegram. The evaluation of it is spread across four surfaces,
-and only one of them is real-model and cadenced today. This folder plans and tracks all of
-them.
+Tamoz's agent is a durable, approval-governed operator that makes sense of the physical world:
+sessions that survive `kill -9`, reviewed change plans, capability sources
+(tools/skills/MCP/websearch), memory, healing, improvement, scheduling, Telegram — and a
+sensor → decision → actuator loop it supervises without ever owning the serial port. The
+evaluation of it is spread across five surfaces, and only one is a cadenced real-model suite
+today. This folder plans and tracks all of them.
 
 - [`RESEARCH.md`](RESEARCH.md) — the four surfaces, the agent's declared capability surface,
   the verified framework defects, and what frontier labs actually evaluate.
 - [`QUALITY_BAR.md`](QUALITY_BAR.md) — what "useful" means, as pass/fail criteria.
 - [`PLAN.md`](PLAN.md) — the work: cadence (W), framework correctness (F), capability breadth (C).
 
-## The four surfaces
+## The five surfaces
 
 | Surface | Measures | Real model? |
 |---|---|---|
-| [`agenteval/`](../../agenteval/) maintenance pack | Generated repo-maintenance work (comprehend, repair, diagnose, implement, author tests, docs) × adversity | Yes — the only live real-model suite |
+| [`agenteval/`](../../agenteval/) maintenance pack | Generated repo-maintenance work (comprehend, repair, diagnose, implement, author tests, docs) × adversity | Yes — the only cadenced real-model suite |
+| Physical / supervisory loop (`thermal-lab`) | Sensor quality + actuator capability → a bounded, risk-governed decision; typed intent, never a model effect | One real-model thermal run; verdict `inconclusive`; physical HIL open |
 | `gems/tamoz-evals` benchmark (`script/benchmark_openclaw_run`) | 9 missions × 8 canonical axes + 9 chat scenarios, CLI↔Telegram parity, per-axis verdict with holdout and publish gate | Harness built; command **fails closed** until the plan's phases land |
 | `test/autonomy_scorecard_test.rb` (`AgentSmokeScorecard`) | Machinery: unattended completion, schedules, crash recovery, approvals, unknown effects, channels, isolation | Scripted (a plumbing gate, never an intelligence claim) |
 | `tamoz-evals` artifact verification | Whether the evidence itself is well-formed | n/a |
@@ -53,6 +55,23 @@ here**, under `docs/eval-improvement/`, not under `agenteval/reports/`. The 2026
 is [`baseline-20260917.json`](baseline-20260917.json) with
 [`FINDINGS-20260917.md`](FINDINGS-20260917.md) — read the correction at the top of the
 findings: that run measures the plan gate, not coding.
+
+## Running the physical loop
+
+The thermal supervisory loop is a tamoz-local path, deliberately kept outside the frozen
+protocol until the loop is proven:
+
+```bash
+export OPENROUTER_API_KEY=... LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+ruby script/thermal_real_run   # scorecard on stderr, evidence manifest JSON on stdout
+```
+
+Its fixture and scoring gates run in `ci_full`: `test/thermal_manifest_test.rb` and
+`test/thermal_tournament_test.rb`. The program, its bar, and its honest status live in
+[`docs/real-world-sensor-tamoz/`](../real-world-sensor-tamoz/README.md); the hardware bench,
+its gateway contract, and the `arduino-bench-v1` manifest template live in the sibling
+`agent-research-lab` checkout under `real-world-sensor/assessment/`. Physical claims require
+that bench evidence — `physical_claims_allowed` is `false` until the HIL gates close.
 
 ## Running the breadth suites
 
