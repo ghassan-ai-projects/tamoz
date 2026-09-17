@@ -1,35 +1,56 @@
-# Quality bar — when is the capability eval "useful"?
+# Quality bar — when is the evaluation "useful"?
 
-"Useful" is not a good score. A useful eval is one a maintainer can **run on demand, trust the
-result of, and act on**. These are the pass/fail criteria for this work.
+"Useful" is not a good score. A useful evaluation is one a maintainer can **run on demand,
+trust the result of, and act on** — over the agent, not over one of its slices. These are the
+pass/fail criteria.
 
 ## The bar
 
-1. **Runnable in one command, repeatably.** A single documented entry point runs the corpus and
-   writes a report; a second validates the corpus without spending money. No remembering flags.
-2. **Trustworthy — every gate hit is diagnosed.** A `false_success`, `unsafe`, or `harness_error`
-   in the current baseline is traced to *agent* or *harness* and written down. An undiagnosed red
-   gate is a bar failure, because the eval is then measuring itself, not the agent.
-3. **Reliability, not luck.** The baseline is run with `repeat >= 2`, and the report distinguishes
-   *reliable* (pass on every trial) from *flaky* (pass on some). A one-sample score does not count.
-4. **A current, committed baseline.** `agenteval/reports/baseline-<date>.json` reflects today's
-   agent, with its corpus digest, and is committed so the next run has something to diff against.
-5. **Regression is detectable.** `agenteval compare OLD NEW` is wired into the cadence and exits
-   non-zero on any regressed scenario; the corpus digest guards against comparing unlike runs.
-6. **Honest about cost and provider.** The report keeps the approvals-auto-granted label, the model
-   and provider, and the wall-clock/turn cost — no capability number is quoted without them.
-7. **No fixture is presented as intelligence evidence** (`documentation/benchmark/README.md`); a
-   capability claim comes only from a real-provider run recorded with its provenance.
+1. **Runnable in one command, repeatably.** A documented entry point runs a suite and writes
+   a report; the corpus is validated without spending money. The interpreter is pinned by the
+   harness, not inherited from `PATH`. No remembered flags.
+2. **The scope is the agent, not a slice.** The eval set states which of the canonical axes
+   (RESEARCH §2) it covers. A coding-only score is labelled a slice, never "the agent". The
+   declared surface with no coverage is listed as a gap, not left implicit.
+3. **Trustworthy — every gate hit is diagnosed to agent or harness, with a repro.** An
+   undiagnosed red gate means the eval is measuring itself. A diagnosis that is not
+   reproducible is a guess.
+4. **Reliability, not luck.** Every suite runs with `repeat >= 2`, and the report names the
+   *reliable* (pass on every trial) and *flaky* (pass on some) scenarios. One sample does not
+   count.
+5. **Every trial carries a stage and a cost.** Terminal stage (never acted / rejected at
+   plan review / acted and failed / verified) plus turns, tool calls, tokens, and wall clock.
+   No capability number is quoted without them. "Never acted" and "wrote wrong code" are
+   never the same row.
+6. **A current, committed baseline; regression against it.** The baseline is committed with
+   its corpus digest; `compare` diffs the newest run against it and exits non-zero on a
+   regressed scenario. A run pair with a different model, provider, or corpus digest is
+   refused, not silently diffed.
+7. **Graders cannot be satisfied by inaction.** A correct-abstention cell requires the agent
+   to state the conflict or the absence. Doing nothing — or crashing — is not judgment.
+8. **Uncertainty is reported.** Point estimates carry their trial count and spread; small
+   deltas are treated as noise, and runs are repeated across times/days before a difference
+   is claimed. (Infrastructure alone moved a frontier coding benchmark by 6 points:
+   RESEARCH §6.)
+9. **Honest about provider and cost.** The report carries model, provider, the
+   approvals-auto-granted label, and the run kind. No capability number is quoted without its
+   provenance.
+10. **No fixture is presented as intelligence evidence** (`documentation/benchmark/README.md`).
+    A capability claim comes only from a real-provider run; the scorer itself is versioned or
+    digested so a scoring change invalidates comparison.
 
-## Explicitly out of scope for this pass
+## Explicitly out of scope
 
-- Chasing a *higher* solve rate (that is agent work, downstream of a trustworthy signal).
-- New task packs, languages, or difficulty sweeps (coverage expansion is a follow-up once the
-  cadence and a trusted baseline exist).
-- Externally-witnessed release evidence (the benchmark protocol governs that separately).
+- Chasing a higher score (that is agent work, downstream of an honest signal).
+- New mission families or packs before the committed ones are landed and interpretable.
+- Externally-witnessed release evidence, which the benchmark protocol governs separately.
 
 ## Acceptance
 
-The pass condition for this work is bars 1–6 met: a one-command, `repeat>=2`, gate-diagnosed,
-committed baseline against today's agent, with a wired regression compare — plus the research
-questions in [`RESEARCH.md`](RESEARCH.md) answered from that run.
+The coding slice passes when bars 1, 3–6, and 9–10 hold: a one-command, `repeat>=2`,
+stage-and-cost-carrying, gate-diagnosed, committed baseline run against verified scoring logic,
+diffed against that baseline.
+
+The agent passes when bar 2 holds: the declared axes each have either a landed real-provider
+measurement or an explicit gap entry — and no coding-only number is presented as the agent's
+capability.
