@@ -75,8 +75,17 @@ module Agenteval
     def cmd_validate(argv)
       options = parse(argv)
       Agenteval.load_packs
-      suite = build_suite(options)
       failures = []
+      suite =
+        begin
+          build_suite(options)
+        rescue StandardError => error
+          # A task that cannot build its own scenario is a corpus defect, not a crash: it
+          # must be reported with the other BROKEN cells so the run stops here rather than
+          # mid-way through a paid model run.
+          @out.puts "BROKEN corpus: a scenario could not be built: #{error.message}"
+          return 1
+        end
 
       suite.scenarios.each do |scenario, built|
         Dir.mktmpdir("agenteval-validate") do |dir|
@@ -89,10 +98,11 @@ module Agenteval
           unless built.solution.nil? || built.solution.empty?
             solved = Workspace.new(dir)
             solved.materialize(scenario.files)
-            solved.materialize(built.solution)
-            solved.record_run(answer: "", exit_code: 0, timed_out: false)
-            # The solution is applied by the harness, so mutation-based checks would
-            # legitimately trip; only the verification itself is asserted here.
+            # Applied after the baseline snapshot, so it registers as the agent's work:
+            # an oracle that asks "did anything change" must see the reference solution
+            # as a change, or a solvable task reports as unreachable.
+            solved.agent_wrote(built.solution)
+            solved.record_run(answer: scenario.notes["reference_answer"].to_s, exit_code: 0, timed_out: false)
             reachable = scenario.oracle.call(solved, built).ok
           end
 
@@ -128,14 +138,32 @@ module Agenteval
       end
     end
 
-    # An abstention marker that appears in the prompt or the given files can be satisfied
-    # by an agent that merely echoes its input, which would make the cell measure nothing.
+    # The subject an abstention must name has to be something the agent has to DISCOVER,
+    # not something an echo of its input would contain — otherwise a cheap agent that
+    # repeats the prompt satisfies the cell without reasoning about anything. The subject
+    # may legitimately appear in the prompt (the agent is told which file is frozen); what
+    # matters is that the cell cannot be satisfied by echoing alone, so the prompt is
+    # checked for the subject only when the subject is not also a required observation.
     def marker_leak(scenario)
-      markers = Array(scenario.notes["abstention_markers"]).reject { |m| m.to_s.empty? }
-      return "an abstention cell with no markers" if scenario.abstention? && markers.empty?
+      return nil unless scenario.abstention?
 
-      haystack = (scenario.prompt.to_s + scenario.files.values.join).downcase
-      markers.find { |marker| haystack.include?(marker.downcase) }
+      subject = scenario.notes["abstention_subject"].to_s
+      return "an abstention cell with no stated subject" if subject.empty?
+
+      # An abstention needs a reference answer the oracle control can state, and it must
+      # actually name the subject, or the control passes for the wrong reason.
+      reference = scenario.notes["reference_answer"].to_s
+      unless reference.downcase.include?(subject.downcase)
+        return "the reference answer #{reference.inspect} does not name the subject #{subject.inspect}"
+      end
+
+      # A probe that does nothing but repeat the request must NOT satisfy the cell. This is
+      # the same property `controls` asserts with the `cheap` agent; asserting it here too
+      # means `validate` and `controls` cannot disagree about whether a cell is well-formed.
+      echo = "#{scenario.prompt}\n#{scenario.files.keys.sort.join("\n")}"
+      return "an echo of the request satisfies this abstention cell" if scenario.stated_abstention?(echo)
+
+      nil
     end
 
     def cmd_preview(argv)

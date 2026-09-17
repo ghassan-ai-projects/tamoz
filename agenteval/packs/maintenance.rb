@@ -184,6 +184,9 @@ module Agenteval
         green = workspace.verify_with(overlay: {}, command: command)
         return Judgement.no("the suite the agent left behind does not pass: #{Verify.tail(green.output)}") unless green.ok
 
+        return Judgement.no("the agent added no test to #{language.test_path(project)}") unless
+          workspace.mutations.include?(language.test_path(project))
+
         Verify.all(
           Judgement.ok("suite passes on correct code"),
           Verify.kills_mutant(workspace, {language.core_path(project) => mutant_core}, command)
@@ -231,16 +234,20 @@ module Agenteval
   end
 
   # Removes an operation's definition from generated source, in whichever language.
-  # The generated method sits at column 0 (the heredoc strips common indentation), so the
-  # pattern must not assume an indent: a pattern that never matches leaves the feature in
-  # place and the hidden suite then passes for an agent that changed nothing.
+  #
+  # Two mistakes are easy here and both are silent. A pattern that never matches leaves the
+  # feature in place, and the hidden suite then passes for an agent that changed nothing. A
+  # pattern anchored on a blank line misses the LAST operation, whose body ends the file.
+  # So the pattern anchors on the next `def` or end-of-file, never on blank lines, and a
+  # no-match raises rather than returning the source unchanged.
   def self.strip_operation(source, target, language)
+    name = Regexp.escape(target.name)
     pattern =
       case language.id
       when :ruby
-        /^[ \t]*def self\.#{Regexp.escape(target.name)}\(value\)\n.*?\n[ \t]*end\n/m
+        /^[ \t]*def self\.#{name}\(value\)\n.*?\n[ \t]*end\n/m
       else
-        /^[ \t]*def #{Regexp.escape(target.name)}\(value\):\n.*?\n\n/m
+        /^[ \t]*def #{name}\(value\):\n(?:.*?\n)*?(?=^[ \t]*def |\z)/m
       end
     stripped = source.sub(pattern, "")
     raise "strip_operation matched nothing for #{target.name} (#{language.id})" if stripped == source

@@ -30,6 +30,17 @@ module Agenteval
       @initial = snapshot
     end
 
+    # Write files AFTER the baseline snapshot, so they register as the agent's mutations.
+    # This is how the validator applies a reference solution: it has to look like work the
+    # agent did, or an oracle that asks "did anything change" reports the task unreachable.
+    def agent_wrote(files)
+      files.each do |relative, content|
+        path = File.join(@dir, relative)
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, content)
+      end
+    end
+
     def record_run(answer:, exit_code:, timed_out:)
       @answer = answer.to_s
       @exit_code = exit_code

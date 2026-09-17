@@ -2,6 +2,7 @@
 
 require "rake/testtask"
 require "rbconfig"
+require "fileutils"
 
 RUBY_SOURCES = FileList[
   "Rakefile",
@@ -505,6 +506,7 @@ end
 namespace :agenteval do
   BIN = "agenteval/bin/agenteval"
   REPORTS = "agenteval/reports"
+  BASELINES = "docs/eval-improvement"
 
   # A real-model run needs a UTF-8 locale or ruby_llm dies parsing models.json.
   def utf8_env!
@@ -512,30 +514,74 @@ namespace :agenteval do
     ENV["LC_ALL"] = "en_US.UTF-8" if ENV["LC_ALL"].to_s.empty? || ENV["LC_ALL"] == "C"
   end
 
-  desc "Validate the corpus — reachable and non-trivial (deterministic, no model calls)"
-  task :validate do
-    sh "ruby", BIN, "validate", "--modifiers", "all"
+  # The Rakefile owns the interpreter. `RbConfig.ruby` is whatever ran rake, and shelling
+  # out to bare `ruby` picks up PATH — on a stock macOS that is 2.6, where this harness does
+  # not parse, so the eval died with syntax errors before it started. The repo pins its
+  # interpreter in `.ruby-version`, so resolve that rather than inheriting either.
+  def agenteval_ruby
+    pinned = File.read(File.join(__dir__, ".ruby-version")).strip
+    candidate = File.join(Dir.home, ".rbenv", "versions", pinned, "bin", "ruby")
+    return candidate if File.executable?(candidate)
+
+    RbConfig.ruby
   end
 
+  desc "Prove the graders discriminate — offline, four control agents (no model calls)"
+  task :controls do
+    sh agenteval_ruby, BIN, "controls", "--modifiers", "all"
+  end
+
+  desc "Validate the corpus — reachable and non-trivial (deterministic, no model calls)"
+  task :validate do
+    sh agenteval_ruby, BIN, "validate", "--modifiers", "all"
+  end
+
+  desc "Run the grader tests — the properties the reviews required be permanent"
+  task :test do
+    sh agenteval_ruby, "-Itest", "agenteval/test/grader_test.rb"
+  end
+
+  # Nothing is measured until the instrument is known to discriminate: a number from a
+  # grader that inaction satisfies is not a weak signal, it is not a signal.
+  desc "Controls + corpus validation — the gate that must pass before any paid run"
+  task prove: %i[test controls validate]
+
   desc "Run the corpus against the agent and write a dated report (needs DEEPSEEK_API_KEY)"
-  task :run do
+  task run: :prove do
     utf8_env!
     out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "run-#{Time.now.utc.strftime("%Y%m%d")}.json"))
-    sh "ruby", BIN, "run", "--tasks", "all",
+    sh agenteval_ruby, BIN, "run", "--tasks", "all",
        "--modifiers", ENV.fetch("AGENTEVAL_MODIFIERS", "all"),
        "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
+       "--seeds", ENV.fetch("AGENTEVAL_SEEDS", "1"),
        "--budget", ENV.fetch("AGENTEVAL_BUDGET", "240"),
        "--out", out
   end
 
-  desc "Compare the two newest reports; non-zero on any regressed scenario"
+  desc "Compare the newest run against the committed baseline (non-zero on a regression)"
   task :compare do
-    reports = Dir[File.join(REPORTS, "*.json")].sort
-    raise "need two reports under #{REPORTS} to compare" if reports.length < 2
+    committed = Dir[File.join(BASELINES, "baseline-*.json")].sort
+    local = Dir[File.join(REPORTS, "*.json")].sort
+    raise "need a committed baseline under #{BASELINES} or two local reports" if committed.empty? && local.length < 2
 
-    before, after = reports[-2], reports[-1]
+    after = local.last
+    raise "no run to compare yet (looked under #{REPORTS})" if after.nil?
+
+    before = committed.last || local[-2]
+    raise "need two runs to compare (#{after} is the only one)" if before == after
+
     puts "comparing #{File.basename(before)} -> #{File.basename(after)}"
-    sh "ruby", BIN, "compare", before, after
+    sh agenteval_ruby, BIN, "compare", before, after
+  end
+
+  desc "Promote the newest run to the committed baseline"
+  task :baseline do
+    latest = Dir[File.join(REPORTS, "*.json")].sort.last
+    raise "no run under #{REPORTS} to promote" if latest.nil?
+
+    target = File.join(BASELINES, "baseline-#{File.mtime(latest).utc.strftime("%Y%m%d")}.json")
+    FileUtils.cp(latest, target)
+    puts "promoted #{File.basename(latest)} -> #{target}"
   end
 end
 
