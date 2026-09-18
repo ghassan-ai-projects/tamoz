@@ -26,6 +26,7 @@ an explicit recorded refusal where a claim cannot yet be earned. Real runs use t
 | 13 | [Horizon](13-horizon.md) | axis named, one bucket | competence over long tasks |
 | 14 | [Context management](14-context-management.md) | bounded/integrity tests | does compaction keep the *right* info |
 | 15 | [Tool calling & permissions](15-tool-calling-and-permissions.md) | strong enforcement, fail-closed | real tool-use success; approval calibration |
+| 16 | [Active investigation](16-active-investigation.md) | **NEW** — primitives only (evidence client, request_evidence) | recognize insufficiency → gather → decide (capability not built) |
 
 Prereqs already met for all: discriminating instruments, independent evals, green controls,
 `pass^k`/Wilson/McNemar machinery. The gate is spend + two owner decisions (coding plan-gate;
