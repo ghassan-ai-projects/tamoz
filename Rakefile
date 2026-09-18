@@ -44,9 +44,11 @@ AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 # skips them and `ci_full` still runs every one.
 SLOW_TESTS = %w[
   test/benchmark_comms_b0_test.rb
+  test/benchmark_comms_controls_test.rb
   test/benchmark_holdout_test.rb
   test/thermal_manifest_test.rb
   test/thermal_tournament_test.rb
+  test/thermal_tournament_controls_test.rb
   test/sqlite_raw_oracle_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
@@ -583,6 +585,28 @@ namespace :agenteval do
     FileUtils.cp(latest, target)
     puts "promoted #{File.basename(latest)} -> #{target}"
   end
+end
+
+namespace :benchmark do
+  # The discrimination gate for the breadth and physical surfaces, the analogue
+  # of agenteval:prove. It drives the real graders with control agents (an oracle
+  # passes, null/cheap fail, an adversary trips the gate it targets). A publishing
+  # run may claim --controls-passed only after this gate is green: the flag is the
+  # gate's output, not an operator's assertion.
+  CONTROL_SUITES = %w[
+    test/benchmark_comms_controls_test.rb
+    test/openclaw_mission_controls_test.rb
+    test/thermal_tournament_controls_test.rb
+  ].freeze
+
+  desc "Prove the benchmark graders discriminate — offline control suites (no model calls)"
+  task :controls do
+    utf8_env!
+    CONTROL_SUITES.each { |suite| sh agenteval_ruby, "-Itest", suite }
+  end
+
+  desc "The offline gate a benchmark run must pass before it may claim --controls-passed"
+  task prove: :controls
 end
 
 task default: :ci
