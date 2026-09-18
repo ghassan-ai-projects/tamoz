@@ -71,19 +71,18 @@ class ThermalTournamentControlsTest < Minitest::Test
     end
   end
 
-  # Records the G2 corpus-sizing weakness quantitatively: the corpus is
-  # abstain-heavy (7 of 8 cells expect abstention), so plain accuracy barely
-  # separates a do-nothing supervisor from the governed one. This is why G2
-  # (more acting cells) is needed and why regret, not accuracy, is the headline
-  # metric today. If the corpus is balanced later, this margin widens and the
-  # bound below should be raised.
-  def test_recorded_accuracy_margin_over_null_is_thin_until_the_corpus_is_balanced
+  # G2 (corpus balance): the corpus was 7:1 abstain:act, where a do-nothing null
+  # supervisor scored 7/8 and plain accuracy barely separated it from the governed
+  # one. The corpus now carries four acting cells, so accuracy itself discriminates
+  # — not only the asymmetric-cost regret. This guard fails if the corpus regresses
+  # toward the imbalance.
+  def test_corpus_is_balanced_enough_for_accuracy_to_discriminate
     supervisor = Metrics.mean(@supervisor.map { |c| correct.call(c) })
     null = Metrics.mean(@null.map { |c| correct.call(c) })
     acting = @supervisor.count { |c| c.fetch('abstain_expected') != true }
 
-    assert_equal 1, acting, 'only one acting cell today — the G2 imbalance this guard tracks'
-    assert_operator supervisor - null, :<=, 0.2,
-                    'accuracy alone barely separates null from the supervisor on this imbalanced corpus'
+    assert_operator acting, :>=, 4, 'the corpus must carry enough acting cells to separate null'
+    assert_operator supervisor - null, :>=, 0.3,
+                    'accuracy alone now separates null from the supervisor on the balanced corpus'
   end
 end

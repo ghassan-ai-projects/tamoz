@@ -36,16 +36,20 @@ class ThermalTournamentTest < Minitest::Test
                  "the fixed-threshold baseline alarms on a disconnected sensor's reading"
   end
 
-  def test_supervisor_acts_only_on_the_clear_excursion
+  def test_supervisor_acts_only_on_the_clear_excursions
     acting = @supervisor.reject { |cell| Metrics.abstained?(cell) }.map { |cell| cell.fetch('cell_id') }
 
-    assert_equal ['sustained-rise'], acting,
-                 'the supervisor acts on the one clear excursion and abstains on the conflict cells'
+    assert_equal %w[sustained-rise sustained-rise-modest sustained-rise-warm sustained-rise-sharp], acting,
+                 'the supervisor acts on every clear excursion and abstains on the conflict cells'
   end
 
   def test_abstention_quality_rewards_the_supervisor
+    # 11 cells. The supervisor is right on all of them. The fixed-threshold
+    # baseline acts iff box_temp > 6: right on the 4 clear excursions and the 3
+    # low-temp abstain cells (7/11), but it false-alarms on the 4 conflict cells,
+    # which is its blind spot the supervisor's governance closes.
     assert_in_delta 1.0, Metrics.abstention_quality(@supervisor), 1e-9
-    assert_in_delta 0.5, Metrics.abstention_quality(@baseline), 1e-9
+    assert_in_delta 7.0 / 11, Metrics.abstention_quality(@baseline), 1e-9
     assert_operator Metrics.abstention_quality(@supervisor), :>, Metrics.abstention_quality(@baseline)
   end
 

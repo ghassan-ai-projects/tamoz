@@ -44,7 +44,11 @@ class ThermalTournament
       metric: 'box_temp', threshold: THRESHOLD, alarm_code: ALARM_CODE, operator: 'gt'
     )
     scored.map do |cell|
-      alarmed = cell.fetch('primary_code') == ALARM_CODE
+      # The act/abstain decision is the threshold crossing itself, NOT
+      # primary_code == ALARM_CODE: the classifier's non-alarm code follows the
+      # corpus majority, so keying the decision on it would make a below-threshold
+      # cell "act" whenever the alarm code happens to be the majority truth.
+      alarmed = cell.fetch('facts').fetch('box_temp').to_f > THRESHOLD
       cell.merge('intent_risk_classes' => alarmed ? ['R2'] : [])
     end
   end
