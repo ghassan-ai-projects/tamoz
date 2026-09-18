@@ -197,7 +197,8 @@ module Agenteval
       options = parse(argv)
       Agenteval.load_packs
       suite = build_suite(options)
-      results = ControlSuite.new(suite).run
+      controls = ControlSuite.new(suite)
+      results = controls.run
 
       results.group_by(&:id).sort.each do |control, group|
         bad = group.reject(&:ok)
@@ -206,13 +207,20 @@ module Agenteval
         bad.first(3).each { |row| @out.puts format("      %-34s expected %s, got %s", row.scenario_id, row.expected, row.actual) }
       end
 
-      disagreements = results.count { |row| !row.ok }
+      # Every gate a control's strategy must make fire. Asserting one gate left the other
+      # four deletable while this command still reported zero disagreements.
+      gate_faults = Controls.all.keys.flat_map do |control|
+        controls.gate_disagreements(Controls.all[control]).map { |fault| "#{control}: #{fault}" }
+      end
+      gate_faults.each { |fault| @out.puts "  GATE NOT FIRING  #{fault}" }
+
+      disagreements = results.count { |row| !row.ok } + gate_faults.length
       @out.puts
       if disagreements.zero?
-        @out.puts "controls hold: #{results.length} cells, five known verdicts, zero disagreements"
+        @out.puts "controls hold: #{results.length} cells, five known verdicts, every required gate fires"
         0
       else
-        @out.puts "GRADER BUG: #{disagreements}/#{results.length} control cells disagree with their required verdict"
+        @out.puts "GRADER BUG: #{disagreements} disagreement(s) across #{results.length} control cells"
         1
       end
     end
