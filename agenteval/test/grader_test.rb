@@ -219,6 +219,54 @@ class GraderTest < Minitest::Test
     assert_operator checked, :>, 0, 'no abstention cell was found to check'
   end
 
+  # A single `failed` bucket cannot distinguish "never acted" from "acted and wrote the
+  # wrong code", and that distinction was the whole finding of the 2026-09-17 review: 36 of
+  # 46 trials ended at the plan gate and only 2 ever wrote a file.
+  def test_stage_separates_never_acted_from_acted_and_failed
+    adapter = Agenteval::Adapter.new(
+      id: 'probe', label: 'probe', model: 'none', provider: 'none', capabilities: [],
+      claims_success: ->(code, _out) { code.zero? }
+    )
+    scenario = scenario_for('repair', :clean)
+    built = Agenteval::Built.new(solution: {})
+    judge = lambda do |answer, code, timed_out, mutate|
+      Dir.mktmpdir do |dir|
+        workspace = Agenteval::Workspace.new(dir)
+        workspace.materialize(scenario.files)
+        File.write(File.join(dir, 'lib', 'touched.rb'), "# touched\n") if mutate
+        workspace.record_run(answer: answer, exit_code: code, timed_out: timed_out)
+        Agenteval::Trial.new(adapter: adapter)
+                       .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
+      end
+    end
+
+    gate = judge.call('tamoz: no plan passed review after 3 attempts', 1, false, false)
+    assert_equal Agenteval::Stage::PLAN_REJECTED, gate.stage
+
+    idle = judge.call('nothing to report', 1, false, false)
+    assert_equal Agenteval::Stage::NEVER_ACTED, idle.stage
+
+    acted = judge.call('Running run_check...', 1, false, true)
+    assert_equal Agenteval::Stage::ACTED_UNVERIFIED, acted.stage
+
+    killed = judge.call('', nil, true, false)
+    assert_equal Agenteval::Stage::TIMED_OUT, killed.stage
+
+    # Two different behaviours must not share a stage.
+    refute_equal gate.stage, acted.stage
+  end
+
+  def test_cost_is_read_from_the_transcript_and_missing_values_stay_visible
+    cost = Agenteval::Cost.of('Running read_file... | Running run_check... | Approve run_check? | done')
+    assert_equal 2, cost['tool_calls']
+    assert_equal 1, cost['approvals_requested']
+    assert_equal({'read_file' => 1, 'run_check' => 1}, cost['tools_used'])
+
+    empty = Agenteval::Cost.of('')
+    assert_equal 0, empty['tool_calls']
+    assert_equal 0, empty['approvals_requested']
+  end
+
   def test_reliability_counts_errors_rather_than_dropping_them
     adapter = Agenteval::Adapter.new(id: 't', label: 't', model: 'm', provider: 'p', capabilities: [])
     scenario = scenario_for('comprehend', 'clean')

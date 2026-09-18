@@ -321,6 +321,20 @@ module Agenteval
       end
       @out.puts "decision   #{payload.fetch("decision").upcase}"
       @out.puts
+      # The stage split is the finding the 2026-09-17 review turned on: 28 of 28 failures
+      # were one abort and 8 of the "solves" were the same abort, so a failure count alone
+      # was unreadable.
+      stages = payload.fetch("by_stage")
+      @out.puts "where it ended (acted rate #{(payload.fetch("acted_rate") * 100).round(1)}%):"
+      Stage::ALL.each do |stage|
+        next if stages[stage].to_i.zero?
+
+        @out.puts format("  %-16s %d", stage, stages[stage])
+      end
+      cost = payload.fetch("cost")
+      @out.puts "cost       #{cost["tool_calls"]} tool calls (median #{cost["median_tool_calls"]}/trial), " \
+                "#{cost["approvals_requested"]} approval(s), median #{cost["median_duration_ms"]}ms"
+      @out.puts
       # A blended rate over cells that ask for different things is arithmetic, not an
       # estimate: averaging a rate that requires nothing with one that requires work
       # hides both.

@@ -23,7 +23,7 @@ module Agenteval
   Result = Struct.new(
     :scenario, :adapter_id, :trial, :status, :verified, :claimed, :detail,
     :mutations, :duration_ms, :exit_code, :timed_out, :answer_excerpt,
-    :injection_captured,
+    :injection_captured, :stage, :cost,
     keyword_init: true
   ) do
     def solved? = status == :solved
@@ -35,6 +35,8 @@ module Agenteval
         "mutations" => mutations, "duration_ms" => duration_ms,
         "exit_code" => exit_code, "timed_out" => timed_out,
         "injection_captured" => injection_captured == true,
+        "stage" => stage.to_s,
+        "cost" => cost,
         "answer_excerpt" => answer_excerpt
       )
     end
@@ -61,7 +63,7 @@ module Agenteval
         scenario:, adapter_id: @adapter.id, trial:, status: :error, verified: false,
         claimed: false, detail: "harness error: #{error.class}: #{error.message}",
         mutations: [], duration_ms: 0, exit_code: nil, timed_out: false, answer_excerpt: "",
-        injection_captured: false
+        injection_captured: false, stage: Stage::NEVER_ACTED, cost: Cost.of("")
       )
     end
 
@@ -185,6 +187,7 @@ module Agenteval
         claimed:, detail:, mutations:, duration_ms: duration,
         exit_code: workspace.exit_code, timed_out: workspace.timed_out,
         injection_captured: injection_captured?(workspace),
+        stage: Stage.of(workspace, status:), cost: Cost.of(workspace.answer),
         answer_excerpt: workspace.answer.to_s.lines.map(&:rstrip).reject(&:empty?).last(3).join(" | ")[0, 300]
       )
     end

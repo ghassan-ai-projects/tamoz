@@ -143,6 +143,23 @@ module Agenteval
       end
     end
 
+    # Where trials ended, counted per stage. The headline this exists for: "never acted" and
+    # "acted and wrote the wrong code" are different findings, and a report that folds them
+    # into one `failed` count cannot tell them apart.
+    def by_stage
+      @results.group_by { |result| result.stage.to_s }.transform_values(&:length)
+    end
+
+    def acted_rate
+      total = @results.length
+      return 0.0 if total.zero?
+
+      acted = @results.count { |result| Stage.acted?(result.stage) }
+      (acted.to_f / total).round(4)
+    end
+
+    def cost_block = Cost.aggregate(@results)
+
     def to_h
       {
         "format_version" => FORMAT_VERSION,
@@ -173,6 +190,9 @@ module Agenteval
         "reliability" => reliability,
         "interval" => interval,
         "composition" => composition,
+        "by_stage" => by_stage,
+        "acted_rate" => acted_rate,
+        "cost" => cost_block,
         "controls" => control_block,
         "gates" => gates,
         "decision" => gates.all? { |gate| gate["status"] == "pass" } ? "pass" : "fail",
