@@ -24,6 +24,7 @@ an explicit recorded refusal where a claim cannot yet be earned. Real runs use t
 | 11 | [Self-improvement](11-self-improvement.md) | pipeline + controls | does it actually improve |
 | 12 | [Physical](12-physical.md) | property spec | recommendation fitness + dispatch safety |
 | 13 | [Horizon](13-horizon.md) | axis named, one bucket | competence over long tasks |
+| 14 | [Context management](14-context-management.md) | bounded/integrity tests | does compaction keep the *right* info |
 
 Prereqs already met for all: discriminating instruments, independent evals, green controls,
 `pass^k`/Wilson/McNemar machinery. The gate is spend + two owner decisions (coding plan-gate;
