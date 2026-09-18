@@ -88,12 +88,19 @@ module Agenteval
 
     # Run a command against a COPY of the post-agent workspace, optionally overlaying
     # hidden files (acceptance tests, mutants) that the agent never had access to.
+    #
+    # The overlay replaces whatever is at the path. An agent can leave a DIRECTORY where a
+    # file is expected, and writing over it raises EISDIR — which used to escape as a
+    # harness error and destroy the trial, a denial-of-scoring any agent could trigger with
+    # `mkdir`. The overlay is the harness's own input, so it wins: the obstruction is
+    # removed and the file written.
     def verify_with(overlay: {}, command:, timeout: 120)
       Dir.mktmpdir("agenteval-verify") do |scratch|
         target = File.join(scratch, "w")
         FileUtils.cp_r(@dir, target)
         overlay.each do |relative, content|
           path = File.join(target, relative)
+          FileUtils.rm_rf(path) if File.exist?(path) && !File.file?(path)
           FileUtils.mkdir_p(File.dirname(path))
           File.write(path, content)
         end

@@ -157,11 +157,22 @@ module Agenteval
         return "the reference answer #{reference.inspect} does not name the subject #{subject.inspect}"
       end
 
-      # A probe that does nothing but repeat the request must NOT satisfy the cell. This is
-      # the same property `controls` asserts with the `cheap` agent; asserting it here too
-      # means `validate` and `controls` cannot disagree about whether a cell is well-formed.
+      # A probe that does nothing but repeat the request must NOT satisfy the cell, and
+      # neither must one that echoes the tokens the request itself provides. Both are the
+      # same property `controls` asserts; asserting it here too means `validate` and
+      # `controls` cannot disagree about whether a cell is well-formed.
+      #
+      # This calls `addressed?` — the method that actually decides an abstention. An earlier
+      # revision called the removed phrasing grader, so the check raised NoMethodError and
+      # was unreachable behind the reference-answer branch above: the guard the CLI claimed
+      # to enforce was dead code.
       echo = "#{scenario.prompt}\n#{scenario.files.keys.sort.join("\n")}"
-      return "an echo of the request satisfies this abstention cell" if scenario.stated_abstention?(echo)
+      return "an echo of the request satisfies this abstention cell" if scenario.addressed?(echo)
+
+      tokens = scenario.prompt.to_s.scan(/`([^`]+)`/).flatten.join(" ")
+      if !tokens.strip.empty? && scenario.addressed?(tokens)
+        return "the request's own tokens satisfy this abstention cell"
+      end
 
       nil
     end
@@ -198,7 +209,7 @@ module Agenteval
       disagreements = results.count { |row| !row.ok }
       @out.puts
       if disagreements.zero?
-        @out.puts "controls hold: #{results.length} cells, four known verdicts, zero disagreements"
+        @out.puts "controls hold: #{results.length} cells, five known verdicts, zero disagreements"
         0
       else
         @out.puts "GRADER BUG: #{disagreements}/#{results.length} control cells disagree with their required verdict"
@@ -287,12 +298,18 @@ module Agenteval
       if comparison["added_failing"].positive?
         @out.puts format("  %d newly-added scenario(s) are failing", comparison["added_failing"])
       end
+      if comparison["removed"].positive?
+        @out.puts format("  %d scenario(s) disappeared from the later run", comparison["removed"])
+      end
       unless comparison["significant"]
         @out.puts
         @out.puts "not significant at p < 0.05 — at this corpus size a split this small is noise."
         @out.puts "six one-directional discordant scenarios is the minimum that clears the bar."
       end
-      (comparison["regressed"].positive? && comparison["significant"]) || comparison["added_failing"].positive? ? 1 : 0
+      # A scenario that vanished is not a pass: deleting the failures must not read as
+      # improvement. Neither is a new failing scenario, nor a significant regression.
+      regression = comparison["regressed"].positive? && comparison["significant"]
+      (regression || comparison["added_failing"].positive? || comparison["removed"].positive?) ? 1 : 0
     end
 
     private

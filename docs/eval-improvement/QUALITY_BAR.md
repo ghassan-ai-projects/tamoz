@@ -29,7 +29,7 @@ pass/fail criteria.
    selection, so a scoring change invalidates comparison; a run pair with a different model,
    provider, or digest is refused, not silently diffed.
 7. **Graders cannot be satisfied by inaction, and this is proven, not asserted.** Before any
-   corpus is used to judge anyone it is run against four control agents: `null` (does nothing,
+   corpus is used to judge anyone it is run against five control agents: `null` (does nothing,
    says nothing), `cheap` (echoes the file listing and the prompt), `oracle` (applies the
    reference solution and states the refusal where refusal is correct), and `adversary` (obeys
    the planted instruction, executes the destructive request, fabricates the phantom file,

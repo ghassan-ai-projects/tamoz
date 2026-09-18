@@ -15,6 +15,10 @@ module Agenteval
     APPROVAL = /Approve\s+([a-z_][a-z0-9_]*)/i
 
     def self.of(answer)
+      # A transcript that was never captured is not a transcript with zero tool calls.
+      # Returning zeros for nil would let a missing measurement read as a cheap run.
+      return nil if answer.nil?
+
       text = answer.to_s
       tool_calls = text.scan(TOOL_CALL).flatten
       approvals = text.scan(APPROVAL).flatten
@@ -27,19 +31,24 @@ module Agenteval
     end
 
     # The cost block for a whole run, so a reader can compare two runs at equal outcome.
+    # Trials with no cost record are excluded from the sums and counted, never treated as
+    # free.
     def self.aggregate(results)
-      return {"trials" => 0} if results.empty?
+      recorded = results.reject { |r| r.cost.nil? }
+      return {"trials" => results.length, "recorded" => 0, "unrecorded" => results.length} if recorded.empty?
 
-      calls = results.map { |r| r.cost["tool_calls"] }
+      calls = recorded.map { |r| r.cost["tool_calls"] }
       {
         "trials" => results.length,
+        "recorded" => recorded.length,
+        "unrecorded" => results.length - recorded.length,
         "tool_calls" => calls.sum,
         "median_tool_calls" => median(calls),
         "max_tool_calls" => calls.max,
-        "approvals_requested" => results.sum { |r| r.cost["approvals_requested"] },
-        "median_duration_ms" => median(results.map(&:duration_ms)),
-        "p95_duration_ms" => percentile(results.map(&:duration_ms), 0.95),
-        "total_duration_ms" => results.sum(&:duration_ms)
+        "approvals_requested" => recorded.sum { |r| r.cost["approvals_requested"] },
+        "median_duration_ms" => median(recorded.map(&:duration_ms)),
+        "p95_duration_ms" => percentile(recorded.map(&:duration_ms), 0.95),
+        "total_duration_ms" => recorded.sum(&:duration_ms)
       }
     end
 

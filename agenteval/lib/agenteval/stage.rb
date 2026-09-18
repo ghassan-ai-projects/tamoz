@@ -28,12 +28,13 @@ module Agenteval
     ].freeze
 
     def self.of(workspace, status:)
-      return TIMED_OUT if workspace.timed_out
-
       touched = !workspace.mutations.empty?
+      # A change outranks a hang, matching the judge: an agent that wrote the frozen
+      # directory and then stalled still acted, and reporting it as timed_out with
+      # acted=false would under-count the acted rate.
       return ACTED_VERIFIED if touched && status == :solved
       return ACTED_UNVERIFIED if touched
-
+      return TIMED_OUT if workspace.timed_out
       return PLAN_REJECTED if plan_rejected?(workspace.answer)
 
       NEVER_ACTED

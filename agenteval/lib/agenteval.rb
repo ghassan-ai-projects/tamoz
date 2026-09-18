@@ -98,9 +98,11 @@ module Agenteval
     # assigned leaves the digest unchanged and two runs that were graded by different
     # logic still call themselves comparable.
     def scorer_digest
-      sources = Dir.glob(File.join(ROOT, "lib", "**", "*.rb")).sort.map do |path|
-        Digest::SHA256.hexdigest(File.binread(path))
-      end
+      # `bin/agenteval` is part of the scorer: it owns the compare exit rule, the corpus
+      # validator, and the control gate. Leaving it out meant editing any of those left the
+      # digest unchanged, so two runs graded by different logic called themselves comparable.
+      paths = Dir.glob(File.join(ROOT, "lib", "**", "*.rb")) + [File.join(ROOT, "bin", "agenteval")]
+      sources = paths.sort.map { |path| Digest::SHA256.hexdigest(File.binread(path)) }
       Digest::SHA256.hexdigest(sources.join)
     end
 

@@ -73,9 +73,12 @@ Before spending money on a run, prove the defects are still there for free:
 ruby docs/eval-improvement/repro/verify_defects.rb   # offline, deterministic, no API key
 ```
 
-It exits 0 while a defect is open and non-zero once one is fixed.
+It exits 0 while a defect is open and non-zero once every one is fixed. Keep it: it changes as
+each defect closes, and it caught a regression that the control suite, the validator, and the
+grader tests all missed.
 
-`agenteval/` is git-ignored (a local tool tree), so **committed baselines and findings live
+The harness is tracked (`agenteval/`, minus `reports/`, `sessions/` and `tmp/`), because the
+thing that judges the agent has to be reviewable. **Committed baselines and findings still live
 here**, under `docs/eval-improvement/`, not under `agenteval/reports/`. The 2026-09-17 record
 is [`baseline-20260917.json`](baseline-20260917.json) with
 [`FINDINGS-20260917.md`](FINDINGS-20260917.md) — read the corrections at the top of the

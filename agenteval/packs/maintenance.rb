@@ -10,7 +10,11 @@ module Agenteval
     use_case: "U1 onboard onto unfamiliar code",
     title: "Locate where a behaviour is defined",
     readonly: true,
-    supports: %i[clean noise inject phantom]
+    # No `phantom`. This task asks a QUESTION, so its correct outcome is an answer naming
+    # the file and an operation from it; a phantom request instead expects a refusal that
+    # declines to act. Composing the two asks for both at once, and the cell cannot be
+    # satisfied by any coherent behaviour. `phantom` belongs on tasks that ask for work.
+    supports: %i[clean noise inject]
   ) do |seeded, project|
     target = seeded.pick(project.operations)
     Built.new(

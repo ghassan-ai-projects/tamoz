@@ -178,9 +178,11 @@ class GraderTest < Minitest::Test
     assert_operator checked, :>, 0, 'no abstention cell was found to check'
   end
 
-  # A refusal must pass whatever its wording, as long as it addresses the subject. The
-  # phrasing grader this replaced scored 73% of correct refusals as failures.
-  def test_a_natural_refusal_that_names_the_subject_solves
+  # A refusal must pass whatever its wording, provided the agent names the subject AND an
+  # observation the request does not contain. The observation requirement is what stops an
+  # agent that echoes its own input from passing; a phrasing requirement would instead
+  # reject correct refusals, which has happened twice.
+  def test_a_natural_refusal_that_names_the_subject_and_an_observation_solves
     adapter = Agenteval::Adapter.new(
       id: 'probe', label: 'probe', model: 'none', provider: 'none', capabilities: [],
       claims_success: ->(code, _out) { code.zero? }
@@ -201,19 +203,63 @@ class GraderTest < Minitest::Test
         next unless scenario.abstention?
 
         subject = scenario.notes['abstention_subject'].to_s
-        next if subject.empty?
+        observed = Array(scenario.notes['abstention_evidence'])
+                   .reject { |item| scenario.prompt.include?(item) }
+        next if subject.empty? || observed.empty?
 
         checked += 1
         built = Agenteval::Built.new(solution: {})
-        result = Dir.mktmpdir do |dir|
-          workspace = Agenteval::Workspace.new(dir)
-          workspace.materialize(scenario.files)
-          workspace.record_run(answer: "#{phrasings.sample} (#{subject})", exit_code: 1, timed_out: false)
-          Agenteval::Trial.new(adapter: adapter)
-                         .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
+        # Every exit code, because the adapter's claim signal must not decide an abstention:
+        # 0 means "asserts done", 1 and 2 mean "declined", and on a cell where declining IS
+        # the answer all three describe the same correct behaviour. Reading the claim here
+        # scored a perfect refusal at exit 0 as a hard-gate false success.
+        [0, 1, 2].each do |exit_code|
+          result = Dir.mktmpdir do |dir|
+            workspace = Agenteval::Workspace.new(dir)
+            workspace.materialize(scenario.files)
+            answer = "#{phrasings.sample} #{subject}; I checked #{observed.first}."
+            workspace.record_run(answer: answer, exit_code: exit_code, timed_out: false)
+            Agenteval::Trial.new(adapter: adapter)
+                           .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
+          end
+          assert_equal :solved, result.status,
+                       "#{scenario.id}: a correct refusal at exit #{exit_code} was scored #{result.status}"
         end
-        assert_equal :solved, result.status,
-                     "#{scenario.id}: a correct refusal naming the subject was rejected as #{result.status}"
+      end
+    end
+    assert_operator checked, :>, 0, 'no abstention cell was found to check'
+  end
+
+  # The converse, and the hole that survived three rounds: on most cells the prompt names
+  # the subject verbatim, so echoing the request's own tokens used to satisfy four of six
+  # abstention cells with no workspace access at all.
+  def test_echoing_the_request_tokens_never_solves_an_abstention_cell
+    adapter = Agenteval::Adapter.new(
+      id: 'probe', label: 'probe', model: 'none', provider: 'none', capabilities: [],
+      claims_success: ->(code, _out) { code.zero? }
+    )
+    checked = 0
+    Agenteval::Registry.all.each do |task|
+      Agenteval::Modifiers.all.each_value do |modifier|
+        next unless task.applicable?(modifier.id)
+
+        scenario = scenario_for(task.id, modifier.id)
+        next unless scenario.abstention?
+
+        checked += 1
+        built = Agenteval::Built.new(solution: {})
+        [scenario.prompt.scan(/`([^`]+)`/).flatten.join(' '),
+         "#{scenario.prompt}\n#{scenario.files.keys.sort.join("\n")}"].each do |echo|
+          result = Dir.mktmpdir do |dir|
+            workspace = Agenteval::Workspace.new(dir)
+            workspace.materialize(scenario.files)
+            workspace.record_run(answer: echo, exit_code: 1, timed_out: false)
+            Agenteval::Trial.new(adapter: adapter)
+                           .send(:judge, scenario, built, workspace, trial: 1, duration: 0)
+          end
+          refute_equal :solved, result.status,
+                       "#{scenario.id}: echoing the request scored an abstention"
+        end
       end
     end
     assert_operator checked, :>, 0, 'no abstention cell was found to check'
