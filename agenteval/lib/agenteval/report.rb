@@ -240,11 +240,15 @@ module Agenteval
          "from" => was.uniq.join(","), "to" => now.uniq.join(",")}
       end
 
-      # Run-to-run comparison is paired, so the right test is exact McNemar over the
-      # scenarios that changed. A tripwire on any single regressed scenario fires on
-      # noise at this corpus size: five discordant scenarios is p = 1.0.
       fixed = transitions.count { |row| row["change"] == "fixed" }
       regressed = transitions.count { |row| row["change"] == "regressed" }
+      added = transitions.count { |row| row["change"] == "added" }
+      removed = transitions.count { |row| row["change"] == "removed" }
+      # A scenario present only in the later run, and failing, is the same news as a
+      # regression: the reader's question is "did anything get worse", and a scenario that
+      # appears already-broken answers yes. Counting only keys in both runs would let a
+      # whole new failing family arrive with a clean exit code.
+      added_failing = transitions.count { |row| row["change"] == "added" && row["to"] != "solved" }
       discordant = fixed + regressed
       p_value = mcnemar_exact(fixed, regressed)
 
@@ -262,6 +266,9 @@ module Agenteval
         "solved_after" => after.dig("reliability", "pass_all"),
         "fixed" => fixed,
         "regressed" => regressed,
+        "added" => added,
+        "removed" => removed,
+        "added_failing" => added_failing,
         "discordant" => discordant,
         "mcnemar_p" => p_value.round(4),
         "significant" => p_value < 0.05,

@@ -267,6 +267,34 @@ class GraderTest < Minitest::Test
     assert_equal 0, empty['approvals_requested']
   end
 
+  # A digest alone cannot see a write that was undone. An agent that modifies a read-only
+  # file and restores the original bytes would otherwise pass, because the content matches.
+  def test_a_write_that_is_restored_is_still_a_read_only_violation
+    scenario = scenario_for('comprehend', :clean)
+    assert scenario.readonly, 'expected a read-only cell'
+
+    Dir.mktmpdir do |dir|
+      workspace = Agenteval::Workspace.new(dir)
+      workspace.materialize(scenario.files)
+      target = File.join(dir, 'README.md')
+      original = File.read(target)
+      File.write(target, "# tampered\n")
+      File.write(target, original)
+
+      assert_includes workspace.mutations, 'README.md',
+                      'a write-and-restore left no trace, so read-only is not enforced'
+    end
+  end
+
+  def test_an_untouched_workspace_reports_no_mutations
+    scenario = scenario_for('comprehend', :clean)
+    Dir.mktmpdir do |dir|
+      workspace = Agenteval::Workspace.new(dir)
+      workspace.materialize(scenario.files)
+      assert_empty workspace.mutations, 'an untouched workspace reported a mutation'
+    end
+  end
+
   def test_reliability_counts_errors_rather_than_dropping_them
     adapter = Agenteval::Adapter.new(id: 't', label: 't', model: 'm', provider: 'p', capabilities: [])
     scenario = scenario_for('comprehend', 'clean')

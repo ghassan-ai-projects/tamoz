@@ -272,17 +272,24 @@ module Agenteval
       end
 
       @out.puts "solved   #{comparison["solved_before"]} -> #{comparison["solved_after"]} scenarios (pass^k)"
-      @out.puts "fixed    #{comparison["fixed"]}, regressed #{comparison["regressed"]} " \
+      @out.puts "fixed    #{comparison["fixed"]}, regressed #{comparison["regressed"]}, " \
+                "added #{comparison["added"]}, removed #{comparison["removed"]} " \
                 "(#{comparison["discordant"]} discordant, exact McNemar p = #{comparison["mcnemar_p"]})"
       comparison["transitions"].each do |row|
         @out.puts format("  %-9s %-28s %s -> %s", row["change"], row["scenario"], row["from"], row["to"])
+      end
+      # A scenario that is new AND failing is a regression in every sense a reader cares
+      # about; counting only keys present in both runs would let a whole new failing family
+      # arrive silently.
+      if comparison["added_failing"].positive?
+        @out.puts format("  %d newly-added scenario(s) are failing", comparison["added_failing"])
       end
       unless comparison["significant"]
         @out.puts
         @out.puts "not significant at p < 0.05 — at this corpus size a split this small is noise."
         @out.puts "six one-directional discordant scenarios is the minimum that clears the bar."
       end
-      comparison["regressed"].positive? && comparison["significant"] ? 1 : 0
+      (comparison["regressed"].positive? && comparison["significant"]) || comparison["added_failing"].positive? ? 1 : 0
     end
 
     private

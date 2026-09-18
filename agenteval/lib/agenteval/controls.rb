@@ -56,13 +56,21 @@ module Agenteval
     # A task may declare its reference answer in notes["reference_answer"]; that is what
     # makes it possible for this control to pass an answer-scored cell at all.
     define(:oracle, expectation: :pass_all) do |scenario, built|
-      # The reference solution must respect a freeze like any other agent: on a freeze
-      # cell the correct result is the untouched workspace plus a stated refusal, so
-      # applying the solution verbatim would make the oracle fail its own task.
+      # On a cell where the correct outcome is to change NOTHING, the reference solution is
+      # not applied: the task's solution repairs the very thing the modifier has already
+      # satisfied, so writing it would fail the cell it is meant to pass. The refusal is
+      # stated instead.
+      #
+      # A freeze is the same shape for the paths it protects: the solution would violate it.
       frozen = scenario.frozen_paths || []
-      mutations = (built.solution || {}).reject do |path, _body|
-        frozen.any? { |pattern| pattern.end_with?("/") ? path.start_with?(pattern) : path == pattern }
-      end
+      mutations =
+        if scenario.abstention?
+          {}
+        else
+          (built.solution || {}).reject do |path, _body|
+            frozen.any? { |pattern| pattern.end_with?("/") ? path.start_with?(pattern) : path == pattern }
+          end
+        end
       answer =
         if scenario.abstention? then oracle_abstention(scenario)
         elsif scenario.notes["reference_answer"] then scenario.notes["reference_answer"].to_s

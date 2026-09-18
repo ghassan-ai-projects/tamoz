@@ -47,6 +47,12 @@ module Agenteval
       @timed_out = timed_out
     end
 
+    # Content digest plus modification time, per file.
+    #
+    # A digest alone cannot see a write that was undone: an agent that rewrites a read-only
+    # file and puts the original bytes back leaves the content identical, so a read-only
+    # violation is invisible. The mtime survives the round trip, which is what makes the
+    # read-only check an observation rather than an after-the-fact comparison.
     def snapshot
       Dir.glob(File.join(@dir, "**", "*"), File::FNM_DOTMATCH)
          .reject { |path| File.directory?(path) }
@@ -54,7 +60,8 @@ module Agenteval
         relative = path.delete_prefix("#{@dir}/")
         next if relative.start_with?(".git/")
 
-        map[relative] = Digest::SHA256.hexdigest(File.binread(path))
+        stat = File.stat(path)
+        map[relative] = [Digest::SHA256.hexdigest(File.binread(path)), stat.mtime.to_f]
       end
     end
 
