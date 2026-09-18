@@ -415,8 +415,11 @@ module Tamoz
             'hard_zero' => {
               'blind_retry_after_unknown' => unknown_preserved && no_blind ? 'passed' : 'failed',
               'stale_owner_send' => stale_refused ? 'passed' : 'failed',
+              # An ambiguous delivery is preserved as unknown with NO confirmation:
+              # a receipt is the terminal proof, so an unknown row that carries one
+              # has been reported as a settled outcome it never had.
               'unknown_reported_as_terminal' =>
-                unknown_rows.none? { |row| %w[succeeded failed].include?(row['status']) } ? 'passed' : 'failed'
+                unknown_rows.any? { |row| !row['receipt'].nil? } ? 'failed' : 'passed'
             }
           }
         end
