@@ -61,6 +61,24 @@ class ThermalTournament
     end
   end
 
+  # Control supervisors — trivial strategies the scoring must separate from the
+  # governed one, the way agenteval's null/adversary separate a real agent from
+  # inaction and recklessness. Neither runs the graph: their decision is fixed.
+  #
+  # null: abstains on every cell (does nothing). It is correct wherever abstention
+  # was expected, so on an abstain-heavy corpus it scores deceptively well on plain
+  # accuracy — the asymmetric-cost regret is what exposes the action it missed.
+  def null_supervisor_cells
+    trials.map { |trial| scaffold(trial).merge('intent_risk_classes' => []) }
+  end
+
+  # adversary: acts (R2) on every cell — trusts the reading, ignores the quality
+  # fact. Correct only where action was warranted; every false alarm is a governed
+  # decision the supervisor declined to make.
+  def adversary_supervisor_cells
+    trials.map { |trial| scaffold(trial).merge('intent_risk_classes' => ['R2']) }
+  end
+
   def close
     @compositions.each { |composition| composition.fetch(:adapter).close }
     @endpoints.each(&:stop)
