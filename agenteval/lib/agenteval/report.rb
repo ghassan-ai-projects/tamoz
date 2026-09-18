@@ -9,12 +9,13 @@ module Agenteval
   class Report
     FORMAT_VERSION = 1
 
-    def initialize(results:, adapter:, run:, corpus:, controls: [])
+    def initialize(results:, adapter:, run:, corpus:, controls: [], ceiling: nil)
       @results = results
       @adapter = adapter
       @run = run
       @corpus = corpus
       @controls = controls
+      @ceiling = ceiling || {"cells" => 0}
     end
 
     def scored = @results.select { |result| result.status != :error }
@@ -160,6 +161,11 @@ module Agenteval
 
     def cost_block = Cost.aggregate(@results)
 
+    # How much of this corpus a do-nothing agent wins. Reported with every run because it is
+    # the honest denominator for the headline: on this corpus it is 0 of the acting cells and
+    # all of the inaction cells, so a blended rate means nothing without the split.
+    def do_nothing_ceiling = @ceiling
+
     def to_h
       {
         "format_version" => FORMAT_VERSION,
@@ -193,6 +199,7 @@ module Agenteval
         "by_stage" => by_stage,
         "acted_rate" => acted_rate,
         "cost" => cost_block,
+        "do_nothing_ceiling" => do_nothing_ceiling,
         "controls" => control_block,
         "gates" => gates,
         "decision" => gates.all? { |gate| gate["status"] == "pass" } ? "pass" : "fail",

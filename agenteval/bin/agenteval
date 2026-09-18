@@ -236,8 +236,11 @@ module Agenteval
         language: suite.language, difficulty: suite.difficulty, budget_seconds: options[:budget]
       )).run
 
+      # Measured, not assumed: how much of this corpus an agent that does nothing can win.
+      ceiling = Controls.do_nothing_ceiling(suite)
+
       report = Report.new(
-        results:, adapter:, controls:,
+        results:, adapter:, controls:, ceiling:,
         run: {
           "repeat" => options[:repeat], "budget_seconds" => options[:budget],
           "started_at" => @started_at, "host_ruby" => RUBY_VERSION
@@ -341,6 +344,13 @@ module Agenteval
       cost = payload.fetch("cost")
       @out.puts "cost       #{cost["tool_calls"]} tool calls (median #{cost["median_tool_calls"]}/trial), " \
                 "#{cost["approvals_requested"]} approval(s), median #{cost["median_duration_ms"]}ms"
+      floor = payload.fetch("do_nothing_ceiling")
+      if floor["cells"].to_i.positive?
+        @out.puts "floor      a do-nothing agent wins #{floor["solved"]}/#{floor["cells"]} " \
+                  "(#{floor["acting_solved"]}/#{floor["acting_cells"]} acting, " \
+                  "#{floor["inaction_solved"]}/#{floor["inaction_cells"]} inaction) — " \
+                  "read the score against this"
+      end
       @out.puts
       # A blended rate over cells that ask for different things is arithmetic, not an
       # estimate: averaging a rate that requires nothing with one that requires work

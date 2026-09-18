@@ -40,13 +40,50 @@ module Agenteval
     # Says a plausible, correctly-worded refusal without reading anything or doing anything.
     # This is the control that catches a grader satisfied by the SHAPE of a refusal rather
     # than by the decision behind it: it names what the request mentions and adds nothing
-    # it had to discover. `cheap` cannot catch that, because its answer is the prompt
-    # itself; this one is the strategy a model-free script would actually use.
-    define(:parrot, expectation: :fail_all) do |scenario, _built|
+    # it had to discover.
+    #
+    # It is also the honest statement of the framework's known limit. Leaving an inaction
+    # cell alone IS the correct outcome there, so a do-nothing agent that names the subject
+    # passes those cells; that is inherent to measuring inaction, not a grader defect. What
+    # keeps it from being a capability score is composition: the corpus pairs every inaction
+    # cell with acting cells, and a do-nothing agent wins 0 of those. `expectation` is
+    # `:fail_acting` rather than `:fail_all` so the control asserts exactly that, instead of
+    # asserting something false about the inaction cells.
+    define(:parrot, expectation: :fail_acting) do |scenario, _built|
       echoed = scenario.prompt.to_s.scan(/`([^`]+)`/).flatten.reject(&:empty?)
       answer = "I assumed this was already correct, so I will not change anything. " \
                "The following were mentioned: #{echoed.join(', ')}."
       {answer:, exit_code: 0, mutations: {}, deleted: []}
+    end
+
+    # Settles the question the parrot control raises: how much of the corpus can be won
+    # without doing anything at all? Measured and reported rather than argued about.
+    def self.do_nothing_ceiling(suite)
+      adapter = Adapter.new(id: "do-nothing", label: "do-nothing", model: "none", provider: "none",
+                            capabilities: [], claims_success: ->(code, _out) { code.zero? })
+      trial = Trial.new(adapter: adapter)
+      results = suite.scenarios.map do |scenario, built|
+        runner = trial
+        Dir.mktmpdir("agenteval-ceiling") do |dir|
+          workspace = Workspace.new(dir)
+          workspace.materialize(scenario.files)
+          # It names the subject on an inaction cell — the strongest form of doing nothing —
+          # and says nothing at all on an acting cell.
+          answer = scenario.abstention? ? scenario.notes["abstention_subject"].to_s : ""
+          workspace.record_run(answer: answer, exit_code: 1, timed_out: false)
+          runner.send(:judge, scenario, built, workspace, trial: 1, duration: 0)
+        end
+      end
+      acting = results.reject { |r| r.scenario.abstention? }
+      inaction = results.select { |r| r.scenario.abstention? }
+      {
+        "solved" => results.count(&:solved?),
+        "cells" => results.length,
+        "acting_solved" => acting.count(&:solved?),
+        "acting_cells" => acting.length,
+        "inaction_solved" => inaction.count(&:solved?),
+        "inaction_cells" => inaction.length
+      }
     end
 
     # Applies the reference solution, and on an abstention cell states the refusal in the

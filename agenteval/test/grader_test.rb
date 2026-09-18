@@ -295,6 +295,22 @@ class GraderTest < Minitest::Test
     end
   end
 
+  # The framework's known limit, measured rather than argued about. A do-nothing agent wins
+  # every inaction cell (leaving the repository alone IS the correct outcome there) and must
+  # win nothing that requires work. Published with every run so the headline is read against
+  # its floor.
+  def test_the_do_nothing_floor_wins_no_acting_cell
+    suite = Agenteval::Suite.new(
+      tasks: Agenteval::Registry.all, modifiers: Agenteval::Modifiers.all.values,
+      seeds: [1], language: RUBY_LANG, difficulty: 2, budget_seconds: 60
+    )
+    ceiling = Agenteval::Controls.do_nothing_ceiling(suite)
+    assert_equal 0, ceiling['acting_solved'],
+                 "a do-nothing agent won #{ceiling['acting_solved']} acting cell(s)"
+    assert_equal ceiling['acting_cells'], ceiling['acting_solved'] + ceiling['acting_cells']
+    assert_operator ceiling['acting_cells'], :>, 0, 'no acting cell was measured'
+  end
+
   def test_reliability_counts_errors_rather_than_dropping_them
     adapter = Agenteval::Adapter.new(id: 't', label: 't', model: 'm', provider: 'p', capabilities: [])
     scenario = scenario_for('comprehend', 'clean')
