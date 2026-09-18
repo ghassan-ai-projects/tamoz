@@ -7,20 +7,32 @@ module Agenteval
   # `hidden` is the acceptance suite: files overlaid onto a copy of the agent's result at
   # judgement time. The agent cannot read, edit or fit them, which is what makes editing the
   # visible tests a useless cheat rather than a passing strategy.
+  # `horizon` is the task-length axis (METR's lesson): a declared property of the task, not
+  # a measured runtime. Today every task is `:short` (seconds-to-minutes); the axis exists so
+  # a report states its horizon coverage rather than assuming it, and so `:medium`/`:long`
+  # read as gaps until a soak-scale task lands (the honest home is the physical fault soak).
   Task = Struct.new(
-    :id, :use_case, :title, :expect, :readonly, :supports, :build,
+    :id, :use_case, :title, :expect, :readonly, :supports, :horizon, :build,
     keyword_init: true
   ) do
     def applicable?(modifier) = supports.nil? || supports.include?(modifier)
   end
+
+  # The declared task-length classes. A task names one; an unknown value is a typo that would
+  # otherwise surface silently as its own horizon bucket, so it is refused at definition time.
+  HORIZONS = %i[short medium long].freeze
 
   Built = Struct.new(:prompt, :files, :hidden, :oracle, :notes, :solution, keyword_init: true)
 
   class Registry
     def self.tasks = @tasks ||= {}
 
-    def self.define(id:, use_case:, title:, expect: :solve, readonly: false, supports: nil, &build)
-      tasks[id] = Task.new(id:, use_case:, title:, expect:, readonly:, supports:, build:)
+    def self.define(id:, use_case:, title:, expect: :solve, readonly: false, supports: nil, horizon: :short, &build)
+      unless HORIZONS.include?(horizon)
+        raise ArgumentError, "task #{id} declares an unknown horizon #{horizon.inspect}; one of #{HORIZONS.inspect}"
+      end
+
+      tasks[id] = Task.new(id:, use_case:, title:, expect:, readonly:, supports:, horizon:, build:)
     end
 
     def self.fetch(id, &block) = tasks.fetch(id, &block)

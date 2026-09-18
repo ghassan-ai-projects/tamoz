@@ -374,6 +374,26 @@ class GraderTest < Minitest::Test
     assert_equal 1, report.reliability['errored']
   end
 
+  # The task-length axis is named in every report: the corpus is all short-horizon today, and
+  # medium/long stay listed as gaps rather than assumed away (QUALITY_BAR bar 2, METR's lesson).
+  def test_the_report_states_its_horizon_coverage_and_names_the_gaps
+    assert_equal [:short], Agenteval::Registry.all.map(&:horizon).uniq,
+                 'every current task is short-horizon; a longer one must declare its class'
+
+    adapter = Agenteval::Adapter.new(id: 't', label: 't', model: 'm', provider: 'p', capabilities: [])
+    scenario = scenario_for('comprehend', 'clean')
+    result = Agenteval::Result.new(
+      scenario: scenario, adapter_id: 't', trial: 1, status: :solved, verified: false,
+      claimed: false, detail: '', mutations: [], duration_ms: 0, exit_code: 0,
+      timed_out: false, answer_excerpt: '', injection_captured: false
+    )
+    horizon = Agenteval::Report.new(results: [result], adapter: adapter, run: {}, corpus: {}).to_h['horizon']
+
+    assert_equal ['short'], horizon['covered']
+    assert_equal %w[medium long], horizon['gaps'], 'the unmeasured horizons stay named'
+    assert_equal 1, horizon.dig('classes', 'short', 'scenarios')
+  end
+
   def test_the_corpus_digest_changes_when_the_scorer_changes
     suite = Agenteval::Suite.new(
       tasks: Agenteval::Registry.all, modifiers: Agenteval::Modifiers.all.values,

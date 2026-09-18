@@ -114,6 +114,31 @@ module Agenteval
       end
     end
 
+    # The task-length axis (METR's lesson). Every published rate is stated against its
+    # horizon coverage, so "we only measure short-horizon tasks" is a visible fact rather than
+    # an implicit assumption. `covered` is the classes the corpus actually exercises; `gaps` is
+    # the declared classes it does not, which stay named until a soak-scale task lands (the
+    # honest home is the physical fault soak, P8). A blended rate across horizons would be a
+    # mixing artifact, like the acting/inaction split.
+    HORIZON_CLASSES = HORIZONS.map(&:to_s).freeze
+
+    def by_horizon
+      present = @results.group_by { |result| result.scenario.horizon.to_s }
+      classes = present.transform_values do |group|
+        by_scenario = group.group_by { |r| [r.scenario.task_id, r.scenario.modifier, r.scenario.seed] }
+        {
+          "trials" => group.length,
+          "scenarios" => by_scenario.length,
+          "pass_all" => by_scenario.count { |_key, trials| trials.all?(&:solved?) }
+        }
+      end
+      {
+        "classes" => classes,
+        "covered" => classes.keys.sort,
+        "gaps" => HORIZON_CLASSES - classes.keys
+      }
+    end
+
     # The unit of analysis is the scenario, never the trial: trials within a scenario are
     # correlated, and counting them as independent understates the interval.
     def interval
@@ -197,6 +222,7 @@ module Agenteval
         "reliability" => reliability,
         "interval" => interval,
         "composition" => composition,
+        "horizon" => by_horizon,
         "by_stage" => by_stage,
         "acted_rate" => acted_rate,
         "cost" => cost_block,

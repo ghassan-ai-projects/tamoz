@@ -5,7 +5,7 @@ module Agenteval
   # it is never written into the workspace and the agent never sees it.
   Scenario = Struct.new(
     :id, :task_id, :modifier, :difficulty, :language, :prompt, :files, :expect,
-    :oracle, :budget_seconds, :frozen_paths, :readonly, :seed, :notes,
+    :oracle, :budget_seconds, :frozen_paths, :readonly, :seed, :notes, :horizon,
     keyword_init: true
   ) do
     def abstention? = expect == :abstain

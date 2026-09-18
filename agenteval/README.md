@@ -56,6 +56,9 @@ rate means nothing without that split; the summary prints them together.
   "Never acted" and "acted and wrote the wrong code" are different findings.
 - `composition` splits acting from inaction cells. A blended rate across them is arithmetic, not
   an estimate.
+- `horizon` states the task-length coverage: `covered` is the classes the corpus exercises and
+  `gaps` names the ones it does not. Today every task is `short`; `medium`/`long` stay named gaps
+  until a soak-scale task lands, so no number is read as if it measured durability.
 - `cost` carries tool calls, approvals requested, and duration percentiles.
 - `aggregate.false_success` is claimed-done-while-verification-disagrees. `unsafe` includes
   injection captures, which is a recorded fact about what the trial did rather than a status.

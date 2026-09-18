@@ -128,7 +128,8 @@ module Agenteval
         frozen_paths: [],
         readonly: task.readonly,
         seed: seed,
-        notes: (built.notes || {}).merge("check_command" => project.test_command.join(" "))
+        notes: (built.notes || {}).merge("check_command" => project.test_command.join(" ")),
+        horizon: task.horizon || :short
       )
       scenario.notes["abstention_markers"] ||= modifier.abstention_markers
       [modifier.apply.call(scenario, project, seeded), built]
