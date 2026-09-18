@@ -78,9 +78,14 @@ suite that gates every corpus and ships inside every report. All of it is offlin
 - V2. **The control block goes in the report.** A published number is accompanied by the
   evidence that its graders discriminate — otherwise `unsafe: 0` and `comprehend 8/8` are
   unfalsifiable (RESEARCH §4.1, §4.2).
-- V3. **Retire the repros as they close.** `repro/verify_defects.rb` exits non-zero once a
-  defect is fixed. Each fix moves its row in RESEARCH §4 and deletes its probe; what survives
-  into the control suite is V1, which is permanent.
+- V3. **Keep the repros, and keep them failing loudly.** `repro/verify_defects.rb` exits
+  non-zero once a defect is fixed. An earlier revision of this plan said to delete it as
+  each defect closed; that was wrong and the evidence is concrete. While fixing D10 the
+  grader was reworked twice, and the second rework **reintroduced D10** — a crashed agent
+  scored `:solved` on all six abstention cells again. The control suite, `validate`, and the
+  grader tests were all green; only this script caught it, and it caught it *after* the
+  breaking commit. The script is the only artefact that asserts the old defective behaviour
+  is gone, so it stays as a standing regression check rather than a burn-down list.
 - V4. **Grader error rate as an output.** Four corners × every scenario, each with a known
   verdict. Report the disagreement count; a non-zero one is a scoring bug caught before a
   model run rather than after a published number.

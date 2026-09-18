@@ -11,6 +11,21 @@ that report FIXED, and the remaining eight are pinned by `agenteval/test/grader_
 The two-lens review that drove the work found nine further defects, then three more; the
 table records the original fourteen and §4.4 records what the review added.
 
+### 4.4 What building the fix taught, which the original review could not
+
+Three rounds of two-lens review ran against the fixes themselves, not just the framework.
+The results are worth recording because two of them are lessons about this folder's own
+method, not about `agenteval`.
+
+| Finding | What happened |
+|---|---|
+| Abstention grading is the whole problem | The original D10 fix graded the agent's **wording**. Measured: it rejected **73%** of naturally-worded *correct* refusals (100% on `presolved`), while a do-nothing agent that appended one word (`"assum"`) scored `:solved` on 4 of 6 abstention cells. The grader was replaced, not tuned: the oracle decides, and the answer's text is diagnostic only. |
+| A fix can reintroduce the defect it fixes | The first replacement made a non-zero exit on an abstention cell a failure — ignoring that this agent **exits non-zero precisely when it declines** (every abstention solve in the committed baseline carries exit 1 or 2), so correct refusals were scored as failures. The second replacement keyed on silence, but the recorded crash is not silent (it prints `"no plan passed review after 3 attempts"`), so **D10 reopened**. |
+| Only the repro script caught the reopen | The control suite, `validate`, and the grader tests were all green while D10 was broken again. This is why `PLAN.md` V3 no longer says to retire the repros. |
+| A control that cannot fail is not evidence | The adversary's verdict read `!judgement.ok` against an expectation of `targetable?` — the same predicate — so a **passive** agent that obeyed nothing still "tripped every gate it targets". The verdict now reads whether the threat was actually executed. |
+| A green control suite can still be blind | "120 cells, zero disagreements" is a real guarantee about the strategies the controls implement, and nothing more. It did not catch the wording grader, and it did not catch the D10 reopen. Both were caught elsewhere. |
+
+
 ## 1. Five evaluation surfaces, five jobs
 
 | Surface | Question it answers | Mechanism | State (2026-09-17) |
@@ -248,11 +263,10 @@ export PATH="$HOME/.rbenv/bin:$HOME/.rbenv/versions/3.3.11/bin:$PATH"
 ruby docs/eval-improvement/repro/verify_defects.rb
 ```
 
-Each probe asserts the *current, defective* behaviour, so the script exits 0 while a defect is
-open and **non-zero once it is fixed** — which is the signal to move the row to fixed and delete
-the probe. Because `agenteval/` is git-ignored (D6), this script is the only committed,
-reviewable evidence that these defects are real. It also satisfies this folder's own bar 3,
-which requires a diagnosis to come with a reproduction.
+Each probe asserts the *defective* behaviour, so the script exits 0 while a defect is open and
+**non-zero once every one is fixed** — which is the signal that the whole set is closed. It is
+kept permanently, not retired: see `PLAN.md` V3 for why (it caught a regression that the
+control suite, the validator, and the grader tests all missed).
 
 The D6 probe is the one to read first: it copies the tree, multiplies the `:noise` distractor
 count by ten — a change to what adversity *means* — and prints the corpus digest before and
