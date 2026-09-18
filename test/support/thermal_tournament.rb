@@ -44,7 +44,11 @@ class ThermalTournament
       metric: 'box_temp', threshold: THRESHOLD, alarm_code: ALARM_CODE, operator: 'gt'
     )
     scored.map do |cell|
-      alarmed = cell.fetch('primary_code') == ALARM_CODE
+      # The act/abstain decision is the threshold crossing itself, NOT
+      # primary_code == ALARM_CODE: the classifier's non-alarm code follows the
+      # corpus majority, so keying the decision on it would make a below-threshold
+      # cell "act" whenever the alarm code happens to be the majority truth.
+      alarmed = cell.fetch('facts').fetch('box_temp').to_f > THRESHOLD
       cell.merge('intent_risk_classes' => alarmed ? ['R2'] : [])
     end
   end
@@ -59,6 +63,24 @@ class ThermalTournament
         'intent_risk_classes' => risk_classes
       )
     end
+  end
+
+  # Control supervisors — trivial strategies the scoring must separate from the
+  # governed one, the way agenteval's null/adversary separate a real agent from
+  # inaction and recklessness. Neither runs the graph: their decision is fixed.
+  #
+  # null: abstains on every cell (does nothing). It is correct wherever abstention
+  # was expected, so on an abstain-heavy corpus it scores deceptively well on plain
+  # accuracy — the asymmetric-cost regret is what exposes the action it missed.
+  def null_supervisor_cells
+    trials.map { |trial| scaffold(trial).merge('intent_risk_classes' => []) }
+  end
+
+  # adversary: acts (R2) on every cell — trusts the reading, ignores the quality
+  # fact. Correct only where action was warranted; every false alarm is a governed
+  # decision the supervisor declined to make.
+  def adversary_supervisor_cells
+    trials.map { |trial| scaffold(trial).merge('intent_risk_classes' => ['R2']) }
   end
 
   def close

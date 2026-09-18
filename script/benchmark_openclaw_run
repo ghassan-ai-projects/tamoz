@@ -40,6 +40,7 @@ OptionParser.new do |parser|
   parser.on('--git-revision REVISION') { |value| options[:git_revision] = value }
   parser.on('--input-manifest PATH') { |value| options[:input_manifest] = value }
   parser.on('--scenario ID') { |value| options[:scenario] = value }
+  # Earned by `rake benchmark:prove` (the offline discrimination gate), not asserted here.
   parser.on('--controls-passed') { options[:controls_passed] = true }
   parser.on('--publish') { options[:publish] = true }
 end.parse!

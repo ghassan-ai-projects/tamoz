@@ -174,5 +174,8 @@ class ThermalLabDecisionTest < Minitest::Test
 
     assert_equal 'install_watch_condition', intent.fetch('type'),
                  'a proposal above the risk ceiling demotes to watch, never escalates'
+    # The model's risk claim never escalates past the ceiling: the demotion lands
+    # at the R0 watch, not the proposal's R2 (B10).
+    assert_equal 'R0', intent.fetch('risk_class')
   end
 end

@@ -138,7 +138,14 @@ results are plumbing evidence and never intelligence evidence.
 
 ## The one command (full publishable target)
 
+`--controls-passed` must be backed by the offline discrimination gate: run it
+first, and pass the flag only once it is green. (The flag is operator discipline
+today, not enforced by the script — see the deferred enforcement note in
+`docs/eval-improvement/GAPS-20260918.md`.)
+
 ```bash
+bundle exec rake benchmark:prove   # oracle passes, null/cheap fail, adversary trips its gate
+
 script/benchmark_openclaw_run \
   --runtime-dir <configured runtime> \
   --provider openrouter --model deepseek/deepseek-chat \
