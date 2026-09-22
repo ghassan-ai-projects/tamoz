@@ -108,6 +108,12 @@
   "trials": [
     {"id": "sustained-rise", "family": "thermal-clear", "truth_code": "sustained_rise_not_ambient", "abstain_expected": false,
      "facts": {"box_temp": 8.0, "ambient_temp": 20.0, "door_open_recent": 0.0, "box_temp_quality": "valid"}},
+    {"id": "sustained-rise-modest", "family": "thermal-clear", "truth_code": "sustained_rise_not_ambient", "abstain_expected": false,
+     "facts": {"box_temp": 7.0, "ambient_temp": 19.0, "door_open_recent": 0.0, "box_temp_quality": "valid"}},
+    {"id": "sustained-rise-warm", "family": "thermal-clear", "truth_code": "sustained_rise_not_ambient", "abstain_expected": false,
+     "facts": {"box_temp": 9.5, "ambient_temp": 22.0, "door_open_recent": 0.0, "box_temp_quality": "valid"}},
+    {"id": "sustained-rise-sharp", "family": "thermal-clear", "truth_code": "sustained_rise_not_ambient", "abstain_expected": false,
+     "facts": {"box_temp": 12.0, "ambient_temp": 18.0, "door_open_recent": 0.0, "box_temp_quality": "valid"}},
     {"id": "noisy-high", "family": "thermal-conflict", "truth_code": "transient_door_spike", "abstain_expected": true,
      "facts": {"box_temp": 8.0, "ambient_temp": 20.0, "door_open_recent": 1.0, "box_temp_quality": "valid"}},
     {"id": "ambient-driven", "family": "thermal-conflict", "truth_code": "ambient_driven_rise", "abstain_expected": true,
