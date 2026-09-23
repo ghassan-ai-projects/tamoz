@@ -10,6 +10,14 @@ prompt cache is prefix-exact.** So keep everything stable at the front and
 byte-identical, only append, move bulk out behind a pointer, and when you must rewrite,
 do it once, at a boundary, with a schema, and log it.
 
+The measurement behind every choice here: `script/dsh_context_survey` reads the DSH session logs
+and reports what its machinery actually did. On a 1,000,000-token route, 81 sessions and 7,236
+steps produced **0 prunes and 0 compactions**, with the widest prompt at 598,597 tokens and 99.6%
+of it a cache read. On 262,144-token routes the same machinery pruned 249 times and compacted 32,
+with the prompt ceiling at the 0.8 trigger. In the whole corpus, all 280 surface replacements came
+from those two compaction packages — not one from staleness, and not one a rewrite of an earlier
+message. The numbers and the worked example are in [FILE-CONTEXT.md](FILE-CONTEXT.md) §0.2–§0.3.
+
 ---
 
 ## 1. The request, by segment
@@ -94,16 +102,31 @@ where recency also gives it more weight (research M-1, loss mode "freshness").
 
 - **DSH:** "Ordered dynamic contexts are separate from sections and become sourced
   user-role snapshots" (`packages/core/system-prompt/README.md`, Model Experience).
+  `RuntimeContextProjection` (`packages/core/agent-loop/src/runtime-context.ts:109-158`) holds the
+  last retained snapshot and creates a new one **only when the rendered text differs**; the message
+  names the contributing sections in its `source`. A snapshot whose dynamic set empties is not
+  deleted — it is superseded by the marker
+  `Current runtime context: none. Earlier runtime-context snapshots no longer apply.`
+  That is DSH choosing an append over a rewrite even for volatile state. Measured: 793 snapshots
+  appended across the corpus, 0 cleared markers, and 1–3 per session rather than one per step.
 - **Tamoz:** the runtime snapshot (workspace root, branch and dirty state, date,
   budgets left), the project guidance and memory recall are sourced `user` entries at
-  the start of the body. They are re-sent only when they change, as a new entry.
+  the start of the body. The snapshot is re-rendered at each model step and appended only when its
+  text changed, with its section digests recorded; guidance and recall are appended once per
+  generation. Nothing volatile may enter the header (H5).
+  Full specification: [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.9 (packages FC10, G-22).
 
 ### 2.5 Output shaping — M-5
 
 - **Research:** the cheapest token is the one never generated; head+tail, never middle;
   pass = one line, fail = full trace; never delete, always redirect.
 - **Tamoz:** in `tamoz-tools` (PLAN §3.4): `run_check` shaping, capped and ranged reads,
-  glob and grep caps, a diff instead of a re-read after an edit.
+  glob and grep caps, a diff instead of a re-read after an edit. **The edit diff is a Tamoz
+  addition, not DSH parity** — DSH's `edit` sends the model a one-line success message and keeps
+  its 3-context-line diff card in `data.meta.diffs` for the UI, outside the request. Measured:
+  123 bytes for the model, a 3-context-line hunk in the meta. Tamoz already appends a
+  context-free diff; §3.4 of [FILE-CONTEXT.md](FILE-CONTEXT.md) adds the context lines and the
+  justification.
 
 ### 2.6 Spill — M-6 reversible offload
 
@@ -126,7 +149,9 @@ where recency also gives it more weight (research M-1, loss mode "freshness").
   summary.
 - **Tamoz:** same defaults, with the marker carrying the locator so the model can
   recall the middle. It runs before summarising, oldest results first, and never
-  touches the newest retained slice.
+  touches the newest retained slice. **It runs only after a compaction trigger qualifies** —
+  DSH never touches a below-pressure conversation, and the corpus agrees (249 prunes, all on
+  256K-window routes; 0 on the million-token route).
 - **Cache effect:** invalidates from the first pruned token.
 - **Holds it:** G-7 (one-pass convergence, strictly smaller, original recoverable).
 
@@ -235,7 +260,13 @@ Rules:
   last reported `prompt_tokens`: `estimate(new) = reported(prev) + heuristic(appended)`.
   The window comes from the profile role (`context_window`), never a guess.
   `ContextEngine::Usage` reads DeepSeek's `prompt_cache_hit_tokens`/`prompt_cache_miss_tokens`
-  and OpenAI's `prompt_tokens_details.cached_tokens`.
+  and OpenAI's `prompt_tokens_details.cached_tokens`. Note that DSH logs `cacheReadTokens` and, on
+  some routes, no `totalTokens` at all; the prompt size is `input_uncached + cache_read`, and
+  `totalTokens` (where present) is input + cache read + output.
+- **Measured correction to ÷ 4.** A controlled series of ten large source reads measured
+  **3.46 bytes/token** (614,891 visible bytes → 177,517 prompt tokens), so the heuristic
+  under-counts code by ~13% before calibration. Calibration is not a nicety; it is what keeps the
+  pressure trigger honest. Full data: [FILE-CONTEXT.md](FILE-CONTEXT.md) §0.2.
 
 ### 2.12 Repeat guard
 
@@ -249,40 +280,77 @@ Rules:
 ### 2.13 Read-before-edit and freshness
 
 - **DSH:** `fs-observation-policy`: a mutation needs a prior read and fails if the file
-  changed since, with a re-read instruction. Not persisted across resume.
+  changed since, with a re-read instruction. Not persisted across resume. **Edit-time only** —
+  there is no proactive "this file changed" note for a read result, and no read dedup; both are
+  absent by source search. What DSH does have is the same pattern on the instruction channel: a
+  changed `AGENTS.md` is superseded by an appended `Updated instructions from: <path>`, a removed
+  one by `Instructions removed: <path> — The previously loaded instructions from this file no
+  longer apply.` (`packages/context/agent-instructions/README.md`), with the documented KV-cache
+  effect "append-only; … does not invalidate existing KV Cache entries".
 - **Prompt-cache research:** the disk edit is not a cache event; the rebuild is. Append
   a diff rather than re-reading; a full re-read costs about 1.46 turns and invalidates
   nothing.
 - **Tamoz:** `expected_sha256` already enforces it. Add the stable error code and the
-  appended diff (PLAN §3.4). Freshness after an external edit is detected at patch time,
-  not tracked continuously.
+  appended diff (PLAN §3.4). **Tamoz extends DSH here**: an observation ledger that pins the patch
+  to the version the model actually saw (today the gate silently fills `expected_sha256` from the
+  disk, so a blind edit passes), plus one appended note when an observed file changes outside the
+  model's edits. Both are append-only. Full specification:
+  [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.1–§3.3.
+
+### 2.14 Prompt and system updates as surface nodes
+
+- **DSH:** the system prompt is itself a surface node. `SystemPromptProjection`
+  (`packages/core/agent-loop/src/runtime-context.ts:60-106`) reconciles it: a continuing capable
+  series **appends** changed non-empty prompt text after the cached history; an incapable route, a
+  broken series, or an emptied prompt instead rewrites node 0 and empties later active system
+  nodes with logged replacements. Node 0 is protected — only a `system/message` over exactly that
+  node may shadow it (`packages/core/session/src/surface.ts:404`).
+- **Tamoz: not built — FC11 was dropped after review.** An earlier draft proposed mirroring DSH at
+  the series boundary. The plan's own measurement found **0** such replacements in the 753-log
+  corpus, and the loop has no accumulation path: `WorkContext#opening` rebuilds its pinned entries
+  every turn (each turn is a fresh execution on a fresh surface) and `WorkGate#round_complete`'s
+  repeat reminder is one-shot. AGENTS.md: do not write code for a case that cannot happen.
+  [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.10 records the decision.
+- **Cache effect (if it ever returns):** none inside a series; the header is rebuilt at the boundary
+  regardless.
+- **Holds it:** G-4 only. G-23 is retired with FC11.
+- **If it returns:** only with a session that shows accumulating `system_update` nodes as its repro.
 
 ---
 
 ## 3. Policy, as data
 
 The defaults ship in `tamoz-context-engine`; a profile role may override them per model route,
-as DSH's `modelPolicies` does.
+as DSH's `modelPolicies` does. Every number below is either DSH's own package default or its
+deployed base-bundle value (`packages/bundle/base/cordis.patch.yml`); the two where Tamoz's first
+draft was stricter are marked, and [FILE-CONTEXT.md](FILE-CONTEXT.md) §8 carries the decision.
 
 ```yaml
 context:
-  threshold_ratio: 0.8        # arm compaction
-  backstop_ratio: 0.92        # compact even mid-step
-  retain_ratio: 0.16          # newest slice kept verbatim
-  max_compactions_per_turn: 1 # then hand off (D6)
-  summary_max_tokens: 8192
-  overflow_retries: 1
+  threshold_ratio: 0.8        # arm compaction (DSH default)
+  backstop_ratio: 0.92        # compact even mid-step (Tamoz addition; DSH has no backstop)
+  retain_ratio: 0.16          # newest slice kept verbatim (DSH default)
+  max_compactions_per_turn: 1 # then hand off (D6; DSH has compactionRetries instead)
+  summary_max_tokens: 8192    # DSH default
+  overflow_retries: 1         # DSH maxOverflowRetries
   spill:
-    max_inline_bytes: 8192
+    max_inline_bytes: 50000   # DSH deployed (was 8192; see parity note)
     preview_head_lines: 20
     preview_tail_lines: 40
   prune:
-    threshold_chars: 8192
+    threshold_chars: 8192     # DSH deployed, verbatim
     head_chars: 4096
     tail_chars: 1024
-  repeat_guard: { remind_at: [3, 5], stop_at: 8 }
-  instructions: { enabled: false, max_bytes: 16384, files: [AGENTS.md] }
+  read: { window_lines: 800, max_bytes: 51200 }  # DSH: 2000 lines (default = max), 50 KiB bytes
+  repeat_guard: { remind_at: [3, 5], stop_at: 8 } # DSH: [3, 5, 8], reminds only
+  instructions: { enabled: false, max_bytes: 16384, files: [AGENTS.md] } # DSH: 65536
 ```
+
+**Parity note.** DSH's spill budget (50,000) is six times this plan's first number: a bigger inline
+budget means fewer `recall_output` round trips and more bytes re-billed at the cache rate. Its read
+window (2,000 lines, which is also the maximum, 2,000 chars per line, 50 KiB) is much larger than
+the 300 lines first proposed here. The full comparison and the recommendations are in
+[FILE-CONTEXT.md](FILE-CONTEXT.md) §8.
 
 ---
 
@@ -292,6 +360,17 @@ context:
 |---|---|
 | Cordis plugin tree, profiles, bundles | Tamoz composes with gems and trusted profiles already; a plugin framework is machinery with no current need. |
 | `/compact` as the only manual path | Tamoz already has `/compact`; it is extended, not replaced. |
-| Continuous `AGENTS.md` rediscovery after fs operations | The chain is read once per generation. Tamoz treats it as untrusted guidance, so less is better. |
-| Sub-agent providers (Claude Code, Codex, in-process fork) | Out of scope (PLAN §5). |
+| Continuous `AGENTS.md` **scope discovery** after fs operations | DSH does this: after a successful filesystem call reaches a deeper directory it appends `Additional instructions from: <path>`. Measured in the corpus: 20 such discoveries, against 822 baseline injections. Tamoz reads the chain once per generation — it treats guidance as untrusted and opt-in (D4), so less is better. |
+| `Updated instructions from:` / `Instructions removed:` notices | DSH appends one when a loaded instruction file changes or disappears (measured: 19 replaces, 1 removal). **Tamoz adopts this**, extended from guidance to every file it loaded: [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.2 and §3.11. |
+| Sub-agent providers (Claude Code, Codex, in-process fork) | Out of scope (PLAN §5). But note: DSH's fresh-child context is itself a context-management mechanism — a delegated task's reading never enters the parent's window, only its answer. Revisit as a read-only `survey` child once the single loop is measured. |
 | Model-facing compaction tool | DSH leaves it undecided; so does this plan. |
+
+## 5. What Tamoz adds that DSH does not have
+
+| Mechanism | Why DSH's absence is not a reason to skip it |
+|---|---|
+| Observation ledger; patch pinned to the version the model saw; `stale_file` | DSH's gate records the version, but Tamoz's currently does not — it fills `expected_sha256` from the disk, so a blind edit passes. This is a defect fix, not a feature. |
+| Proactive "files changed outside your edits" note, appended once per pass | DSH proves the pattern on the instruction channel and leaves the read channel unmanaged. Stale read text is the exact problem the owner asked about. |
+| Read dedup ("unchanged since step 9") | DSH re-sends a repeated read in full. At a real window this is the single largest token saving per the cost model of §0.2. |
+| Superseded-read pruning | DSH prunes by size only. Pruning staleness first is one extra map lookup in a pass that already runs. |
+| Runtime-context snapshot on change (§2.4/§3.9) | Parity, not an addition — listed here because Tamoz has it in name only today (rendered once at the opening). |

@@ -1,0 +1,180 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Dump the derived context of the DSH session running this script.
+#
+#   ruby script/dsh_context_dump --label 03 --expect-reads 3 --out tmp/context-test/dump-03.json
+#
+# Resolves the log from $DSH_SESSION_ID, refusing a top-level session when a subagent log is the
+# live writer. --expect-reads polls until that many `read` tool results are durable, so a dump
+# taken in the same step as the read still reflects it.
+require 'json'
+
+options = {}
+ARGV.each_slice(2) { |key, value| options[key.sub(/\A--/, '')] = value }
+label = options.fetch('label', 'dump')
+expect_reads = options['expect-reads'].to_i
+expect_edits = options['expect-edits'].to_i
+expect_writes = options['expect-writes'].to_i
+out = options['out']
+home = ENV.fetch('DSH_HOME', File.expand_path('~/.dsh'))
+session_id = ENV['DSH_SESSION_ID']
+
+def header_of(path)
+  IO.popen(['zstd', '-dc', path], err: File::NULL) { |s| s.first(3) }.to_a.filter_map do |line|
+    event = begin
+      JSON.parse(line)
+    rescue JSON::ParserError
+      nil
+    end
+    event if event && event['type'] == 'session'
+  end.first
+end
+
+def candidates(home)
+  Dir[File.join(home, 'sessions', '*', '*', 'session*.jsonl.zstd')]
+    .group_by { |path| File.dirname(path) }
+    .map { |directory, paths| paths.max_by { |path| File.basename(path) } }
+    .select { |path| File.mtime(path) > Time.now - 3600 }
+    .sort_by { |path| -File.mtime(path).to_f }
+end
+
+chosens = candidates(home)
+direct = chosens.find { |path| session_id && path.include?(session_id) }
+log = if direct && header_of(direct)&.fetch('origin', nil) == 'subagent'
+        direct
+      else
+        chosens.find { |path| header_of(path)&.fetch('origin', nil) == 'subagent' } || direct || chosens.first
+      end
+abort 'dump_context: no live session log found' unless log
+
+def tool_name(event) = event.dig('data', 'name').to_s
+
+def result_text(event)
+  block = Array(event.dig('data', 'message', 'content')).first
+  inner = block && Array(block['content']).first
+  inner.is_a?(Hash) ? inner['text'].to_s : ''
+end
+
+def blocks_text(blocks)
+  Array(blocks).sum do |block|
+    next 0 unless block.is_a?(Hash)
+
+    block['text'].to_s.bytesize + block['arguments'].to_s.bytesize
+  end
+end
+
+# Fold the log into the model-visible surface exactly as deriveMessages does: surface-eligible
+# events append at their own position, and a replace op shadows the range it names.
+def fold(raw)
+  names = {}
+  nodes = []
+  calls = Hash.new(0)
+  results = Hash.new(0)
+  recent = []
+  replacements = []
+  usage = nil
+  read_sizes = []
+  events = 0
+  raw.each_line do |line|
+    next unless line.include?('"type":"')
+
+    event = begin
+      JSON.parse(line)
+    rescue JSON::ParserError
+      next
+    end
+    events += 1
+    case event['type']
+    when 'tool/call'
+      calls[tool_name(event)] += 1
+      names[event.dig('data', 'callId')] = tool_name(event)
+    when 'assistant/message'
+      candidate = event.dig('data', 'usage')
+      usage = candidate if candidate.is_a?(Hash) && candidate.values.any? { |v| v.to_i.positive? }
+    end
+    op = event['surfaceOp']
+    next unless op
+
+    if op.is_a?(Hash)
+      first = op['startSeq'] || op['start']
+      last = op['endSeq'] || op['end']
+      nodes.reject! { |node| node[:seq].between?(first, last) } if first && last
+      replacements << { 'type' => event['type'], 'range' => [first, last] }
+    end
+
+    kind, bytes, tool = case event['type']
+                        when 'system/message' then ['system', blocks_text(event.dig('data', 'message', 'content')), nil]
+                        when 'user/message'
+                          source = event.dig('data', 'source') || {}
+                          ["user/#{source['kind'] || 'user'}",
+                           blocks_text(event.dig('data', 'content') || event.dig('data', 'message', 'content')), nil]
+                        when 'assistant/message'
+                          ['assistant', blocks_text(event.dig('data', 'message', 'content')), nil]
+                        when 'tool/result'
+                          call_id = event.dig('data', 'message', 'source', 'callId') ||
+                                    event.dig('data', 'message', 'content', 0, 'toolCallId')
+                          name = names[call_id] || '?'
+                          text = result_text(event)
+                          read_sizes << text.bytesize if name == 'read'
+                          results[name] += 1
+                          recent << { 'seq' => event['seq'], 'name' => name, 'bytes' => text.bytesize,
+                                      'head' => text[0, 300] }
+                          ['tool', text.bytesize, name]
+                        end
+    next unless kind
+
+    nodes << { seq: event['seq'], kind: kind, tool: tool, bytes: bytes }
+  end
+  { nodes: nodes, calls: calls, results: results, recent: recent.last(3), replacements: replacements,
+    usage: usage, read_sizes: read_sizes, events: events }
+end
+
+deadline = Time.now + 40
+min_seconds = 1.5
+opened = Time.now
+state = nil
+loop do
+  state = fold(IO.popen(['zstd', '-dc', log], &:read))
+  ready = state[:read_sizes].length >= expect_reads &&
+          state[:results]['edit'].to_i >= expect_edits &&
+          state[:results]['write'].to_i >= expect_writes
+  break if ready && Time.now - opened >= min_seconds
+  break if Time.now > deadline
+
+  sleep 0.4
+end
+usage = state[:usage] || {}
+uncached = usage['inputTokens'].to_i
+cached = usage['cacheReadTokens'].to_i
+by_kind = state[:nodes].group_by { |node| node[:kind] }
+dump = {
+  'label' => label,
+  'at' => Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+  'session_id' => File.basename(File.dirname(log)),
+  'origin' => header_of(log)&.fetch('origin', nil),
+  'log_bytes' => File.size(log),
+  'log_mtime' => File.mtime(log).utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+  'events' => state[:events],
+  'visible_messages' => state[:nodes].length,
+  'visible_bytes' => state[:nodes].sum { |node| node[:bytes] },
+  'bytes_by_kind' => by_kind.transform_values { |rows| [rows.length, rows.sum { |r| r[:bytes] }] },
+  'prompt_tokens' => uncached + cached,
+  'uncached_tokens' => uncached,
+  'cache_read_tokens' => cached,
+  'output_tokens' => usage['outputTokens'].to_i,
+  'tool_calls' => state[:calls].values.sum,
+  'read_calls' => state[:calls]['read'].to_i,
+  'read_results' => state[:read_sizes].length,
+  'read_result_bytes' => state[:read_sizes],
+  'results_by_tool' => state[:results],
+  'recent_tool_results' => state[:recent],
+  'replacements' => state[:replacements],
+  'nodes' => state[:nodes],
+  'largest_messages' => state[:nodes].sort_by { |node| -node[:bytes] }.first(6)
+}
+File.write(out, JSON.pretty_generate(dump)) if out
+puts "#{label}: #{dump['visible_messages']} messages, #{dump['visible_bytes']} bytes, " \
+     "prompt #{dump['prompt_tokens']} (cached #{dump['cache_read_tokens']}), " \
+     "reads #{dump['read_results']}, edits #{state[:results]['edit'].to_i}, " \
+     "replacements #{dump['replacements'].length} -> #{out}"

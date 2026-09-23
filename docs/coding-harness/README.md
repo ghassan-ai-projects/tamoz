@@ -15,6 +15,7 @@ both use them.
 |---|---|
 | [PLAN.md](PLAN.md) | Current state (with file references), the design, the two new gems, the per-surface changes, the gated work packages, risks. |
 | [CONTEXT-ENGINE.md](CONTEXT-ENGINE.md) | The DSH context-management method mapped onto Tamoz, mechanism by mechanism: frozen request header, request series, append-only surface, in-history prompt updates, spill, pruner, compaction, token meter, cache accounting. |
+| [FILE-CONTEXT.md](FILE-CONTEXT.md) | Next phase (plan): the route's real window first, then files as their own kind of context — read-before-edit observations, notes for outside changes, bounded reads and dedup, the diff tail, `@path` references, a change ledger and rewind. §0.2–§0.3 carry the measurement of what DSH's machinery actually does (753 session logs) and the worked example of five reads with the third one changed. |
 | [PROMPTS.md](PROMPTS.md) | The system prompt and personalization layer: section order, trust tiers, draft text, what is data and where it lives. |
 | [EVAL.md](EVAL.md) | The eval: offline guarantees, controls that must discriminate, the cache/cost trace, the capability and context-fidelity corpora, the real-model runs, the stop rule. |
 | [GOAL.md](GOAL.md), [QUALITY_BAR.md](QUALITY_BAR.md), [STATUS.md](STATUS.md) | The goal, the bar it must meet and where it stands, and the resume point with recorded deviations. |
@@ -36,9 +37,13 @@ Sources this plan is built from:
 - Its cache annex: `~/ai-projects/articles/research-prompt-cache-architecture`
   (`dsh/dsh.md`, pinned at dsh `c291e7961a`).
 - DSH itself: `~/external-projects/deepseek-harness` (`docs/architecture.md`,
-  `packages/core/system-prompt`, `packages/compaction/*`, `packages/spill/spill-policy`,
-  `packages/fs/fs-observation-policy`, `packages/guard/repeat-tool-reminder`,
-  `packages/context/agent-instructions`).
+  `packages/core/system-prompt`, `packages/core/agent-loop/src/runtime-context.ts`,
+  `packages/core/session/src/surface.ts`, `packages/compaction/*`,
+  `packages/spill/spill-policy`, `packages/fs/fs-observation-policy`,
+  `packages/context/agent-instructions`, `packages/guard/repeat-tool-reminder`,
+  `packages/bundle/base/cordis.patch.yml` for the deployed policy values).
+- What DSH's machinery actually did: `script/dsh_context_survey` over `~/.dsh/sessions`
+  (the table in [FILE-CONTEXT.md](FILE-CONTEXT.md) §0.2).
 
 ## The answer in one paragraph
 

@@ -1,0 +1,133 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Surveys DSH session logs for what its context machinery actually did: which routes compacted,
+# how far prompts grew, how much was cache-read, and which surface replacements ever fired.
+# Usage: script/dsh_context_survey [ROOT] [--json]   (ROOT defaults to ~/.dsh/sessions)
+#
+# The logs are zstd-compressed JSONL. Only lines that can carry an interesting event are parsed;
+# that keeps a multi-hundred-megabyte corpus to a few seconds.
+require 'json'
+
+INTERESTING = %r{"type":"(?:request/context|compaction/start|compaction/prune|assistant/message|user/message|system/message|tool/result)"}
+
+# The highest session format generation in a directory. Older generations are superseded copies
+# of the same session, so counting both would double every figure.
+def log_for(directory)
+  Dir[File.join(directory, 'session*.jsonl.zstd')].max_by { |path| File.basename(path) }
+end
+
+def survey(path)
+  session = { path:, route: nil, window: nil, steps: 0, prune: 0, compactions: 0, replacements: {},
+              runtime_snapshots: 0, markers: 0, max_prompt: 0, max_cache_read: 0, max_uncached: 0,
+              prompt_tokens: 0, cached_tokens: 0, output: 0 }
+  IO.popen(['zstd', '-dc', path]) do |stream|
+    stream.each_line do |line|
+      next unless line.match?(INTERESTING)
+
+      event = begin
+        JSON.parse(line)
+      rescue JSON::ParserError
+        next
+      end
+      case event['type']
+      when 'request/context' then route(session, event)
+      when 'compaction/start' then session[:compactions] += 1
+      when 'compaction/prune' then session[:prune] += 1
+      when 'assistant/message' then usage(session, event)
+      when 'user/message' then injected(session, event)
+      end
+      replacement(session, event)
+    end
+  end
+  session
+end
+
+def route(session, event)
+  session[:route] ||= event.dig('data', 'model')
+  session[:window] ||= event.dig('data', 'contextWindow')
+end
+
+# Usage arrives in two shapes: some routes report `totalTokens` (input + cache read + output), others
+# only the three parts. The model-visible prompt is always input + cache read; cached tokens are the
+# reusable prefix and the uncached ones are what the provider processed afresh.
+def usage(session, event)
+  usage = event.dig('data', 'usage') || {}
+  uncached = usage['inputTokens'].to_i
+  cached = usage['cacheReadTokens'].to_i
+  output = usage['outputTokens'].to_i
+  total = usage['totalTokens'].is_a?(Integer) ? usage['totalTokens'] : uncached + cached + output
+  return unless total.positive?
+
+  prompt = uncached + cached
+  session[:steps] += 1
+  session[:prompt_tokens] += prompt
+  session[:cached_tokens] += cached
+  session[:output] += output
+  return unless prompt > session[:max_prompt]
+
+  session[:max_prompt] = prompt
+  session[:max_cache_read] = cached
+  session[:max_uncached] = uncached
+end
+
+def injected(session, event)
+  source = event.dig('data', 'source') || {}
+  return unless source['plugin'] == '@deepseek-ai/dsh-system-prompt'
+
+  text = Array(event.dig('data', 'message', 'content')).filter_map { |block| block['text'] }.join
+  if text.include?('Earlier runtime-context snapshots no longer apply')
+    session[:markers] += 1
+  else
+    session[:runtime_snapshots] += 1
+  end
+end
+
+# A replacement is the only way anything leaves the model's context. Count it by the event that
+# carries the op, so the producer is named rather than guessed.
+def replacement(session, event)
+  return unless event['surfaceOp'].is_a?(Hash)
+
+  session[:replacements][event['type']] = session[:replacements].fetch(event['type'], 0) + 1
+end
+
+root = ARGV.reject { |argument| argument == '--json' }.first || File.expand_path('~/.dsh/sessions')
+json = ARGV.include?('--json')
+abort "no session logs under #{root}" unless File.directory?(root)
+
+sessions = Dir[File.join(root, '*', '*')].filter_map { |directory| log_for(directory) }.map { |path| survey(path) }
+by_route = sessions.select { |session| session[:window] }.group_by { |session| [session[:window], session[:route]] }
+summary = by_route.map do |(window, route), group|
+  prompts = group.sum { |s| s[:prompt_tokens] }
+  cached = group.sum { |s| s[:cached_tokens] }
+  { 'window' => window, 'route' => route, 'sessions' => group.length,
+    'steps' => group.sum { |s| s[:steps] }, 'prune' => group.sum { |s| s[:prune] },
+    'compactions' => group.sum { |s| s[:compactions] }, 'max_prompt' => group.map { |s| s[:max_prompt] }.max,
+    'prompt_tokens' => prompts, 'cached_tokens' => cached, 'cache_share' => prompts.zero? ? 0 : cached.fdiv(prompts),
+    'output' => group.sum { |s| s[:output] } }
+end.sort_by { |row| [-row['sessions'], row['window'].to_i] }
+replacements = sessions.each_with_object(Hash.new(0)) do |session, counts|
+  session[:replacements].each { |kind, count| counts[kind] += count }
+end
+
+if json
+  puts JSON.pretty_generate('summary' => summary, 'replacements' => replacements,
+                            'runtime_snapshots' => sessions.sum { |s| s[:runtime_snapshots] },
+                            'no_longer_apply_markers' => sessions.sum { |s| s[:markers] })
+else
+  puts 'window    route                          sessions  steps   prune  compact  max prompt  cache share'
+  summary.each do |row|
+    puts format('%-9d %-30s %8d %6d %7d %8d %11d %12s',
+                row['window'], row['route'], row['sessions'], row['steps'], row['prune'],
+                row['compactions'], row['max_prompt'], format('%.1f%%', row['cache_share'] * 100))
+  end
+  puts
+  puts "surface replacements: #{replacements.empty? ? 'none' : replacements.map { |k, v| "#{k}=#{v}" }.join(', ')}"
+  puts "runtime-context snapshots appended: #{sessions.sum { |s| s[:runtime_snapshots] }}, " \
+       "cleared markers: #{sessions.sum { |s| s[:markers] }}"
+  widest = sessions.select { |s| s[:window] }.max_by { |s| s[:max_prompt] }
+  if widest
+    puts "widest prompt: #{widest[:max_prompt]} (cache read #{widest[:max_cache_read]}, " \
+         "uncached #{widest[:max_uncached]}) on #{widest[:route]} @ #{widest[:window]}"
+  end
+end

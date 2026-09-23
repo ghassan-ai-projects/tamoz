@@ -176,9 +176,13 @@ make the eval load the whole runtime to grade a byte-stability property.
 - New `glob` (pattern → paths, sorted, capped) and regex mode for `search_text`
   (`regex: true`, `context_lines`, `path_glob`), still with no shell and no host `rg`
   required.
-- `apply_patch` returns a unified diff of what it changed. The prompt-cache research
-  prices "append a diff" as the best-value refresh. A stale sha returns a stable error
-  code with "re-read the file, then retry" (DSH's observation policy).
+- `apply_patch` returns a unified diff of what it changed. **This is a Tamoz addition, not DSH
+  parity**: DSH's model-visible edit result is one line ("The file … has been updated
+  successfully.", measured at 123 bytes) and its 3-context-line diff card is UI-only
+  (`data.meta.diffs`, excluded from the request; [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.4). The
+  prompt-cache research prices "append a diff" as the best-value refresh, which is the reason to
+  keep it. A stale sha returns a stable error code with "re-read the file, then retry" (DSH's
+  observation policy).
 - `run_check` output shaping (M-5): pass → one line (name, exit 0, duration,
   summary counts where the output has them); fail → head and tail with the failure.
   The full log always goes to `ContextEngine::Spill`.
