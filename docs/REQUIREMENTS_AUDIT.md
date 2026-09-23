@@ -7,16 +7,17 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 529 | 284 | 15 | **no** |
+| 560 | 286 | 17 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
+| failing | 2 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 499 |
+| pass | 528 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -36,7 +37,14 @@ generating run.
 | `INV-59` — Observation cannot change execution, and its surface is bounded and versioned | missing | The bounded catalog, recorder isolation, and drop accounting are implemented and covered by observability tests, but the full four-way byte-identity, hanging-collector, and end-to-end latency proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. The slice-B conformance suite closes this residual. |
 | `INV-60` — Telemetry is redacted by construction and content capture is an explicit named policy | missing | Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual. |
 | `INV-61` — Safety-bearing observability is derived from durable evidence, correlated by durable identity, and never overstates what it measured | missing | Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding. |
+| `OBJ-3` — evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines | failing | no direct evidence names this requirement |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
+| `PHASE-P3` — Coding behavior scorecard — fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies | failing | no direct evidence names this requirement |
+
+## Failing evidence (release stopper)
+
+- `OBJ-3` — test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates
+- `PHASE-P3` — test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps
 
 ## Full audit
 
@@ -210,6 +218,23 @@ generating run.
 | `API-tamoz-concurrency-Tamoz::Concurrency::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Pool.for` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::StreamSink` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Compaction` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Error` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::InvalidSummaryError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::MemoryStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Policy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Prompts` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Pruner` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::RequestHeader` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Section` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Series` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Spill` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Surface` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::TokenMeter` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::ToolSchema` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Trace` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::Usage` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-context-engine-Tamoz::ContextEngine::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configuration` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configuration_finalized?` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configure` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -300,6 +325,18 @@ generating run.
 | `API-tamoz-graph-Tamoz::Reducers::Reducer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-graph-Tamoz::START` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-graph-Tamoz::Send` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::Error` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::Finish` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::Handoff` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::Header` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::Instructions` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::LoopPolicy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::Persona` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::PlanDocument` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::PlanError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::PromptPack` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::ToolCalls` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-harness-Tamoz::Harness::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::AmbiguousOutcomeError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::Catalog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::Catalog.compile` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -438,12 +475,14 @@ generating run.
 | `CLI-approve` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_06_approval_resumes_the_same_occurrence` |
 | `CLI-ask` | cli_command | yes | pass | `test/agent_cli_test.rb#test_ask_creates_session_file` |
 | `CLI-cancel` | cli_command | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
+| `CLI-code` | cli_command | yes | pass | `test/cli_code_test.rb#test_code_runs_the_work_loop_and_exits_zero_on_a_verified_change` |
 | `CLI-comms` | cli_command | yes | pass | `test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly` |
 | `CLI-compact` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards` |
 | `CLI-config` | cli_command | yes | pass | `test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup` |
 | `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
+| `CLI-improve` | cli_command | yes | pass | `test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
 | `CLI-observe` | cli_command | yes | pass | `test/observability_cli_test.rb#test_observe_commands_read_the_local_journal` |
@@ -544,7 +583,7 @@ generating run.
 | `NG-self-promotion` | non_goal | yes | pass | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
 | `OBJ-1` | objective | no | indirect | `—` |
 | `OBJ-2` | objective | yes | pass | `test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound` |
-| `OBJ-3` | objective | yes | pass | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
+| `OBJ-3` | objective | yes | failing | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
 | `OBJ-4` | objective | yes | pass | `test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven` |
 | `OBJ-5` | objective | yes | pass | `test/capability_host_test.rb#test_the_admission_set_bounds_the_surface` |
 | `OBJ-6` | objective | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
@@ -564,7 +603,7 @@ generating run.
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
 | `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture` |
 | `PHASE-P2` | phase_exit_criterion | yes | pass | `test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes` |
-| `PHASE-P3` | phase_exit_criterion | yes | pass | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
+| `PHASE-P3` | phase_exit_criterion | yes | failing | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
 | `PHASE-P4` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_compound_patch_applies_two_distinct_replacements` |
 | `PHASE-P5` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_create_file_writes_exact_bytes_with_default_mode` |
 | `PHASE-P6` | phase_exit_criterion | yes | pass | `test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once` |
