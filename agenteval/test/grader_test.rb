@@ -374,11 +374,12 @@ class GraderTest < Minitest::Test
     assert_equal 1, report.reliability['errored']
   end
 
-  # The task-length axis is named in every report: the corpus is all short-horizon today, and
-  # medium/long stay listed as gaps rather than assumed away (QUALITY_BAR bar 2, METR's lesson).
+  # The task-length axis is named in every report, and a report over short cells alone still
+  # lists medium/long as gaps rather than assuming them (QUALITY_BAR bar 2, METR's lesson). The
+  # harness pack (docs/coding-harness) is what brings medium and long tasks into the corpus.
   def test_the_report_states_its_horizon_coverage_and_names_the_gaps
-    assert_equal [:short], Agenteval::Registry.all.map(&:horizon).uniq,
-                 'every current task is short-horizon; a longer one must declare its class'
+    assert_equal %i[long medium short], Agenteval::Registry.all.map(&:horizon).uniq.sort,
+                 'the corpus declares every horizon class it covers'
 
     adapter = Agenteval::Adapter.new(id: 't', label: 't', model: 'm', provider: 'p', capabilities: [])
     scenario = scenario_for('comprehend', 'clean')

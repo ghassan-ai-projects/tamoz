@@ -39,21 +39,25 @@ module Tamoz
         nil
       end
 
-      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
+      # rubocop:disable Metrics/ParameterLists -- routing and its harness settings travel together
+      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {})
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
         # the storage or channel packages at require time.
         require "tamoz/sqlite"
         require "tamoz/comms"
         require "tamoz/approval"
-        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:, routing:)
+        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:, routing:, harness:)
         runtime.install_channel_delivery_sink unless delivery_sink
         runtime
       end
+      # rubocop:enable Metrics/ParameterLists
 
-      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
+      # rubocop:disable Metrics/ParameterLists -- routing and its harness settings travel together
+      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {})
         @directory = directory
         @model_factory = model_factory
         @routing = normalize_routing(routing)
+        @harness = harness
 
         # The channel projection is nil-safe by default (ADR-042): a worker
         # without a comms surface delivers nothing and never raises.
@@ -62,6 +66,7 @@ module Tamoz
         initialize_session_caches
         @approval_engine = build_approval_engine
       end
+      # rubocop:enable Metrics/ParameterLists
 
       def path = @directory.path
 
@@ -1081,7 +1086,8 @@ module Tamoz
           artifact_tenant: "profile:#{profile_id || 'default'}",
           child_task_runtime: self,
           mcp:,
-          routing: @routing
+          routing: @routing,
+          harness: @harness
         )
       end
 

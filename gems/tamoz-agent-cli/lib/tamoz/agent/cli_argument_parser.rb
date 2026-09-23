@@ -91,8 +91,14 @@ module Tamoz
             value.on('--adaptive-routing', 'Use the bounded adaptive read-only session graph') do
               options[:adaptive_routing] = true
             end
+            value.on('--work-routing', 'Serve worker and chat turns with the tool-calling work loop') do
+              options[:work_routing] = true
+            end
             value.on('--shadow-routing', 'Record routing decisions while using the standard workflow') do
               options[:shadow_routing] = true
+            end
+            value.on('--guidance FILE', 'Project guidance file for tamoz code, e.g. AGENTS.md (repeatable)') do |entry|
+              (options[:guidance] ||= []) << entry
             end
             value.on('--check NAME=COMMAND', 'Configure a named verification command') do |entry|
               register_check(options, entry)

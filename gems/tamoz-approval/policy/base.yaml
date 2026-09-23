@@ -10,6 +10,9 @@ tool_tiers:
   search_text:
     tier: read
     verb: read
+  glob:
+    tier: read
+    verb: read
   load_skill:
     tier: read
     verb: read

@@ -22,7 +22,7 @@ module Tamoz
 
       class << self
         def build(provider:, model:, profile_role:, environment:, explicit_api_base: nil,
-                  safety: :unsafe, gateway: nil, timeout_seconds: 120)
+                  safety: :unsafe, gateway: nil, timeout_seconds: 120, context_window: nil)
           name = normalize_provider(provider)
           descriptor = descriptor_for(name)
           ensure_model!(model, name)
@@ -41,6 +41,7 @@ module Tamoz
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:,
             gateway:, timeout_seconds:,
+            context_window: context_window || configured_context_window(profile_role, environment),
             provider_configuration_digest: Tamoz::Core.digest(
               "tamoz.agent.model.configuration.v1\n", configuration
             )
@@ -76,6 +77,19 @@ module Tamoz
         end
 
         private
+
+        # The routed model's window: a profile role setting, else TAMOZ_CONTEXT_WINDOW.
+        # There is no built-in default; a caller that needs one refuses without it.
+        def configured_context_window(profile_role, environment)
+          value = (profile_role&.normalized_settings || {})['context_window'] ||
+                  environment_value(environment, 'TAMOZ_CONTEXT_WINDOW')
+          return unless value
+
+          window = Integer(value, exception: false)
+          raise ModelCallError.new(code: 'context_window_invalid') unless window&.positive?
+
+          window
+        end
 
         def normalize_provider(provider)
           value = String(provider).downcase

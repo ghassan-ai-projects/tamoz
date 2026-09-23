@@ -428,6 +428,39 @@
       "Tamoz::Tools::ToolPolicyError": {},
       "Tamoz::Tools::Toolbox": {},
       "Tamoz::Tools::VERSION": {}
+    },
+    "tamoz-context-engine": {
+      "Tamoz::ContextEngine::Compaction": {},
+      "Tamoz::ContextEngine::Error": {},
+      "Tamoz::ContextEngine::InvalidSummaryError": {},
+      "Tamoz::ContextEngine::MemoryStore": {},
+      "Tamoz::ContextEngine::Policy": {},
+      "Tamoz::ContextEngine::Prompts": {},
+      "Tamoz::ContextEngine::Pruner": {},
+      "Tamoz::ContextEngine::RequestHeader": {},
+      "Tamoz::ContextEngine::Section": {},
+      "Tamoz::ContextEngine::Series": {},
+      "Tamoz::ContextEngine::Spill": {},
+      "Tamoz::ContextEngine::Surface": {},
+      "Tamoz::ContextEngine::TokenMeter": {},
+      "Tamoz::ContextEngine::ToolSchema": {},
+      "Tamoz::ContextEngine::Trace": {},
+      "Tamoz::ContextEngine::Usage": {},
+      "Tamoz::ContextEngine::VERSION": {}
+    },
+    "tamoz-harness": {
+      "Tamoz::Harness::Error": {},
+      "Tamoz::Harness::Finish": {},
+      "Tamoz::Harness::Handoff": {},
+      "Tamoz::Harness::Header": {},
+      "Tamoz::Harness::Instructions": {},
+      "Tamoz::Harness::LoopPolicy": {},
+      "Tamoz::Harness::Persona": {},
+      "Tamoz::Harness::PlanDocument": {},
+      "Tamoz::Harness::PlanError": {},
+      "Tamoz::Harness::PromptPack": {},
+      "Tamoz::Harness::ToolCalls": {},
+      "Tamoz::Harness::VERSION": {}
     }
   },
   "generated_at": "2026-08-04T23:12:56Z"

@@ -34,6 +34,7 @@ module Tamoz
       # (three spellings share follow_up); `list` alone takes no argv.
       SUBCOMMAND_HANDLERS = {
         "ask" => :cmd_ask,
+        "code" => :cmd_code,
         "resume" => :cmd_resume,
         "continue" => :cmd_continue,
         "list" => :cmd_list,
@@ -159,6 +160,7 @@ module Tamoz
 
       def run_one_shot(options, argv)
         raise ArgumentError, "--adaptive-routing requires --session" if options[:adaptive_routing]
+        raise ArgumentError, "--work-routing needs a durable session; use tamoz code" if options[:work_routing]
 
         if options[:session]
           @policy.validate_profile_usage(options, "ask")
@@ -646,14 +648,17 @@ module Tamoz
           mcp:,
           artifact_store: adapter.bind_artifact_store(tenant: "session:#{thread_id}"),
           artifact_tenant: "session:#{thread_id}",
-          routing: durable_routing(options)
+          routing: durable_routing(options),
+          harness: work_harness(options, thread_id)
         )
       end
 
       # Kept apart from one_shot_routing on purpose: a durable session ignores
       # --shadow-routing today (unification is an owner decision).
       def durable_routing(options)
-        if options[:adaptive_routing]
+        if options[:work_routing]
+          :work
+        elsif options[:adaptive_routing]
           :adaptive
         elsif options[:experimental_routing]
           :experimental

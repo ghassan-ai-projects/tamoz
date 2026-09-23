@@ -16,6 +16,8 @@ Bundler/OrderedGems:
 # Offense count: 24
 Gemspec/RequiredRubyVersion:
   Exclude:
+    - 'gems/tamoz-context-engine/tamoz-context-engine.gemspec'
+    - 'gems/tamoz-harness/tamoz-harness.gemspec'
     - 'gems/tamoz-agent-capabilities/tamoz-agent-capabilities.gemspec'
     - 'gems/tamoz-agent-cli/tamoz-agent-cli.gemspec'
     - 'gems/tamoz-agent-healing/tamoz-agent-healing.gemspec'

@@ -36,6 +36,8 @@ on that thread.
 | `--allow-changes` | Enable reviewed and approved workspace changes |
 | `--experimental-routing` | Use the experimental fused request router |
 | `--shadow-routing` | Record routing decisions while using the standard workflow |
+| `--work-routing` | Serve worker and chat turns with the tool-calling work loop |
+| `--guidance FILE` | Project guidance file for the work loop, e.g. `AGENTS.md` (repeatable, workspace root only) |
 | `--check NAME=COMMAND` | Configure a named verification command |
 | `--json` | Emit newline-delimited JSON events |
 | `--non-interactive` | Fail instead of prompting |
@@ -53,6 +55,7 @@ Work you are watching, against a session directory.
 | Subcommand | Purpose | Key options |
 |---|---|---|
 | `ask` | Start a new turn on a thread | `TASK` (positional) |
+| `code` | Start a coding turn in the durable tool-calling work loop; needs `--allow-changes` or a profile, and a context window (profile role `context_window` or `TAMOZ_CONTEXT_WINDOW`) | `TASK` (positional) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on | `THREAD`, `--answer ANSWER`, `--approval-profile NAME`, `--recover` |
 | `continue` | Drive a paused thread forward without new input | `THREAD` |
 | `list` | Show every thread in the session directory | |

@@ -2,11 +2,13 @@
   "names": [
     "apply_patch",
     "create_file",
+    "glob",
     "list_directory",
     "read_file",
     "search_text"
   ],
   "read_only_names": [
+    "glob",
     "list_directory",
     "read_file",
     "search_text"
@@ -14,9 +16,10 @@
   "descriptions": {
     "apply_patch": "Replace exact text occurrences atomically. expected_sha256 must come from current read_file evidence. Single replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"before\": \"exact existing text\", \"after\": \"replacement text\"}. Compound replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"replacements\": [{\"before\": \"...\", \"after\": \"...\"}]}.",
     "create_file": "Create a new regular file with exact bytes and mode. Overwrite is never allowed. Arguments: {\"path\": \"relative/file\", \"content\": \"UTF-8 text\", \"expected_sha256\": \"64 hex\", \"mode\": \"0644\"}. mode is optional and defaults to 0644.",
+    "glob": "Find files by glob pattern. Arguments: {\"pattern\": \"**/*.rb\", \"path\": \"relative/directory\"}; path is optional.",
     "list_directory": "List entries. Arguments: {\"path\": \"relative/directory\"}; path is optional.",
-    "read_file": "Read UTF-8 text with its SHA-256 digest. Arguments: {\"path\": \"relative/file\"}.",
-    "search_text": "Find literal text. Arguments: {\"query\": \"text\", \"path\": \"relative/path\"}; path is optional."
+    "read_file": "Read UTF-8 text with its SHA-256 digest. Arguments: {\"path\": \"relative/file\"}. Optional \"offset\" (1-based line) and \"limit\" (line count) return numbered lines.",
+    "search_text": "Find text. Arguments: {\"query\": \"text\", \"path\": \"relative/path\"}; path is optional. Set \"regex\": true to match a regular expression."
   },
-  "catalog_digest": "sha256:6a81d5ef1c9192769edcf58f430b5c2c3a1493601f97690d48a3d297a6ea1470"
+  "catalog_digest": "sha256:886960eee5ecc279257f66a7ccf9d48d998217a0c2a835083c55e1bafd98354d"
 }

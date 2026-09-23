@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+require 'json'
+require 'tamoz/core'
+require 'tamoz/context_engine'
+require_relative 'harness/version'
+require_relative 'harness/errors'
+require_relative 'harness/prompt_pack'
+require_relative 'harness/persona'
+require_relative 'harness/instructions'
+require_relative 'harness/plan_document'
+require_relative 'harness/tool_calls'
+require_relative 'harness/loop_policy'
+require_relative 'harness/finish'
+require_relative 'harness/handoff'
+require_relative 'harness/header'

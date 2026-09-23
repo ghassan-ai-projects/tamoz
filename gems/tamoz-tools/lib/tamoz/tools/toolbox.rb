@@ -88,6 +88,7 @@ module Tamoz
       end
 
       def descriptions = @descriptions
+      def schemas = @catalog.schemas
       def names = descriptions.keys
       def allowed_tools = @allowed_tools
 
@@ -119,6 +120,7 @@ module Tamoz
         when 'read_file' then ReadOperations.new(self).read_file(normalized_arguments)
         when 'list_directory' then ReadOperations.new(self).list_directory(normalized_arguments)
         when 'search_text' then ReadOperations.new(self).search_text(normalized_arguments)
+        when 'glob' then ReadOperations.new(self).glob(normalized_arguments)
         when 'apply_patch' then PatchOperations.new(self).apply(normalized_arguments)
         when 'run_check' then CheckRunner.new(self).run(normalized_arguments)
         when 'create_file' then CreationOperations.new(self).create(normalized_arguments)

@@ -10,8 +10,9 @@ module Tamoz
       CURRENT_GRAPH_VERSION = "2"
       ADAPTIVE_GRAPH_VERSION = "3"
       COMPACTION_GRAPH_VERSION = "4"
+      WORK_GRAPH_VERSION = "5"
       SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION, ADAPTIVE_GRAPH_VERSION,
-                                  COMPACTION_GRAPH_VERSION].freeze
+                                  COMPACTION_GRAPH_VERSION, WORK_GRAPH_VERSION].freeze
     end
   end
 end

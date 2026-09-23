@@ -35,6 +35,39 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
         },
+        "tamoz-context-engine" => {
+          "Tamoz::ContextEngine::Compaction" => {},
+          "Tamoz::ContextEngine::Error" => {},
+          "Tamoz::ContextEngine::InvalidSummaryError" => {},
+          "Tamoz::ContextEngine::MemoryStore" => {},
+          "Tamoz::ContextEngine::Policy" => {},
+          "Tamoz::ContextEngine::Prompts" => {},
+          "Tamoz::ContextEngine::Pruner" => {},
+          "Tamoz::ContextEngine::RequestHeader" => {},
+          "Tamoz::ContextEngine::Section" => {},
+          "Tamoz::ContextEngine::Series" => {},
+          "Tamoz::ContextEngine::Spill" => {},
+          "Tamoz::ContextEngine::Surface" => {},
+          "Tamoz::ContextEngine::TokenMeter" => {},
+          "Tamoz::ContextEngine::ToolSchema" => {},
+          "Tamoz::ContextEngine::Trace" => {},
+          "Tamoz::ContextEngine::Usage" => {},
+          "Tamoz::ContextEngine::VERSION" => {}
+        },
+        "tamoz-harness" => {
+          "Tamoz::Harness::Error" => {},
+          "Tamoz::Harness::Finish" => {},
+          "Tamoz::Harness::Handoff" => {},
+          "Tamoz::Harness::Header" => {},
+          "Tamoz::Harness::Instructions" => {},
+          "Tamoz::Harness::LoopPolicy" => {},
+          "Tamoz::Harness::Persona" => {},
+          "Tamoz::Harness::PlanDocument" => {},
+          "Tamoz::Harness::PlanError" => {},
+          "Tamoz::Harness::PromptPack" => {},
+          "Tamoz::Harness::ToolCalls" => {},
+          "Tamoz::Harness::VERSION" => {}
+        },
         "tamoz-agent-healing" => {
           "Tamoz::Agent::Healing::Remediation" => {},
           "Tamoz::Agent::Healing::VERSION" => {}
@@ -431,6 +464,8 @@ class PublicAPITest < Minitest::Test
     # skew in either could not have been caught by this gate.
     versions = [
       Tamoz::Core::VERSION,
+      Tamoz::ContextEngine::VERSION,
+      Tamoz::Harness::VERSION,
       Tamoz::Graph::VERSION,
       Tamoz::SQLite::VERSION,
       Tamoz::Scheduler::VERSION,

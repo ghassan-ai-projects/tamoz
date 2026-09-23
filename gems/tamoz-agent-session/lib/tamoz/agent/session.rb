@@ -53,11 +53,12 @@ module Tamoz
       include SessionContextControls
 
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
-      ROUTINGS = %i[legacy experimental adaptive].freeze
+      ROUTINGS = %i[legacy experimental adaptive work].freeze
       GRAPH_VERSION_BY_ROUTING = {
         legacy: GraphVersions::COMPACTION_GRAPH_VERSION,
         experimental: GraphVersions::CURRENT_GRAPH_VERSION,
-        adaptive: GraphVersions::ADAPTIVE_GRAPH_VERSION
+        adaptive: GraphVersions::ADAPTIVE_GRAPH_VERSION,
+        work: GraphVersions::WORK_GRAPH_VERSION
       }.freeze
 
       attr_reader :app, :definition, :toolbox, :model
@@ -85,7 +86,10 @@ module Tamoz
         transcript_reader = lambda do |thread_id:, request_id:|
           conversation_transcript(thread_id:, request_id:)
         end
-        @nodes_by_version = build_nodes(options.node_arguments(transcript_reader:))
+        previous_turn_reader = lambda do |thread_id:, execution_id:|
+          previous_turn_state(thread_id:, execution_id:)
+        end
+        @nodes_by_version = build_nodes(options.node_arguments(transcript_reader:, previous_turn_reader:))
         @definitions = build_definitions(@nodes_by_version)
         @apps = @definitions.transform_values do |definition|
           definition.compile(checkpointer: options.checkpointer)
@@ -110,6 +114,9 @@ module Tamoz
           ),
           GraphVersions::COMPACTION_GRAPH_VERSION => SessionNodes.new(
             **node_arguments, graph_version: GraphVersions::COMPACTION_GRAPH_VERSION
+          ),
+          GraphVersions::WORK_GRAPH_VERSION => SessionNodes.new(
+            **node_arguments, graph_version: GraphVersions::WORK_GRAPH_VERSION
           )
         }.freeze
       end
@@ -312,6 +319,15 @@ module Tamoz
         offset ? fragments.drop(offset) : fragments
       end
       private :conversation_transcript
+
+      # The final state of the thread's latest other execution: what a work turn carries forward.
+      def previous_turn_state(thread_id:, execution_id:)
+        app = app_for_thread(thread_id)
+        earlier = app.checkpointer.history(thread_id:, limit: 200, namespace: [])
+                     .find { |checkpoint| checkpoint.execution_id != execution_id }
+        earlier && SessionRecords.load_state!(app.snapshot(earlier).state)
+      end
+      private :previous_turn_state
 
       def start(task, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         deliver_turn({"task" => String(task)}, thread:, request_id:, owner_id:, emitter:, context:)

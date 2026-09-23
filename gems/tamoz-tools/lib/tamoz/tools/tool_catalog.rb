@@ -8,12 +8,43 @@ module Tamoz
     # Builds the immutable, policy-filtered tool surface for one toolbox.
     # :reek:ControlParameter :reek:DuplicateMethodCall :reek:FeatureEnvy
     # :reek:LongParameterList :reek:TooManyInstanceVariables :reek:TooManyStatements :reek:UtilityFunction
+    # :reek:TooManyConstants
     # rubocop:disable Layout/LineLength, Metrics/AbcSize, Metrics/ParameterLists
     class ToolCatalog
       READ_DESCRIPTIONS = {
-        'read_file' => 'Read UTF-8 text with its SHA-256 digest. Arguments: {"path": "relative/file"}.',
+        'read_file' => 'Read UTF-8 text with its SHA-256 digest. Arguments: {"path": "relative/file"}. ' \
+                       'Optional "offset" (1-based line) and "limit" (line count) return numbered lines.',
         'list_directory' => 'List entries. Arguments: {"path": "relative/directory"}; path is optional.',
-        'search_text' => 'Find literal text. Arguments: {"query": "text", "path": "relative/path"}; path is optional.'
+        'search_text' => 'Find text. Arguments: {"query": "text", "path": "relative/path"}; path is optional. ' \
+                         'Set "regex": true to match a regular expression.',
+        'glob' => 'Find files by glob pattern. Arguments: {"pattern": "**/*.rb", "path": "relative/directory"}; ' \
+                  'path is optional.'
+      }.freeze
+      STRING = { 'type' => 'string' }.freeze
+      SHA256 = { 'type' => 'string', 'pattern' => '^[0-9a-f]{64}$' }.freeze
+      SCHEMAS = {
+        'read_file' => { 'properties' => { 'path' => STRING, 'offset' => { 'type' => 'integer', 'minimum' => 1 },
+                                           'limit' => { 'type' => 'integer', 'minimum' => 1 } },
+                         'required' => %w[path] },
+        'list_directory' => { 'properties' => { 'path' => STRING } },
+        'search_text' => { 'properties' => { 'query' => STRING, 'path' => STRING, 'regex' => { 'type' => 'boolean' } },
+                           'required' => %w[query] },
+        'glob' => { 'properties' => { 'pattern' => STRING, 'path' => STRING }, 'required' => %w[pattern] },
+        'apply_patch' => {
+          'properties' => {
+            'path' => STRING, 'expected_sha256' => SHA256, 'before' => STRING, 'after' => STRING,
+            'replacements' => { 'type' => 'array', 'items' => { 'type' => 'object',
+                                                                'properties' => { 'before' => STRING, 'after' => STRING },
+                                                                'required' => %w[before after] } }
+          },
+          'required' => %w[path expected_sha256]
+        },
+        'create_file' => { 'properties' => { 'path' => STRING, 'content' => STRING, 'expected_sha256' => SHA256,
+                                             'mode' => { 'type' => 'string', 'pattern' => '^0[0-7]{3}$' } },
+                           'required' => %w[path content] },
+        'run_check' => { 'properties' => { 'name' => STRING }, 'required' => %w[name] },
+        'load_skill' => { 'properties' => { 'skill' => STRING }, 'required' => %w[skill] },
+        'read_skill_resource' => { 'properties' => { 'skill' => STRING, 'path' => STRING }, 'required' => %w[skill path] }
       }.freeze
       ACTION_DESCRIPTIONS = {
         'apply_patch' => 'Replace exact text occurrences atomically. expected_sha256 must come from current read_file evidence. Single replacement: {"path": "relative/file", "expected_sha256": "64 hex characters", "before": "exact existing text", "after": "replacement text"}. Compound replacement: {"path": "relative/file", "expected_sha256": "64 hex characters", "replacements": [{"before": "...", "after": "..."}]}.',
@@ -54,7 +85,20 @@ module Tamoz
         @check_safeties.fetch(String(name), :unsafe)
       end
 
+      # JSON object schemas for native tool calls, one per available tool.
+      def schemas
+        @descriptions.keys.to_h do |name|
+          schema = SCHEMAS.fetch(name).merge('type' => 'object', 'additionalProperties' => false)
+          schema = with_check_names(schema) if name == 'run_check'
+          [name, schema]
+        end
+      end
+
       private
+
+      def with_check_names(schema)
+        schema.merge('properties' => { 'name' => { 'type' => 'string', 'enum' => @checks.keys.sort } })
+      end
 
       def descriptions_for(allow_changes, skills)
         descriptions = READ_DESCRIPTIONS.dup

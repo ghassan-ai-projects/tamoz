@@ -291,6 +291,49 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
+  def test_context_engine_loads_core_only_and_no_http_or_agent
+    script = <<~RUBY
+      require "json"
+      require "tamoz/context_engine"
+      puts JSON.generate(
+        "context_engine" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/context_engine") },
+        "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+        "graph" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/graph") },
+        "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
+        "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
+        "tools" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/tools") }
+      )
+    RUBY
+    result = capture_json(script)
+
+    assert result.fetch("context_engine")
+    %w[net_http graph sqlite agent tools].each do |feature|
+      refute result.fetch(feature), "#{feature} must not be in the load graph"
+    end
+  end
+
+  def test_harness_loads_context_engine_and_core_only
+    script = <<~RUBY
+      require "json"
+      require "tamoz/harness"
+      puts JSON.generate(
+        "harness" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/harness") },
+        "context_engine" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/context_engine") },
+        "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+        "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
+        "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
+        "tools" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/tools") }
+      )
+    RUBY
+    result = capture_json(script)
+
+    assert result.fetch("harness")
+    assert result.fetch("context_engine")
+    %w[net_http sqlite agent tools].each do |feature|
+      refute result.fetch(feature), "#{feature} must not be in the load graph"
+    end
+  end
+
   def test_no_production_gemspec_depends_on_evals
     production = GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner")
 

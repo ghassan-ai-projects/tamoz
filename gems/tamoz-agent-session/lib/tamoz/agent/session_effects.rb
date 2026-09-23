@@ -53,6 +53,30 @@ module Tamoz
         unwrap_model(outcome, request:, configuration_digest:)
       end
 
+      # One tool-calling conversation turn. A model call changes nothing outside,
+      # so an unanswered one is safely retried (:idempotent).
+      def converse(context, stage:, messages:, tools:, iteration:, tool_choice: 'auto', attempt: 0)
+        model = conversation_model
+        request = conversation_request(model, stage, messages, tools, tool_choice)
+        operation = "model.converse.#{stage}"
+        outcome = EffectDispatcher.run(
+          context:, operation:, safety: :idempotent, call_index: iteration, request:, actor: 'tamoz.agent.session',
+          logical_identity: logical_identity(context:, operation:, capability_id: "model:#{stage}", arguments: request,
+                                             iteration:, sub_operation: attempt)
+        ) do
+          response = model.converse(stage:, messages:, tools:, tool_choice:)
+          ConversationProjection.from_response(response, request_digest: request.fetch('request_digest'))
+        end
+        outcome.status == :succeeded ? outcome.with(value: ConversationProjection.validate!(outcome.value)) : outcome
+      end
+
+      def conversation_model
+        model = @configuration.model
+        return model if model.respond_to?(:converse)
+
+        raise ConfigurationError, 'the work route needs a model that supports tool calls'
+      end
+
       def unwrap_model(outcome, request:, configuration_digest:)
         return outcome unless outcome.status == :succeeded
 
@@ -208,6 +232,16 @@ module Tamoz
         @configuration.model.settings_digest
       end
 
+      def conversation_request(model, stage, messages, tools, tool_choice)
+        bytes = model.build_conversation(messages:, tools:, tool_choice:)
+        {
+          'stage' => stage.to_s,
+          'request_digest' => model.request_digest(bytes),
+          'message_count' => messages.length,
+          'provider_configuration_digest' => model_configuration_digest
+        }.compact
+      end
+
       def model_request(system:, prompt:)
         return { 'system' => system, 'prompt' => prompt } unless @configuration.model.respond_to?(:build_request)
 
@@ -271,6 +305,7 @@ module Tamoz
       def check_payload(result)
         {
           'output' => result.to_s,
+          'shaped' => result.shaped,
           'check' => {
             'name' => result.name,
             'outcome' => result.outcome,

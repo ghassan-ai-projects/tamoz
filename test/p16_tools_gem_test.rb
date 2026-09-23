@@ -10,7 +10,7 @@ class P16ToolsGemTest < Minitest::Test
 
   # ---- P16-start reference pins (captured from the pre-move code) -----------
 
-  MATRIX_DIGEST = "sha256:7bb2e9761f1e90ea0ff044fc38717cf992bf7dd142517bb8b8a1eef07a495c90"
+  MATRIX_DIGEST = "sha256:48a1e1a94fc1ac7a2f7948efcbec40953a85aecd09ba78cb6190e75db3a15a57"
 
   REJECTION_MESSAGES = {
     "bad_skills_type" => "skills must be a Tamoz::Agent::Skills::SkillSnapshot",
@@ -22,7 +22,7 @@ class P16ToolsGemTest < Minitest::Test
     "unconfigured_safety" => "check_safeties names unconfigured check \"other\"",
     "bad_safety" => "check \"c\" safety must be one of read_only, idempotent, unsafe",
     "bad_allowed" =>
-      "allowed_tools names unavailable tools: nope (available: list_directory, read_file, search_text)",
+      "allowed_tools names unavailable tools: nope (available: glob, list_directory, read_file, search_text)",
     "bad_allow_changes" => "allow_changes must be true or false",
     "bad_timeout" => "check_timeout must be between 0 and 600 seconds"
   }.freeze
@@ -277,7 +277,7 @@ class P16ToolsGemTest < Minitest::Test
       assert_equal 32, Tamoz::Agent::Toolbox::MAX_REPLACEMENTS
       assert_equal({}, box.checks)
       assert_equal File.realpath(root), box.root.to_s
-      assert_equal %w[apply_patch create_file list_directory read_file search_text], box.names.sort
+      assert_equal %w[apply_patch create_file glob list_directory read_file search_text], box.names.sort
       assert box.skills.empty?
     end
 

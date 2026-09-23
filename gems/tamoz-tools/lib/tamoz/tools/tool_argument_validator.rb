@@ -18,6 +18,7 @@ module Tamoz
         'read_file' => :validate_read_file,
         'list_directory' => :validate_list_directory,
         'search_text' => :validate_search,
+        'glob' => :validate_glob,
         'apply_patch' => :validate_patch,
         'run_check' => :validate_check,
         'load_skill' => :validate_load_skill,
@@ -29,6 +30,7 @@ module Tamoz
       # arguments use — distinct from Tamoz::Core::JCS::DIGEST_PATTERN's
       # prefixed wire format.
       SHA256_HEX_PATTERN = /\A[0-9a-f]{64}\z/
+      MAX_LINE = 10_000_000
 
       def initialize(names:, checks:, path_resolver:, skill_catalog:)
         @names = names
@@ -59,7 +61,24 @@ module Tamoz
       end
 
       def validate_read_file(arguments)
-        validate_path_only(arguments, allowed: %w[path], key: 'path')
+        validate_path_only(arguments, allowed: %w[path offset limit], key: 'path')
+        %w[offset limit].each do |key|
+          next unless arguments.key?(key)
+
+          value = arguments.fetch(key)
+          raise ToolArgumentError, "#{key} must be an integer from 1 to #{MAX_LINE}" unless
+            value.is_a?(Integer) && value.between?(1, MAX_LINE)
+        end
+        arguments
+      end
+
+      def validate_glob(arguments)
+        validate_path_only(arguments, allowed: %w[path pattern], key: 'path', default: '.')
+        pattern = arguments.fetch('pattern')
+        raise ToolArgumentError, 'pattern must be a non-empty string' unless pattern.is_a?(String) && !pattern.empty?
+        raise ToolArgumentError, 'pattern exceeds 256 bytes' if pattern.bytesize > 256
+
+        arguments
       end
 
       def validate_list_directory(arguments)
@@ -73,7 +92,8 @@ module Tamoz
       end
 
       def validate_search(arguments)
-        validate_path_only(arguments, allowed: %w[path query], key: 'path', default: '.')
+        validate_path_only(arguments, allowed: %w[path query regex], key: 'path', default: '.')
+        validate_regex_flag!(arguments)
         query = arguments.fetch('query')
         raise ToolArgumentError, 'query must be a string' unless query.is_a?(String)
         raise ToolArgumentError, 'query must not be empty' if query.empty?
@@ -83,6 +103,19 @@ module Tamoz
         raise ToolArgumentError, 'query must be valid UTF-8' unless query.valid_encoding?
 
         arguments
+      end
+
+      def validate_regex_flag!(arguments)
+        flag = arguments['regex']
+        raise ToolArgumentError, 'regex must be a boolean' unless [nil, true, false].include?(flag)
+
+        validate_regex!(arguments.fetch('query')) if flag
+      end
+
+      def validate_regex!(query)
+        Regexp.new(query, timeout: ReadOperations::REGEX_TIMEOUT)
+      rescue RegexpError => e
+        raise ToolArgumentError, "query is not a valid regular expression: #{e.message}"
       end
 
       def validate_patch(arguments)

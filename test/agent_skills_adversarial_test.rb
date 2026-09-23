@@ -272,7 +272,7 @@ class AgentSkillsAdversarialTest < Minitest::Test
 
     assert_empty record.requested_capabilities & read_only.names,
                  "a read-only toolbox intersects a hostile request to nothing"
-    assert_equal %w[read_file list_directory search_text], read_only.names
+    assert_equal %w[read_file list_directory search_text glob], read_only.names
     refute read_only.action_capable?
   end
 
