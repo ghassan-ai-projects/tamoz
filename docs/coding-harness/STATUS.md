@@ -158,6 +158,26 @@ The next attempt must not reach for a string-level transformation again; it must
 establish what its second argument actually is, and rewrite that assertion's comparison. That is a
 read-then-edit job on five assertions, not a regex.
 
+
+### R5 — a second phase-1 regression, in the serial suites
+
+Three of the five preview assertions are migrated (single-hunk sites; the suite is green at
+63 runs / 337 assertions). The remaining two go with F7 itself.
+
+While verifying, `rake test_parallel` failed and the cause is **not** this round's change:
+`test/requirements_manifest_test.rb` fails with the **same three failures on the clean parent
+tree**. The diff is about `tamoz-context-engine` and `tamoz-harness` public API rows — the
+**phase-1 gems** — so R0/R1 added public API and the pinned manifests were never regenerated.
+Siblings (`test/agent_scorecard_test.rb`, `test/benchmark_holdout_test.rb`,
+`test/public_api_test.rb`) fail the same way.
+
+This is the **same class of gap as the packaging failure**: those suites live in `SERIAL_TESTS`,
+which `rake ci` / `test_fast` never runs, so a round can pass the everyday gate with them red.
+`GOAL.md`'s gate block was corrected in R1 for packaging; the fix here is to run the pinned
+generators — `script/generate_requirements_manifest`, the agent scorecard and the holdout
+manifest — as part of any round that adds public API, and to add them to every round's gate.
+Recorded as known-red prerequisite **3** pending that repair.
+
 ## Verified against DSH, 2026-09-23
 
 `script/dsh_context_survey` reads every log under `~/.dsh/sessions` and reports what DSH's context

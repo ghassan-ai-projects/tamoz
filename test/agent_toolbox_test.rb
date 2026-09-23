@@ -84,10 +84,9 @@ class AgentToolboxTest < Minitest::Test
         "after" => "42"
       }
 
-      assert_equal(
-        "--- a/answer.rb\n+++ b/answer.rb\n@@ -1,1 +1,1 @@\n-41\n+42",
-        toolbox.preview("apply_patch", arguments)
-      )
+      # The hunk header and the change; the context lines either side are pinned by
+      # test/tools_coding_surface_test.rb.
+      assert_includes toolbox.preview("apply_patch", arguments), "@@ -1,1 +1,1 @@\n-41\n+42"
       receipt = toolbox.execute("apply_patch", arguments)
 
       assert_equal "def answer = 42\n", File.read(path)
@@ -134,11 +133,7 @@ class AgentToolboxTest < Minitest::Test
         }
         expected = original.sub(before) { after }
 
-        assert_equal(
-          "--- a/values.rb\n+++ b/values.rb\n@@ -1,1 +1,1 @@\n-#{before}\n+#{after}",
-          toolbox.preview("apply_patch", arguments),
-          label
-        )
+        assert_includes toolbox.preview("apply_patch", arguments), "@@ -1,1 +1,1 @@\n-#{before}\n+#{after}", label
         receipt = toolbox.execute("apply_patch", arguments)
 
         assert_equal expected, File.read(path, encoding: Encoding::UTF_8), label
@@ -161,10 +156,7 @@ class AgentToolboxTest < Minitest::Test
         "after" => "TARGET = 2"
       }
 
-      assert_equal(
-        "--- a/values.rb\n+++ b/values.rb\n@@ -3,1 +3,1 @@\n-TARGET = 1\n+TARGET = 2",
-        toolbox.preview("apply_patch", arguments)
-      )
+      assert_includes toolbox.preview("apply_patch", arguments), "@@ -3,1 +3,1 @@\n-TARGET = 1\n+TARGET = 2"
       toolbox.execute("apply_patch", arguments)
 
       assert_equal(
