@@ -41,7 +41,7 @@ module Tamoz
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:,
             gateway:, timeout_seconds:,
-            context_window: context_window || configured_context_window(profile_role, environment),
+            context_window: context_window || configured_context_window(profile_role, environment, name, model),
             provider_configuration_digest: Tamoz::Core.digest(
               "tamoz.agent.model.configuration.v1\n", configuration
             )
@@ -78,11 +78,13 @@ module Tamoz
 
         private
 
-        # The routed model's window: a profile role setting, else TAMOZ_CONTEXT_WINDOW.
-        # There is no built-in default; a caller that needs one refuses without it.
-        def configured_context_window(profile_role, environment)
+        # The routed model's window, explicit before implicit: a profile role setting, else the
+        # operator's TAMOZ_CONTEXT_WINDOW, else the documented window for the route. There is no
+        # built-in default; a caller that needs one refuses without it.
+        def configured_context_window(profile_role, environment, provider, model)
           value = (profile_role&.normalized_settings || {})['context_window'] ||
-                  environment_value(environment, 'TAMOZ_CONTEXT_WINDOW')
+                  environment_value(environment, 'TAMOZ_CONTEXT_WINDOW') ||
+                  ModelWindows.window(provider:, model:)
           return unless value
 
           window = Integer(value, exception: false)

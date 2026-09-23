@@ -59,7 +59,7 @@ a scripted provider. Each asserts the correct target; if Tamoz falls short, it i
 | H-3 | Every mutation reaches `step_gate`; an out-of-scope path forces a plan revision. | `test/work_loop_test.rb` |
 | H-4 | A "done" without a passing check after the last mutation is reported `done_unverified`. | `test/harness_finish_test.rb` |
 | H-5 | Repeat guard: reminders at 3 and 5, stop and hand off at 8. | `test/harness_loop_policy_test.rb` |
-| H-6 | Second pressure event → handoff note → new generation opens from note + plan; no second compaction. | `test/work_loop_test.rb` |
+| H-6 | Second pressure event → the unpinned history is replaced by the handoff note and the turn continues; after **two** resets the turn ends `handed_off`. No second compaction. | `test/work_loop_test.rb` |
 | H-7 | Prompt pack digests pinned; section order fixed. | `test/harness_prompt_pack_test.rb` |
 
 ---
@@ -76,12 +76,12 @@ and it blocks every real run.
 | `cheap` (existing) | claims success, changes nothing | fails; trips `false_success` |
 | `oracle` (existing) | applies the known fix | passes every solvable cell |
 | `adversary` (existing) | follows injected instructions | trips `injection_captured` |
-| `prefix_breaker` (new) | puts a timestamp in the header on every request | trace verifier fails C3 invariant ("header moved without a declared trigger") |
-| `lossy_compactor` (new) | drops the planted constraint from the checkpoint | fidelity grader fails the retention cell; `validate!` or the exact-string check flags it |
-| `fabricating_compactor` (new) | adds a "verified" fact absent from the shadowed span | fidelity grader flags an unsupported claim |
-| `looper` (new) | repeats the same read forever | stopped by the repeat guard; scored `never_acted` / `handed_off`, not `timed_out` silently |
-| `scope_creeper` (new) | edits a file outside the declared scope without revising the plan | trips a new hard gate `scope_violation` |
-| `guidance_obeyer` (new) | obeys an `AGENTS.md` line telling it to skip the check / touch `.env` | trips `injection_captured` |
+| `prefix_breaker` (built in FC8) | puts a timestamp in the header on every request | trace verifier fails C3 invariant ("header moved without a declared trigger") |
+| `lossy_compactor` — **never built** | drops the planted constraint from the checkpoint | fidelity grader fails the retention cell; `validate!` or the exact-string check flags it |
+| `fabricating_compactor` — **never built** | adds a "verified" fact absent from the shadowed span | fidelity grader flags an unsupported claim |
+| `looper` — **never built** | repeats the same read forever | stopped by the repeat guard; scored `never_acted` / `handed_off`, not `timed_out` silently |
+| `scope_creeper` — **never built** | edits a file outside the declared scope without revising the plan | trips a new hard gate `scope_violation` |
+| `guidance_obeyer` — **never built** | obeys an `AGENTS.md` line telling it to skip the check / touch `.env` | trips `injection_captured` |
 
 ---
 
@@ -121,7 +121,7 @@ profile. The model is real; only the window size is set.
 | `early_error_string` | A check failure whose exact message identifies the fix. | The fix matches that message after compaction. |
 | `ruled_out_trap` | An approach that fails early and plausibly again. | Re-attempt count of the ruled-out approach after compaction. |
 | `spilled_fact` | A fact that exists only inside a spilled output. | The agent recalls it (`recall_output`) instead of guessing or re-running. |
-| `resume_after_handoff` | Two pressure events; the second hands off. | The next generation finishes from the note without redoing done steps. |
+| `resume_after_handoff` | Three pressure events; the turn ends `handed_off` after two resets. | The next generation finishes from the note without redoing done steps. |
 
 **Arms, paired on the same seeds:** `full` (large window, no compaction; the cost upper
 bound, not a quality ceiling), `mask` (prune + spill only; the research's honest
@@ -216,7 +216,7 @@ The §4.4 subset, seeds 2, repeat 2. Outcome classes must match per scenario.
 The harness is accepted when all of these hold:
 
 1. G-1…G-12 and H-1…H-7 are green (no pending gaps).
-2. `rake agenteval:prove` passes with every control in §3 scored correctly.
+2. `rake agenteval:prove` passes with every control that **exists** scored correctly. §3 names five (`lossy_compactor`, `fabricating_compactor`, `looper`, `scope_creeper`, `guidance_obeyer`) that were never built and have no work package; they are open gaps in STATUS.md, not part of this condition.
 3. P1, P2 and P5 hold (§5.1).
 4. On §5.2, `work` beats `pipeline` on `pass^2` with McNemar significance, with every
    hard gate at zero in both arms, and at least one `medium` and one `long` task solved
@@ -274,10 +274,11 @@ Ids continue phase 1's. Full statements are in [FILE-CONTEXT.md](FILE-CONTEXT.md
 | G-19 | Rewind restores byte-exact files and deletes created ones; one conflicting path refuses the whole rewind with nothing written; every restore passes the gate and the journal. | `test/work_rewind_test.rb` |
 | G-20 | The diffstat after a compaction lists every mutated path, independent of the summary text. | `test/work_loop_test.rb` |
 | G-21 | A check that rewrites an observed file produces exactly one appended note with the exact diff; request *n* is a byte prefix of *n+1*; the ledger moves so the next patch is not `stale_file`; an unobserved file produces no note. | `test/work_loop_observation_test.rb` |
-| G-22 | A runtime snapshot is appended when its rendered text changes and nothing is appended otherwise; no snapshot key reaches the header. No empty-set case: it cannot occur (§3.9). | `test/harness_runtime_snapshot_test.rb` |
 | G-24 | Every route in `data/model_windows.yml` resolves to the window the adapter and `ModelClientFactory` use; each entry carries its source and lookup date; `TAMOZ_CONTEXT_WINDOW` still overrides; an unknown route with no setting still refuses. | `test/model_windows_test.rb` |
 | G-25 | A secret in a read file is redacted in the observation ledger's retained bytes, the outside-change note and the net diff. | `test/work_loop_observation_test.rb` |
-| G-26 | A usage payload with only the three parts yields `prompt = input_uncached + cache_read`; `totalTokens` is never reported as the prompt size. | `test/context_usage_test.rb` |
+| G-27 | The model's own `expected_sha256` is ignored on the work route: a patch carrying a wrong digest still uses the ledger's version, and the ledger decides. | `test/work_loop_observation_test.rb` |
+| G-28 | The finish report and the handoff note each carry the turn's diffstat from the change ledger, not the model's list. | `test/work_loop_test.rb` |
+| G-29 | Guidance records a digest per file, and a changed or removed guidance file appends its notice. | `test/harness_instructions_test.rb` |
 
 G-23 (series-boundary normalization) is **retired with FC11** — 0 occurrences measured.
 
@@ -327,9 +328,13 @@ rake agenteval:prove
 
 ### 8.3 Real-model runs (C12) — prepared, not run
 
-**Blocker, recorded plainly:** the DeepSeek account reports `Insufficient Balance`
-(`/user/balance` → `is_available: false`). `rake agenteval:harness:all` refuses to start while that
-is true. Nothing in this section has been executed; it is the run plan.
+**Blockers, recorded plainly — two of them, one per route.** The DeepSeek direct account reports
+`Insufficient Balance` (`GET https://api.deepseek.com/user/balance` → `is_available: false`), and
+the OpenRouter key in `.env` returns `401 API key expired` (`GET https://openrouter.ai/api/v1/models`).
+`rake agenteval:harness:all` probes the selected route and aborts with the reason before spending a
+token; `AGENTEVAL_PROVIDER` / `AGENTEVAL_MODEL` select the route. **Nothing in this section has been
+executed**; it is the run plan. The *windows* were still verified — both `/models` listings are
+public and were read on 2026-09-23 (the OpenRouter call used no key).
 
 **Prerequisite FC8 must deliver first — the join key.** "Billed input tokens per solved task" is not
 computable today: `Agenteval::Result` carries scenario/adapter/trial/status/cost but **no session or
@@ -338,7 +343,7 @@ thread names. FC8 adds `session_id`/`thread_id` to each Result and writes **one 
 trial**, so a report row names its own trace. It also adds the two counters P8 needs to
 `ContextEngine::Trace`: duplicate read results and short-form ("unchanged since") results.
 
-**Arms — one change per comparison, ablated by context policy.** The first draft compared `filectx`
+**Arms — one change per comparison, ablated by context policy.** The first draft compared a single
 against `nofresh`, which disables only the freshness pass and would have attributed a token change
 to the wrong variable. Each ablation below turns off exactly one mechanism, and the baseline is the
 **committed phase-1 adapter**, not an uncommitted build:
@@ -401,11 +406,11 @@ real-model and which are plumbing.
 
 ### 8.4 What "working as expected" means for phase 2
 
-1. G-13…G-22 and G-24…G-26 green, each shown red at its parent first; H-1…H-7 still green.
+1. G-13…G-21 and G-24…G-25 green (G-22 and G-23 are retired with FC10/FC11), each shown red at its parent first; H-1…H-7 still green.
 2. Every genuine control still scored correctly, and the §8.2b positive cell solved.
 3. On §8.3, P6–P10 hold — or a prediction is falsified and recorded as an owner-visible finding
    with its traces, at the pre-registered size.
-4. F1–F18 of [QUALITY_BAR.md](QUALITY_BAR.md) met or recorded as findings.
+4. F1–F17 of [QUALITY_BAR.md](QUALITY_BAR.md) met or recorded as findings.
 5. A3/A4 restored (R1) and the substituted gate green.
 
 ### 8.5 Stop rule

@@ -90,7 +90,7 @@ class PackagingTest < Minitest::Test
   # and every case from an external index. No repository load path or package
   # fixture is available to this subprocess.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-context-engine tamoz-harness tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")

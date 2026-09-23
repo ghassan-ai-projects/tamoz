@@ -18,12 +18,11 @@ owner-visible finding with evidence.
 > subagents as reviewers and loop until it is fully done, commit on each round. Prepare an eval
 > and testing plan so we can run it with a real LLM after finishing."
 
-Phase 2 completes [FILE-CONTEXT.md](FILE-CONTEXT.md) **FC1–FC8 and FC10**. **End state:** a work
+Phase 2 completes [FILE-CONTEXT.md](FILE-CONTEXT.md) **FC1–FC9**. **End state:** a work
 turn keeps a current, verifiable picture of every file it has read — before it edits, after
 anything else changes the file, and after a check rewrites it — without ever rewriting a message
 that is already in the cached prefix; the route runs at the model's real, recorded window;
-repeated reads do not re-pay; the runtime snapshot refreshes only when it changes; and a turn can
-report and undo its net change.
+repeated reads do not re-pay; and a turn can report and undo its net change.
 
 Why this is the end state and not more: §0.2–§0.3 of FILE-CONTEXT.md measured what DSH does
 (append only; the window is the mechanism; the machinery fires only above 0.8 × window) and what
@@ -36,7 +35,7 @@ there.
 | Dropped | Why |
 |---|---|
 | FC11 (series-boundary `system_update` normalization) | The measurement that justified it found **0** occurrences in the corpus, and the session-log spec shows no accumulation path in the current loop. There is no construction that reaches it. |
-| FC10's "no longer apply" marker branch | The dynamic set is never empty by construction: the date and the budgets are always present, so the marker branch is unreachable. FC10 keeps only the append-on-change half. |
+| FC10 (runtime snapshot on change) | Every component of that snapshot is **turn-constant**: `Header.runtime_snapshot` renders root, date, the *total* budgets and the window; branch is never passed. The snapshot therefore cannot change mid-turn, so the append-on-change half is dead code — while rendering *remaining* budget would append on every step, which is worse. The renderer already exists and is called once per turn; if the harness later tracks branch or dirty state, it is called again then. |
 
 If either becomes reachable later, it returns as a fresh measured finding, not as pre-emptive code.
 
@@ -62,7 +61,7 @@ they stand as decided (2026-09-23):
 | F4 | Read defaults: 800 lines, 50 KiB, per route in the context policy. |
 | F5 | No shadow-git repository; the change ledger uses the existing `ArtifactStore`. |
 | F6 | Spill budget raised to DSH's deployed 50,000 bytes. |
-| F7 | Build the runtime snapshot (FC10) and series-boundary normalization (FC11). |
+| F7 | ~~Build the runtime snapshot (FC10) and series-boundary normalization (FC11).~~ **Both dropped after measuring them** — see the dropped-package table above. |
 | F8 | Guidance files get DSH's change/removal notice; nested scope discovery stays off. |
 
 ## Loop
@@ -71,14 +70,14 @@ they stand as decided (2026-09-23):
 
 | Round | Packages | Adds a graph channel? | F rows it must move to met |
 |---|---|---|---|
-| R1 | FC1 (window, pinned as data) · FC10 (runtime snapshot on change) · restore A3/A4 (the packaging list is missing both phase-1 gems — `test/packaging_test.rb` is red today) | yes (`work_snapshot`) | F1, F8, F18; A3, A4 |
+| R1 | FC1 (window, pinned as data) · restore A3/A4 (the packaging list is missing both phase-1 gems — `test/packaging_test.rb` is red today) | no | F1; A3, A4 |
 | R2 | FC2 (contextual edit diff, read byte cap, stable error codes) | no | F2, F7 |
 | R3 | FC3 (observation ledger, gate pinning, read window, dedup, outside-change notice) | yes | F3, F4, F5, F6, F17 |
 | R4 | FC7 (superseded-read prune) — **after** FC3, which produces its input | no | F12 |
 | R5 | FC5 (change ledger + diffstat) · FC4 (references, guidance digests + notice) | yes | F9, F10 |
 | R6 | FC6 (operator rewind) | yes | F11 |
-| R7 | FC8 (offline eval: scripted work-loop tests, genuine controls, the positive loop-level cell) | no | F14 |
-| R8 | FC9 (wire the `filectx` / `filectx-stale` arms; prepared, not run) | no | F15 |
+| R7 | FC8 (offline eval: scripted work-loop tests, genuine controls, the positive loop-level cell, and the scenario→trace join key) | no | F14 |
+| R8 | FC9 (wire the `ctx-window`, `ctx-dedup`, `ctx-fresh`, `ctx-mention` and `ctx-positive` arms; prepared, not run) | no | F15 |
 
 FC11 is dropped (§ above). Every round that adds a state channel **bumps `WORK_GRAPH_VERSION`**;
 each round's sessions are written and read at one version only, and no session crosses a round —
@@ -114,11 +113,16 @@ export PATH="$HOME/.rbenv/bin:$HOME/.rbenv/versions/3.3.11/bin:$PATH"
 rake design:validate adr:validate syntax test_fast quality:architecture   # ci minus stream:proto:check
 ruby -Itest test/packaging_test.rb                 # A3 — in SERIAL_TESTS, skipped by ci
 ruby -Itest test/dependency_isolation_test.rb      # A2/F16 — likewise
-bundle exec rubocop <changed files>                # no NEW offense
+bundle exec rubocop --cache-root .rubocop-cache <changed files>   # no NEW offense
 ```
 
 `rake ci_full` is the same set plus the remaining serial suites; it is run **once, in R7**, for
 the durability-heavy rounds' benefit, minus the same broken prerequisite.
+
+**`--cache-root` is load-bearing.** RuboCop's default result cache lives under `~/.cache`, which
+this sandbox refuses to write; it then aborts *after inspecting zero files* and still prints
+"0 files inspected, no offenses detected". Without the flag the lint gate is a false green — found
+by running it, not by reading it. A round must see a non-zero "N files inspected" for its files.
 
 **Why the substitution is legitimate, and what it costs.** `stream:proto:check` invokes
 `grpc-tools` 1.83.0's vendored protoc, which ships only `x86_64-macos` / `x86_64-linux` binaries;

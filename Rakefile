@@ -602,7 +602,36 @@ namespace :agenteval do
     abort "DeepSeek reports no usable balance (#{body.strip[0, 160]}); top up before a real run"
   end
 
-  def harness_step(label, *command, **options)
+  # A real run spends money, so name the blocker for the SELECTED route before spending any. The
+# default route is OpenRouter while the DeepSeek direct account is unfunded; either can be chosen
+# with AGENTEVAL_PROVIDER / AGENTEVAL_MODEL.
+def agenteval_env_key(name)
+  key = ENV[name].to_s
+  return key unless key.empty?
+
+  dotenv = File.join(__dir__, ".env")
+  File.exist?(dotenv) ? File.read(dotenv)[/#{name}\s*=\s*(\S+)/, 1].to_s : ""
+end
+
+def openrouter_reachable!
+  require "net/http"
+  key = agenteval_env_key("OPENROUTER_API_KEY")
+  abort "OPENROUTER_API_KEY is not set; export it or use AGENTEVAL_PROVIDER=deepseek" if key.empty?
+
+  body = Net::HTTP.get(URI("https://openrouter.ai/api/v1/models"), { "Authorization" => "Bearer #{key}" })
+  return if body.include?('"data"')
+
+  abort "OpenRouter refuses the configured key (#{body.strip[0, 160]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
+rescue SocketError, Timeout::Error => e
+  abort "OpenRouter is unreachable (#{e.class}); a real run needs the network"
+end
+
+def real_run_ready!
+  provider = ENV.fetch("AGENTEVAL_PROVIDER", "openrouter")
+  provider == "deepseek" ? deepseek_funded! : openrouter_reachable!
+end
+
+def harness_step(label, *command, **options)
     sh(*command, **options) { |ok, status| puts "#{label}: #{ok ? 'ok' : "exit #{status.exitstatus}"}" }
   end
 
@@ -634,7 +663,7 @@ namespace :agenteval do
       desc "Coding-harness real run: #{arm} arm (#{spec[:adapters].join(' vs ')})"
       task arm => :prove do
         utf8_env!
-        deepseek_funded!
+        real_run_ready!
         harness_arm(arm, spec)
       end
     end

@@ -23,7 +23,7 @@ both use them.
 ## Using it
 
 ```bash
-TAMOZ_CONTEXT_WINDOW=65536 rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' --guidance AGENTS.md code "Add X"
+rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' --guidance AGENTS.md code "Add X"
 ```
 
 Chat: start the worker/comms runtime with `--work-routing`. Inspect a thread's context and cache use with
@@ -83,7 +83,7 @@ and the `agenteval` harness. What is missing is narrower:
 | D3 | Shell access? | **No arbitrary shell in v1.** Configured checks (as today) plus a small read-only command allowlist declared as profile data (`git status/diff/log/show`, `rg`). A general shell is a separate, later decision. |
 | D4 | Where does the target repo's `AGENTS.md` go? | **Into the body as attributed, untrusted guidance, never into the system prompt.** Opt-in per profile, with a byte budget. It can steer style. It can never grant a tool, a path or an approval. |
 | D5 | Gem names | `tamoz-context-engine` (the window) and `tamoz-harness` (the prompt and the loop protocol). |
-| D6 | Compaction policy | DSH defaults (trigger at 0.8 of the routed window, keep the newest 16%), plus the research rule **one compaction, then hand off**: the second pressure event writes a handoff note and moves to a new generation (`/new`) instead of compacting twice. |
+| D6 | Compaction policy | DSH defaults (trigger at 0.8 of the routed window, keep the newest 16%), plus the research rule **one compaction, then reset**: the second pressure event replaces the unpinned history with a handoff note and continues inside the same turn, and the turn ends `handed_off` after two resets — never a second compaction. |
 
 ## How this relates to active investigation
 

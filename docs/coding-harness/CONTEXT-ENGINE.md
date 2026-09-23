@@ -11,12 +11,13 @@ byte-identical, only append, move bulk out behind a pointer, and when you must r
 do it once, at a boundary, with a schema, and log it.
 
 The measurement behind every choice here: `script/dsh_context_survey` reads the DSH session logs
-and reports what its machinery actually did. On a 1,000,000-token route, 81 sessions and 7,236
-steps produced **0 prunes and 0 compactions**, with the widest prompt at 598,597 tokens and 99.6%
-of it a cache read. On 262,144-token routes the same machinery pruned 249 times and compacted 32,
-with the prompt ceiling at the 0.8 trigger. In the whole corpus, all 280 surface replacements came
-from those two compaction packages — not one from staleness, and not one a rewrite of an earlier
-message. The numbers and the worked example are in [FILE-CONTEXT.md](FILE-CONTEXT.md) §0.2–§0.3.
+and reports what its machinery actually did, in one command. On a 1,000,000-token route, 85
+sessions and 7,779 steps produced **0 prunes and 0 compactions**, with the widest prompt at
+598,597 tokens, 596,480 of them a cache read. On 262,144-token routes the same machinery pruned
+249 times and compacted 32, with the prompt ceiling at the 0.8 trigger. In the whole corpus, all
+280 surface replacements came from those two compaction packages — not one from staleness, and not
+one a rewrite of an earlier message. The corpus is live, so the totals drift; the shape does not.
+The numbers and the worked example are in [FILE-CONTEXT.md](FILE-CONTEXT.md) §0.2–§0.3.
 
 ---
 
@@ -59,10 +60,10 @@ where recency also gives it more weight (research M-1, loss mode "freshness").
   `packages/core/agent-loop/src/agent.ts:363-369` (three triggers); four logged reasons
   `initial | resume | change | series`. Resume and a model swap alone continue the
   series.
-- **Tamoz:** `ContextEngine::RequestHeader` is the canonical JCS of `{sections, tools, route}`.
+- **Tamoz:** `ContextEngine::RequestHeader` is the canonical JCS of `{model, system, tools}`.
   JCS already sorts object keys by code point, so ordering is locale-independent by
   construction. Sections are an array sorted by `[order, name.b]`. Tools are an array
-  sorted by `name.b`. `ContextEngine::Series#admit(header, declared:)` returns
+  sorted by `name.b`. `ContextEngine::Series.admit(header:, previous_digest:, declared:)` returns
   `continue` or `start(reason)`; a `series` record lands on the surface log.
 - **Triggers:** first request (`initial`), resumed turn (`resume`, series continues
   if bytes are equal), header bytes changed (`change`), declared boundary after a
@@ -114,7 +115,7 @@ where recency also gives it more weight (research M-1, loss mode "freshness").
   the start of the body. The snapshot is re-rendered at each model step and appended only when its
   text changed, with its section digests recorded; guidance and recall are appended once per
   generation. Nothing volatile may enter the header (H5).
-  Full specification: [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.9 (packages FC10, G-22).
+  **Not built**: the append-on-change half (FC10) is dropped — see [FILE-CONTEXT.md](FILE-CONTEXT.md) §3.9. Tamoz renders the snapshot once per turn and every component is turn-constant.
 
 ### 2.5 Output shaping — M-5
 
@@ -186,8 +187,9 @@ where recency also gives it more weight (research M-1, loss mode "freshness").
     an error line, a path, or a command (extracted deterministically). A rejected summary
     falls back to prune-only, and the trace records the fallback.
   - After the checkpoint: the plan document is appended verbatim.
-  - Second pressure event in the same turn: `Harness::Handoff` writes the note, the turn
-    ends as `handed_off`, and the next turn opens a new generation from the note and the plan.
+  - Second pressure event in the same turn: `Harness::Handoff` writes the note, the unpinned
+    history is replaced by it, and the turn continues. After **two** such resets the turn ends
+    `handed_off`, and the next turn opens a new generation from the note and the plan.
 - **The summariser instruction** (final user message; DSH's text plus the research
   schema's additions, marked ✚):
 
@@ -230,7 +232,7 @@ Rules:
   runs on the same route (the DSH default; PLAN open point 3). The checkpoint itself
   invalidates from the first shadowed token. The research break-even is roughly four
   later turns, so a compaction near the end of a turn is a pure loss; the trigger does
-  not fire if the plan's remaining steps are ≤ 1.
+  does not fire until a boundary or the backstop qualifies.
 - **Holds it:** G-8 (balanced cut, node 0 safe), G-9 (validate!), G-10 (crash in the
   bracket), G-11 (overflow retry once), and the fidelity corpus in EVAL.md §4.
 
@@ -334,7 +336,7 @@ context:
   summary_max_tokens: 8192    # DSH default
   overflow_retries: 1         # DSH maxOverflowRetries
   spill:
-    max_inline_bytes: 50000   # DSH deployed (was 8192; see parity note)
+    max_inline_bytes: 50000   # TARGET, DSH's deployed value; ships in FC2. Today's default is 8192.
     preview_head_lines: 20
     preview_tail_lines: 40
   prune:
@@ -373,4 +375,3 @@ the 300 lines first proposed here. The full comparison and the recommendations a
 | Proactive "files changed outside your edits" note, appended once per pass | DSH proves the pattern on the instruction channel and leaves the read channel unmanaged. Stale read text is the exact problem the owner asked about. |
 | Read dedup ("unchanged since step 9") | DSH re-sends a repeated read in full. At a real window this is the single largest token saving per the cost model of §0.2. |
 | Superseded-read pruning | DSH prunes by size only. Pruning staleness first is one extra map lookup in a pass that already runs. |
-| Runtime-context snapshot on change (§2.4/§3.9) | Parity, not an addition — listed here because Tamoz has it in name only today (rendered once at the opening). |

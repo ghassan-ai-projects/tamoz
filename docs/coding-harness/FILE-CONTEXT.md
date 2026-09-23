@@ -36,16 +36,23 @@ things were injected and removed dynamically. The logs say something narrower an
 `script/dsh_context_survey` reads every session log under `~/.dsh/sessions` and reports what the
 context machinery actually did. Run on 2026-09-23:
 
+**Every number on this page is one command's output**, not a hand count: run
+`script/dsh_context_survey` to reproduce the table, the replacement counts, the snapshot
+distribution, the instruction-channel counts and the cap-footer share. **The corpus is live** —
+the agent writing this plan has its own sessions in it — so re-running gives slightly different
+totals; the recorded run is stated with each figure and the shape is what matters. Recorded run:
+**2026-09-23 12:05 CEST**.
+
 | window | route | sessions | steps | prune | compact | max prompt | cache share |
 |---|---|---|---|---|---|---|---|
-| 1,000,000 | `deepseek-v4.1-flash` | 81 | 7,236 | **0** | **0** | **598,597** | 93.3% |
+| 1,000,000 | `deepseek-v4.1-flash` | 85 | 7,779 | **0** | **0** | **598,597** | 94.0% |
 | 262,144 | `stealth/ox-alpha` | 636 | 26,096 | 235 | 27 | 213,223 | 96.6% |
 | 262,144 | `glm-5.3-flash` | 28 | 1,851 | 14 | 5 | 209,877 | 97.1% |
 
 | | |
 |---|---|
-| Surface replacements, whole corpus | **280**, every one from a compaction package: 249 tool-result prunes, 31 compaction checkpoints. None from staleness; none a rewrite of an earlier conversation message. |
-| Runtime-context snapshots appended | 793. "Earlier snapshots no longer apply" markers: **0** |
+| Surface replacements, whole corpus | **280**, every one from a compaction package: 249 tool-result prunes, 31 compaction checkpoints. None from staleness; none a rewrite of an earlier conversation message. |\n| Tool results, and how many hit a cap | 42,873 results; **1,830 (4.3%)** carried a cap footer — the rest entered whole |
+| Runtime-context snapshots appended | 797. "Earlier snapshots no longer apply" markers: **0**. Per session: 724 sessions have 1, 13 have 2, 11 have 3, 2 have 4, 1 has 6, 5 have none |
 | Widest prompt | 598,597 tokens: 596,480 cache reads and 2,117 uncached — 99.6% reuse at that step |
 
 Four facts fall out, and they are the whole design argument:
@@ -227,8 +234,9 @@ context machinery is ever exercised at all.
   taken from the provider's documentation when the route is added and recorded in the profile —
   1,000,000 for `deepseek-v4.1-flash`, the route the owner runs DSH on. The `deepseek-chat` window
   on the DeepSeek API is looked up, not assumed, before the eval arm is set.
-- `README.md` and `documentation/reference/cli.md` stop showing `TAMOZ_CONTEXT_WINDOW=65536` as the
-  way to run; the variable stays as an override.
+- `docs/coding-harness/README.md` stops showing `TAMOZ_CONTEXT_WINDOW=65536` as the way to run
+  (that is the file with the example); `documentation/reference/cli.md` only names the variable and
+  stays as it is. The variable remains a documented override.
 - The eval's main arm (`tamoz-code`) uses the route's window. `tamoz-code-small` (12K) stays: it is
   the arm that forces compaction, so compaction is still exercised — but it is an artificial arm,
   and the report must say so. DSH's own floor in the corpus is 262,144; a 12K arm measures the
@@ -477,27 +485,25 @@ snapshot** only when the rendered text changes, with the contributing sections n
 (`RuntimeContextProjection`, `packages/core/agent-loop/src/runtime-context.ts:109-158`). It never
 re-renders in place, and when the snapshot becomes empty it appends a marker —
 `Current runtime context: none. Earlier runtime-context snapshots no longer apply.` — rather than
-deleting the old one. In the corpus: 793 snapshots appended, 1–3 per session, 0 markers.
+deleting the old one. In the corpus: 797 snapshots appended, 0 markers, and at most 6 in any one session.
 
 Tamoz today renders `runtime_text` once in `WorkContext#opening` (`work_context.rb:69`), pinned at
 the start of the body, and never revisits it. A long turn therefore keeps the branch, dirty state
 and budget picture it started with, and a `/think`-style change becomes a `system_update` with no
 relation to the snapshot it modifies.
 
-**The seam is extended, not reinvented.** `Harness::Header.runtime_snapshot`
-(`gems/tamoz-harness/lib/tamoz/harness/header.rb:17`) already renders exactly this text and is
-already called by `WorkContext#runtime_text` (`work_context.rb:106`); FC10 gives it a section-digest
-return and a comparison, and names no new unit.
+**Dropped, and why.** `Harness::Header.runtime_snapshot`
+(`gems/tamoz-harness/lib/tamoz/harness/header.rb:17`) renders this text and `WorkContext#runtime_text`
+(`work_context.rb:106`) calls it once per turn. An append-on-change mechanism was planned here (FC10)
+and is **dropped**: every component is turn-constant (root, date, the *total* budgets, the window;
+branch is never passed), so nothing can change mid-turn and the comparison is dead code. Rendering
+*remaining* budget instead would append on every step, which is worse than rendering it once. The
+seam stays as it is; if the harness later tracks branch or dirty state, it is called again then.
 
 - **Split the two kinds of context explicitly:** *sections* (identity, operating rules, tool rules,
   editing rules, honesty, surface) are stable and belong in the frozen header; *dynamic context*
   (date, workspace root, branch and dirty state, budgets left, accepted plan digest, active goal)
   is volatile and belongs in a sourced body entry.
-- **Re-render only when it changes.** The node value is the rendered text plus a digest of its
-  contributing sections. Compare before appending; an unchanged snapshot appends nothing, so a
-  turn that changes nothing adds no bytes. This is DSH's exact rule and the reason its snapshots
-  are 1–3 per session rather than one per step.
-- **Never delete.** A superseded snapshot stays; a new one supersedes it by recency.
 - **No "no longer apply" marker branch.** DSH appends one when the dynamic set empties; the corpus
   measured **0** in 793 snapshots, and Tamoz's dynamic set is never empty by construction (the date
   and the budgets are unconditional). AGENTS.md: do not write code for a case that cannot happen.
@@ -531,9 +537,9 @@ nodes, it returns as a measured finding with that session as the repro.
 
 A workspace `AGENTS.md` is the clearest case of the problem this plan fixes, and DSH already treats
 it that way. A guidance file is loaded into the prompt once; if it changes under the model, the
-loaded copy is stale exactly like a stale `read_file` result. Measured over the corpus: 808
-instruction messages, of which **822 changes are the one-time baseline**, and only 40 are dynamic —
-20 nested-scope discoveries after an fs call reached a deeper directory, 19 `replace`, 1 `remove`.
+loaded copy is stale exactly like a stale `read_file` result. Measured over the corpus (`script/dsh_context_survey`): 812
+instruction messages, of which **830 changes are baseline `set`**, 20 are nested-scope
+discoveries, 19 are `replace` and 1 is `remove` — 40 of 870 changes are dynamic.
 
 DSH's three dynamic notices, verbatim from the logs:
 
@@ -568,7 +574,7 @@ changes mid-turn stays stale for the rest of the turn.
 - **Adopt the change/removal notice** for every guidance file already loaded, through the same pass
   as §3.2: guidance paths are observation-ledger entries whose ledger has no `read_file` behind it.
   A changed file appends the loaded-vs-disk diff; a removed one appends the one-line removal
-  notice. Both are `system_update` entries, so G-21 and G-22 style assertions cover them.
+  notice. Both are `system_update` entries, so G-21-style assertions cover them.
 - **Do not adopt scope discovery** (D4): the guidance chain is read once per generation. Guidance is
   untrusted and opt-in, so discovering more of it is not the goal. Note the asymmetry, and that it
   is deliberate.
@@ -594,11 +600,9 @@ message.
 | `references` entry | Pinned body entry in the opening. | Paths only. |
 | Change-ledger diffstat | Appended at finish, handoff and after a compaction — points that already end or break the series. | — |
 | Superseded pruning | Rides the existing prune pass. | — |
-| Runtime snapshot (§3.9) | Append on change only. | 1–3 entries per session, not one per step. |
-| System-node normalization (§3.10) | Replaces at a series boundary, where the prefix is being rebuilt anyway. | — |
 
-G-1 (header stability) and G-2 (append-only) keep holding without new exceptions: §3.2 and §3.9
-append, §3.10 replaces only inside a declared series boundary.
+G-1 (header stability) and G-2 (append-only) keep holding without new exceptions: §3.2 appends and
+never rewrites.
 
 ---
 
@@ -608,10 +612,10 @@ append, §3.10 replaces only inside a declared series boundary.
 |---|---|---|
 | profile data, adapters, docs | Route `context_window`; eval main arm; README/CLI docs. | — |
 | `tamoz-context-engine` | `observes` field on `Surface` entries; `Surface.visible_matching`; `Pruner` superseded pass taking `current: {key ⇒ version}`; snapshot compare helper for §3.9. | `Surface.entry`, `Pruner.prune` gain keyword arguments. |
-| `tamoz-harness` | `Harness::FileReferences` (parse, render); `Harness::Instructions` returns per-file digests (§3.11); `Harness::RuntimeSnapshot` (render, section digests, compare); prompt files `file_references.md`, `outside_changes.md`, revised `editing.md`, `handoff.md` with `%{changes}`; `Handoff.note(changes:)`. | `Handoff.note` signature; one new harness unit. |
+| `tamoz-harness` | `Harness::FileReferences` (parse, render); `Harness::Instructions` returns per-file digests (§3.11); prompt files `file_references.md`, `outside_changes.md`, revised `editing.md`, `handoff.md` with `%{changes}`; `Handoff.note(changes:)`. | `Handoff.note` signature; one new harness unit. |
 | `tamoz-tools` | `render_diff` with 3 context lines, and a text-to-text diff for §3.2; `read_range` takes a byte cap; stable error codes `not_observed`, `stale_file`; `restore_file` (F3 only). | Diff output format; one new tool. |
 | `tamoz-approval` | `restore_file` tier row in `policy/base.yaml` (F3 only). | Policy data. |
-| `tamoz-agent-session` | `WorkContext#opening` resolves references and builds the snapshot through `Harness::RuntimeSnapshot`; `WorkGate` owns the observation ledger, pinning, default read window, dedup, the outside-change pass; `work_changes`; finish/handoff/compaction append the diffstat; rewind intake; series-boundary system-node normalization. New state channels → graph version 6. | Graph version. |
+| `tamoz-agent-session` | `WorkContext#opening` resolves references; `WorkGate` owns the observation ledger, pinning, default read window, dedup, the outside-change pass; `work_changes`; finish/handoff/compaction append the diffstat; rewind intake; series-boundary system-node normalization. New state channels → graph version 6. | Graph version. |
 | `tamoz-agent-cli`, comms | `tamoz rewind`, `/rewind`; print the diffstat. | CLI surface. |
 
 Dependency rules from QUALITY_BAR A2 are unchanged: `tamoz-context-engine` → `tamoz-core` only;
@@ -634,11 +638,13 @@ Dependency rules from QUALITY_BAR A2 are unchanged: `tamoz-context-engine` → `
 | G-19 | Rewind restores byte-exact files and deletes created ones; one conflicting path refuses the whole rewind with nothing written; every restore passes the approval gate and the journal. | `test/work_rewind_test.rb` |
 | G-20 | The diffstat after a compaction lists every mutated path, independent of the summary text. | `test/work_loop_test.rb` |
 | G-21 | A check that rewrites an observed file produces exactly one appended note with the exact diff from the read version; nothing earlier on the surface changes (request *n* is a byte prefix of *n+1*); the ledger moves to the new sha, so the next patch is not `stale_file`. An unobserved file changed by the check produces no note. | `test/work_loop_observation_test.rb` |
-| G-22 | A runtime snapshot is appended when its rendered text changes and nothing is appended when it does not; two steps in a row on an unchanged workspace add no snapshot; a changed budget or branch appends exactly one; no snapshot key (date, branch, budget) ever reaches the header. **No empty-set case is tested: it cannot occur by construction** (§3.9). | `test/harness_runtime_snapshot_test.rb` |
+| — | G-22 is **retired with FC10** (§3.9): the snapshot is turn-constant, so there is no change to detect. | — |
 | G-24 | For every route in `data/model_windows.yml`: the recorded window equals the value the adapter and `ModelClientFactory` resolve for that provider/model, the entry carries its source and lookup date, and `TAMOZ_CONTEXT_WINDOW` still overrides it. A route absent from the file with no profile setting and no env var still refuses. | `test/model_windows_test.rb` |
 | G-25 | A secret planted in a file the model reads is redacted before those bytes are retained in the observation ledger, before the outside-change note renders, and before the net diff renders — the raw secret appears in none of the three. | `test/work_loop_observation_test.rb` |
-| G-26 | A usage payload with only `inputTokens`/`cacheReadTokens`/`outputTokens` yields `prompt_tokens = input_uncached + cache_read`; a payload that also carries `totalTokens` (input + cache read + output) never reports `totalTokens` as the prompt size. | `test/context_usage_test.rb` |
-| — | G-23 (series-boundary normalization) is **retired with FC11** (§3.10). | — |
+| G-27 | The model's own `expected_sha256` is ignored on the work route: a patch carrying a wrong digest still uses the ledger's version, and the ledger decides. | `test/work_loop_observation_test.rb` |
+| G-28 | The finish report and the handoff note each carry the turn's diffstat, built from the change ledger and not from the model's own list. | `test/work_loop_test.rb`, `test/harness_protocol_test.rb` |
+| G-29 | Guidance records a digest per loaded file, and a changed or removed guidance file appends its notice (§3.11). | `test/harness_instructions_test.rb` |
+| — | G-23 (series-boundary normalization) is **retired with FC11** (§3.10); G-26 (a DSH-shaped usage payload) is **dropped** — no provider Tamoz talks to sends that shape. | — |
 
 ### 6.2 Controls (the graders must discriminate)
 
@@ -671,9 +677,9 @@ the cell is added in FC8.
 
 ### 6.3 Real model (DeepSeek, paired against the current build)
 
-Two new tasks in `agenteval/packs/harness.rb`: `large_file_fix` (a bug in the middle of a
-3,000-line file) and `mention_task` (the task names its files with `@path`); plus
-`formatter_check` as a task. Measured on those and the existing harness pack, same seeds:
+The tasks and cells are the ones EVAL.md §8.3 fixes — `large_file_fix`, `mention_task`,
+`dup_read_task`, `formatter_check`, the positive `fresh_editor_task`, and the planted
+`stale_editor_task` / `blind_editor_task`. Measured on those and the existing harness pack, same seeds:
 
 - **billed input tokens per solved task** (cached + uncached, as in §0.2) — the claim this plan
   makes; must drop;
@@ -706,13 +712,12 @@ names, and every round's tests must be **red at its parent commit** first.
 | FC5 | Session: change ledger, diffstat at finish/handoff/compaction; `Handoff.note(changes:)`. Bumps `WORK_GRAPH_VERSION`. | G-18, G-20 |
 | FC6 | Rewind (F3): `restore_file`, policy row, rewind intake, CLI and chat. Bumps `WORK_GRAPH_VERSION`. | G-19 |
 | FC7 | `Pruner` superseded pass — **after FC3**, which produces its `current: {key ⇒ version}` input; a work-loop test, not only the unit test, must show the pass running under pressure. | G-16 |
-| FC8 | Eval offline: the scripted work-loop tests, the **positive loop-level cell** (§6.2c), the new tasks, `prefix_breaker` as a real control, `rake agenteval:prove`. | §6.2, F14 |
-| FC9 | Wire the `filectx` / `filectx-stale` arms into `HARNESS_ARMS` (prepared, not run: the account has no balance). | F15 |
-| FC10 | Extend `Harness::Header.runtime_snapshot` with section digests and a comparison; append on change in the work loop. No marker branch (§3.9). | G-22 |
+| FC8 | Eval offline: the scripted work-loop tests, the **positive loop-level cell** (§6.2c), the new tasks, `prefix_breaker` as a real control, `rake agenteval:prove`. Also the **join key** §8.3 needs: `session_id`/`thread_id` on every `Agenteval::Result`, one trace file per trial, and duplicate-read / short-form counters on `ContextEngine::Trace`. | §6.2, F14 |
+| FC9 | Wire the `ctx-window`, `ctx-dedup`, `ctx-fresh`, `ctx-mention` and `ctx-positive` arms into `HARNESS_ARMS` (prepared, not run: see STATUS.md for the two route blockers). | F15 |
+| ~~FC10~~ | **Dropped** (§3.9) — every component is turn-constant; no construction reaches an append-on-change. | — |
 | ~~FC11~~ | **Dropped** (§3.10) — 0 occurrences measured; no construction reaches it. | — |
 
-**Sequencing.** FC10 adds a state channel, so it lands with FC1 in R1 and bumps the graph version
-there. FC3–FC6 each bump it again. Active-investigation WP4 is plan-only and rebases onto the
+**Sequencing.** FC3, FC5 and FC6 each add a state channel and bump the graph version. R1 adds none. Active-investigation WP4 is plan-only and rebases onto the
 phase-2 graph afterwards (GOAL.md §Loop).
 
 ---
@@ -737,7 +742,7 @@ not an accident of copying package defaults.
 | compaction threshold / retain / summary cap | 0.8 / 0.16 / 8,192 | same | exact parity |
 | compaction retries | `compactionRetries: 1` **and** `maxOverflowRetries: 1` | one `overflow_retries: 1` | Tamoz folds two distinct DSH knobs into one; acceptable while both are 1. |
 | read window | 2,000 lines (default *is* the max), 2,000 chars/line, 50 KiB bytes | 800 lines / 50 KiB | F4. Still stricter on lines, equal on bytes, so an ordinary file arrives whole and the byte cap is the real bound. |
-| runtime snapshot cadence | append only when the rendered text changes | same | G-22, FC10 |
+| runtime snapshot cadence | append only when the rendered text changes | once per turn; no change-detection | DSH’s dynamic set actually changes (clock, todos, goals); Tamoz’s is turn-constant, so FC10 was dropped |
 | guidance budget | 65,536 bytes | 16,384 | Keep Tamoz's: project guidance is untrusted and opt-in (D4). |
 | repeat guard | thresholds `[3, 5, 8]`, 500-char arguments preview | remind 3, 5; stop 8 | Tamoz stops where DSH only reminds; keep, but the reminder should carry the arguments preview. |
 
@@ -749,7 +754,7 @@ not an accident of copying package defaults.
 | F4 | Read defaults | **800 lines and a 50 KiB byte cap**, per model route in the context policy like the other thresholds — closer to DSH's 2,000 lines than the 300 first proposed, so an ordinary file still arrives whole and the byte cap is the real bound. |
 | F5 | A real shadow-git repository? | **No** (§3.6). |
 | F6 | Match DSH's deployed spill budget (50,000) or keep 8,192? | **Match DSH: 50,000.** One fewer round trip through `recall_output` is worth more than the bytes, because those bytes are re-billed at the cache rate rather than the uncached rate. The pruner bounds the tail later. |
-| F7 | Build the runtime snapshot (FC10)? And series-boundary normalization (FC11)? | **FC10 yes; FC11 dropped** (§3.10). The snapshot is small, extends `Harness::Header.runtime_snapshot`, and closes a gap DSH does not have. FC11 measured 0 occurrences and has no construction path, so AGENTS.md forbids writing it. |
+| F7 | Build the runtime snapshot (FC10)? And series-boundary normalization (FC11)? | **Both dropped.** FC11 measured 0 occurrences (§3.10); FC10’s snapshot is turn-constant, so append-on-change is unreachable (§3.9). AGENTS.md forbids writing either without a construction path. |
 | F8 | Guidance files: adopt DSH's change/removal notices, and its nested scope discovery? | **Notices yes, discovery no** (§3.11). The notice is the same mechanism as §3.2 and costs one appended diff; discovery grows untrusted guidance, which D4 and the opt-in budget argue against. |
 
 ## 9. Out of scope

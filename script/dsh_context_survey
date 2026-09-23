@@ -20,7 +20,10 @@ end
 def survey(path)
   session = { path:, route: nil, window: nil, steps: 0, prune: 0, compactions: 0, replacements: {},
               runtime_snapshots: 0, markers: 0, max_prompt: 0, max_cache_read: 0, max_uncached: 0,
-              prompt_tokens: 0, cached_tokens: 0, output: 0 }
+              prompt_tokens: 0, cached_tokens: 0, output: 0,
+              instruction_messages: 0, instruction_changes: Hash.new(0),
+              tool_results: 0, capped_results: 0 }
+              
   IO.popen(['zstd', '-dc', path]) do |stream|
     stream.each_line do |line|
       next unless line.match?(INTERESTING)
@@ -35,7 +38,10 @@ def survey(path)
       when 'compaction/start' then session[:compactions] += 1
       when 'compaction/prune' then session[:prune] += 1
       when 'assistant/message' then usage(session, event)
-      when 'user/message' then injected(session, event)
+      when 'user/message'
+        instruction(session, event)
+        injected(session, event)
+      when 'tool/result' then tool_result(session, event)
       end
       replacement(session, event)
     end
@@ -43,7 +49,32 @@ def survey(path)
   session
 end
 
+# The instruction channel: one baseline per session, plus the notices DSH appends when a loaded
+# instruction file changes or disappears. Counted from the durable `source`, which is what the Web
+# client renders as a "Context injection" row.
+def instruction(session, event)
+  source = event.dig('data', 'source') || {}
+  return unless source['kind'] == 'agent-instructions'
+
+  session[:instruction_messages] += 1
+  Array(source['changes']).each do |change|
+    label = "#{change['action']}#{source['baseline'] ? ' (baseline)' : ''}"
+    session[:instruction_changes][label] += 1
+  end
+end
+
+# A tool result is bounded either by the tool's own cap footer or by the spill policy.
+def tool_result(session, event)
+  session[:tool_results] += 1
+  block = Array(event.dig('data', 'message', 'content')).first
+  text = Array(block && block['content']).first.to_h['text'].to_s
+  return unless text.include?('Output capped') || text.match?(/Showing lines \d+-\d+ of \d+/)
+
+  session[:capped_results] += 1
+end
+
 def route(session, event)
+
   session[:route] ||= event.dig('data', 'model')
   session[:window] ||= event.dig('data', 'contextWindow')
 end
@@ -123,8 +154,17 @@ else
   end
   puts
   puts "surface replacements: #{replacements.empty? ? 'none' : replacements.map { |k, v| "#{k}=#{v}" }.join(', ')}"
-  puts "runtime-context snapshots appended: #{sessions.sum { |s| s[:runtime_snapshots] }}, " \
-       "cleared markers: #{sessions.sum { |s| s[:markers] }}"
+snapshots = sessions.map { |s| s[:runtime_snapshots] }.tally.sort.to_h
+puts "runtime-context snapshots appended: #{sessions.sum { |s| s[:runtime_snapshots] }}, " \
+     "cleared markers: #{sessions.sum { |s| s[:markers] }}, per-session: #{snapshots}"
+changes = sessions.each_with_object(Hash.new(0)) do |session, all|
+  session[:instruction_changes].each { |key, value| all[key] += value }
+end
+puts "instruction messages: #{sessions.sum { |s| s[:instruction_messages] }}, changes: #{changes.sort.to_h}"
+results = sessions.sum { |s| s[:tool_results] }
+capped = sessions.sum { |s| s[:capped_results] }
+puts format('tool results: %d, with a cap footer: %d (%.1f%%)', results, capped,
+            results.zero? ? 0 : capped * 100.0 / results)
   widest = sessions.select { |s| s[:window] }.max_by { |s| s[:max_prompt] }
   if widest
     puts "widest prompt: #{widest[:max_prompt]} (cache read #{widest[:max_cache_read]}, " \
