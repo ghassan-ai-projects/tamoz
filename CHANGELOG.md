@@ -10,6 +10,14 @@ from its public release line onward.
 
 ### Added
 
+- `tamoz code`: the coding harness. A durable tool-calling work loop in
+  `tamoz-agent-session`, with two new gems: `tamoz-context-engine` (frozen
+  request header, append-only surface, spill, pruner, compaction, token meter,
+  trace) and `tamoz-harness` (prompt pack, persona, project guidance via
+  `--guidance`, living plan, loop budgets, finish contract). Context windows are
+  recorded per route in `gems/tamoz-agent-kernel/data/model_windows.yml`, and
+  worker/chat serve work turns with `--work-routing`.
+
 - `tamoz-approval`: approval policy as digest-pinned YAML data (`policy/base.yaml`
   plus `implement`/`plan`/`review`/`auto`/`unattended` profiles) with a deny-first
   engine, scoped expiring grants, a durable decision log, and mid-session mode
@@ -21,6 +29,16 @@ from its public release line onward.
   the same policy owner; a denial is a structured result the turn continues from.
 - Approval prompts carry the evidence level from the journaled engine Decision;
   the hardcoded comms constant policy is gone.
+
+### Fixed
+
+- A model reply containing a non-ASCII character no longer crashes a turn:
+  `Tamoz::Core::JCS` now returns UTF-8 strings from a binary HTTP body.
+- Interactive approval previews print once, not twice. A failed session names
+  the error class next to the node.
+- A long work turn ends on its loop budget with a handoff, instead of on the
+  graph's 200-step limit.
+- A reply cut off at the token limit continues the turn instead of failing it.
 
 ### Removed
 

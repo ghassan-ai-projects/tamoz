@@ -112,6 +112,13 @@ class AgentScorecardTest < Minitest::Test
         # control text); no behavioral counter moved. F09-SEC-01 grew them
         # again by attributing remote MCP tool descriptions in the planner
         # prompt (+194 B over the 95 calls); no behavioral counter moved.
+        # Phase 1's work loop (a37abc26) then put the frozen request header —
+        # the system prompt pack and the per-tool JSON schemas — and the
+        # runtime snapshot on every request, +19,021 B with no behavioral
+        # counter moving: this test passes at 743aeeb3, the branch point before
+        # a37abc26, on the previous pin. The counter is reproducible across
+        # days because the snapshot's only time-varying field is a fixed-width
+        # UTC date; a variable-width timestamp here would make it not so.
         "cases" => 21,
         "task_successes" => 19,
         "task_success_basis_points" => 9_047,
@@ -127,7 +134,7 @@ class AgentScorecardTest < Minitest::Test
         "approvals_denied" => 1,
         "tool_calls" => 38,
         "model_calls" => 95,
-        "model_input_bytes" => 286_846,
+        "model_input_bytes" => 305_867,
         "model_output_bytes" => 21_441,
         "tool_output_bytes" => 5_122,
         "mutations" => 11,

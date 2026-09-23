@@ -44,7 +44,7 @@ rbenv exec bundle exec rake ci
 file, and the whole test suite. It must be green before you trust anything else
 on this page.
 
-## The twenty-seven gems
+## The twenty-nine gems
 
 Tamoz is a monorepo of independently publishable gems. Each one installs and
 runs with only its declared dependencies — proven per gem by
@@ -67,17 +67,19 @@ named example task in a clean subprocess.
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability`, `tamoz-concurrency` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core`, `tamoz-cancellation` |
+| `tamoz-context-engine` | Context-window management for agent loops: frozen request header, append-only surface, spill, pruner, compaction, cache accounting | `tamoz-core` |
+| `tamoz-harness` | The coding-harness protocol: prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets, finish contract | `tamoz-context-engine`, `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-agent-kernel` | The deliberation substrate: records, receipts, plan/review/execute/verify engine, effect seam, request routes and projections | `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-capabilities` | The sealed capability catalog: bindings over toolbox/skills/MCP/browser/database sources, child-task dispatch | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |
 | `tamoz-agent-memory` | The durable memory vertical: `Memory::Engine`, admission/retrieval/consolidation/lifecycle, wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification, rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-tools`, `tamoz-core` |
-| `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite` |
-| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated lifecycle, promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
-| `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-agent-session`, `tamoz-agent-capabilities`, `tamoz-comms-gateway`, `tamoz-cancellation`, `tamoz-concurrency` |
+| `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, selected runtime gems |
 
@@ -143,6 +145,7 @@ The interactive subcommands drive one thread while you watch it.
 | Subcommand | What it does |
 |---|---|
 | `ask` | Start a new turn on a thread |
+| `code` | Start a coding turn in the tool-calling work loop (needs `--allow-changes` or a profile, and a route with a known context window; see [the coding guide](../guides/coding.md)) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on |
 | `continue` | Drive a paused thread forward without new input |
 | `list` | Show every thread in the session directory |

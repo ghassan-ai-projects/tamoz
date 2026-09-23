@@ -15,5 +15,6 @@ TamozGemspec.build(
     ['tamoz-core', "= #{Tamoz::Agent::Kernel::VERSION}"],
     ['tamoz-tools', "= #{Tamoz::Agent::Kernel::VERSION}"],
     ['net-http', '~> 0.5']
-  ]
+  ],
+  runtime_contracts: ['data/model_windows.yml']
 )

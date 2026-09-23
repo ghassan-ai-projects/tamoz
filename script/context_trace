@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Prints the per-request context trace of a work-loop thread: request series, size, and the
+# provider's cache hits. Usage: script/context_trace SESSION_DIR [THREAD] [--json]
+# Without THREAD it summarizes every work thread in SESSION_DIR (the EVAL.md §5.1 cache report).
+# A thread's trace is its latest turn; each agenteval trial is a one-turn thread.
+require 'bundler/setup'
+require 'json'
+require 'tamoz/agent'
+require 'tamoz/sqlite'
+
+json = ARGV.delete('--json')
+session_dir, thread = ARGV
+abort 'usage: script/context_trace SESSION_DIR [THREAD] [--json]' unless session_dir && File.directory?(session_dir)
+
+def requests(path, thread)
+  adapter = Tamoz::SQLite::Adapter.new(path:)
+  inert = Object.new
+  def inert.generate(**) = raise('context_trace never calls a model')
+  session = Tamoz::Agent::Session.new(model: inert, toolbox: Tamoz::Agent::Toolbox.new(root: Dir.pwd),
+                                      checkpointer: adapter, routing: :work)
+  session.view(thread:).state.fetch(:work_trace, []).select { |record| record['event'] == 'request' }
+ensure
+  adapter&.close
+end
+
+threads = thread ? [thread] : Dir[File.join(session_dir, '*.sqlite3')].map { |path| File.basename(path, '.sqlite3') }
+missing = threads.reject { |name| File.file?(File.join(session_dir, "#{name}.sqlite3")) }
+abort "no session database for #{missing.join(', ')}" unless missing.empty?
+records = threads.flat_map { |name| requests(File.join(session_dir, "#{name}.sqlite3"), name) }
+summary = Tamoz::ContextEngine::Trace.summarize(records).merge('threads' => threads.length)
+if json
+  puts JSON.pretty_generate('requests' => records, 'summary' => summary)
+else
+  puts %w[step series messages estimate prompt cached].join("\t")
+  records.each do |record|
+    usage = record['usage'] || {}
+    puts [record['step'], record['series_reason'] || '-', record['message_count'], record['estimated_tokens'],
+          usage['prompt_tokens'], usage['cache_read_tokens']].join("\t")
+  end
+  puts JSON.generate(summary)
+end
+abort 'no traced requests found' if records.empty?

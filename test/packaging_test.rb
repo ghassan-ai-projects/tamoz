@@ -90,7 +90,7 @@ class PackagingTest < Minitest::Test
   # and every case from an external index. No repository load path or package
   # fixture is available to this subprocess.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-context-engine tamoz-harness tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -586,6 +586,59 @@ class PackagingTest < Minitest::Test
       assert_equal "nil", result.fetch("sqlite_defined")
       assert_equal "nil", result.fetch("agent_defined")
       assert_empty stderr
+    end
+  end
+
+  def test_packaged_context_engine_runs_with_only_core_installed
+    with_isolated_install(%w[tamoz-core tamoz-context-engine], "context-engine") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/context_engine"
+        engine = Tamoz::ContextEngine
+        store = engine::MemoryStore.new
+        header = engine::RequestHeader.build(
+          sections: [engine::Section.new(name: "identity", order: 1, text: "You are Tamoz.")],
+          tools: [], model: "m"
+        )
+        entry = engine::Surface.entry(kind: "user", seq: 0, text: "hi", store:)
+        puts JSON.generate(
+          "messages" => engine::Surface.messages([entry], header:, resolve: engine::Surface.resolver(store)),
+          "instruction" => engine::Prompts.fetch("compaction_instruction").start_with?("You are now acting"),
+          "agent_defined" => defined?(Tamoz::Agent).inspect
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+
+      assert_equal [{"role" => "system", "content" => "You are Tamoz."}, {"role" => "user", "content" => "hi"}],
+                   result.fetch("messages")
+      assert result.fetch("instruction"), "the packaged gem must ship its prompt files"
+      assert_equal "nil", result.fetch("agent_defined")
+    end
+  end
+
+  def test_packaged_harness_runs_with_only_context_engine_and_core_installed
+    with_isolated_install(%w[tamoz-core tamoz-context-engine tamoz-harness], "harness") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/harness"
+        header = Tamoz::Harness::Header.build(tools: [], model: "m", surface: :chat)
+        puts JSON.generate(
+          "tools" => header.tool_names,
+          "prompts" => Tamoz::Harness::PromptPack.digests.keys,
+          "agent_defined" => defined?(Tamoz::Agent).inspect
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+
+      assert_equal %w[recall_output update_plan], result.fetch("tools")
+      assert_includes result.fetch("prompts"), "harness_tools.json"
+      assert_equal "nil", result.fetch("agent_defined")
     end
   end
 

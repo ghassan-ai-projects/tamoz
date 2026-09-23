@@ -1,0 +1,48 @@
+# Documented context windows for the model routes Tamoz talks to.
+#
+# A route's window is a property of the (provider, model) pair, looked up from the provider when
+# the route is added and pinned here so a work turn never guesses and never inherits a provider
+# default. It is NOT a property of the model name alone: `deepseek/deepseek-chat` is 163,840
+# tokens through OpenRouter and is not served at all by the DeepSeek direct API any more.
+#
+# `source` is where the value was read and `checked` is the date it was read; re-read both before
+# editing a number. Refresh with:
+#
+#   curl -s https://api.deepseek.com/models       -H "Authorization: Bearer $DEEPSEEK_API_KEY"
+#   curl -s https://openrouter.ai/api/v1/models
+#
+# A route that is absent here and has no profile-role `context_window` refuses rather than
+# guessing — see ModelClientFactory#configured_context_window.
+routes:
+  "deepseek/deepseek-flash":
+    context_window: 1048576
+    max_output_tokens: 393216
+    source: https://api.deepseek.com/models
+    checked: "2026-09-23"
+    note: "DeepSeek-V4.1-Flash. The legacy names deepseek-chat, deepseek-v4-flash and
+      deepseek-v4-flash-vision-exp are no longer served by this endpoint."
+  "deepseek/deepseek-v4-pro":
+    context_window: 1048576
+    max_output_tokens: 393216
+    source: https://api.deepseek.com/models
+    checked: "2026-09-23"
+    note: "DeepSeek-V4-Pro."
+  "openrouter/deepseek/deepseek-v4.1-flash":
+    context_window: 1048576
+    max_output_tokens: 384000
+    source: https://openrouter.ai/api/v1/models
+    checked: "2026-09-23"
+    note: "The real-model eval route while the DeepSeek direct account has no balance. The
+      listing carries input_cache_read pricing, so a cache-hit rate is measurable here."
+  "openrouter/deepseek/deepseek-v4-flash":
+    context_window: 1048576
+    max_output_tokens: 384000
+    source: https://openrouter.ai/api/v1/models
+    checked: "2026-09-23"
+  "openrouter/deepseek/deepseek-chat":
+    context_window: 163840
+    max_output_tokens: 16384
+    source: https://openrouter.ai/api/v1/models
+    checked: "2026-09-23"
+    note: "Kept so the existing benchmark recipes that name deepseek/deepseek-chat record the
+      window that route really has: 160K here, not the 64K the old docs assumed."

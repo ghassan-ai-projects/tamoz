@@ -19,6 +19,8 @@ TamozGemspec.build(
     ["tamoz-core", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-cancellation", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::SessionGem::VERSION}"],
+    ["tamoz-harness", "= #{Tamoz::Agent::SessionGem::VERSION}"],
+    ["tamoz-context-engine", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-tools", "= #{Tamoz::Agent::SessionGem::VERSION}"]
   ]
 )

@@ -62,7 +62,7 @@ module Tamoz
       SUGGESTION_BASENAME = "suggested-profile.yaml"
 
       SAFETIES = %w[read_only idempotent unsafe].freeze
-      KNOWN_TOOLS = %w[read_file list_directory search_text apply_patch create_file run_check].freeze
+      KNOWN_TOOLS = %w[read_file list_directory search_text glob apply_patch create_file run_check].freeze
       KNOWN_PROVIDERS = Providers::ENV_KEYS.keys.map(&:to_s).freeze
 
       TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy egress].freeze

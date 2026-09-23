@@ -40,6 +40,48 @@ module Tamoz
         end
       end
 
+      # The durable tool-calling work loop (docs/coding-harness): same session, same approvals.
+      def cmd_code(options, argv)
+        raise OptionParser::InvalidArgument, 'tamoz code needs --allow-changes or a --profile' unless
+          options[:allow_changes] || options[:profile]
+
+        thread = options[:session] && File.join(resolve_session_dir(options), options[:session])
+        if thread && File.exist?("#{thread}.sqlite3") && !File.exist?("#{thread}.harness.json")
+          raise OptionParser::InvalidArgument, "thread #{options[:session]} is not a work thread"
+        end
+
+        cmd_ask(options.merge(work_routing: true), argv)
+      end
+
+      # A work thread's surface, guidance and persona are pinned at its first turn, so a follow-up,
+      # resume or continue builds the same header and body without repeating the flags.
+      def work_harness(options, thread_id)
+        pin = File.join(resolve_session_dir(options), "#{thread_id}.harness.json")
+        return JSON.parse(File.read(pin)).transform_keys(&:to_sym).merge(surface: :cli) if File.exist?(pin)
+        return {} unless options[:work_routing]
+
+        settings = { surface: :cli, guidance_files: guidance_files(options), persona: operator_persona(options) }
+        File.write(pin, JSON.generate(settings.except(:surface)), perm: 0o600)
+        settings
+      end
+
+      def guidance_files(options)
+        root = options[:root] || Dir.pwd
+        Array(options[:guidance]).each do |name|
+          raise OptionParser::InvalidArgument, "--guidance #{name}: no such file in the workspace root" unless
+            File.file?(File.join(root, name))
+        end
+      end
+
+      def operator_persona(options)
+        directory = options[:runtime_dir] || @env['TAMOZ_RUNTIME_DIR']
+        path = directory && File.join(directory, 'persona.md')
+        return nil unless path && File.file?(path) && !File.symlink?(path)
+        raise OptionParser::InvalidArgument, "#{path} exceeds 16384 bytes" if File.size(path) > 16_384
+
+        File.read(path, encoding: Encoding::UTF_8)
+      end
+
       def cmd_resume(options, argv)
         resume_options = parse_resume_options(argv)
         thread_id = extract_thread!(argv)

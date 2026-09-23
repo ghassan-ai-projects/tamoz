@@ -403,6 +403,25 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  def test_interactive_approval_shows_each_preview_once
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "app.rb"), "value = 1\n")
+      factory = repair_factory(Digest::SHA256.hexdigest("value = 1\n"))
+      err = StringIO.new
+
+      status = run_cli(
+        ["ask", "set value to 2"],
+        session: "th", workspace:, session_dir:, input: StringIO.new("y\nn\ny\nn\n"), err:, factory:,
+        checks: {"answer" => check_argv}
+      )
+
+      assert_equal 0, status, err.string
+      asked = err.string.scan(/Approve \w+\?/).length
+      assert_operator asked, :>, 0
+      assert_equal asked, err.string.scan("Approval required for ").length, err.string
+    end
+  end
+
   def test_resume_non_interactive_with_answer
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "app.rb"), "value = 1\n")

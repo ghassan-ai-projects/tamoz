@@ -15,6 +15,12 @@ require_relative "session_steps"
 require_relative "session_lifecycle"
 require_relative "session_routing"
 require_relative "session_adaptive"
+require_relative "work_context"
+require_relative "work_observations"
+require_relative "work_tools"
+require_relative "work_compaction"
+require_relative "work_gate"
+require_relative "session_work"
 
 module Tamoz
   module Agent
@@ -48,7 +54,9 @@ module Tamoz
         :capabilities,
         :approval_engine,
         :approval_session_id,
-        :graph_version
+        :graph_version,
+        :harness,
+        :previous_turn_reader
       )
 
       # Immutable collaborator graph for the durable session façade.
@@ -85,7 +93,9 @@ module Tamoz
         artifact_tenant: nil,
         child_task_runtime: nil,
         transcript_reader: nil,
-        graph_version: GraphVersions::GRAPH_VERSION
+        graph_version: GraphVersions::GRAPH_VERSION,
+        harness: {},
+        previous_turn_reader: nil
       )
         graph_version = String(graph_version).freeze
         @toolbox = toolbox
@@ -116,7 +126,9 @@ module Tamoz
           artifact_tenant:,
           child_task_runtime:,
           capabilities: @capabilities,
-          graph_version:
+          graph_version:,
+          harness:,
+          previous_turn_reader:
         )
         @memory_nodes = SessionMemory.new(configuration:)
         @bindings = SessionBindings.new(
@@ -148,10 +160,22 @@ module Tamoz
         @deliberation = SessionDeliberation.new(services:)
         @steps = SessionSteps.new(services:)
         @lifecycle = SessionLifecycle.new(services:)
+        @work = graph_version == GraphVersions::WORK_GRAPH_VERSION ? SessionWork.new(services:) : nil
         freeze
       end
 
-      def intake(state, context) = @bindings.intake(state, context)
+      def intake(state, context)
+        base = @bindings.intake(state, context)
+        @work ? @work.intake(state, context, base) : base
+      end
+
+      def work_step(state, context) = @work.step(state, context)
+
+      def work_gate(state, context) = @work.gate(state, context)
+
+      def work_execute(state, context) = @work.execute(state, context)
+
+      def work_observe(state, context) = @work.observe(state, context)
 
       def memory_binding = @memory_nodes.memory_binding
 

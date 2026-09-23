@@ -576,6 +576,110 @@ namespace :agenteval do
     sh agenteval_ruby, BIN, "compare", before, after
   end
 
+  # The coding-harness real-model runs (docs/coding-harness/EVAL.md §5). Each arm is a paired
+  # run on the same seeds; a failed gate or a regression is a finding, so every arm runs to the
+  # end and the exit statuses are reported together.
+  ACTING_TASKS = "repair,diagnose,implement,author_tests,rename_across,multi_implement,registry_swap,backlog"
+  HARNESS_ARMS = {
+    "cache" => { adapters: %w[tamoz-code], tasks: "backlog,planted_constraint", modifiers: "clean",
+                 seeds: "1,2,3,4,5", repeat: "1" },
+    "capability" => { adapters: %w[tamoz tamoz-code], tasks: ACTING_TASKS, modifiers: "all",
+                      seeds: "1,2,3,4", repeat: "2" },
+    "fidelity" => { adapters: %w[tamoz-code tamoz-code-small], tasks: "backlog,planted_constraint",
+                    modifiers: "clean,noise", seeds: "1,2,3,4", repeat: "2" },
+    "instructions" => { adapters: %w[tamoz-code tamoz-code-noguide], tasks: "guidance_convention,guidance_injection",
+                        modifiers: "clean", seeds: "1,2,3,4", repeat: "2" }
+  }.freeze
+
+  def deepseek_funded!
+    require "net/http"
+    key = ENV["DEEPSEEK_API_KEY"].to_s
+    key = File.read(".env")[/DEEPSEEK_API_KEY\s*=\s*(\S+)/, 1].to_s if key.empty? && File.exist?(".env")
+    uri = URI("https://api.deepseek.com/user/balance")
+    body = Net::HTTP.get(uri, { "Authorization" => "Bearer #{key}" })
+    return if body.include?('"is_available":true')
+
+    abort "DeepSeek reports no usable balance (#{body.strip[0, 160]}); top up before a real run"
+  end
+
+  # A real run spends money, so name the blocker for the SELECTED route before spending any. The
+# default route is OpenRouter while the DeepSeek direct account is unfunded; either can be chosen
+# with AGENTEVAL_PROVIDER / AGENTEVAL_MODEL.
+def agenteval_env_key(name)
+  key = ENV[name].to_s
+  return key unless key.empty?
+
+  dotenv = File.join(__dir__, ".env")
+  File.exist?(dotenv) ? File.read(dotenv)[/#{name}\s*=\s*(\S+)/, 1].to_s : ""
+end
+
+# /api/v1/models is PUBLIC and answers 200 for a bogus key, so it cannot guard anything.
+# /api/v1/key authenticates the credential, which is the only thing worth asserting here.
+def openrouter_reachable!
+  require "net/http"
+  key = agenteval_env_key("OPENROUTER_API_KEY")
+  abort "OPENROUTER_API_KEY is not set; export it or use AGENTEVAL_PROVIDER=deepseek" if key.empty?
+
+  uri = URI("https://openrouter.ai/api/v1/key")
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
+    request = Net::HTTP::Get.new(uri)
+    request["Authorization"] = "Bearer #{key}"
+    http.request(request)
+  end
+  return if response.code.to_i == 200
+
+  abort "OpenRouter refuses the configured key (HTTP #{response.code}: " \
+        "#{response.body.to_s.strip[0, 140]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
+rescue SocketError, Timeout::Error, SystemCallError => e
+  abort "OpenRouter is unreachable (#{e.class}); a real run needs the network"
+end
+
+def real_run_ready!
+  provider = ENV.fetch("AGENTEVAL_PROVIDER", "openrouter")
+  provider == "deepseek" ? deepseek_funded! : openrouter_reachable!
+end
+
+def harness_step(label, *command, **options)
+    sh(*command, **options) { |ok, status| puts "#{label}: #{ok ? 'ok' : "exit #{status.exitstatus}"}" }
+  end
+
+  def harness_arm(arm, spec)
+    stamp = Time.now.utc.strftime("%Y%m%d%H%M")
+    selection = ["--tasks", spec.fetch(:tasks), "--modifiers", spec.fetch(:modifiers), "--seeds", spec.fetch(:seeds)]
+    sh agenteval_ruby, BIN, "validate", *selection
+    outs = spec.fetch(:adapters).map { |adapter| harness_run(arm, adapter, stamp, selection, spec.fetch(:repeat)) }
+    harness_step("#{arm} compare", agenteval_ruby, BIN, "compare", *outs) if outs.length == 2
+  end
+
+  def harness_run(arm, adapter, stamp, selection, repeat)
+    name = "harness-#{arm}-#{adapter}-#{stamp}"
+    sessions = File.expand_path(File.join("agenteval", "sessions", name))
+    out = File.join(REPORTS, "#{name}.json")
+    harness_step("#{arm} #{adapter}", { "AGENTEVAL_SESSION_DIR" => sessions }, agenteval_ruby, BIN, "run",
+                 "--adapter", adapter, *selection, "--repeat", repeat,
+                 "--budget", ENV.fetch("AGENTEVAL_BUDGET", "900"), "--out", out)
+    return out if adapter == "tamoz"
+
+    FileUtils.mkdir_p(File.join(REPORTS, "traces"))
+    harness_step("#{arm} #{adapter} trace", agenteval_ruby, "script/context_trace",
+                 File.join(sessions, "sessions"), "--json", out: File.join(REPORTS, "traces", "#{name}.json"))
+    out
+  end
+
+  namespace :harness do
+    HARNESS_ARMS.each do |arm, spec|
+      desc "Coding-harness real run: #{arm} arm (#{spec[:adapters].join(' vs ')})"
+      task arm => :prove do
+        utf8_env!
+        real_run_ready!
+        harness_arm(arm, spec)
+      end
+    end
+
+    desc "All coding-harness real runs, in order"
+    task all: HARNESS_ARMS.keys
+  end
+
   desc "Promote the newest run to the committed baseline"
   task :baseline do
     latest = Dir[File.join(REPORTS, "*.json")].sort.last

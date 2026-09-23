@@ -1,15 +1,9 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
-$LOAD_PATH.unshift(*%w[
-  tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-tools
-  tamoz-observability tamoz-comms tamoz-approval tamoz-agent-kernel
-  tamoz-agent-capabilities tamoz-agent-session tamoz-agent-memory
-  tamoz-agent-healing tamoz-agent-improvement tamoz-agent-profile tamoz-agent
-  tamoz-sqlite tamoz-stream
-].map { |name| File.expand_path("../gems/#{name}/lib", __dir__) })
+# Every gem lib, so extracting a class into a new gem cannot stale-date this
+# script's load path.
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
 $LOAD_PATH.unshift(File.expand_path("../test", __dir__))
 require "tamoz/evals/runner"
 require "digest"

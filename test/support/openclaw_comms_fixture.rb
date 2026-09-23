@@ -385,7 +385,8 @@ module Tamoz
         def deploy_surface_and_bind_correspondent(runtime_dir, admission_mode)
           resolved = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_dir, env: {})
           @runtime = Tamoz::Agent::WorkerRuntime.open(
-            resolved, model_factory: @model_factory, routing: @routing
+            resolved, model_factory: @model_factory, routing: @routing,
+            harness: @routing == :work ? { surface: :chat } : {}
           )
           @store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
           @store.deploy_surface(descriptor(admission_mode).wire, now: @now)

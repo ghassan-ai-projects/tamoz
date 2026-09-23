@@ -29,7 +29,8 @@ module Tamoz
         artifact_store: nil,
         artifact_tenant: nil,
         child_task_runtime: nil,
-        routing: :legacy
+        routing: :legacy,
+        harness: {}
       }.freeze
 
       # The frozen construction options for a Session — every keyword, its
@@ -41,7 +42,7 @@ module Tamoz
         :approval_engine, :approval_session_id, :model_call_safety,
         :profile, :mcp, :profile_roles, :profile_budgets, :profile_narrowed,
         :memory, :memory_owner, :artifact_store, :artifact_tenant,
-        :child_task_runtime, :routing
+        :child_task_runtime, :routing, :harness
       ) do
         # Pipeline A: every durable session has exactly one policy owner. A
         # caller that supplies none gets the driver's bundled default (the
@@ -60,13 +61,13 @@ module Tamoz
           GRAPH_VERSION_BY_ROUTING.fetch(routing.to_sym)
         end
 
-        def node_arguments(transcript_reader:)
+        def node_arguments(transcript_reader:, previous_turn_reader: nil)
           {
             model:, toolbox:, max_plan_attempts:, max_repair_attempts:,
             approval_engine:, approval_session_id:, model_call_safety:,
             profile:, mcp:, profile_roles:, profile_budgets:, profile_narrowed:,
             memory:, memory_owner:, artifact_store:, artifact_tenant:,
-            child_task_runtime:, transcript_reader:
+            child_task_runtime:, transcript_reader:, harness:, previous_turn_reader:
           }
         end
 

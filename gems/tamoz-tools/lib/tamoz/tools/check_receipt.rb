@@ -44,6 +44,15 @@ module Tamoz
         TEXT
       end
 
+      # The model-facing rendering: a pass is its name and the output's last lines; a
+      # failure keeps everything (large output is spilled by the caller, never cut here).
+      def shaped(tail_lines: 5)
+        return to_s if failed?
+
+        tail = normalized_output(stdout).lines.last(tail_lines).join.rstrip
+        tail.empty? ? "Check #{name}: #{outcome} (passed)" : "Check #{name}: #{outcome} (passed)\n#{tail}"
+      end
+
       private
 
       def normalized_output(value)

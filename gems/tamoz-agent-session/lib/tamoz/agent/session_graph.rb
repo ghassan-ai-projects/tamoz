@@ -28,6 +28,8 @@ module Tamoz
 
       def declare_nodes(builder, nodes, version)
         node_on(builder, :intake) { |state, context| nodes.intake(state, context) }
+        return work_nodes(builder, nodes) if work?(version)
+
         node_on(builder, :route) { |state, context| nodes.route(state, context) } if routed?(version)
         adaptive_nodes(builder, nodes) if adaptive?(version)
         deliberation_nodes(builder, nodes)
@@ -38,6 +40,14 @@ module Tamoz
         node_on(builder, :adaptive_validate) { |state, context| nodes.adaptive_validate(state, context) }
         node_on(builder, :adaptive_dispatch) { |state, context| nodes.adaptive_dispatch(state, context) }
         node_on(builder, :adaptive_observe) { |state, context| nodes.adaptive_observe(state, context) }
+      end
+
+      def work_nodes(builder, nodes)
+        node_on(builder, :work_step) { |state, context| nodes.work_step(state, context) }
+        node_on(builder, :work_gate) { |state, context| nodes.work_gate(state, context) }
+        node_on(builder, :work_execute) { |state, context| nodes.work_execute(state, context) }
+        node_on(builder, :work_observe) { |state, context| nodes.work_observe(state, context) }
+        node_on(builder, :terminal) { |state, context| nodes.terminal(state, context) }
       end
 
       def deliberation_nodes(builder, nodes)
@@ -51,12 +61,14 @@ module Tamoz
 
       def declare_edges(builder, version)
         builder.edge Tamoz::START, :intake
-        builder.edge :intake, successor(version)
-        builder.edge :verify, :terminal
+        builder.edge :intake, successor(version) unless work?(version)
+        builder.edge :verify, :terminal unless work?(version)
         builder.edge :terminal, Tamoz::END
       end
 
       def declare_branches(builder, version)
+        return work_branches(builder) if work?(version)
+
         next_node_branch(builder, :route, :route_route, %i[step_gate deliberate terminal]) if routed?(version)
         next_node_branch(builder, :deliberate, :deliberate_route, %i[step_gate verify terminal])
         next_node_branch(builder, :step_gate, :step_gate_route, %i[step_execute evaluate terminal])
@@ -72,6 +84,15 @@ module Tamoz
                          %i[adaptive_observe terminal])
         next_node_branch(builder, :adaptive_observe, :adaptive_observe_route,
                          %i[adaptive_decide terminal])
+      end
+
+      def work_branches(builder)
+        next_node_branch(builder, :intake, :intake_route, %i[work_step terminal])
+        next_node_branch(builder, :work_step, :work_step_route, %i[work_step work_gate work_observe terminal])
+        next_node_branch(builder, :work_gate, :work_gate_route,
+                         %i[work_gate work_execute work_observe work_step terminal])
+        next_node_branch(builder, :work_execute, :work_execute_route, %i[work_gate terminal])
+        next_node_branch(builder, :work_observe, :work_observe_route, %i[work_step terminal])
       end
 
       # Every session branch routes the same way — on the next_node channel —
@@ -102,6 +123,10 @@ module Tamoz
 
       def adaptive?(version)
         version == GraphVersions::ADAPTIVE_GRAPH_VERSION
+      end
+
+      def work?(version)
+        version == GraphVersions::WORK_GRAPH_VERSION
       end
 
       # The state channels as literal lists (the codebase's data-list pattern,
@@ -138,7 +163,22 @@ module Tamoz
           builder.state :terminal
         end
 
+        WORK_APPEND_CHANNELS = %i[work_entries work_signatures work_trace].freeze
+        WORK_SCALAR_CHANNELS = {
+          work_pending: nil, work_cursor: 0, work_prepared: nil, work_plan: nil, work_plan_reviews: 0,
+          work_step_count: 0, work_series: nil, work_compactions: 0, work_resets: 0, work_mutated: false,
+          work_verified: false, work_checked: false, work_boundary: false, work_overflowed: false,
+          work_force_reduce: false, work_exhausted: nil, work_started_ms: 0, work_mutation_count: 0,
+          work_turn: nil, work_reminders: [], work_observations: nil
+        }.freeze
+
+        def work_channels(builder)
+          WORK_APPEND_CHANNELS.each { |name| builder.state name, reduce: :append, default: [] }
+          WORK_SCALAR_CHANNELS.each { |name, default| builder.state name, default: }
+        end
+
         def variant_channels(builder, version)
+          work_channels(builder) if SessionGraph.work?(version)
           builder.state :route if SessionGraph.routed?(version) || SessionGraph.adaptive?(version)
           add_compactions_channel(builder, version) unless version == GraphVersions::GRAPH_VERSION
           return unless SessionGraph.adaptive?(version)

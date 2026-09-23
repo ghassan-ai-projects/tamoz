@@ -12,7 +12,7 @@ require "stringio"
 require "tmpdir"
 
 ROOT = Pathname.new(File.expand_path("..", __dir__)).freeze
-GEM_ROOTS = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-approval tamoz-evals tamoz-evals-runner tamoz-mcp tamoz-mcp-websearch tamoz-scheduler tamoz-stream tamoz-comms tamoz-comms-gateway tamoz-telegram tamoz-observability tamoz-otel].to_h do |name|
+GEM_ROOTS = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-context-engine tamoz-harness tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-approval tamoz-evals tamoz-evals-runner tamoz-mcp tamoz-mcp-websearch tamoz-scheduler tamoz-stream tamoz-comms tamoz-comms-gateway tamoz-telegram tamoz-observability tamoz-otel].to_h do |name|
   [name, ROOT.join("gems", name)]
 end.freeze
 
@@ -30,6 +30,8 @@ SUBPROCESS_LIB_ARGS = (
 require "tamoz/cancellation"
 require "tamoz/concurrency"
 require "tamoz/core"
+require "tamoz/context_engine"
+require "tamoz/harness"
 require "tamoz/graph"
 require "tamoz/sqlite"
 require "tamoz/tools"

@@ -7,7 +7,7 @@ module Tamoz
     # and the one-shot runtime — must present the SAME question for the same
     # call, or grants and decision digests diverge between them.
     module RequestProjection
-      TOOLS_WITH_TARGETS = %w[read_file list_directory search_text apply_patch create_file].freeze
+      TOOLS_WITH_TARGETS = %w[read_file list_directory search_text glob apply_patch create_file].freeze
 
       module_function
 

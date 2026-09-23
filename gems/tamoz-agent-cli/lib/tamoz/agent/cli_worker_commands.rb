@@ -667,17 +667,21 @@ module Tamoz
         File.expand_path(candidate)
       end
 
+      def worker_routing(options)
+        return :work if options[:work_routing]
+        return :adaptive if options[:adaptive_routing]
+
+        options[:experimental_routing] ? :experimental : :legacy
+      end
+
       def with_worker_runtime(options)
         directory = RuntimeDirectory.resolve(path: options[:runtime_dir], env: @env)
         runtime = WorkerRuntime.open(
           directory,
           model_factory: ->(profile:) { build_model(options, profile:) },
           lease_ttl: lease_ttl,
-          routing: if options[:adaptive_routing]
-                     :adaptive
-                   else
-                     (options[:experimental_routing] ? :experimental : :legacy)
-                   end
+          routing: worker_routing(options),
+          harness: options[:work_routing] ? { surface: :chat, guidance_files: Array(options[:guidance]) } : {}
         )
         begin
           yield runtime

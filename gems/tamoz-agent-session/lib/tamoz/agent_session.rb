@@ -8,6 +8,7 @@ require "tamoz/agent_kernel"
 require "tamoz/agent_capabilities"
 require "tamoz/agent_memory"
 require "tamoz/agent_profile"
+require "tamoz/harness"
 
 require_relative "agent/session_gem/version"
 require_relative "agent/session_approval_wiring"

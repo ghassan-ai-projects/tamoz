@@ -9,6 +9,9 @@ the public contract is still moving.
 - **The reviewed change loop** — plan, review, approval, verified effect, and
   bounded repair. Nothing acts without a reviewed plan; no file changes without
   an approval for that exact diff.
+- **Coding tasks (`tamoz code`)** — a durable tool-calling work loop with a
+  context engine and a harness protocol, for tasks that take many steps. See
+  [guides/coding.md](guides/coding.md).
 - **Durable sessions** — threads survive crashes and resume from their last
   committed barrier instead of guessing.
 - **Trusted profiles** — project authority pinned outside the repository, with
@@ -37,6 +40,10 @@ the public contract is still moving.
   reliable unattended workflow: trigger → durable inbox → trusted authority →
   deliberation → governed capabilities → bounded execution → durable outcome →
   notification or approval request.
+- **Coding harness evaluation and file context** — the real-model evaluation
+  suite is built but has not been run. It runs over OpenRouter; only its cache
+  measurements need a funded DeepSeek direct route. File-context work (read deduplication, notes for files changed outside
+  the loop, a change ledger, operator rewind) is in progress.
 - **Observability completion** — the signal catalog and local journal are
   shipped; the full telemetry contract is still being closed.
 - **UX / latency work** — deterministic channel behavior and the

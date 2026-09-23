@@ -468,7 +468,7 @@ class AgentToolErrorRecoveryTest < Minitest::Test
         # The symlink's realpath lands outside the workspace, so the disclosed reason
         # is the containment violation, and the failing node is named.
         assert_match(/^Error: .*escapes the workspace root/, err.string)
-        assert_match(/node step_/, err.string)
+        assert_match(/\(node step_\w+, Tamoz::[\w:]+\)/, err.string)
         assert_match(/tamoz: session failed: .*escapes the workspace root/, err.string)
       end
     end

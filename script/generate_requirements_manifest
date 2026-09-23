@@ -692,6 +692,9 @@ EVIDENCE = {
   },
 
   # ---- CLI verbs (one behavioral assertion per verb; ledger gap 12) -------
+  "CLI-improve" => {test: "test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories"},
+  "CLI-code" => {test: "test/cli_code_test.rb#test_code_runs_the_work_loop_and_exits_zero_on_a_verified_change",
+               supporting: ["test/cli_code_test.rb#test_code_refuses_a_thread_that_is_not_a_work_thread"]},
   "CLI-ask" => {test: "test/agent_cli_test.rb#test_ask_creates_session_file"},
   "CLI-resume" => {test: "test/agent_cli_test.rb#test_resume_collects_interrupt_answers",
                    supporting: ["test/agent_cli_test.rb#test_resume_non_interactive_with_answer"]},

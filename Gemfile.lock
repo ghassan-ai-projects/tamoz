@@ -67,8 +67,10 @@ PATH
       tamoz-agent-memory (= 0.1.0.alpha.1)
       tamoz-agent-profile (= 0.1.0.alpha.1)
       tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-context-engine (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
+      tamoz-harness (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 
 PATH
@@ -124,6 +126,12 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-context-engine
+  specs:
+    tamoz-context-engine (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-core
   specs:
     tamoz-core (0.1.0.alpha.1)
@@ -165,6 +173,13 @@ PATH
       tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       zeitwerk (~> 2.6)
+
+PATH
+  remote: gems/tamoz-harness
+  specs:
+    tamoz-harness (0.1.0.alpha.1)
+      tamoz-context-engine (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-mcp-websearch
@@ -402,10 +417,12 @@ DEPENDENCIES
   tamoz-comms!
   tamoz-comms-gateway!
   tamoz-concurrency!
+  tamoz-context-engine!
   tamoz-core!
   tamoz-evals!
   tamoz-evals-runner!
   tamoz-graph!
+  tamoz-harness!
   tamoz-mcp!
   tamoz-mcp-websearch!
   tamoz-observability!
@@ -487,10 +504,12 @@ CHECKSUMS
   tamoz-comms (0.1.0.alpha.1)
   tamoz-comms-gateway (0.1.0.alpha.1)
   tamoz-concurrency (0.1.0.alpha.1)
+  tamoz-context-engine (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)
   tamoz-evals-runner (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)
+  tamoz-harness (0.1.0.alpha.1)
   tamoz-mcp (0.1.0.alpha.1)
   tamoz-mcp-websearch (0.1.0.alpha.1)
   tamoz-observability (0.1.0.alpha.1)

@@ -16,9 +16,9 @@ class AgentSkillsToolboxTest < Minitest::Test
   # no skills must be byte-identical to the pre-P9 surface, so every P8 profile
   # keeps validating.
   PRE_P9_READ_ONLY_DIGEST =
-    "sha256:4344901f2da07a1fc610d904894bca2dbe1c74bc48ed644ab259531cbd6aa91a"
+    "sha256:7429be62f8618e718993339b10b4d2f06445cfc488cc6de7442aac6afdc0d536"
   PRE_P9_READ_WRITE_DIGEST =
-    "sha256:70a08d53e3565bf626723751af2267910f4c2d197ccaea742ea283dce8732644"
+    "sha256:a63dd5d4a32382ffd296ca05eec0de3daad4357d8808da93fd7ae424f7670447"
 
   def setup
     @dir = Dir.mktmpdir("tamoz-skills-toolbox")
@@ -67,8 +67,8 @@ class AgentSkillsToolboxTest < Minitest::Test
     assert_equal PRE_P9_READ_ONLY_DIGEST, toolbox.catalog_digest
     assert_equal PRE_P9_READ_WRITE_DIGEST,
                  toolbox(allow_changes: true, checks: {"answer" => ["true"]}).catalog_digest
-    assert_equal %w[read_file list_directory search_text], toolbox.names
-    assert_equal %w[read_file list_directory search_text], toolbox.read_only_names
+    assert_equal %w[read_file list_directory search_text glob], toolbox.names
+    assert_equal %w[read_file list_directory search_text glob], toolbox.read_only_names
     assert_equal "none", toolbox.skill_epoch
   end
 
@@ -126,7 +126,7 @@ class AgentSkillsToolboxTest < Minitest::Test
     refute_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "load_skill"
     refute_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "read_skill_resource"
 
-    box = toolbox(skills: snapshot, allowed_tools: %w[read_file list_directory search_text])
+    box = toolbox(skills: snapshot, allowed_tools: %w[read_file list_directory search_text glob])
 
     refute_includes box.names, "load_skill"
     refute_includes box.names, "read_skill_resource"

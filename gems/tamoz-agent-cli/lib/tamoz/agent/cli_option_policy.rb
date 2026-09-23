@@ -15,7 +15,7 @@ module Tamoz
       # Capability-surface policy over the parsed options hash. Stateless: the
       # rules are the entire purpose of this class.
       class OptionPolicy
-        PROFILE_COMMANDS = %w[ask resume continue follow-up follow_up followup redirect profile].freeze
+        PROFILE_COMMANDS = %w[ask code resume continue follow-up follow_up followup redirect profile].freeze
         PROFILE_COMBINATION_ERROR = '--profile sets the capability surface; do not combine it with ' \
                                     '--allow-changes or --check'
 
