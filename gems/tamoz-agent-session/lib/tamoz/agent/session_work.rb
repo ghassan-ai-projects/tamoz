@@ -25,7 +25,8 @@ module Tamoz
                                 previous_answer: previous[:verification]&.fetch('answer'),
                                 updates: directive_updates(previous))
         base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
-                   work_started_ms: now_ms, work_plan: previous[:work_plan])
+                   # §3.1: the disk may change between turns, so a turn's ledger starts empty.
+                   work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan])
       end
 
       # rubocop:disable Metrics/AbcSize -- one model step and its four outcomes, in journal order

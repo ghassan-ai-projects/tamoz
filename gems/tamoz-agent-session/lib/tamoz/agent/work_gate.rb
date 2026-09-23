@@ -243,30 +243,26 @@ module Tamoz
                  "Error: #{@services.evidence.tool_error_message(outcome)}"
                end
         result(state, call, text, summary: summary(name, outcome))
-          .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil)
-          .merge(observation_update(state, name, call, outcome))
+          .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil,
+                                              **observation_update(state, name, call, outcome))
       end
 
-      # What the model was shown, and the bytes it saw. A read whose file moved inside the call
-      # records the reported sha with no retained bytes: the next edit then fails stale_file,
-      # which is the right outcome.
+      # The one seam outside this class that maintains the ledger: a read, a creation, or a
+      # mutation, each of which shows the model a version of a file.
       def observation_update(state, name, call, outcome)
         return {} unless outcome.status == :succeeded
-        return { work_observations: read_ledger(state, outcome).to_h } if name == 'read_file'
-        return { work_observations: write_ledger(state, call).to_h } if WorkContext::MUTATING_TOOLS.include?(name)
+        return {} unless %w[read_file create_file].include?(name) || WorkContext::MUTATING_TOOLS.include?(name)
 
-        {}
+        { work_observations: observed_ledger(state, name, call, outcome).to_h }
       end
 
-      def read_ledger(state, outcome)
-        observations(state).record_read(String(outcome.value.fetch('output')),
-                                        step: state.fetch(:work_step_count))
-      end
-
-      # The model saw the diff, and the file now holds the after-bytes.
-      def write_ledger(state, call)
-        observations(state).record_write(call.fetch('arguments').fetch('path'),
-                                         step: state.fetch(:work_step_count))
+      def observed_ledger(state, name, call, outcome)
+        step = state.fetch(:work_step_count)
+        case name
+        when 'read_file' then observations(state).record_read(String(outcome.value.fetch('output')), step:)
+        when 'create_file' then observations(state).record_create(call.fetch('arguments').fetch('path'), step:)
+        else observations(state).record_write(call.fetch('arguments').fetch('path'), step:)
+        end
       end
 
       def success_text(name, value, preview)

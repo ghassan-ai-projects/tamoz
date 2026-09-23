@@ -79,6 +79,26 @@ class WorkLoopObservationTest < Minitest::Test
     end
   end
 
+  # The discriminator the wrong-digest case cannot be: here the model's digest is the one it was
+  # told to use at read time — still the value a gate that re-derived from disk would use — and the
+  # file has moved since. Only the ledger refuses it.
+  def test_a_correct_but_stale_model_digest_is_still_refused
+    with_work_workspace(files: FILES) do |root, adapter|
+      empty = Digest::SHA256.hexdigest('')
+      stale = ['apply_patch', { 'path' => 'lib/value.rb', 'expected_sha256' => empty,
+                                'before' => 'VALUE = 1', 'after' => 'VALUE = 2' }]
+      turns = [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+               lambda { |_|
+                 File.write(File.join(root, 'lib/value.rb'), "VALUE = 1\n# who\n")
+                 { calls: [stale] }
+               }, { content: 'Stopped.' }]
+      outcome, model = run_turns(root, adapter, turns)
+
+      assert_match(/Error \[stale_file\]/, tool_results(model).last)
+      assert_empty outcome.state.fetch(:effect_intents, [])
+    end
+  end
+
   def test_an_unranged_read_gets_the_default_window_and_is_never_spilled
     with_work_workspace(files: long_file(5_000)) do |root, adapter|
       turns = [{ calls: [plan_call] }, { calls: [read_call('lib/long.rb')] }, { content: 'Stopped.' }]
@@ -94,6 +114,36 @@ class WorkLoopObservationTest < Minitest::Test
     end
   end
 
+  # The line window is not the only bound: one window of 200-character lines cannot fit
+  # `read.max_bytes`, and the byte cap is what cuts it.
+  def test_the_default_window_stays_inside_the_read_byte_budget
+    with_work_workspace(files: long_lines(5_000)) do |root, adapter|
+      turns = [{ calls: [plan_call] }, { calls: [read_call('lib/long.rb')] }, { content: 'Stopped.' }]
+      _, model = run_turns(root, adapter, turns)
+      result = tool_results(model).last
+
+      assert_operator result.bytesize, :<, Tamoz::Tools::ReadOperations::MAX_RANGE_BYTES + 512
+      assert_match(/truncated; continue with offset \d+/, result)
+    end
+  end
+
+  # A created file is not an observed one: `create_file` refuses to overwrite, so the model cannot
+  # have seen bytes it brought into existence in the same breath. Without this, one create_file
+  # followed by an apply_patch is a blind edit with extra steps.
+  def test_a_file_the_model_created_is_not_an_observation
+    with_work_workspace(files: FILES) do |root, adapter|
+      turns = [{ calls: [plan_call] },
+               { calls: [['create_file', { 'path' => 'lib/new.rb', 'content' => "VALUE = 0\n" }]] },
+               { calls: [['apply_patch', { 'path' => 'lib/new.rb', 'before' => 'VALUE = 0',
+                                           'after' => 'VALUE = 1' }]] },
+               { content: 'Stopped.' }]
+      _, model = run_turns(root, adapter, turns)
+
+      assert_match(%r{Error \[not_observed\]: read lib/new\.rb first}, tool_results(model).last)
+      assert_equal "VALUE = 0\n", File.read(File.join(root, 'lib/new.rb'))
+    end
+  end
+
   def test_a_pipeline_read_is_unchanged_by_the_work_window
     with_work_workspace(files: long_file(5_000)) do |root, _adapter|
       toolbox = Tamoz::Tools::Toolbox.new(root:, allow_changes: true, checks: {})
@@ -105,7 +155,9 @@ class WorkLoopObservationTest < Minitest::Test
     end
   end
 
-  def long_file(lines)
-    { 'lib/long.rb' => (1..lines).map { |number| "line #{number}\n" }.join }
-  end
+  def long_file(lines) = { 'lib/long.rb' => (1..lines).map { |number| "line #{number}\n" }.join }
+
+  # Same length, 200 characters a line: one window of these cannot fit the 50 KiB read budget, so
+  # the byte cap — not the line window — is what cuts the result.
+  def long_lines(lines) = { 'lib/long.rb' => (1..lines).map { |number| "#{'x' * 190} #{number}\n" }.join }
 end

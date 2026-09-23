@@ -343,8 +343,9 @@ RuboCop: the same 2 pre-existing offenses as the parent (`Metrics/BlockLength`, 
 line), none added.
 
 **Reviewer debt, recorded:** rounds 3–11 ran without the two independent reviewer subagents the
-round rule requires. Their findings are owed before FC3 is called done; this section is the
-resume note for that debt, not a claim it was discharged.
+round rule requires. R12's pair ran (reports below) but had to be stopped mid-flight: neither ran
+the suite, so every finding is static evidence with line numbers, and their "verified" sections say
+so. That is weaker than the round rule asks and is recorded as such, not as discharged.
 
 ### R12 — FC3, part one: the observation ledger and the gate that owns it
 
@@ -375,25 +376,64 @@ model's own). `test/cli_code_test.rb` and `test/tools_coding_surface_test.rb` ne
 treatment; `test/agent_durable_compatibility_spike_test.rb` moved its "future version" from 6 to 7.
 
 **Red at the parent (`5268d574`), before the implementation** — the test copied into a worktree at
-that commit, with only the fixtures' new `read_call` helper:
+that commit:
 
 ```
-5 failures, 0 errors
+6 runs, 11 assertions, 5 failures, 0 errors
 test_a_patch_to_a_file_never_read_is_refused_not_observed:
   Expected /Error \[not_observed\]: read lib\/value\.rb first/ to match
   "Applied lib/value.rb\nbefore_sha256: e13df8…\nafter_sha256: 3da6c4…\n\nDiff:\n…-VALUE = 1\n+VALUE = 2"
 ```
 
 A patch to a file the model had never opened was **Applied** — the blind edit this round closes.
-Only `test_a_pipeline_read_is_unchanged_by_the_work_window` passes at the parent, which is exactly
-what it is there for.
+Two of the six pass at the parent (lens B measured it): `test_a_pipeline_read_is_unchanged_by_the_work_window`
+(which is what it is there for) and `test_a_second_patch_after_a_first_needs_no_re_read`, which
+passes because the parent applied edits blindly — that is the defect, not a pass. A third caveat:
+the parent run needed `WorkLoopObservationTest#long_file` to shadow `test_helper.rb`'s top-level
+helper of the same name, or the window test fails on its **fixture** rather than on the property.
 
-**Evidence.** `work_loop_observation_test.rb` **6 runs / 25 assertions / 0 failures** (new);
+**Both reviewers' findings, and what was done with each.** (R12's pair is `0e1a08ec` (correctness)
+and `5b61483c` (evidence); both were stopped before they ran the suite, so their findings are static
+evidence and their "verified" sections were re-checked here by running the tests.)
+
+1. **BLOCKER — `create_file` then `apply_patch` was still a blind edit.** A created file's bytes were
+   recorded as an observation, so `pinned_digest` accepted them and the very next `apply_patch`
+   applied: one extra tool call walked around the whole round. Found by static trace, **confirmed by
+   the new test red at `82fec857`** — `Applied lib/new.rb … -VALUE = 0 +VALUE = 1` — and fixed by
+   `record_create` marking the entry `read: false` and `refusal` refusing any path a read has not
+   reported. `test_a_file_the_model_created_is_not_an_observation` now pins it. Commit `1403be0c`.
+2. **MAJOR — the ledger was not reset at turn start.** §3.1 says each turn starts empty (the disk may
+   change between turns); `SessionWork#intake` merged everything else and not `work_observations`, so
+   a resumed execution inherited the previous one's ledger. Fixed in `intake`.
+3. **MINOR — the wrong-digest test could not discriminate.** It sent a digest equal to the *current*
+   disk, so blanking, re-deriving and ledger-pinning all pass it. Added
+   `test_a_correct_but_stale_model_digest_is_still_refused`: the digest is the one the model was
+   told to use at read time, the file has moved since, and only the ledger refuses it.
+4. **MINOR — the byte cap was asserted nowhere.** F2's "inside `read.max_bytes`" was prose. Added
+   `test_the_default_window_stays_inside_the_read_byte_budget` (200-character lines, one window
+   cannot fit 50 KiB) and corrected the bar's wording below.
+5. **MINOR — `test_a_pipeline_read_is_unchanged_by_the_work_window` used a 78 KB fixture**, so it errored
+   on the whole-file cap when re-aimed. Reverted to the line fixture.
+6. **Recorded, not changed:** the ledger keeps only the newest version per path, which is the base
+   R13's outside-change diff will use; `record_write` returning `self` on an `absent` disk is
+   unreachable by construction; and the two stale surfaces (pre-approval `stale_file`, post-approval
+   `ToolPolicyError`) are D-8 as designed.
+
+**Evidence (re-run after the findings above; the first four numbers changed with them).**
+`work_loop_observation_test.rb` **9 runs / 36 assertions / 0 failures** (new);
 `work_loop_test.rb` 23 / 53 / 0; `cli_code_test.rb` 5 / 14 / 0; `tools_coding_surface_test.rb`
 14 / 40 / 0; `context_compaction_test.rb` 13 / 103 / 0; `harness_prompt_pack_test.rb` 6 / 10 / 0
 (the `editing.md` digest is re-pinned with the text). Gate: `rake test_fast`
 **263 files across 9 workers — all passed**; `rake quality:architecture` exit 0; RuboCop 0
 offenses in all 12 changed Ruby files (baseline for those files: 0).
+
+**F3's negative half is not the whole row.** The bar's F3/F4 rows are met for the *refusals and the
+pinning* — and a harness that refuses every `apply_patch` cannot pass them, because
+`test_a_second_patch_after_a_first_needs_no_re_read`, `test_the_ledger_pins_the_version_and_the_models_digest_is_ignored`
+and `test_a_correct_but_stale_model_digest_is_still_refused` all require a working apply path. But
+FILE-CONTEXT §6.2(c)'s **positive loop-level cell** (read → patch → check rewrites → one note →
+patch again → *solved*) does not exist yet; it is F14's hard requirement and lands in FC8. Until it
+is green, the refusal tests are necessary but not sufficient, and the bar now says so.
 
 **F3's repairable classification is the owner's answer**, recorded in R8: a moved file refuses with
 `stale_file` and the sentence "re-read the part you need", because the remedy is a fresh read —

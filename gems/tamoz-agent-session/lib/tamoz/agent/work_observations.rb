@@ -30,10 +30,7 @@ module Tamoz
 
         path = arguments.fetch('path')
         observed = @ledger[path]
-        unless observed
-          return Core::ToolCodes.render(Core::ToolCodes::NOT_OBSERVED,
-                                        "read #{path} first (a range around the edit is enough), then retry.")
-        end
+        return not_observed(path) unless observed&.fetch('read')
         return nil if observed.fetch('sha256') == disk_digest(path)
 
         Core::ToolCodes.render(Core::ToolCodes::STALE_FILE,
@@ -42,19 +39,32 @@ module Tamoz
 
       def pinned_digest(path) = @ledger.fetch(path).fetch('sha256')
 
+      # The ledger is read by the gate and by nothing else, so this stays public.
+      def not_observed(path)
+        Core::ToolCodes.render(Core::ToolCodes::NOT_OBSERVED,
+                               "read #{path} first (a range around the edit is enough), then retry.")
+      end
+
       # A read result carries the whole-file sha in its header, whole or ranged.
       def record_read(output, step:)
         match = READ_HEADER.match(output)
         return self unless match
 
-        move(match[:path], match[:sha], step:, range: read_range(output))
+        move(match[:path], match[:sha], step:, range: read_range(output), read: true)
       end
+
+      # A created file is not an observed one. `create_file` refuses to overwrite, so the model
+      # cannot have been shown bytes it brought into existence in the same breath — and without
+      # this, one create_file plus an apply_patch is a blind edit with extra steps. The version is
+      # still recorded (a later outside change reads `stale_file`), but `read: false` keeps the
+      # path unpatchable until a read reports it.
+      def record_create(path, step:) = move(path, disk_digest(path), step:, range: nil, read: false)
 
       def record_write(path, step:)
         digest = disk_digest(path)
         return self if digest == 'absent'
 
-        move(path, digest, step:, range: nil)
+        move(path, digest, step:, range: nil, read: true)
       end
 
       private
@@ -63,8 +73,9 @@ module Tamoz
         Tamoz::Tools::Toolbox.observe(@root.join(path)).fetch('state')
       end
 
-      def move(path, sha, step:, range:)
-        record = { 'sha256' => sha, 'ref' => retain(path, sha), 'step' => step, 'range' => range }.freeze
+      def move(path, sha, step:, range:, read:)
+        record = { 'sha256' => sha, 'ref' => retain(path, sha), 'step' => step, 'range' => range,
+                   'read' => read }.freeze
         self.class.new(@ledger.merge(path => record), root: @root, store: @store, scrub: @scrub)
       end
 
