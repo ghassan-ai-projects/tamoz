@@ -21,7 +21,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | `TAMOZ_PROFILE` / `TAMOZ_PROFILE_ID` | Default profile selection |
 | `TAMOZ_CONFIG_HOME` | Redirects the whole operator config tree (profiles, registries) |
 | `TAMOZ_LEASE_TTL` | Writer lease TTL in seconds, within `(0, 30]` |
-| `TAMOZ_CONTEXT_WINDOW` | Context window in tokens for the work loop, overriding the route's recorded window (a profile role's `context_window` wins over it) |
+| `TAMOZ_CONTEXT_WINDOW` | Context window in tokens for the work loop, overriding the route's recorded window (a profile role's `normalized_settings.context_window` wins over it) |
 | `TAMOZ_WEBSEARCH_GRANT` / `TAMOZ_WEBSEARCH_EGRESS` / `TAMOZ_WEBSEARCH_PROVIDER` | Governed websearch gates |
 
 Model precedence is CLI flag > `TAMOZ_MODEL`/`TAMOZ_PROVIDER` > the profile's

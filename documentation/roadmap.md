@@ -41,8 +41,8 @@ the public contract is still moving.
   deliberation → governed capabilities → bounded execution → durable outcome →
   notification or approval request.
 - **Coding harness evaluation and file context** — the real-model evaluation
-  suite is built but has not run yet (it waits on a funded DeepSeek direct
-  route). File-context work (read deduplication, notes for files changed outside
+  suite is built but has not been run. It runs over OpenRouter; only its cache
+  measurements need a funded DeepSeek direct route. File-context work (read deduplication, notes for files changed outside
   the loop, a change ledger, operator rewind) is in progress.
 - **Observability completion** — the signal catalog and local journal are
   shipped; the full telemetry contract is still being closed.

@@ -5,9 +5,10 @@ context engine that keeps the conversation inside the model's window, and a
 harness protocol that says how the model should work. For how to use it, see
 [guides/coding.md](../guides/coding.md).
 
-Source: the working record in `docs/coding-harness/` (the plan, the
-context-engine mapping, the prompt design, the eval plan, and the resume point in
-`STATUS.md`). If this summary and that record disagree, the record wins.
+Background: the repository-internal working record in `docs/coding-harness/`
+(the plan, the context-engine mapping, the prompt design, the eval plan and the
+resume point). The code is the authority. If this page and the code disagree,
+this page is wrong.
 
 Current version: `0.1.0.alpha.1` (pre-release).
 
@@ -28,8 +29,10 @@ system/user pair in JSON mode. Three things were added:
 
 Everything else is reused rather than rebuilt: the durable graph, the effect
 journal (`EffectDispatcher`), the approval engine and its policy YAML, the
-content-addressed artifact store, the sealed capability host, and the context
-controls (`/new`, `/reset`, `/compact`, `/usage`, `/context`).
+content-addressed artifact store, and the sealed capability host. Of the
+context controls, `/think` and `/verbose` become in-history updates on a work
+thread. `/new`, `/reset` and `/compact` only change what the first work turn of
+a thread sees.
 
 ## The work loop
 
@@ -39,16 +42,19 @@ The work route is a graph version of the durable session in
 ```mermaid
 flowchart LR
     I[intake] --> S[work_step]
+    I -->|nothing to do| T[terminal]
     S -->|tool calls| G[work_gate]
-    S -->|finished or budget spent| T[terminal]
+    S -->|finished, budget spent or model call failed| T
     S -->|window exceeded| O[work_observe]
     S -->|reply cut off| S
     G -->|approved| E[work_execute]
     G -->|refused or fed back| G
     G -->|message done| O
+    G -->|repeat guard stop| S
     E --> G
+    E -->|outcome unknown| T
     O --> S
-    O -->|budget or window exhausted| T
+    O -->|context pressure after two resets| T
 ```
 
 - **`work_step`** makes one model call through `SessionEffects#converse`. It is
@@ -61,22 +67,23 @@ flowchart LR
 - **`work_execute`** runs one approved call through the effect journal. A patch
   binds the file's SHA-256, so a crash after the write is reconciled from the
   file on disk and never applied twice.
-- **`work_observe`** measures the surface against the window, then spills,
-  prunes or compacts it (below) before the next step.
+- **`work_observe`** measures the surface against the window, then prunes,
+  compacts or resets it (below) before the next step.
 
 Each turn is a fresh execution. It opens a new surface seeded with the previous
 turn's answer, or its handoff note, and it carries the accepted plan forward.
 
 **Budgets.** `Harness::LoopPolicy` bounds a turn: 60 model calls, 120 tool calls,
-1800 seconds, and a repeat guard that reminds at 3 identical calls and stops at
-8. The graph's super-step limit stays as a backstop behind those budgets. The
+1800 seconds since the turn started or an approval was last answered, and a
+repeat guard that reminds at 3 identical calls and stops at 8. A turn also has at
+most three plan reviews and two context resets. The graph's super-step limit stays as a backstop behind those budgets. The
 work graph compiles its step limit from the loop policy's worst case per model
 call, so the budget ends a turn with a handoff before that backstop is reached.
 
 ## The context engine
 
-The method follows the DeepSeek Harness (`dsh`) context design, mapped onto
-Tamoz. The rule behind all of it: the provider's prompt cache is prefix-exact, so
+The method is adapted from the context design of DeepSeek Harness, a coding
+agent used here as the reference design. The rule behind all of it: the provider's prompt cache is prefix-exact, so
 the loop appends and never rewrites.
 
 | Mechanism | What it does |
@@ -84,14 +91,15 @@ the loop appends and never rewrites.
 | Frozen request header | System prompt and tool schemas fixed for a request series, with their digest recorded, so every request extends the previous one byte for byte |
 | Append-only surface | Every model-visible message is a logged entry. Tool calls and results are stored by reference, and checkpoints hold references only |
 | In-history updates | Operator changes (`/think`, `/verbose`, a plan re-read, a repeat reminder) are appended as update messages. The header is never edited |
-| Spill | A tool result over the inline limit (8 KB) goes to the artifact store. The model sees a head, a tail and a locator, and reads more with `recall_output` |
+| Spill | A tool result over the inline limit (8 KB) goes to the artifact store. The model sees a head, a tail and a locator, and reads more with `recall_output`. `read_file` results are never spilled; an unranged read returns an 800-line window |
 | Pruner | Old tool results outside the retained recent tail are cut to a head and a tail |
-| Compaction | At 80% of the window (at a plan boundary) or 92% (anywhere), the history is summarized, once per turn, into a fixed-section summary: plan state, files, errors, decisions, ruled out, exact strings, next step. This starts a new request series |
-| Handoff | Pressure after that one compaction, or a second overflow, ends the turn with a handoff note |
+| Compaction | At 80% of the window (at a plan boundary) or 92% (anywhere), the history is summarized, once per turn, into eleven fixed sections: primary request and intent, plan state, files and code, errors and fixes, decisions, ruled out, exact strings, offloaded artifacts, pending work, current work, next step. This starts a new request series |
+| Reset | Pressure after that one compaction replaces the history with a handoff note, and the turn continues. At most two resets per turn |
+| Handoff | Pressure after two resets ends the turn as `handed_off`. A second window overflow right after a reduction ends it as `work_failed` |
 | Token meter | Estimates tokens before a request and recalibrates from the provider's reported usage. It also records cache hits |
 
-The window comes from the profile role, then `TAMOZ_CONTEXT_WINDOW`, then the
-recorded route in `gems/tamoz-agent-kernel/data/model_windows.yml`. A route with
+The window comes from the profile role's `normalized_settings.context_window`,
+then `TAMOZ_CONTEXT_WINDOW`, then the recorded route in `gems/tamoz-agent-kernel/data/model_windows.yml`. A route with
 no recorded window is refused rather than guessed.
 
 ## The harness protocol
@@ -117,9 +125,11 @@ no recorded window is refused rather than guessed.
   graph, journal and approval engine. They cover crash replay, a patch never
   applied twice, compaction, overflow, the repeat guard, a cut-off reply, and a
   budget handoff. The `agenteval` packs and adapters for real-model runs are
-  built, and `rake agenteval:prove` validates them offline.
+  built, and `rake agenteval:prove` validates them offline. The real-model run
+  (`rake agenteval:harness:all`) uses OpenRouter by default and has not been run
+  yet.
 - **Real model:** one real end-to-end task, and one follow-up change, over
   OpenRouter DeepSeek v4.1 Flash on 2026-09-23 (see the guide's worked example).
   The runs exposed three harness defects and review found a fourth; all four
   are fixed, each with a test that fails without the fix. The real-model evaluation
-  suite has not run yet; see [limitations](../limitations.md#the-coding-harness-has-one-real-task-run-not-a-real-model-evaluation).
+  suite has not run; see [limitations](../limitations.md#the-coding-harness-has-one-real-task-run-not-a-real-model-evaluation).

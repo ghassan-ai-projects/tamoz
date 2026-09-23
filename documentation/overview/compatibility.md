@@ -21,7 +21,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 ### Gems and their runtime dependencies
 
-All twenty-seven gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ruby_version >= 3.3 < 5.0`. Each installs and runs with only its declared dependencies, proven per gem by an isolated install into its own `GEM_HOME`.
+All twenty-nine gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ruby_version >= 3.3 < 5.0`. Each installs and runs with only its declared dependencies, proven per gem by an isolated install into its own `GEM_HOME`.
 
 | Gem | Depends on |
 |---|---|

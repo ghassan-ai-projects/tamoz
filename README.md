@@ -42,8 +42,8 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
 | `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
-| `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-agent-session`, `tamoz-agent-capabilities`, `tamoz-comms-gateway`, `tamoz-cancellation`, `tamoz-concurrency` |
+| `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, runtime gems used by the selected runner |
 
@@ -61,9 +61,10 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
   that take many steps. The model finds and reads code, writes a plan that a
   second call reviews, edits through approved, digest-checked patches, and runs
   your configured checks. A context engine keeps the conversation inside the
-  model's window; budgets end a turn with a handoff instead of a loop. In its
-  first real run it built a working browser Game of Life, then changed it on
-  request ([guide](documentation/guides/coding.md)).
+  model's window; budgets end a turn with a handoff instead of a loop. After
+  three failed runs exposed harness defects (now fixed), it built a working
+  browser Game of Life with a real model, then changed it on request
+  ([guide](documentation/guides/coding.md)).
 - **Reviewed change loop.** Discovery reads, then a separately reviewed action
   plan, an exact diff shown before approval, a digest-bound atomic patch, and a
   configured verification command. A failed check becomes evidence for up to two

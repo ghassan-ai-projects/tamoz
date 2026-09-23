@@ -25,7 +25,8 @@ The coding work loop (`tamoz code`) manages the model's context window, so it
 needs the window size of the route it calls. The window is resolved in this
 order:
 
-1. The profile role's `context_window` setting.
+1. The profile role's `normalized_settings.context_window`, written as a string
+   (for example `context_window: "163840"`).
 2. The `TAMOZ_CONTEXT_WINDOW` environment variable.
 3. The route's recorded window in
    `gems/tamoz-agent-kernel/data/model_windows.yml`, keyed on `provider/model`.
@@ -48,5 +49,5 @@ checked):
 To add a route, read the window from the provider's model listing and record
 it with its `source` and `checked` date.
 
-Tool-calling conversations do not run through the witness gateway; the work loop
-refuses a gateway route.
+The work loop does not run through the stream episode path's witness gateway.
+OpenRouter, a gateway provider, is supported.

@@ -55,7 +55,7 @@ Work you are watching, against a session directory.
 | Subcommand | Purpose | Key options |
 |---|---|---|
 | `ask` | Start a new turn on a thread | `TASK` (positional) |
-| `code` | Start a coding turn in the durable tool-calling work loop; needs `--allow-changes` or a profile, and a known context window (profile role `context_window`, `TAMOZ_CONTEXT_WINDOW`, or the route's recorded window). See [the coding guide](../guides/coding.md) | `TASK` (positional) |
+| `code` | Start a coding turn in the durable tool-calling work loop; needs `--allow-changes` or a profile, and a known context window (profile role `normalized_settings.context_window`, `TAMOZ_CONTEXT_WINDOW`, or the route's recorded window). See [the coding guide](../guides/coding.md) | `TASK` (positional) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on | `THREAD`, `--answer ANSWER`, `--approval-profile NAME`, `--recover` |
 | `continue` | Drive a paused thread forward without new input | `THREAD` |
 | `list` | Show every thread in the session directory | |

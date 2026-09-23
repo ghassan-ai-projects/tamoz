@@ -134,7 +134,7 @@ The contracts stay separate because they have different failure semantics:
 
 ## Next reads
 
-- [gems.md](gems.md) — the 27-gem map and dependency chain
+- [gems.md](gems.md) — the 29-gem map and dependency chain
 - [data-model.md](data-model.md) — checkpoints, inbox, effects, leases in SQLite
 - [security-model.md](security-model.md) — the authority boundary
 - [../design/README.md](../design/README.md) — the design documents behind this stack
