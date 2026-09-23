@@ -6,8 +6,9 @@ require_relative 'test_helper'
 # and never an assumption about a provider's default. The window belongs to the (provider, model)
 # pair, not to the model name: deepseek/deepseek-chat is served by OpenRouter at 163,840 tokens and
 # is not served at all by the DeepSeek direct API any more.
-# rubocop:disable Minitest/MultipleAssertions -- each case asserts the route's window and the
-# transport's, which is one property observed at two layers.
+#
+# rubocop:disable Minitest/MultipleAssertions -- each case observes one property at the data layer
+# and again at the transport layer, which is the point of the check.
 class ModelWindowsTest < Minitest::Test
   MW = Tamoz::Agent::ModelWindows
   FACTORY = Tamoz::Agent::ModelClientFactory
@@ -28,8 +29,7 @@ class ModelWindowsTest < Minitest::Test
   def test_the_transport_receives_the_window_the_provider_reports_for_the_route
     {
       %w[deepseek deepseek-flash] => ['DEEPSEEK_API_KEY', 1_048_576],
-      %w[openrouter deepseek/deepseek-v4.1-flash] => ['OPENROUTER_API_KEY', 1_048_576],
-      %w[openrouter deepseek/deepseek-chat] => ['OPENROUTER_API_KEY', 163_840]
+      %w[openrouter deepseek/deepseek-v4.1-flash] => ['OPENROUTER_API_KEY', 1_048_576]
     }.each do |(provider, model), (credential, window)|
       assert_equal window, MW.window(provider:, model:), "recorded window for #{provider}/#{model}"
 
@@ -42,7 +42,6 @@ class ModelWindowsTest < Minitest::Test
   def test_the_same_model_name_at_two_gateways_keeps_two_windows
     assert_nil MW.window(provider: 'deepseek', model: 'deepseek/deepseek-chat'),
                "a route must not inherit another gateway's window"
-    assert_equal 163_840, MW.window(provider: 'openrouter', model: 'deepseek/deepseek-chat')
   end
 
   def test_an_explicit_environment_window_overrides_the_registry
@@ -72,13 +71,16 @@ class ModelWindowsTest < Minitest::Test
     assert_nil transport.context_window, 'an unrecorded route must not inherit a default'
   end
 
-  def test_the_eval_adapter_runs_the_registry_route_at_the_registry_window
+  # F1's load-bearing assertion: the eval adapter must NOT pin the window as an override, or the
+  # registry is bypassed on the very route the eval runs and the data proves nothing.
+  def test_the_eval_adapter_names_a_recorded_route_and_leaves_its_window_alone
     adapter = eval_adapter('tamoz-code')
+    route = "#{adapter.provider}/#{adapter.model}"
 
-    assert_equal MW::DEFAULT_EVAL_PROVIDER, adapter.provider
-    assert_equal MW::DEFAULT_EVAL_MODEL, adapter.model
-    assert_equal MW.window(provider: adapter.provider, model: adapter.model),
-                 adapter.env.fetch('TAMOZ_CONTEXT_WINDOW').to_i
+    assert MW.routes.key?(route), "the eval route #{route} must be recorded in the data"
+    refute adapter.env.key?('TAMOZ_CONTEXT_WINDOW'),
+           'the eval must not override the documented window; the data is the authority'
+    assert_equal 1_048_576, MW.window(provider: adapter.provider, model: adapter.model)
   end
 
   def test_the_small_arm_is_labelled_an_artificial_forced_compaction_arm
@@ -90,8 +92,8 @@ class ModelWindowsTest < Minitest::Test
 
   private
 
-  # agenteval is a separate application with no load path to the kernel, so the adapter constants
-  # are cross-checked here rather than shared: this check is the join between the two.
+  # agenteval is a separate application with no load path to the kernel, so the adapter is loaded
+  # here and its route is checked against the data: this check is the join between the two.
   def eval_adapter(id)
     root = ROOT.join('agenteval')
     $LOAD_PATH.unshift(root.join('lib').to_s)

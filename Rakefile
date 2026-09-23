@@ -613,16 +613,24 @@ def agenteval_env_key(name)
   File.exist?(dotenv) ? File.read(dotenv)[/#{name}\s*=\s*(\S+)/, 1].to_s : ""
 end
 
+# /api/v1/models is PUBLIC and answers 200 for a bogus key, so it cannot guard anything.
+# /api/v1/key authenticates the credential, which is the only thing worth asserting here.
 def openrouter_reachable!
   require "net/http"
   key = agenteval_env_key("OPENROUTER_API_KEY")
   abort "OPENROUTER_API_KEY is not set; export it or use AGENTEVAL_PROVIDER=deepseek" if key.empty?
 
-  body = Net::HTTP.get(URI("https://openrouter.ai/api/v1/models"), { "Authorization" => "Bearer #{key}" })
-  return if body.include?('"data"')
+  uri = URI("https://openrouter.ai/api/v1/key")
+  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
+    request = Net::HTTP::Get.new(uri)
+    request["Authorization"] = "Bearer #{key}"
+    http.request(request)
+  end
+  return if response.code.to_i == 200
 
-  abort "OpenRouter refuses the configured key (#{body.strip[0, 160]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
-rescue SocketError, Timeout::Error => e
+  abort "OpenRouter refuses the configured key (HTTP #{response.code}: " \
+        "#{response.body.to_s.strip[0, 140]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
+rescue SocketError, Timeout::Error, SystemCallError => e
   abort "OpenRouter is unreachable (#{e.class}); a real run needs the network"
 end
 

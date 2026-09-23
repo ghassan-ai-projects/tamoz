@@ -3,6 +3,7 @@
 require "digest"
 require "tamoz/agent/episode_model_transport"
 require "tamoz/agent/model_receipt"
+require "tamoz/agent/model_windows"
 require "tamoz/agent/providers"
 
 module Tamoz

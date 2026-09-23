@@ -10,12 +10,13 @@ module Agenteval
     # against the pinned data by test/model_windows_test.rb: https://openrouter.ai/api/v1/models
     # listed deepseek/deepseek-v4.1-flash at context_window 1048576 on 2026-09-23, and it carries
     # input_cache_read pricing, so the cache-hit predictions are measurable on this route.
+    # The route the real-model eval runs on. Its window is NOT repeated here: the kernel resolves
+    # it from `data/model_windows.yml`, which is the one authority for the number.
     DEFAULT_PROVIDER = "openrouter"
     DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
-    DEFAULT_WINDOW = 1_048_576
 
     def register(id:, label:, window: nil, guidance:)
-      window ||= ENV.fetch("AGENTEVAL_CONTEXT_WINDOW", DEFAULT_WINDOW).to_i
+      window = ENV["AGENTEVAL_CONTEXT_WINDOW"] if window.nil? && ENV.key?("AGENTEVAL_CONTEXT_WINDOW")
       tamoz_root = ENV.fetch("AGENTEVAL_TAMOZ_ROOT", File.expand_path("..", Agenteval::ROOT))
       Adapters.register(
         Adapter.new(
@@ -35,17 +36,19 @@ module Agenteval
     def provider_model = ENV.fetch("AGENTEVAL_MODEL", DEFAULT_MODEL)
 
     def environment(tamoz_root, window)
-      {
+      base = {
         # Both credentials travel: the run's provider decides which one the route needs.
         "DEEPSEEK_API_KEY" => credential(tamoz_root, "DEEPSEEK_API_KEY"),
         "OPENROUTER_API_KEY" => credential(tamoz_root, "OPENROUTER_API_KEY"),
         "TAMOZ_PROVIDER" => provider,
         "TAMOZ_MODEL" => provider_model,
-        "TAMOZ_CONTEXT_WINDOW" => window.to_s,
         "PATH" => ENV.fetch("PATH"), "HOME" => ENV.fetch("HOME"),
         "BUNDLE_GEMFILE" => File.join(tamoz_root, "Gemfile"),
         "RBENV_VERSION" => File.read(File.join(tamoz_root, ".ruby-version")).strip
       }.compact
+      # Only an explicit operator override travels; otherwise the route's documented window stands.
+      base["TAMOZ_CONTEXT_WINDOW"] = window.to_s unless window.nil?
+      base
     end
 
     def credential(tamoz_root, name)

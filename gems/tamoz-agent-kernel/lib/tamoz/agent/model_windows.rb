@@ -12,24 +12,15 @@ module Tamoz
     module ModelWindows
       DATA = File.expand_path('../../../data/model_windows.yml', __dir__)
 
-      # The route the real-model eval runs on while the DeepSeek direct account has no balance.
-      # Pinned here so the eval adapter and the data cannot drift apart.
-      DEFAULT_EVAL_PROVIDER = 'openrouter'
-      DEFAULT_EVAL_MODEL = 'deepseek/deepseek-v4.1-flash'
-
       class << self
         def routes = @routes ||= load_routes
 
         # The recorded window for a route, or nil when the route is not documented.
         def window(provider:, model:) = entry(provider:, model:)&.fetch('context_window', nil)
 
-        def max_output_tokens(provider:, model:) = entry(provider:, model:)&.fetch('max_output_tokens', nil)
-
         # Keyed on the pair: one model name can have a different window at each gateway, so a bare
         # model key would apply one provider's number to another provider's route.
         def entry(provider:, model:) = routes["#{provider}/#{model}"]
-
-        def eval_route = "#{DEFAULT_EVAL_PROVIDER}/#{DEFAULT_EVAL_MODEL}"
 
         private
 

@@ -9,6 +9,11 @@
 # that keeps a multi-hundred-megabyte corpus to a few seconds.
 require 'json'
 
+# A standalone instrument: one long survey method and several wide format calls are the shape of
+# reading a log, not production code. Acknowledged here rather than split for the linter.
+# rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/AbcSize
+# rubocop:disable Style/FormatStringToken, Style/MultilineBlockChain
+
 INTERESTING = %r{"type":"(?:request/context|compaction/start|compaction/prune|assistant/message|user/message|system/message|tool/result)"}
 
 # The highest session format generation in a directory. Older generations are superseded copies
@@ -23,7 +28,7 @@ def survey(path)
               prompt_tokens: 0, cached_tokens: 0, output: 0,
               instruction_messages: 0, instruction_changes: Hash.new(0),
               tool_results: 0, capped_results: 0 }
-              
+
   IO.popen(['zstd', '-dc', path]) do |stream|
     stream.each_line do |line|
       next unless line.match?(INTERESTING)
@@ -58,7 +63,7 @@ def instruction(session, event)
 
   session[:instruction_messages] += 1
   Array(source['changes']).each do |change|
-    label = "#{change['action']}#{source['baseline'] ? ' (baseline)' : ''}"
+    label = "#{change['action']}#{' (baseline)' if source['baseline']}"
     session[:instruction_changes][label] += 1
   end
 end
@@ -74,7 +79,6 @@ def tool_result(session, event)
 end
 
 def route(session, event)
-
   session[:route] ||= event.dig('data', 'model')
   session[:window] ||= event.dig('data', 'contextWindow')
 end
@@ -154,20 +158,22 @@ else
   end
   puts
   puts "surface replacements: #{replacements.empty? ? 'none' : replacements.map { |k, v| "#{k}=#{v}" }.join(', ')}"
-snapshots = sessions.map { |s| s[:runtime_snapshots] }.tally.sort.to_h
-puts "runtime-context snapshots appended: #{sessions.sum { |s| s[:runtime_snapshots] }}, " \
-     "cleared markers: #{sessions.sum { |s| s[:markers] }}, per-session: #{snapshots}"
-changes = sessions.each_with_object(Hash.new(0)) do |session, all|
-  session[:instruction_changes].each { |key, value| all[key] += value }
-end
-puts "instruction messages: #{sessions.sum { |s| s[:instruction_messages] }}, changes: #{changes.sort.to_h}"
-results = sessions.sum { |s| s[:tool_results] }
-capped = sessions.sum { |s| s[:capped_results] }
-puts format('tool results: %d, with a cap footer: %d (%.1f%%)', results, capped,
-            results.zero? ? 0 : capped * 100.0 / results)
+  snapshots = sessions.map { |s| s[:runtime_snapshots] }.tally.sort.to_h
+  puts "runtime-context snapshots appended: #{sessions.sum { |s| s[:runtime_snapshots] }}, " \
+       "cleared markers: #{sessions.sum { |s| s[:markers] }}, per-session: #{snapshots}"
+  changes = sessions.each_with_object(Hash.new(0)) do |session, all|
+    session[:instruction_changes].each { |key, value| all[key] += value }
+  end
+  puts "instruction messages: #{sessions.sum { |s| s[:instruction_messages] }}, changes: #{changes.sort.to_h}"
+  results = sessions.sum { |s| s[:tool_results] }
+  capped = sessions.sum { |s| s[:capped_results] }
+  puts format('tool results: %d, with a cap footer: %d (%.1f%%)', results, capped,
+              results.zero? ? 0 : capped * 100.0 / results)
   widest = sessions.select { |s| s[:window] }.max_by { |s| s[:max_prompt] }
   if widest
     puts "widest prompt: #{widest[:max_prompt]} (cache read #{widest[:max_cache_read]}, " \
          "uncached #{widest[:max_uncached]}) on #{widest[:route]} @ #{widest[:window]}"
   end
 end
+# rubocop:enable Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/AbcSize
+# rubocop:enable Style/FormatStringToken, Style/MultilineBlockChain

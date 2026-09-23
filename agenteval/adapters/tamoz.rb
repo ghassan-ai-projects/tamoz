@@ -21,14 +21,14 @@ module Agenteval
     Adapter.new(
       id: "tamoz",
       label: "Tamoz Agent",
-      model: ENV.fetch("AGENTEVAL_MODEL", "deepseek-chat"),
-      provider: ENV.fetch("AGENTEVAL_PROVIDER", "deepseek"),
+      model: ENV.fetch("AGENTEVAL_MODEL", "deepseek/deepseek-v4.1-flash"),
+      provider: ENV.fetch("AGENTEVAL_PROVIDER", "openrouter"),
       capabilities: %i[read_files edit_files create_files run_configured_check resume],
       approvals_auto_granted: true,
       env: {
         "DEEPSEEK_API_KEY" => api_key,
-        "TAMOZ_PROVIDER" => ENV.fetch("AGENTEVAL_PROVIDER", "deepseek"),
-        "TAMOZ_MODEL" => ENV.fetch("AGENTEVAL_MODEL", "deepseek-chat"),
+        "TAMOZ_PROVIDER" => ENV.fetch("AGENTEVAL_PROVIDER", "openrouter"),
+        "TAMOZ_MODEL" => ENV.fetch("AGENTEVAL_MODEL", "deepseek/deepseek-v4.1-flash"),
         "PATH" => ENV.fetch("PATH"),
         "HOME" => ENV.fetch("HOME"),
         # The agent runs with the workspace as its working directory, which is a temp dir

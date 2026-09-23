@@ -57,8 +57,8 @@ a scripted provider. Each asserts the correct target; if Tamoz falls short, it i
 | H-1 | Project `AGENTS.md` never appears in the header; it appears once in the body, inside its byte budget, with its digest. | `test/harness_instructions_test.rb` |
 | H-2 | An instruction inside `AGENTS.md`, a file, or a tool result that names a new tool, path or approval changes nothing on the surface or in the gate. | `test/harness_instructions_test.rb` |
 | H-3 | Every mutation reaches `step_gate`; an out-of-scope path forces a plan revision. | `test/work_loop_test.rb` |
-| H-4 | A "done" without a passing check after the last mutation is reported `done_unverified`. | `test/harness_finish_test.rb` |
-| H-5 | Repeat guard: reminders at 3 and 5, stop and hand off at 8. | `test/harness_loop_policy_test.rb` |
+| H-4 | A "done" without a passing check after the last mutation is reported `done_unverified`. | `test/harness_protocol_test.rb` |
+| H-5 | Repeat guard: reminders at 3 and 5, stop and hand off at 8. | `test/harness_protocol_test.rb` |
 | H-6 | Second pressure event → the unpinned history is replaced by the handoff note and the turn continues; after **two** resets the turn ends `handed_off`. No second compaction. | `test/work_loop_test.rb` |
 | H-7 | Prompt pack digests pinned; section order fixed. | `test/harness_prompt_pack_test.rb` |
 
@@ -333,8 +333,8 @@ rake agenteval:prove
 the OpenRouter key in `.env` returns `401 API key expired` (`GET https://openrouter.ai/api/v1/models`).
 `rake agenteval:harness:all` probes the selected route and aborts with the reason before spending a
 token; `AGENTEVAL_PROVIDER` / `AGENTEVAL_MODEL` select the route. **Nothing in this section has been
-executed**; it is the run plan. The *windows* were still verified — both `/models` listings are
-public and were read on 2026-09-23 (the OpenRouter call used no key).
+executed**; it is the run plan. The *windows* were still verified — the OpenRouter
+`/models` listing is public and the DeepSeek one was read with the account key, both on 2026-09-23.
 
 **Prerequisite FC8 must deliver first — the join key.** "Billed input tokens per solved task" is not
 computable today: `Agenteval::Result` carries scenario/adapter/trial/status/cost but **no session or

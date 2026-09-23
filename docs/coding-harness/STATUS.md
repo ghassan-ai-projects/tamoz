@@ -54,7 +54,7 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 |---|---|---|---|---|---|
 | R0 | Plan, goal, quality bar, eval plan; evidence and instrument | n/a (documents) | — | done | R0 |
 | R1 | FC1 window (pinned as data) · restore A3/A4 | recorded below | F1, A3, A4 | done | R1 |
-| R2 | FC2 contextual edit diff, read byte cap, stable error codes | pending | F2, F7 | pending | — |
+| R2 | R1 reviewer findings (F1 authority, the route guard, dead machinery); FC2 deferred | F1 test rewritten and green | F1 re-established | partial | R2 |
 | R3 | FC3 observation ledger, gate pinning, read window, dedup, outside-change notice | pending | F3, F4, F5, F6, F17 | pending | — |
 | R4 | FC7 superseded-read prune (after its producer) | pending | F12 | pending | — |
 | R5 | FC5 change ledger + diffstat · FC4 references + guidance digests/notice | pending | F9, F10 | pending | — |
@@ -101,6 +101,34 @@ $ bundle exec rubocop --cache-root .rubocop-cache <changed ruby files>
 Reviewers: the two R1 reviewers were launched against this change set before the commit; their
 reports had not landed when it was made. **Deviation from the round rule, recorded:** their
 findings are addressed in R2's commit, and R2 does not start until they are.
+
+
+
+### R2 — what landed, and what did not
+
+R1's reviewer pair found two high-severity defects in R1 itself, both fixed here:
+
+1. **F1 was not actually met.** The eval adapter pinned the window as `TAMOZ_CONTEXT_WINDOW` — the
+   *override* — so `ModelWindows.window` was bypassed on the eval route, and the test compared two
+   hand-maintained literals. The adapter no longer sets a window (only an explicit
+   `AGENTEVAL_CONTEXT_WINDOW` travels), and the test now asserts the adapter names a *recorded*
+   route, does not override it, and that the recorded value is the verified number. A degenerate
+   "keep two literals equal, fake the source" implementation no longer passes.
+2. **The real-run guard was vacuous.** It probed `/api/v1/models`, which is public and answers 200
+   for a bogus key. It now authenticates against `/api/v1/key` and branches on the HTTP status.
+
+Also: the duplicated eval route and the dead `max_output_tokens` / `eval_route` readers are gone
+("pin authority, never re-derive it"); `model_client_factory` requires what it uses; the paired
+`capability` arm now puts both adapters on one route; and the stale A3/A4, evidence-filename and
+table-row defects are corrected. New RuboCop offenses: none — `patch_preparation` 0 (parent 0),
+`dsh_context_survey` 15 → 1 (the remainder is the pre-existing long regex line).
+
+**FC2 was implemented and then reverted, deliberately.** `render_diff` gained three context lines
+either side of a hunk and `test/tools_coding_surface_test.rb` gained a green test for it
+(13 runs, 40 assertions), but five existing assertions in `test/agent_toolbox_test.rb` encode the
+**old** preview bytes and must be migrated to the new format first. Committing a red tree to claim
+F7 was not acceptable, so the change is reverted and R2 stops here. F2 and F7 stay open; the next
+round migrates those assertions and lands both.
 
 
 ## Verified against DSH, 2026-09-23

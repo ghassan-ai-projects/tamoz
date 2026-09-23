@@ -51,7 +51,8 @@ totals; the recorded run is stated with each figure and the shape is what matter
 
 | | |
 |---|---|
-| Surface replacements, whole corpus | **280**, every one from a compaction package: 249 tool-result prunes, 31 compaction checkpoints. None from staleness; none a rewrite of an earlier conversation message. |\n| Tool results, and how many hit a cap | 42,873 results; **1,830 (4.3%)** carried a cap footer — the rest entered whole |
+| Surface replacements, whole corpus | **280**, every one from a compaction package: 249 tool-result prunes, 31 compaction checkpoints. None from staleness; none a rewrite of an earlier conversation message. ||
+| Tool results, and how many hit a cap | 42,873 results; **1,830 (4.3%)** carried a cap footer — the rest entered whole |
 | Runtime-context snapshots appended | 797. "Earlier snapshots no longer apply" markers: **0**. Per session: 724 sessions have 1, 13 have 2, 11 have 3, 2 have 4, 1 has 6, 5 have none |
 | Widest prompt | 598,597 tokens: 596,480 cache reads and 2,117 uncached — 99.6% reuse at that step |
 

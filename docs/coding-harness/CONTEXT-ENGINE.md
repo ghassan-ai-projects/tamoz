@@ -63,7 +63,7 @@ where recency also gives it more weight (research M-1, loss mode "freshness").
 - **Tamoz:** `ContextEngine::RequestHeader` is the canonical JCS of `{model, system, tools}`.
   JCS already sorts object keys by code point, so ordering is locale-independent by
   construction. Sections are an array sorted by `[order, name.b]`. Tools are an array
-  sorted by `name.b`. `ContextEngine::Series.admit(header:, previous_digest:, declared:)` returns
+  sorted by `name.b`. `ContextEngine::Series.admit(header:, previous_digest:, resumed:, declared:)` returns
   `continue` or `start(reason)`; a `series` record lands on the surface log.
 - **Triggers:** first request (`initial`), resumed turn (`resume`, series continues
   if bytes are equal), header bytes changed (`change`), declared boundary after a
