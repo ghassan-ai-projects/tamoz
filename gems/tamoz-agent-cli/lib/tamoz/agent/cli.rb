@@ -403,7 +403,6 @@ module Tamoz
           cancellation: cancellation,
           emitter: emitter
         )
-        prompts = []
         # `@stream_error` is deliberately not reset here: the drain loop calls
         # `run_with_stream` once more after the failing run (to confirm nothing is
         # queued), and that empty poll must not erase the reason the operator just saw.
@@ -421,7 +420,7 @@ module Tamoz
         end
 
         begin
-          sink.each { |part| render_stream_part(part, options:, prompts:) }
+          sink.each { |part| render_stream_part(part, options:) }
         ensure
           sink.finish unless sink.finished?
           worker.join
@@ -429,14 +428,10 @@ module Tamoz
         worker.value
         raise Tamoz::Agent::Error, DURABLE_WORKER_FAILURE_MESSAGE if checkpoint_conflict
 
-        if prompts.any? && !options[:json]
-          prompts.each { |part| render_interrupt_prompt(part, session:, thread_id:) }
-        end
-
         outcome
       end
 
-      def render_stream_part(part, options:, prompts:)
+      def render_stream_part(part, options:)
         if options[:json]
           emit_event_envelope(part.type.to_s, part.data, part)
           return
@@ -451,34 +446,23 @@ module Tamoz
             ),
             json: options[:json]
           )
-        when :interrupt
-          prompts << part
         when :error
           @stream_error = error_summary(part.data)
           @err.puts "Error: #{@stream_error}"
         end
       end
 
-      # An `:error` stream part carries graph/node/task_id/error_class/category/
-      # safe_message. It has never carried a "message" key, so reading one produced a
-      # blank line. Fall through every key that can name the failure so the operator is
-      # never told only that something went wrong.
+      # The error class names a failure whose safe message is generic.
       def error_summary(data)
         reason = data["safe_message"].to_s.strip
-        reason = data["error_class"].to_s.strip if reason.empty?
         reason = "the session failed" if reason.empty?
         node = data["node"].to_s.strip
-        node.empty? ? reason : "#{reason} (node #{node})"
+        where = [node.empty? ? nil : "node #{node}", data["error_class"].to_s.strip].reject { _1.nil? || _1.empty? }
+        where.empty? ? reason : "#{reason} (#{where.join(", ")})"
       end
 
-      def render_interrupt_prompt(part, session:, thread_id:)
-        view = session.view(thread: thread_id)
-        interrupt = view.interrupts.find do |candidate|
-          candidate.task_id == part.data["task_id"] && candidate.call_index == part.data["call_index"]
-        end
-        return unless interrupt
-
-        descriptor = interrupt.descriptor
+      # Shown when no prompt will ask; an interactive prompt shows the descriptor itself.
+      def render_interrupt_prompt(descriptor)
         case descriptor["kind"]
         when "approve_tool"
           @err.puts "Approval required for #{descriptor["tool"]}:"
@@ -531,6 +515,7 @@ module Tamoz
 
       def answer_for(interrupt, options:, resume_options:)
         descriptor = interrupt.descriptor
+        render_interrupt_prompt(descriptor) if (resume_options[:answer] || options[:non_interactive]) && !options[:json]
         return map_answer(descriptor["kind"], resume_options[:answer]) if resume_options[:answer]
         return nil if options[:non_interactive]
 

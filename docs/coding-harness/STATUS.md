@@ -33,6 +33,40 @@ Resume point for any session. Updated 2026-09-23.
    need the funded DeepSeek direct route, which is where the deployed 1M-token parity figures
    were measured.
 
+**First real end-to-end task (2026-09-23): delivered.** `tamoz code` on OpenRouter
+`deepseek/deepseek-v4.1-flash`, in an empty git workspace, with `--check 'test=node test.js'`, was
+asked to build Conway's Game of Life in plain HTML/CSS/JS with a Node test. Run 4 finished
+`Verification: satisfied`, exit 0: 36 work-step model calls plus 2 plan reviews, and 30 tool calls.
+Four files were created, and the check passed after the last change. Checked by hand in a real
+browser: toggling cells, Step (a blinker oscillates), Clear, Random, and Start/Stop all work, with
+no console errors. One cosmetic gap: the canvas kept its height when it narrowed, so cells
+stretched.
+
+A follow-up modification in the same workspace (`mod1`, a new thread) was delivered first time:
+22 model calls, `Verification: satisfied`. The task was a wrap-edges checkbox (`step(grid, { wrap:
+true })`), a live speed slider, the stretched-cells bug described only by its symptom, and a
+wrapped-glider test. Tamoz found the cause (an inline `style.height` overriding the stylesheet).
+Checked in a browser: cells are square at 546px wide; unwrapped, an edge blinker loses a cell;
+wrapped, it crosses the seam; and the slider changes the rate mid-run (16 → 118 generations per
+2s).
+
+Runs 1–3 failed on harness defects. Each is fixed with a test that was red at the parent:
+
+1. A model answer containing `—` crashed `work_step` with `UnsupportedValueError`. `JCS.parse`
+   kept the ASCII-8BIT encoding of HTTP bodies, and the state codec refuses binary strings. Fixed
+   in `Tamoz::Core::JCS` (scan bytes, return UTF-8 strings).
+2. Every approval preview printed twice in interactive runs: once from the stream's interrupt
+   render and once from the prompt adapter. Now `answer_for` shows it once. The CLI failure line
+   now also names the error class, e.g. `(node work_step, Tamoz::UnsupportedValueError)`; before,
+   it gave only the generic message and the node.
+3. A 41-call turn raised `RecursionLimitError`. The graph's global 200-super-step backstop sits
+   below what the default loop budget (60 model / 120 tool calls) needs. The work graph now
+   compiles with a step limit derived from its loop policy: the worst case per model call (an
+   overflow retry and a full message of eight calls) times `max_model_calls`.
+4. Found by review, not yet hit live: a reply cut off at the token limit with no tool calls
+   routed `work_step` to itself, a target the graph did not declare (`InvalidUpdateError`). The
+   route now declares it.
+
 `rake agenteval:harness:all` checks the selected route and aborts with the reason before spending
 anything; `AGENTEVAL_PROVIDER=deepseek AGENTEVAL_MODEL=deepseek-flash` switches routes once
 either is unblocked. Nothing in FC1–FC8 depends on a funded account.
@@ -71,6 +105,10 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
    behavioral counter identical, red at `a37abc26`. **Repaired in R11** with the attribution in
    the existing comment block (verified: the test passes at `743aeeb3`, the branch point before
    `a37abc26`, on the old pin).
+6. **`script_context_bootstrap_test` is red under `bundle exec`, so under `rake ci`.** Found
+   2026-09-23 and red at `ea3f803e`. Bundler already puts every gem's lib on the load path, so the
+   "stripped" script loads `tamoz/…` anyway and fails later on `support/benchmark_families`; the
+   assertion expects the `tamoz/` load error. Green with plain `ruby -Itest`. **Open.**
 
 | Round | Packages | Red-at-parent proof | F rows → met | State | Commit |
 |---|---|---|---|---|---|

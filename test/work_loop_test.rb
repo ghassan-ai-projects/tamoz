@@ -97,6 +97,31 @@ class WorkLoopTest < Minitest::Test
     end
   end
 
+  def test_a_long_turn_ends_on_its_loop_budget_not_the_graph_step_limit
+    previous = Tamoz.configuration.recursion_limit
+    Tamoz.configure { |config| config.recursion_limit = 10 }
+    files = (0...8).to_h { |index| ["lib/f#{index}.rb", "F#{index} = 1\n"] }
+    with_work_workspace(files:) do |root, adapter|
+      reads = (0...8).each_slice(2).map { |pair| { calls: pair.map { |index| read_call("lib/f#{index}.rb") } } }
+      outcome, = run_turns(root, adapter, reads, harness: { loop_policy: { max_model_calls: 4, max_tool_calls: 8 } })
+
+      assert_equal 'handed_off', outcome.state.fetch(:terminal_reason)
+      assert_equal ['model_call_budget'], outcome.state.fetch(:verification).fetch('evidence')
+    end
+  ensure
+    Tamoz.configure { |config| config.recursion_limit = previous }
+  end
+
+  def test_a_reply_cut_off_at_the_token_limit_asks_the_model_to_continue
+    with_work_workspace(files: FILES) do |root, adapter|
+      turns = [{ content: 'The answer is', finish_reason: 'length' }, { content: 'Done.' }]
+      outcome, model = run_turns(root, adapter, turns)
+
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+      assert_equal 2, model.requests.length
+    end
+  end
+
   def test_the_header_is_frozen_and_every_request_extends_the_previous_one
     with_work_workspace(files: FILES) do |root, adapter|
       turns = [{ calls: [plan_call] }, { calls: [['read_file', { 'path' => 'lib/value.rb' }]] },

@@ -53,6 +53,7 @@ module Tamoz
       include SessionContextControls
 
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
+      WORK_STEP_HEADROOM = 20
       ROUTINGS = %i[legacy experimental adaptive work].freeze
       GRAPH_VERSION_BY_ROUTING = {
         legacy: GraphVersions::COMPACTION_GRAPH_VERSION,
@@ -91,8 +92,8 @@ module Tamoz
         end
         @nodes_by_version = build_nodes(options.node_arguments(transcript_reader:, previous_turn_reader:))
         @definitions = build_definitions(@nodes_by_version)
-        @apps = @definitions.transform_values do |definition|
-          definition.compile(checkpointer: options.checkpointer)
+        @apps = @definitions.to_h do |version, definition|
+          [version, definition.compile(checkpointer: options.checkpointer, **graph_limits(version, options.harness))]
         end.freeze
         @definition = @definitions.fetch(@default_graph_version)
         @app = @apps.fetch(@default_graph_version)
@@ -128,6 +129,17 @@ module Tamoz
         end.freeze
       end
       private :build_definitions
+
+      # The loop budget, not the graph backstop, must end a work turn. Worst case per model call: an
+      # overflow retry, the step, a full message of gated and executed calls, the closing gate, observe.
+      def graph_limits(version, harness)
+        return {} unless version == GraphVersions::WORK_GRAPH_VERSION
+
+        policy = WorkContext::Settings.from(harness).loop_policy
+        steps = ((5 + (2 * Harness::ToolCalls::MAX_PER_STEP)) * policy.max_model_calls) + WORK_STEP_HEADROOM
+        { limits: Graph::Limits.new(max_steps: [Tamoz.configuration.recursion_limit, steps].max) }
+      end
+      private :graph_limits
 
       def nodes_for_default_graph
         @nodes_by_version.fetch(@default_graph_version)

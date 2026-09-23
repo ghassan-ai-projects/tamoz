@@ -88,7 +88,7 @@ module Tamoz
 
       def work_branches(builder)
         next_node_branch(builder, :intake, :intake_route, %i[work_step terminal])
-        next_node_branch(builder, :work_step, :work_step_route, %i[work_gate work_observe terminal])
+        next_node_branch(builder, :work_step, :work_step_route, %i[work_step work_gate work_observe terminal])
         next_node_branch(builder, :work_gate, :work_gate_route,
                          %i[work_gate work_execute work_observe work_step terminal])
         next_node_branch(builder, :work_execute, :work_execute_route, %i[work_gate terminal])

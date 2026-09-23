@@ -111,6 +111,16 @@ class CoreJcsVectorsTest < Minitest::Test
     assert_raises(Tamoz::Core::JCS::Error) { Tamoz::Core.jcs_json("{\"k\":\"a\x01b\"}") }
   end
 
+  # An HTTP body arrives as ASCII-8BIT; the state codec refuses binary strings.
+  def test_strings_parsed_from_binary_bytes_are_utf8
+    raw = "{\"a\":\"caf\u00e9 \u2014 \\u00e9\"}".b
+    value = Tamoz::Core.parse_json_strict(raw)
+
+    assert_equal "caf\u00e9 \u2014 \u00e9", value.fetch("a")
+    assert_equal Encoding::UTF_8, value.fetch("a").encoding
+    assert_equal Encoding::UTF_8, value.keys.first.encoding
+  end
+
   def test_nesting_depth_is_bounded
     deep = "[" * 600 + "]" * 600
     assert_raises(Tamoz::Core::JCS::Error) { Tamoz::Core.jcs_json(deep) }

@@ -59,7 +59,7 @@ module Tamoz
           raise Error, "document is not valid UTF-8"
         end
 
-        scanner = Scanner.new(raw)
+        scanner = Scanner.new(raw.b)
         value = scanner.parse_value
         scanner.eof!
         value
@@ -362,17 +362,17 @@ module Tamoz
 
         def parse_string
           @pos += 1
-          out = +""
+          out = String.new(encoding: Encoding::BINARY)
           loop do
             raise Error, "unterminated string" if @pos >= @raw.length
 
             char = @raw[@pos]
             if char == '"'
               @pos += 1
-              return out
+              return out.force_encoding(Encoding::UTF_8)
             elsif char == "\\"
               @pos += 1
-              out << parse_escape
+              out << parse_escape.b
             else
               if char.ord < 0x20
                 raise Error, "unescaped control character in string at #{@pos}"

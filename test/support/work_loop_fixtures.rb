@@ -88,8 +88,9 @@ module WorkLoopFixtures
       calls = Array(turn[:calls]).each_with_index.map do |(name, arguments), index|
         { 'id' => "call_#{@requests.length}_#{index}", 'name' => name, 'arguments' => JSON.generate(arguments) }
       end
+      finish_reason = turn.fetch(:finish_reason) { calls.empty? ? 'stop' : 'tool_calls' }
       Tamoz::Agent::EpisodeModelTransport::Conversation.new(
-        content: turn.fetch(:content, ''), tool_calls: calls, finish_reason: calls.empty? ? 'stop' : 'tool_calls',
+        content: turn.fetch(:content, ''), tool_calls: calls, finish_reason:,
         usage: { 'prompt_tokens' => Tamoz::Core.jcs(messages).bytesize / 4, 'completion_tokens' => 5 },
         request_digest: request_digest(bytes), response_digest: request_digest(JSON.generate(turn.to_s)),
         settings_digest: DIGEST, provider_configuration_digest: DIGEST

@@ -27,3 +27,9 @@ harness that scores an agent.
   absent, never zero.
 - **Separate "never acted" from "acted and failed."** One `failed` bucket hid that 28 of 28
   failures were a single abort and 8 of the "solves" were the same abort.
+- **A scripted loop is not a working loop; run one real task before claiming it.** The work
+  loop passed every scripted test, yet its first real `tamoz code` run (a Game of Life, over
+  OpenRouter) hit three defects no fake could: a model answer with `—` crashed the work step
+  (HTTP bodies are ASCII-8BIT, the JSON parser kept them binary, the state codec refused them), every approval preview
+  printed twice, and a 41-call turn hit the graph's 200-step backstop before the loop's own
+  60-call budget could hand off. Fakes answer in ASCII, in few steps, without a terminal.
