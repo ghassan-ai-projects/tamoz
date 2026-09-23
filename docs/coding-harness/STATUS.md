@@ -23,10 +23,15 @@ Resume point for any session. Updated 2026-09-23.
 1. **DeepSeek direct is unfunded.** `GET https://api.deepseek.com/user/balance` returns
    `is_available: false` (`total_balance: -0.00`). The key is valid and `deepseek-flash` /
    `deepseek-v4-pro` are served at a documented 1,048,576-token window.
-2. **OpenRouter's key is expired.** `GET https://openrouter.ai/api/v1/models` with the key from
-   `.env` returns `401 API key expired`. The public listing (no key) still gives the windows
-   recorded in `gems/tamoz-agent-kernel/data/model_windows.yml`, so FC1's data is verified even
-   though a call is not possible.
+2. **OpenRouter works, but it cannot price the cache.** The `.env` key (renewed by the owner)
+   authenticates against `GET https://openrouter.ai/api/v1/key` (HTTP 200, `limit_remaining`
+   4.998…), tool calls work, and usage comes back OpenAI-shaped (`prompt_tokens`,
+   `completion_tokens`, `prompt_tokens_details.cached_tokens`, `cost`). But
+   **`cached_tokens` is 0 on two byte-identical requests** and the second call costs ~2.15× the
+   first, so this route never reads a cached prefix. It is usable for correctness and for
+   non-cache cost/step comparisons; P1/P2 (the cache-hit and cache-adjusted-cost predictions)
+   need the funded DeepSeek direct route, which is where the deployed 1M-token parity figures
+   were measured.
 
 `rake agenteval:harness:all` checks the selected route and aborts with the reason before spending
 anything; `AGENTEVAL_PROVIDER=deepseek AGENTEVAL_MODEL=deepseek-flash` switches routes once
@@ -37,18 +42,35 @@ Mirrors GOAL.md's authoritative table. A round is "done" when: its tests were **
 commit** (sha and failure output recorded here), the round's gates pass, both reviewers' findings are
 addressed or recorded, and its commit exists. "A commit exists" alone is not done.
 
-**Known-red prerequisites (both pre-existing; neither is caused by phase 2).**
+**Known-red prerequisites (all pre-existing; none caused by phase 2).**
 
 1. **`stream:proto:check` cannot run on this host.** `grpc-tools` 1.83.0 ships only
    `x86_64-macos` / `x86_64-linux` protoc binaries; this host is `arm64`, so the exec dies with
    `Errno::EBADARCH`. Everything before it in `rake ci` passes. Rounds run the exact substituted
-   gate in GOAL.md §Loop. No phase-2 change touches `tamoz-stream`.
-2. **`test/packaging_test.rb` is red (A3, A4).** The scorecard install list in
-   `test/packaging_test.rb:93` names neither phase-1 gem, so `tamoz-agent-session`'s declared
-   dependency on `tamoz-harness` cannot resolve in the isolated `GEM_HOME`:
-   `Could not find 'tamoz-harness' (= 0.1.0.alpha.1) among 114 total gem(s)`. This is a **phase-1
-   regression** that `rake ci` never exposed because packaging is in `SERIAL_TESTS`. R1 fixes it and
-   A3/A4 flip back to met. Until then, QUALITY_BAR's A3/A4 read "not met".
+   gate in GOAL.md §Loop. No phase-2 change touches `tamoz-stream`. **Open** (host limitation).
+2. **`test/packaging_test.rb` was red (A3, A4).** The scorecard install list in
+   `test/packaging_test.rb:93` named neither phase-1 gem, so `tamoz-agent-session`'s declared
+   dependency on `tamoz-harness` could not resolve in the isolated `GEM_HOME`:
+   `Could not find 'tamoz-harness' (= 0.1.0.alpha.1) among 114 total gem(s)`. A **phase-1
+   regression** that `rake ci` never exposed because packaging is in `SERIAL_TESTS`. **Repaired
+   in R1** (15 runs, 636 assertions, 0 failures); A3/A4 read met.
+3. **The pinned requirements manifest was red.** `script/generate_requirements_manifest` refused
+   to run at all, then (in R10) two phase-1 CLI rows, `CLI-code` and `CLI-improve`, turned out to
+   have release-blocking rows with no `EVIDENCE` entry. **Repaired in R10**:
+   `test/requirements_manifest_test.rb` 11 runs, 3126 assertions, 0 failures.
+4. **The benchmark scripts hand-maintained a gem subset.** `script/benchmark_holdout`,
+   `benchmark_run` and `benchmark_release` each listed gem lib dirs by hand and none named the
+   phase-1 gems, so all three died on `cannot load such file -- tamoz/harness`
+   (`benchmark_holdout_test`: 5 failures. Red at `a37abc26`, the phase-1 parent). Invisible to
+   `rake ci` twice over: the test is in `SLOW_TESTS`, and the tests load the scripts in-process
+   where `test_helper` has already installed every gem. **Repaired in R11**; the three lists
+   became one `gems/*/lib` glob and `test/script_context_bootstrap_test.rb` now proves the
+   property in a bare child process.
+5. **The smoke-scorecard pin was stale.** `test/agent_scorecard_test.rb` pinned
+   `model_input_bytes` at 286,846 while the run produced 305,867 — prompt bytes only, every
+   behavioral counter identical, red at `a37abc26`. **Repaired in R11** with the attribution in
+   the existing comment block (verified: the test passes at `743aeeb3`, the branch point before
+   `a37abc26`, on the old pin).
 
 | Round | Packages | Red-at-parent proof | F rows → met | State | Commit |
 |---|---|---|---|---|---|
@@ -57,6 +79,8 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 | R2 | R1 reviewer findings; FC2 deferred | recorded | F1 re-established | done | R2 |
 | R7 | FC2/F7: the patch preview carries three context lines either side of a hunk | five assertions migrated | F7 | done | R7 |
 | R9 | FC2 (tools half): the ranged-read byte budget | suite green | F2 (part) | partial | R9 |
+| R10 | The pinned requirements manifest (known-red 3) | generator refusal recorded | — | done | R10 |
+| R11 | The two remaining phase-1 regressions in the slow/serial lane (known-red 4, 5) | recorded below | — | done | R11 |
 | R3 | FC3 observation ledger, gate pinning, read window, dedup, outside-change notice | pending | F3, F4, F5, F6, F17 | pending | — |
 | R4 | FC7 superseded-read prune (after its producer) | pending | F12 | pending | — |
 | R5 | FC5 change ledger + diffstat · FC4 references + guidance digests/notice | pending | F9, F10 | pending | — |
@@ -268,6 +292,55 @@ both changed files.
 
 **Still open in FC2:** the `not_observed` / `stale_file` codes, blocked on the classification
 decision recorded in R8.
+
+
+### R10 — the pinned requirements manifest (known-red 3)
+
+The generator's refusal was real but not the whole story. Once `CLI-code` and `CLI-improve` had
+their `EVIDENCE` entries (both verbs already had passing tests; only the generator's map was
+missing them), `script/generate_requirements_manifest --accept` regenerated
+`docs/requirements-manifest.json`, `docs/requirements-audit.json` and
+`docs/REQUIREMENTS_AUDIT.md`. Evidence: `test/requirements_manifest_test.rb` **11 runs, 3126
+assertions, 0 failures** (from 3 failures). Commit `d7b52282`.
+
+### R11 — the last two phase-1 regressions (known-red 4, 5)
+
+Both were red at `a37abc26`, phase 1's work-loop commit, and both were invisible to `rake ci`:
+the affected tests are in `SLOW_TESTS` / `SERIAL_TESTS`, and the script one is additionally
+masked by the test process's own load path. Neither was caused by a phase-2 round.
+
+**4 — the benchmark scripts named a gem subset.** `script/benchmark_holdout`, `benchmark_run` and
+`benchmark_release` each hand-maintained a list of gem lib dirs for `$LOAD_PATH`; phase 1 split
+`tamoz-harness` and `tamoz-context-engine` out and no list was updated, so all three died on
+`cannot load such file -- tamoz/harness`. The lists are now one `gems/*/lib` glob — the remedy
+`test/test_helper.rb` already documents — and `test/script_context_bootstrap_test.rb` makes the
+property behavioral rather than structural: every script that bootstraps gem libs must resolve
+its own requires in a bare child process (no `RUBYLIB`, no bundler), and a copy with its
+`$LOAD_PATH` lines stripped must still fail, so a probe that stops detecting the defect cannot
+pass. Commit `80ec16d3`.
+
+Evidence: `benchmark_holdout_test` 5 runs / 45 assertions / 0 failures (was 5 failures);
+`benchmark_controls_test` 14 / 42 / 0; `dependency_isolation_test` 24 / 243 / 0;
+`packaging_test` 15 / 636 / 0; `script_context_bootstrap_test` 3 / 50 / 0. RuboCop on the four
+changed files: 3 offenses, all pre-existing (2 `Metrics/ParameterLists`, 1 `Style/FetchEnvVar`),
+none on a changed line.
+
+**5 — the smoke-scorecard pin.** `model_input_bytes` was pinned at 286,846 and the run produced
+305,867: +19,021 prompt bytes over 95 model calls, every behavioral counter identical. It belongs
+to phase 1's work-loop commit (`a37abc26`), which is verified rather than inferred: the test
+**passes at `743aeeb3`** — the branch point before it — on the old pin, and fails at `a37abc26`
+with the new number. What it is *not* is the work loop's header: the smoke corpus builds its
+sessions with no `routing:`, so it never enters the work route, and the growth came from that
+commit's other prompt-visible changes (the new tool schemas and prompt text); which one is not
+isolated. Re-pinned to 305,867 with that history in the comment block.
+
+Evidence: `test/agent_scorecard_test.rb` 6 runs / 215 assertions / 0 failures (was 1 failure).
+RuboCop: the same 2 pre-existing offenses as the parent (`Metrics/BlockLength`, a trailing empty
+line), none added.
+
+**Reviewer debt, recorded:** rounds 3–11 ran without the two independent reviewer subagents the
+round rule requires. Their findings are owed before FC3 is called done; this section is the
+resume note for that debt, not a claim it was discharged.
 
 ## Verified against DSH, 2026-09-23
 

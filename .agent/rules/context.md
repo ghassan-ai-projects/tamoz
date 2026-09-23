@@ -41,3 +41,9 @@ Learned mapping DSH's context machinery onto the Tamoz harness
   write injects nothing at all (`user/*` node counts unchanged), and three versions of one file
   then coexist on the surface, ordered only by recency. If the harness needs the model to know,
   the harness must append it.
+- **A prompt-byte pin is reproducible only while every time-varying prompt field is fixed-width.**
+  The work loop stamps `Time.now.utc.strftime('%Y-%m-%d')` into the runtime snapshot
+  (`work_context.rb`), so that request's bytes are the same on two dates a week apart — which is
+  what would let a byte counter over it be a change-detector for prompt growth rather than noise.
+  The moment a width-varying timestamp (a clock time, an ISO-8601 with offset) enters a request,
+  any pin over its bytes starts failing for a reason that has nothing to do with behaviour.
