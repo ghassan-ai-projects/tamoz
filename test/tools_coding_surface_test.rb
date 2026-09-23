@@ -22,6 +22,29 @@ class ToolsCodingSurfaceTest < Minitest::Test
     end
   end
 
+  # F7: the model's picture of the new file is the old read plus this diff, so the diff must carry
+  # enough surrounding lines to place the change. DSH's card uses three (DIFF_CONTEXT = 3).
+  # rubocop:disable Minitest/MultipleAssertions -- one property (the hunk header, the change and
+  # the three context lines either side) observed in one place.
+  def test_render_diff_carries_three_context_lines_either_side
+    with_workspace do |toolbox, root|
+      file = File.join(root, 'lib/context.rb')
+      File.write(file, (1..12).map { |n| "line #{n}\n" }.join)
+      patch = toolbox.__send__(:prepare_patch, 'path' => 'lib/context.rb',
+                                               'expected_sha256' => Digest::SHA256.hexdigest(File.read(file)),
+                                               'before' => "line 6\n", 'after' => "line 6 changed\n")
+
+      diff = toolbox.__send__(:render_diff, 'lib/context.rb', patch)
+      context = diff.lines.grep(/\A /).map { |line| line[1..].strip }
+
+      assert_includes diff, '@@ -6,1 +6,1 @@'
+      assert_includes diff, "-line 6\n"
+      assert_includes diff, "+line 6 changed\n"
+      assert_equal ['line 3', 'line 4', 'line 5', 'line 7', 'line 8', 'line 9'], context
+    end
+  end
+  # rubocop:enable Minitest/MultipleAssertions
+
   ESCAPES = ['../*', '{..,x}/*', '{/etc,x}/hosts', '\\../*', '.\\./*', '/etc/*', 'etclink/*', 'etclink/**/*',
              '{/,x}**/*'].freeze
 

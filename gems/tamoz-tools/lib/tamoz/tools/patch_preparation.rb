@@ -9,6 +9,9 @@ module Tamoz
     # :reek:TooManyStatements :reek:UtilityFunction
     # rubocop:disable Layout/LineLength, Metrics/AbcSize
     class PatchPreparation
+      # Unchanged lines either side of a hunk, matching DSH's diff card (fs/tool-fs/src/diff.ts).
+      DIFF_CONTEXT = 3
+
       def initialize(toolbox)
         @toolbox = toolbox
         freeze
@@ -41,7 +44,10 @@ module Tamoz
           after_lines = replacement.fetch(:after_text).lines(chomp: true)
           line = replacement.fetch(:line)
           ["--- a/#{display_path}", "+++ b/#{display_path}", "@@ -#{line},#{before_lines.length} +#{line},#{after_lines.length} @@",
-           *before_lines.map { |entry| "-#{entry}" }, *after_lines.map { |entry| "+#{entry}" }].join("\n")
+           *replacement.fetch(:context_before, []).map { |entry| " #{entry}" },
+           *before_lines.map { |entry| "-#{entry}" },
+           *after_lines.map { |entry| "+#{entry}" },
+           *replacement.fetch(:context_after, []).map { |entry| " #{entry}" }].join("\n")
         end.join("\n\n")
       end
 
@@ -115,7 +121,20 @@ module Tamoz
 
       def build_replacement(byte_start, byte_length, before, after, content)
         { byte_start:, byte_end: byte_start + byte_length, before_text: before, after_text: after,
-          line: content.byteslice(0, byte_start).count("\n") + 1 }.freeze
+          line: content.byteslice(0, byte_start).count("\n") + 1,
+          context_before: context_before(content, byte_start),
+          context_after: context_after(content, byte_start + byte_length) }.freeze
+      end
+
+      # Whole lines only: a replacement that starts or ends mid-line contributes no context on
+      # that side rather than a partial line that is not a valid diff line.
+      def context_before(content, byte_start)
+        head = content.byteslice(0, byte_start).to_s
+        head.end_with?("\n") ? head.lines(chomp: true).last(DIFF_CONTEXT) : []
+      end
+
+      def context_after(content, byte_end)
+        content.byteslice(byte_end, content.bytesize - byte_end).to_s.lines(chomp: true).first(DIFF_CONTEXT)
       end
 
       def apply_replacements(content, replacements)

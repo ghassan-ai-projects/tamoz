@@ -54,7 +54,8 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 |---|---|---|---|---|---|
 | R0 | Plan, goal, quality bar, eval plan; evidence and instrument | n/a (documents) | — | done | R0 |
 | R1 | FC1 window (pinned as data) · restore A3/A4 | recorded below | F1, A3, A4 | done | R1 |
-| R2 | R1 reviewer findings (F1 authority, the route guard, dead machinery); FC2 deferred | F1 test rewritten and green | F1 re-established | partial | R2 |
+| R2 | R1 reviewer findings; FC2 deferred | recorded | F1 re-established | done | R2 |
+| R7 | FC2/F7: the patch preview carries three context lines either side of a hunk | five assertions migrated | F7 | done | R7 |
 | R3 | FC3 observation ledger, gate pinning, read window, dedup, outside-change notice | pending | F3, F4, F5, F6, F17 | pending | — |
 | R4 | FC7 superseded-read prune (after its producer) | pending | F12 | pending | — |
 | R5 | FC5 change ledger + diffstat · FC4 references + guidance digests/notice | pending | F9, F10 | pending | — |
@@ -197,6 +198,22 @@ closing work package (FC1…FC8) in whatever source supplies them, then regenera
 output was reverted rather than committed. `test/requirements_manifest_test.rb`,
 `test/agent_scorecard_test.rb`, `test/benchmark_holdout_test.rb` and `test/public_api_test.rb` stay
 red until that is done — all in the serial suites `rake ci` skips.
+
+
+### R7 — F7 landed
+
+`render_diff` emits DSH's three context lines either side of a hunk, `DIFF_CONTEXT = 3`, whole
+lines only. Its property test pins the rule exactly (`test/tools_coding_surface_test.rb`), and the
+five pre-existing preview assertions in `test/agent_toolbox_test.rb` are migrated: the single-hunk
+sites assert the hunk header and the change separately (context can precede the change, so
+`"@@ …\n-old\n+new"` is not a contiguous substring), and the two compound sites assert one hunk per
+replacement. Both changes are recorded in the same commit.
+
+Evidence: `agent_toolbox_test` 63 runs / 357 assertions / 0 failures (was 5 failures);
+`tools_coding_surface_test` 13 / 34 / 0; `work_loop_test` 23 / 53 / 0; `rake test_fast`
+261 files all passed; RuboCop 0 offenses in the three changed files.
+
+Still open in FC2: the read byte cap and the `not_observed` / `stale_file` error codes (F2).
 
 ## Verified against DSH, 2026-09-23
 

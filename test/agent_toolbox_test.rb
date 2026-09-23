@@ -86,7 +86,9 @@ class AgentToolboxTest < Minitest::Test
 
       # The hunk header and the change; the context lines either side are pinned by
       # test/tools_coding_surface_test.rb.
-      assert_includes toolbox.preview("apply_patch", arguments), "@@ -1,1 +1,1 @@\n-41\n+42"
+      preview = toolbox.preview("apply_patch", arguments)
+      assert_includes preview, "@@ -1,1 +1,1 @@"
+      assert_includes preview, "-41\n+42"
       receipt = toolbox.execute("apply_patch", arguments)
 
       assert_equal "def answer = 42\n", File.read(path)
@@ -133,7 +135,9 @@ class AgentToolboxTest < Minitest::Test
         }
         expected = original.sub(before) { after }
 
-        assert_includes toolbox.preview("apply_patch", arguments), "@@ -1,1 +1,1 @@\n-#{before}\n+#{after}", label
+        preview = toolbox.preview("apply_patch", arguments)
+        assert_includes preview, "@@ -1,1 +1,1 @@", label
+        assert_includes preview, "-#{before}\n+#{after}", label
         receipt = toolbox.execute("apply_patch", arguments)
 
         assert_equal expected, File.read(path, encoding: Encoding::UTF_8), label
@@ -156,7 +160,9 @@ class AgentToolboxTest < Minitest::Test
         "after" => "TARGET = 2"
       }
 
-      assert_includes toolbox.preview("apply_patch", arguments), "@@ -3,1 +3,1 @@\n-TARGET = 1\n+TARGET = 2"
+      preview = toolbox.preview("apply_patch", arguments)
+      assert_includes preview, "@@ -3,1 +3,1 @@"
+      assert_includes preview, "-TARGET = 1\n+TARGET = 2"
       toolbox.execute("apply_patch", arguments)
 
       assert_equal(
@@ -521,13 +527,12 @@ class AgentToolboxTest < Minitest::Test
       expected = "ONE = 10\nTWO = 20\nTHREE = 3\n"
 
       preview = toolbox.preview("apply_patch", arguments)
-      assert_equal(
-        [
-          "--- a/values.rb\n+++ b/values.rb\n@@ -1,1 +1,1 @@\n-ONE = 1\n+ONE = 10",
-          "--- a/values.rb\n+++ b/values.rb\n@@ -2,1 +2,1 @@\n-TWO = 2\n+TWO = 20"
-        ].join("\n\n"),
-        preview
-      )
+      # One hunk per replacement; asserted individually because the context lines F7
+      # adds sit inside each hunk, so the hunks are no longer one blank line apart.
+      [
+        "-ONE = 1\n+ONE = 10",
+        "-TWO = 2\n+TWO = 20"
+      ].each { |hunk| assert_includes preview, hunk }
 
       receipt = toolbox.execute("apply_patch", arguments)
       assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
@@ -576,13 +581,12 @@ class AgentToolboxTest < Minitest::Test
       expected = "VALUE = 2\nVALUE = 3\nVALUE = 1\n"
 
       preview = toolbox.preview("apply_patch", arguments)
-      assert_equal(
-        [
-          "--- a/values.rb\n+++ b/values.rb\n@@ -1,1 +1,1 @@\n-VALUE = 1\n+VALUE = 2",
-          "--- a/values.rb\n+++ b/values.rb\n@@ -2,1 +2,1 @@\n-VALUE = 1\n+VALUE = 3"
-        ].join("\n\n"),
-        preview
-      )
+      # One hunk per replacement; asserted individually because the context lines F7
+      # adds sit inside each hunk, so the hunks are no longer one blank line apart.
+      [
+        "-VALUE = 1\n+VALUE = 2",
+        "-VALUE = 1\n+VALUE = 3"
+      ].each { |hunk| assert_includes preview, hunk }
 
       receipt = toolbox.execute("apply_patch", arguments)
       assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
