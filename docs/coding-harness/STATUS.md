@@ -178,6 +178,26 @@ generators — `script/generate_requirements_manifest`, the agent scorecard and 
 manifest — as part of any round that adds public API, and to add them to every round's gate.
 Recorded as known-red prerequisite **3** pending that repair.
 
+
+**Known-red 3 is blocked in the generator, not merely un-run.** Running it does not repair the
+manifests; it raises:
+
+```
+$ ruby script/generate_requirements_manifest
+script/generate_requirements_manifest:1006:in `row': CLI-code: a release-blocking row without
+evidence must state which work package closes it (EvidenceError)
+    from script/generate_requirements_manifest:1111:in `block in <main>'
+```
+
+So the manifest enforces its own rule: a release-blocking row with no evidence must name the work
+package that closes it. The offending row is a **phase-2** row (`CLI-code`) whose evidence does not
+exist yet — which is why R0/R1 could add public API without the manifest changing, and why
+regenerating now cannot succeed. The repair is to mark the phase-2 release-blocking rows with their
+closing work package (FC1…FC8) in whatever source supplies them, then regenerate. Its partial
+output was reverted rather than committed. `test/requirements_manifest_test.rb`,
+`test/agent_scorecard_test.rb`, `test/benchmark_holdout_test.rb` and `test/public_api_test.rb` stay
+red until that is done — all in the serial suites `rake ci` skips.
+
 ## Verified against DSH, 2026-09-23
 
 `script/dsh_context_survey` reads every log under `~/.dsh/sessions` and reports what DSH's context
