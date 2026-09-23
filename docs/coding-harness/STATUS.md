@@ -131,6 +131,23 @@ F7 was not acceptable, so the change is reverted and R2 stops here. F2 and F7 st
 round migrates those assertions and lands both.
 
 
+
+### R3 — F7's assertion migration, precisely
+
+F7's implementation is small and its own test passes; what blocks it is migrating **five** existing
+preview assertions in `test/agent_toolbox_test.rb`, which pin the whole preview string and
+therefore the previously-absent context lines. They are not one shape:
+
+| Site | Shape | Migration |
+|---|---|---|
+| `:87` (`answer.rb`), `:164` (`values.rb`) | `assert_equal("<full preview>", toolbox.preview(...))` | `assert_includes toolbox.preview(...), "<hunk + change>"` |
+| `:137` (`NAME = "héllo"`) | same, but the expected interpolates `#{before}` / `#{after}` **and** the call carries a trailing argument | `assert_includes` with the interpolated literal retained |
+| `:532`, `:587` (compound patches) | `assert_equal([hunk1, hunk2], preview)` — an **array**, one entry per replacement | `expected.each { |hunk| assert_includes preview, hunk }` |
+
+A regex that assumes one string per assertion converts 2 of 5 and must be run against all three
+shapes. Two attempts have reverted rather than commit a red tree; the implementation and the new
+property test are written and verified in isolation (13 runs, 40 assertions, 0 failures).
+
 ## Verified against DSH, 2026-09-23
 
 `script/dsh_context_survey` reads every log under `~/.dsh/sessions` and reports what DSH's context
