@@ -148,6 +148,16 @@ A regex that assumes one string per assertion converts 2 of 5 and must be run ag
 shapes. Two attempts have reverted rather than commit a red tree; the implementation and the new
 property test are written and verified in isolation (13 runs, 40 assertions, 0 failures).
 
+
+**Third attempt (R4), and the new datum.** Wrapping the single shared call —
+`toolbox.preview('apply_patch', arguments)` → a helper that drops context lines before comparing —
+is shape-agnostic and does convert every site, yet the same five assertions still fail. So the
+context lines are **not** the only difference: the compound cases (`:532`, `:587`) compare an
+**array of hunks** against the preview value, which `render_diff` returns as a **joined string**.
+The next attempt must not reach for a string-level transformation again; it must open each site,
+establish what its second argument actually is, and rewrite that assertion's comparison. That is a
+read-then-edit job on five assertions, not a regex.
+
 ## Verified against DSH, 2026-09-23
 
 `script/dsh_context_survey` reads every log under `~/.dsh/sessions` and reports what DSH's context
