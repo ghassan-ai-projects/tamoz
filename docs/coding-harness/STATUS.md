@@ -215,6 +215,41 @@ Evidence: `agent_toolbox_test` 63 runs / 357 assertions / 0 failures (was 5 fail
 
 Still open in FC2: the read byte cap and the `not_observed` / `stale_file` error codes (F2).
 
+
+### R8 — FC2's `stale_file` needs one classification decision first (no code this round)
+
+F2's remaining items are the read byte cap and the `not_observed` / `stale_file` codes. The codes
+look like a one-line change, but the repo already draws the line they must fall on, and the plan
+does not say which side it is on.
+
+`gems/tamoz-core/lib/tamoz/core/tool_error.rb`:
+
+- `ToolPolicyError` — "Always terminal — a security rejection must never become a retryable value
+  the planner can iterate against." Its list includes *"a workspace that no longer matches the
+  approved before-state"*, which is the stale-digest case, and it is what
+  `PatchPreparation#verify_digest` raises today (a D-8 decision: the digest the operator approved
+  is a claim about existing bytes).
+- `ToolArgumentError` — `repairable? == true`, "re-read the workspace and plan different arguments",
+  whose list includes *"a stale digest"* as an argument-level failure.
+
+So "stale" means two different things and both already have a home:
+
+| Situation | Who chose the digest | Correct class | Model is told |
+|---|---|---|---|
+| The gate pinned the ledger's version and the file moved | the ledger | `ToolPolicyError` (terminal) — the approval's basis is gone | stop and re-plan |
+| The model supplied a digest and it does not match | the model | `ToolArgumentError` (repairable) | re-read, then retry |
+
+DSH's `FS_STALE_VERSION` is the second kind — it appends "re-read the file, then retry" — and the
+plan's §3.1/F3 describes the same remedy. That is compatible with D-8 only if the gate's pinning
+means the *ledger* (not the model) is the chooser, in which case a moved file voids the approval
+and the refusal is terminal; the plan currently says both ("re-read the file, then retry" **and**
+the gate pins the ledger's value).
+
+This is a one-decision unblock, not a design problem: pick which of the two `stale_file` is, and
+the implementation is a code on the class plus the remedy text. It gates F2 and FC3, so it is
+recorded here rather than discovered mid-implementation. **Owner input wanted** — it changes
+whether a stale edit ends a turn or invites a retry.
+
 ## Verified against DSH, 2026-09-23
 
 `script/dsh_context_survey` reads every log under `~/.dsh/sessions` and reports what DSH's context
