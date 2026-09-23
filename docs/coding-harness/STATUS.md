@@ -56,6 +56,7 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 | R1 | FC1 window (pinned as data) · restore A3/A4 | recorded below | F1, A3, A4 | done | R1 |
 | R2 | R1 reviewer findings; FC2 deferred | recorded | F1 re-established | done | R2 |
 | R7 | FC2/F7: the patch preview carries three context lines either side of a hunk | five assertions migrated | F7 | done | R7 |
+| R9 | FC2 (tools half): the ranged-read byte budget | suite green | F2 (part) | partial | R9 |
 | R3 | FC3 observation ledger, gate pinning, read window, dedup, outside-change notice | pending | F3, F4, F5, F6, F17 | pending | — |
 | R4 | FC7 superseded-read prune (after its producer) | pending | F12 | pending | — |
 | R5 | FC5 change ledger + diffstat · FC4 references + guidance digests/notice | pending | F9, F10 | pending | — |
@@ -249,6 +250,24 @@ This is a one-decision unblock, not a design problem: pick which of the two `sta
 the implementation is a code on the class plus the remedy text. It gates F2 and FC3, so it is
 recorded here rather than discovered mid-implementation. **Owner input wanted** — it changes
 whether a stale edit ends a turn or invites a retry.
+
+
+### R9 — the read byte budget (F2, tools half)
+
+`ReadOperations::MAX_RANGE_BYTES = 50 * 1024` — the documented read cap, the same number DSH's
+read tool uses — now bounds one ranged read's output, where it previously used the whole-file limit
+(`Toolbox::MAX_FILE_BYTES`, 64 KiB). A ranged read is a window, and the existing footer already
+says where to continue. The unranged path is untouched, so the pipeline and every other caller keep
+today's behaviour, as F2 requires; the work loop applies the rest of the read policy at its gate
+(FC3).
+
+Evidence: `tools_coding_surface_test` 14 runs / 40 assertions / 0 failures with the new case
+(a 400-line file of 200-character lines stays inside the budget and reports
+`... truncated; continue with offset N`); `rake test_fast` 261 files all passed; RuboCop clean in
+both changed files.
+
+**Still open in FC2:** the `not_observed` / `stale_file` codes, blocked on the classification
+decision recorded in R8.
 
 ## Verified against DSH, 2026-09-23
 

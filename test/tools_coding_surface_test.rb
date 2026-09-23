@@ -45,6 +45,22 @@ class ToolsCodingSurfaceTest < Minitest::Test
   end
   # rubocop:enable Minitest/MultipleAssertions
 
+  # F2: a ranged read is a window under the documented byte budget, not the whole-file limit, and
+  # it says where to continue instead of silently truncating.
+  def test_a_ranged_read_stops_at_the_read_budget_and_says_where_to_continue
+    with_workspace do |toolbox, root|
+      file = File.join(root, 'lib/wide.rb')
+      rows = (1..400).map { |n| format('%<n>04d %<pad>s', n: n, pad: 'x' * 200) }
+      File.write(file, "#{rows.join("\n")}\n")
+
+      out = toolbox.execute('read_file', 'path' => 'lib/wide.rb', 'offset' => 1)
+
+      assert_operator out.bytesize, :<=, (50 * 1024) + 4096, 'the window stays inside the read budget'
+      assert_includes out, 'lines: 1-'
+      assert_match(/\.\.\. truncated; continue with offset \d+/, out)
+    end
+  end
+
   ESCAPES = ['../*', '{..,x}/*', '{/etc,x}/hosts', '\\../*', '.\\./*', '/etc/*', 'etclink/*', 'etclink/**/*',
              '{/,x}**/*'].freeze
 

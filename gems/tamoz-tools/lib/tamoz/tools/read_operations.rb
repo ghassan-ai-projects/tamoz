@@ -12,6 +12,10 @@ module Tamoz
     class ReadOperations
       IGNORED_DIRECTORIES = %w[.git vendor node_modules].freeze
       MAX_RANGED_FILE_BYTES = 4 * 1024 * 1024
+      # The output budget for one ranged read. This is the documented read cap (50 KiB,
+      # the same number DSH's read tool uses), not the whole-file limit: a ranged read is a
+      # window, and the footer tells the caller where to continue.
+      MAX_RANGE_BYTES = 50 * 1024
       MAX_RANGE_LINES = 2_000
       MAX_GLOB_RESULTS = 500
       REGEX_TIMEOUT = 1.0
@@ -122,7 +126,7 @@ module Tamoz
 
       def bounded(lines)
         used = 0
-        lines.take_while { |line| (used += line.bytesize + 1) <= Toolbox::MAX_FILE_BYTES }
+        lines.take_while { |line| (used += line.bytesize + 1) <= MAX_RANGE_BYTES }
       end
 
       def numbered(lines, first) = lines.each_with_index.map { |line, index| "#{first + index}\t#{line.chomp}" }
