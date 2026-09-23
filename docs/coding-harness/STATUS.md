@@ -81,7 +81,9 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 | R9 | FC2 (tools half): the ranged-read byte budget | suite green | F2 (part) | partial | R9 |
 | R10 | The pinned requirements manifest (known-red 3) | generator refusal recorded | — | done | R10 |
 | R11 | The two remaining phase-1 regressions in the slow/serial lane (known-red 4, 5) | recorded below | — | done | R11 |
-| R3 | FC3 observation ledger, gate pinning, read window, dedup, outside-change notice | pending | F3, F4, F5, F6, F17 | pending | — |
+| R12 | FC3 part one: the observation ledger, gate pinning, `not_observed`/`stale_file`, the default read window, reads never spilled | recorded below | F2, F3, F4 | done | R12 |
+| R13 | FC3 part two: read dedup (short form), the outside-change pass, secret scrub through the new paths | pending | F5, F6, F17 | pending | — |
+| R3 | ~~FC3 (one round)~~ — split into R12/R13; the original row stays for the plan's numbering | — | — | split | — |
 | R4 | FC7 superseded-read prune (after its producer) | pending | F12 | pending | — |
 | R5 | FC5 change ledger + diffstat · FC4 references + guidance digests/notice | pending | F9, F10 | pending | — |
 | R6 | FC6 operator rewind | pending | F11 | pending | — |
@@ -314,10 +316,12 @@ masked by the test process's own load path. Neither was caused by a phase-2 roun
 `tamoz-harness` and `tamoz-context-engine` out and no list was updated, so all three died on
 `cannot load such file -- tamoz/harness`. The lists are now one `gems/*/lib` glob — the remedy
 `test/test_helper.rb` already documents — and `test/script_context_bootstrap_test.rb` makes the
-property behavioral rather than structural: every script that bootstraps gem libs must resolve
-its own requires in a bare child process (no `RUBYLIB`, no bundler), and a copy with its
-`$LOAD_PATH` lines stripped must still fail, so a probe that stops detecting the defect cannot
-pass. Commit `80ec16d3`.
+property behavioral rather than structural: each covered script must resolve its own requires in a
+bare child process (no `RUBYLIB`, no bundler), and a copy with its `$LOAD_PATH` lines stripped must
+still fail, so a probe that stops detecting the defect cannot pass. Commit `80ec16d3`. **R12 fixes a
+defect in that probe**: it discovered its subjects by globbing `script/*`, which also ran
+`script/generate_legacy_session_fixture` — a generator whose whole job is to rewrite the committed
+`test/fixtures/legacy_session_v1.sqlite3`. The probe now names the three scripts it covers.
 
 Evidence: `benchmark_holdout_test` 5 runs / 45 assertions / 0 failures (was 5 failures);
 `benchmark_controls_test` 14 / 42 / 0; `dependency_isolation_test` 24 / 243 / 0;
@@ -341,6 +345,74 @@ line), none added.
 **Reviewer debt, recorded:** rounds 3–11 ran without the two independent reviewer subagents the
 round rule requires. Their findings are owed before FC3 is called done; this section is the
 resume note for that debt, not a claim it was discharged.
+
+### R12 — FC3, part one: the observation ledger and the gate that owns it
+
+FC3 is one work package in FILE-CONTEXT §7 and was one row in the plan's round table. It landed in
+two rounds instead, because the tests that prove it are not one behaviour: the gate's refusals and
+the pinning (R12) are independent of the surface-side dedup and the outside-change pass (R13).
+**Deviation recorded in the round table above.**
+
+**What landed.**
+
+| Seam | Change |
+|---|---|
+| `gems/tamoz-core/lib/tamoz/core/tool_codes.rb` (new) | `ToolCodes::NOT_OBSERVED` / `STALE_FILE` and one renderer, so the code and its sentence are built in one place. |
+| `gems/tamoz-agent-session/lib/tamoz/agent/work_observations.rb` (new) | The ledger: `{path ⇒ {sha256, ref, step, range}}`, `refusal(name, arguments)`, `pinned_digest(path)`, `record_read` / `record_write`. Retains the **scrubbed** file bytes only when the file still hashes to what the read reported. |
+| `WorkGate` | Records an observation after a successful `read_file` and after a mutating tool; refuses an unobserved `apply_patch` `not_observed` **before** approval and a moved file `stale_file`; pins `expected_sha256` from the ledger in **both** `prepare` and `execute`; applies the read window. |
+| `Tamoz::Tools::ReadOperations#truncation` | A window that ends before EOF now says so (`... continue with offset N`) — the default window made this reachable. |
+| `ContextEngine::Policy#window_arguments` + `read_window_lines: 800` | The default window is policy data, applied at the work gate so every other `read_file` caller is untouched. |
+| `WorkGate#spilled_result` | A `read_file` result is never spilled. |
+| `GraphVersions::WORK_GRAPH_VERSION` | `"5"` → `"6"`; `work_observations` joins the work scalar channels. |
+| `prompts/editing.md` | Drops the `expected_sha256` instruction: the model no longer copies digests. |
+
+**One behaviour change the round had to migrate, not just add.** Eight existing `work_loop_test.rb`
+cases patched a file the model had not read — which is exactly what `not_observed` refuses. Each
+gained a `read_file` step, `patch_call`'s eager digest no longer matters (`G-27`), and the
+durability crash index moved `5` → `8` because the read adds one model call (three
+`build_conversation` calls per converse: `conversation_request`, the transport, and the scripted
+model's own). `test/cli_code_test.rb` and `test/tools_coding_surface_test.rb` needed the same
+treatment; `test/agent_durable_compatibility_spike_test.rb` moved its "future version" from 6 to 7.
+
+**Red at the parent (`5268d574`), before the implementation** — the test copied into a worktree at
+that commit, with only the fixtures' new `read_call` helper:
+
+```
+5 failures, 0 errors
+test_a_patch_to_a_file_never_read_is_refused_not_observed:
+  Expected /Error \[not_observed\]: read lib\/value\.rb first/ to match
+  "Applied lib/value.rb\nbefore_sha256: e13df8…\nafter_sha256: 3da6c4…\n\nDiff:\n…-VALUE = 1\n+VALUE = 2"
+```
+
+A patch to a file the model had never opened was **Applied** — the blind edit this round closes.
+Only `test_a_pipeline_read_is_unchanged_by_the_work_window` passes at the parent, which is exactly
+what it is there for.
+
+**Evidence.** `work_loop_observation_test.rb` **6 runs / 25 assertions / 0 failures** (new);
+`work_loop_test.rb` 23 / 53 / 0; `cli_code_test.rb` 5 / 14 / 0; `tools_coding_surface_test.rb`
+14 / 40 / 0; `context_compaction_test.rb` 13 / 103 / 0; `harness_prompt_pack_test.rb` 6 / 10 / 0
+(the `editing.md` digest is re-pinned with the text). Gate: `rake test_fast`
+**263 files across 9 workers — all passed**; `rake quality:architecture` exit 0; RuboCop 0
+offenses in all 12 changed Ruby files (baseline for those files: 0).
+
+**F3's repairable classification is the owner's answer**, recorded in R8: a moved file refuses with
+`stale_file` and the sentence "re-read the part you need", because the remedy is a fresh read —
+which re-triggers approval against the bytes the operator will actually approve. D-8's terminal
+`ToolPolicyError` stays exactly where it was, on the race the gate cannot see: a change that lands
+between approval and the write.
+
+**A committed binary fixture was a false red, and the cause was R11's own probe.**
+`test/fixtures/legacy_session_v1.sqlite3` is written by no test and no Rake task — but
+`test/script_context_bootstrap_test.rb` (R11) globbed `script/*` and *ran* every script that
+bootstraps gem libs, which includes `script/generate_legacy_session_fixture`; running it rewrote
+the fixture, and the next `legacy_session_resume_test` run was red for a reason that had nothing to
+do with the change. The probe now names its three subjects (`COVERED`), and the tree ends the lane
+clean. Two lessons, both now in the code: a probe that executes scripts inherits their side
+effects, and a red in a test that reads a committed binary artifact is the artifact's state until
+proven otherwise — restore it (`git checkout -- <path>`) before believing the failure.
+
+**Still open in FC3:** read dedup, the outside-change pass, and secret scrub through the note and
+the net diff (F5, F6, F17) — R13. **Reviewer debt for R12 is not yet discharged.**
 
 ## Verified against DSH, 2026-09-23
 

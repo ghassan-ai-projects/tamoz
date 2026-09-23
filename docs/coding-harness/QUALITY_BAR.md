@@ -105,12 +105,14 @@ Every row is checkable and names its evidence. A row is **met**, **not met**, or
 
 | Rows | State |
 |---|---|
-| A1–A9 | **A1 partial, A3/A4 not met.** `rake ci` passes everything except the environmentally-broken `stream:proto:check` (recorded in STATUS.md); no new RuboCop offense in changed files; `enola check` clean (`rake quality:architecture` exit 0). **A3/A4 are not met**: `test/packaging_test.rb` fails because the scorecard install list names neither phase-1 gem (`Could not find 'tamoz-harness' (= 0.1.0.alpha.1)`) — a phase-1 regression that `rake ci` never exposed, because packaging is in `SERIAL_TESTS`. R1 restores it. |
+| A1–A9 | **A1 partial, A3/A4 met.** `rake ci` passes everything except the environmentally-broken `stream:proto:check` (recorded in STATUS.md); no new RuboCop offense in changed files; `enola check` clean (`rake quality:architecture` exit 0). A3/A4 were red from phase 1 and are restored in R1 (`test/packaging_test.rb` 15 runs / 636 assertions / 0 failures). |
 | B1–B9 | met — `test/context_*_test.rb`, `test/work_loop_test.rb` (G-3 crash replay incl. a crash after a patch started, G-10 by construction, G-11 overflow retry). |
 | C1–C6 | met — `test/harness_*_test.rb`, `test/work_loop_test.rb`, `test/cli_code_test.rb`, `test/chat_work_loop_test.rb`. |
 | D1 | met for the packs that exist — `rake agenteval:prove` validates 38 scenarios from `harness.rb` / `maintenance.rb`. The `context_fidelity` and `instructions` packs EVAL §4.1–§4.3 describe were never built and are listed as open gaps. |
 | D2, D3 | **partially met, rescoped.** The controls that exist all score correctly (`prove` green on 38 scenarios), but EVAL.md §3 names five that were never built, and `prefix_breaker` exists only as a unit test. Both rows now say what they actually cover. |
 | E1–E5 | **blocked** — the DeepSeek account has no balance. Run `rake agenteval:harness:all` after topping up. |
-| F1–F17 | **not met** — phase 2 starts here. Round-by-round state in [STATUS.md](STATUS.md); every row needs its red-at-parent proof. |
+| F1–F4, F7 | **met.** F1 in R1/R2 (`test/model_windows_test.rb`), F7 in R7 (`tools_coding_surface_test.rb`), F2 in R9 (the read byte budget) and R12 (the window, the footer, never spilled), F3 and F4 in R12 (`test/work_loop_observation_test.rb`: G-14 and G-27). |
+| F5, F6, F17 | **not met** — read dedup, the outside-change pass and secret scrub through the new paths; R13. |
+| F9–F12, F14, F15 | **not met** — FC5/FC4, FC6, FC7, FC8 and FC9. Round-by-round state in [STATUS.md](STATUS.md); every row needs its red-at-parent proof. |
 
 

@@ -98,7 +98,7 @@ class ToolsCodingSurfaceTest < Minitest::Test
       output = toolbox.execute('read_file', 'path' => 'lib/a.rb', 'offset' => 2, 'limit' => 1)
       digest = Digest::SHA256.hexdigest(File.read(File.join(root, 'lib/a.rb')))
 
-      assert_equal "File: lib/a.rb\nsha256: #{digest}\nlines: 2-2 of 3\n2\t  1", output
+      assert_equal "File: lib/a.rb\nsha256: #{digest}\nlines: 2-2 of 3\n2\t  1\n... continue with offset 3", output
     end
   end
 

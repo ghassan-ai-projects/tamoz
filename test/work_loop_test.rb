@@ -18,7 +18,7 @@ class WorkLoopTest < Minitest::Test
 
   def test_plan_edit_check_and_finish_is_done_and_satisfied
     with_work_workspace(files: FILES) do |root, adapter|
-      turns = [{ calls: [plan_call] }, lambda { |_|
+      turns = [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] }, lambda { |_|
         { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] }
       },
                { calls: [['run_check', { 'name' => 'test' }]] }, { content: 'Changed lib/value.rb; test passed.' }]
@@ -31,7 +31,7 @@ class WorkLoopTest < Minitest::Test
 
   def test_a_change_without_a_passing_check_is_done_unverified
     with_work_workspace(files: FILES) do |root, adapter|
-      turns = [{ calls: [plan_call] }, lambda { |_|
+      turns = [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] }, lambda { |_|
         { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] }
       },
                { content: 'Done.' }]
@@ -197,7 +197,8 @@ class WorkLoopApprovalTest < Minitest::Test
   def test_an_asked_edit_pauses_for_approval_and_a_denial_is_fed_back
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
       model = ScriptedConversationModel.new(turns: [
-        { calls: [plan_call] }, ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
+        { calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+        ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
         { content: 'The operator declined the edit.' }
       ])
       session = work_session(model:, root:, adapter:, profile: 'review')
@@ -219,7 +220,8 @@ class WorkLoopDurabilityTest < Minitest::Test
   def test_a_crash_replays_from_the_journal_with_identical_request_bytes_and_no_double_edit
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
       patch = patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')
-      first = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { calls: [patch] }], crash_at: 5)
+      first = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+                                                    { calls: [patch] }], crash_at: 8)
       assert_raises(ScriptedConversationModel::Crash) do
         work_session(model: first, root:, adapter:).start('Set VALUE to 2', thread: 'work', request_id: 'work-1')
       end
@@ -240,7 +242,8 @@ class WorkLoopEffectCrashTest < Minitest::Test
   def test_a_crash_after_a_patch_started_reconciles_and_never_applies_twice
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
       patch = patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')
-      first = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { calls: [patch] }],
+      first = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+                                                    { calls: [patch] }],
                                             crash_after: 'tool.apply_patch')
       assert_raises(ScriptedConversationModel::Crash) do
         work_session(model: first, root:, adapter:).start('Set VALUE to 2', thread: 'work', request_id: 'work-1')
@@ -297,7 +300,8 @@ class WorkLoopGuidanceTest < Minitest::Test
       edits = (0..8).flat_map do |index|
         [->(_) { { calls: [patch_call(root, 'lib/value.rb', "VALUE = #{index}", "VALUE = #{index + 1}")] } }, check]
       end
-      model = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }] + edits + [{ content: 'Done.' }])
+      model = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] }] +
+                                                   edits + [{ content: 'Done.' }])
       outcome = work_session(model:, root:, adapter:).start('Count to 9', thread: 'work', request_id: 'work-1')
 
       assert_equal ['done', "VALUE = 9\n"],
@@ -312,7 +316,8 @@ class WorkLoopReviewFindingsTest < Minitest::Test
   def test_an_approved_edit_resumes_under_the_step_the_operator_saw
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
       model = ScriptedConversationModel.new(turns: [
-        { calls: [plan_call] }, ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
+        { calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+        ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
         { content: 'Edited.' }
       ])
       session = work_session(model:, root:, adapter:, profile: 'review')
@@ -342,7 +347,8 @@ class WorkLoopReviewFindingsTest < Minitest::Test
   def test_a_failing_check_after_a_passing_one_is_not_verified
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
       model = ScriptedConversationModel.new(turns: [
-        { calls: [plan_call] }, ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
+        { calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+        ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
         { calls: [['run_check', { 'name' => 'test' }]] }, { calls: [['run_check', { 'name' => 'test' }]] },
         { content: 'Done.' }
       ])

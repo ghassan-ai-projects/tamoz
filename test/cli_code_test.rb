@@ -74,7 +74,8 @@ class CliCodeTest < Minitest::Test
   def test_code_runs_the_work_loop_and_exits_zero_on_a_verified_change
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, _|
       model = ScriptedConversationModel.new(turns: [
-        { calls: [plan_call] }, ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
+        { calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+        ->(_) { { calls: [patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
         { calls: [['run_check', { 'name' => 'test' }]] }, { content: 'Changed lib/value.rb; test passed.' }
       ])
       status, out, err = code(['code', 'Set VALUE to 2'], workspace: root, factory: ->(_) { model },

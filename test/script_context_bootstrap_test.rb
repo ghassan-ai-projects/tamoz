@@ -18,8 +18,14 @@ class ScriptContextBootstrapTest < Minitest::Test
     'BUNDLE_GEMFILE' => nil, 'BUNDLE_BIN_PATH' => nil
   }.freeze
 
+  # Named, not discovered. The probe RUNS each script, and `script/` also holds generators whose
+  # whole job is to write committed artifacts — `generate_legacy_session_fixture` rewrites
+  # test/fixtures/legacy_session_v1.sqlite3. A glob here would regenerate them as a side effect of
+  # checking a load path.
+  COVERED = %w[benchmark_holdout benchmark_release benchmark_run].freeze
+
   def bootstrapping_scripts
-    ROOT.glob('script/*').select(&:file?).select do |path|
+    COVERED.map { |name| ROOT.join('script', name) }.select(&:file?).select do |path|
       path.read.lines.any? { |line| line.include?('$LOAD_PATH') && line.include?('gems') }
     end
   end
@@ -32,10 +38,8 @@ class ScriptContextBootstrapTest < Minitest::Test
   def test_the_probe_covers_the_benchmark_scripts
     names = bootstrapping_scripts.map { |path| path.basename.to_s }.sort
 
-    %w[benchmark_holdout benchmark_release benchmark_run].each do |expected|
-      assert_includes names, expected,
-                      "#{expected} no longer bootstraps gem libs; this probe would cover nothing for it"
-    end
+    assert_equal COVERED.sort, names,
+                 'each covered script must still bootstrap gem libs, or this probe covers nothing for it'
   end
 
   def test_each_script_resolves_its_own_requires

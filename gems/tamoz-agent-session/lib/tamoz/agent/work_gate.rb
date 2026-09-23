@@ -38,7 +38,9 @@ module Tamoz
       def execute(state, context)
         prepared = state.fetch(:work_prepared)
         call = with_arguments(state.fetch(:work_pending).fetch(state.fetch(:work_cursor)))
-        step = prepared.fetch('step').merge('arguments' => call.fetch('arguments'))
+        step = prepared.fetch('step').merge(
+          'arguments' => pinned(state, call.fetch('name'), call.fetch('arguments'))
+        )
         preview = mutation_preview(step)
         outcome = @services.effects.dispatch(context, prepared.fetch('intent'), step,
                                              iteration: state.fetch(:work_step_count),
@@ -53,7 +55,8 @@ module Tamoz
       private
 
       def with_arguments(call)
-        call.merge('arguments' => JSON.parse(@work.resolve.call(call.fetch('arguments_ref'))))
+        arguments = JSON.parse(@work.resolve.call(call.fetch('arguments_ref')))
+        call.merge('arguments' => @work.settings.context_policy.window_arguments(call.fetch('name'), arguments))
       end
 
       # Reminders wait until every call of the step is answered: a user message between the
@@ -92,12 +95,19 @@ module Tamoz
 
       def toolbox_gate(state, context, call, cursor)
         @services.configuration.capabilities.validate(call.fetch('name'), call.fetch('arguments'))
-        refusal = scope_refusal(state, call.fetch('name'), call.fetch('arguments'))
+        refusal = scope_refusal(state, call.fetch('name'), call.fetch('arguments')) ||
+                  observations(state).refusal(call.fetch('name'), call.fetch('arguments'))
         return result(state, call, refusal) if refusal
 
         prepare(state, context, call, cursor)
       rescue ToolError => e
         result(state, call, "Error: #{e.message}")
+      end
+
+      # The version the model last saw, per path, with the scrubbed bytes it saw.
+      def observations(state)
+        WorkObservations.new(state[:work_observations], root: @services.configuration.toolbox.root,
+                                                        store: @work.store, scrub: @work.method(:scrub))
       end
 
       def scope_refusal(state, name, arguments)
@@ -124,11 +134,21 @@ module Tamoz
       def prepare(state, context, call, cursor)
         effects = @services.effects
         name = call.fetch('name')
-        arguments = effects.resolved_effect_arguments(call.fetch('arguments'), name)
+        arguments = effects.resolved_effect_arguments(pinned(state, name, call.fetch('arguments')), name)
         step = { 'id' => step_id(state, cursor), 'tool' => name, 'arguments' => arguments }
         intent = effects.build_intent(step, accepted(state), arguments, iteration: state.fetch(:work_step_count),
                                                                         sub_operation: cursor)
         approve(state, context, call, { 'step' => step.except('arguments'), 'intent' => intent }, step)
+      end
+
+      # F4: the ledger is the authority for what the model saw — not the disk at gate time (which
+      # would let a blind edit pass) and not the model's own digest. create_file keeps its
+      # content-derived digest; it has no before-state to observe.
+      def pinned(state, name, arguments)
+        return arguments unless name == 'apply_patch'
+
+        ledger = observations(state).pinned_digest(arguments.fetch('path'))
+        arguments.merge('expected_sha256' => ledger)
       end
 
       def approve(state, context, call, prepared, step)
@@ -224,6 +244,29 @@ module Tamoz
                end
         result(state, call, text, summary: summary(name, outcome))
           .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil)
+          .merge(observation_update(state, name, call, outcome))
+      end
+
+      # What the model was shown, and the bytes it saw. A read whose file moved inside the call
+      # records the reported sha with no retained bytes: the next edit then fails stale_file,
+      # which is the right outcome.
+      def observation_update(state, name, call, outcome)
+        return {} unless outcome.status == :succeeded
+        return { work_observations: read_ledger(state, outcome).to_h } if name == 'read_file'
+        return { work_observations: write_ledger(state, call).to_h } if WorkContext::MUTATING_TOOLS.include?(name)
+
+        {}
+      end
+
+      def read_ledger(state, outcome)
+        observations(state).record_read(String(outcome.value.fetch('output')),
+                                        step: state.fetch(:work_step_count))
+      end
+
+      # The model saw the diff, and the file now holds the after-bytes.
+      def write_ledger(state, call)
+        observations(state).record_write(call.fetch('arguments').fetch('path'),
+                                         step: state.fetch(:work_step_count))
       end
 
       def success_text(name, value, preview)
@@ -274,12 +317,20 @@ module Tamoz
       end
 
       def result(state, call, text, summary: nil)
-        limit = @work.settings.context_policy.max_inline_bytes
-        spilled = ContextEngine::Spill.new(store: @work.store, max_inline_bytes: limit)
-                                      .apply(@work.scrub(text), summary: summary || call.fetch('name'))
+        spilled = spilled_result(call.fetch('name'), text, summary: summary || call.fetch('name'))
         entry = @work.entry(state.fetch(:work_entries), 'tool_result', spilled.text,
                             tool_call_id: call.fetch('id'), name: call.fetch('name'), spilled: spilled.spilled)
         { work_entries: [entry], work_cursor: state.fetch(:work_cursor) + 1, next_node: 'work_gate' }
+      end
+
+      # A read is never spilled: the file is re-readable, so a stub plus recall_output is a worse
+      # copy of read_file with an offset. Its bytes are bounded by the read tool's own caps.
+      def spilled_result(name, text, summary:)
+        scrubbed = @work.scrub(text)
+        return ContextEngine::Spill::Result.new(text: scrubbed, spilled: nil) if name == 'read_file'
+
+        limit = @work.settings.context_policy.max_inline_bytes
+        ContextEngine::Spill.new(store: @work.store, max_inline_bytes: limit).apply(scrubbed, summary:)
       end
     end
   end

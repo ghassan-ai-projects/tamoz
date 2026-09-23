@@ -72,7 +72,7 @@ they stand as decided (2026-09-23):
 |---|---|---|---|
 | R1 | FC1 (window, pinned as data) · restore A3/A4 (the packaging list is missing both phase-1 gems — `test/packaging_test.rb` is red today) | no | F1; A3, A4 |
 | R2 | FC2 (contextual edit diff, read byte cap, stable error codes) | no | F2, F7 |
-| R3 | FC3 (observation ledger, gate pinning, read window, dedup, outside-change notice) | yes | F3, F4, F5, F6, F17 |
+| R3 | FC3 (observation ledger, gate pinning, read window, dedup, outside-change notice) — **executed as R12 + R13** (see below) | yes | F3, F4, F5, F6, F17 |
 | R4 | FC7 (superseded-read prune) — **after** FC3, which produces its input | no | F12 |
 | R5 | FC5 (change ledger + diffstat) · FC4 (references, guidance digests + notice) | yes | F9, F10 |
 | R6 | FC6 (operator rewind) | yes | F11 |
@@ -82,6 +82,13 @@ they stand as decided (2026-09-23):
 FC11 is dropped (§ above). Every round that adds a state channel **bumps `WORK_GRAPH_VERSION`**;
 each round's sessions are written and read at one version only, and no session crosses a round —
 the repo carries no compatibility code for old graph versions.
+
+**Split (recorded).** The plan's R3 is executed as **R12** (the observation ledger, gate pinning,
+`not_observed`/`stale_file`, the default read window, reads never spilled → F2, F3, F4; bumps the
+graph version to 6) and **R13** (read dedup, the outside-change pass, secret scrub through the note
+and the net diff → F5, F6, F17; no new channel). The plan's later round numbers keep their
+packages; the *order* is unchanged (FC7's prune still waits on the ledger). The two repair rounds
+for the inherited phase-1 reds are R10 and R11, which move no F row.
 
 **Sequencing note (recorded, per review).** `docs/active-investigation/` WP4 is *plan, not built*
 and also edits the session graph. Phase 2 runs first; WP4 rebases onto the phase-2 graph when it

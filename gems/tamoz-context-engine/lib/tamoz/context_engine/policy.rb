@@ -5,13 +5,14 @@ module Tamoz
     # When to prune, compact and hand off, per model route.
     Policy = Data.define(
       :threshold_ratio, :backstop_ratio, :retain_ratio, :max_compactions_per_turn, :summary_max_tokens,
-      :overflow_retries, :max_inline_bytes, :prune_threshold_chars, :prune_head_chars, :prune_tail_chars
+      :overflow_retries, :max_inline_bytes, :prune_threshold_chars, :prune_head_chars, :prune_tail_chars,
+      :read_window_lines
     ) do
       def self.default
         new(
           threshold_ratio: 0.8, backstop_ratio: 0.92, retain_ratio: 0.16, max_compactions_per_turn: 1,
           summary_max_tokens: 8192, overflow_retries: 1, max_inline_bytes: 8192,
-          prune_threshold_chars: 8192, prune_head_chars: 4096, prune_tail_chars: 1024
+          prune_threshold_chars: 8192, prune_head_chars: 4096, prune_tail_chars: 1024, read_window_lines: 800
         )
       end
 
@@ -40,6 +41,16 @@ module Tamoz
       def prune_budget
         Pruner::Budget.new(threshold_chars: prune_threshold_chars, head_chars: prune_head_chars,
                            tail_chars: prune_tail_chars)
+      end
+
+      # The work route applies the read window here, at its gate, so the pipeline, the healing
+      # preflight and every other read_file caller keep their own behaviour. A read without a
+      # range is a window, and the window is policy.
+      def window_arguments(name, arguments)
+        return arguments unless name == 'read_file'
+        return arguments if arguments.key?('offset') || arguments.key?('limit')
+
+        arguments.merge('offset' => 1, 'limit' => read_window_lines)
       end
     end
   end

@@ -53,7 +53,7 @@ module Tamoz
         window = line_window(lines, first, arguments.fetch('limit', MAX_RANGE_LINES))
         shown = bounded(numbered(window, first))
         [*range_header(arguments.fetch('path'), content, first, shown.length), *shown,
-         *truncation(shown, window, first)].join("\n")
+         *truncation(shown, window, first, lines)].join("\n")
       end
 
       # Matching is pure string work (File.fnmatch?) over a walk that never leaves the
@@ -120,8 +120,13 @@ module Tamoz
         ["File: #{path}", "sha256: #{Digest::SHA256.hexdigest(content)}", range]
       end
 
-      def truncation(shown, window, first)
-        shown.length < window.length ? ["... truncated; continue with offset #{first + shown.length}"] : []
+      # Two different truncations, both worth telling the caller about: the byte budget cut the
+      # window short, or the file simply continues past it.
+      def truncation(shown, window, first, lines)
+        return ["... truncated; continue with offset #{first + shown.length}"] if shown.length < window.length
+        return [] if first + shown.length > lines.length
+
+        ["... continue with offset #{first + shown.length}"]
       end
 
       def bounded(lines)

@@ -128,6 +128,8 @@ module WorkLoopFixtures
                       'steps' => [{ 'title' => 'Edit the value', 'status' => 'in_progress' }] }]
   end
 
+  def read_call(path) = ['read_file', { 'path' => path }]
+
   def patch_call(root, path, before, after)
     sha = Digest::SHA256.hexdigest(File.read(File.join(root, path)))
     ['apply_patch', { 'path' => path, 'expected_sha256' => sha, 'before' => before, 'after' => after }]
