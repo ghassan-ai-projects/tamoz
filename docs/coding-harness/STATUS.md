@@ -108,7 +108,11 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 6. **`script_context_bootstrap_test` is red under `bundle exec`, so under `rake ci`.** Found
    2026-09-23 and red at `ea3f803e`. Bundler already puts every gem's lib on the load path, so the
    "stripped" script loads `tamoz/…` anyway and fails later on `support/benchmark_families`; the
-   assertion expects the `tamoz/` load error. Green with plain `ruby -Itest`. **Open.**
+   assertion expects the `tamoz/` load error. Green with plain `ruby -Itest`. **Repaired**: the
+   child now runs with every `BUNDLE*` variable and `RUBYOPT` cleared and an empty gem home, so only
+   the script's own bootstrap can resolve `tamoz/*`. The forced `-rbundler/setup` it replaces
+   crashed before the script ran, so the probe never ran the script in either environment. Green
+   under both `ruby` and `bundle exec`, and a narrowed `$LOAD_PATH` glob still turns it red.
 
 | Round | Packages | Red-at-parent proof | F rows → met | State | Commit |
 |---|---|---|---|---|---|

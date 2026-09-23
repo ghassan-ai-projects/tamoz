@@ -11,12 +11,10 @@ require_relative 'test_helper'
 class ScriptContextBootstrapTest < Minitest::Test
   STRIPPED_HARNESS = 'cannot load such file'
 
-  # No RUBYLIB, no bundler, no RUBYOPT: the child resolves tamoz/* from the
-  # script's bootstrap alone, exactly as a person running it from a shell does.
-  BARE_ENV = {
-    'RUBYOPT' => nil, 'RUBYLIB' => nil,
-    'BUNDLE_GEMFILE' => nil, 'BUNDLE_BIN_PATH' => nil
-  }.freeze
+  # No RUBYLIB, no RUBYOPT, and none of the BUNDLE*/BUNDLER* variables `bundle exec` exports: the
+  # child resolves tamoz/* from the script's bootstrap alone, as a person running it from a shell does.
+  BARE_ENV = ENV.keys.grep(/\ABUNDLE/).to_h { |key| [key, nil] }
+                .merge('RUBYOPT' => nil, 'RUBYLIB' => nil).freeze
 
   # Named, not discovered. The probe RUNS each script, and `script/` also holds generators whose
   # whole job is to write committed artifacts — `generate_legacy_session_fixture` rewrites
@@ -30,9 +28,15 @@ class ScriptContextBootstrapTest < Minitest::Test
     end
   end
 
-  def run_script(path, args: [])
-    out, err, status = Open3.capture3(BARE_ENV, RbConfig.ruby, path.to_s, *args, chdir: ROOT.to_s)
+  def run_script(path, args: [], env: BARE_ENV)
+    out, err, status = Open3.capture3(env, RbConfig.ruby, path.to_s, *args, chdir: ROOT.to_s)
     [out, err, status]
+  end
+
+  # The stripped copy must die of the missing bootstrap, not of whatever the environment makes
+  # resolvable: with bundler gone, an empty gem home is the only other place tamoz/* could come from.
+  def without_gem_fallback(dir)
+    BARE_ENV.merge('GEM_HOME' => File.join(dir, 'gem_home'), 'GEM_PATH' => File.join(dir, 'empty_gem_path'))
   end
 
   def test_the_probe_covers_the_benchmark_scripts
@@ -63,7 +67,7 @@ class ScriptContextBootstrapTest < Minitest::Test
       copy = Pathname.new(dir).join('stripped_holdout')
       copy.write(stripped)
 
-      _out, err, status = run_script(copy)
+      _out, err, status = run_script(copy, env: without_gem_fallback(dir))
 
       refute_predicate status, :success?, 'the stripped copy loaded anyway; the probe cannot detect the defect'
       assert_includes err, "#{STRIPPED_HARNESS} -- tamoz/",
