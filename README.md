@@ -40,7 +40,7 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-agent-memory` | Durable memory: `Memory::Engine` — admission, retrieval, lifecycle with deletion receipts, consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification with abstention, immutable rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
-| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
 | `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
@@ -57,6 +57,13 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
 
 ## What works today
 
+- **Coding tasks (`tamoz code`).** A durable tool-calling work loop for tasks
+  that take many steps. The model finds and reads code, writes a plan that a
+  second call reviews, edits through approved, digest-checked patches, and runs
+  your configured checks. A context engine keeps the conversation inside the
+  model's window; budgets end a turn with a handoff instead of a loop. In its
+  first real run it built a working browser Game of Life, then changed it on
+  request ([guide](documentation/guides/coding.md)).
 - **Reviewed change loop.** Discovery reads, then a separately reviewed action
   plan, an exact diff shown before approval, a digest-bound atomic patch, and a
   configured verification command. A failed check becomes evidence for up to two
@@ -90,6 +97,13 @@ rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
 rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' "Fix the failing test"
 ```
 
+For a coding task that takes many steps, use `code`. It needs a model route with a
+known context window; see [the coding guide](documentation/guides/coding.md):
+
+```bash
+rbenv exec bundle exec tamoz --provider openrouter --model deepseek/deepseek-v4.1-flash --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' --guidance AGENTS.md code "Add X"
+```
+
 Read-only is the default. See
 [`documentation/getting-started/install.md`](documentation/getting-started/install.md)
 for requirements, durable sessions, profiles and the full subcommand surface.
@@ -113,8 +127,10 @@ from its index:
   [security model](documentation/architecture/security-model.md),
   [invariants](documentation/architecture/invariants.md)
 - **Design** — [the design docs](documentation/design/README.md),
+  [the coding harness](documentation/design/coding-harness.md),
   [decisions/ADRs](documentation/adr/README.md)
-- **Guides** — [operator runbook](documentation/guides/agent-operator.md),
+- **Guides** — [coding with `tamoz code`](documentation/guides/coding.md),
+  [operator runbook](documentation/guides/agent-operator.md),
   [Telegram](documentation/guides/telegram.md),
   [evaluation](documentation/guides/evaluation.md)
 - **Operations** — [runbook](documentation/operations/operations.md),

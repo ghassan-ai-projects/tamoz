@@ -37,6 +37,7 @@ If you have twenty minutes, the package suggests: GOAL → REVIEW → INVARIANTS
 - [self-healing.md](./self-healing.md) — bounded self-healing: typed failures, the remediation matrix, the DR-2 durable circuit, promotion gates, verification and compensation.
 - [skills.md](./skills.md) — portable Agent Skills: format, snapshots, loading, frontmatter, supply-chain promotion, and why compilation never executes.
 - [observability.md](./observability.md) — the signal plane: closed versioned catalog, correlation identity, immutable signals, bounded recorders, the local journal, content policy, and OTLP export.
+- [coding-harness.md](./coding-harness.md) — the coding harness: the durable tool-calling work loop, the context engine (frozen header, append-only surface, spill, pruner, compaction), the harness protocol, and the budgets.
 - [comms.md](./comms.md) — the channel/communications design: channel values, admission, the Transport seam, delivery, approval policy, decision records, and the Telegram transport.
 
 Related: the decisions behind these subsystems are cataloged in [`../adr/README.md`](../adr/README.md).

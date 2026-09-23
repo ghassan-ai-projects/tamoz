@@ -76,7 +76,7 @@ named example task in a clean subprocess.
 | `tamoz-agent-memory` | The durable memory vertical: `Memory::Engine`, admission/retrieval/consolidation/lifecycle, wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification, rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-tools`, `tamoz-core` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite` |
-| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated lifecycle, promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
 | `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
@@ -145,7 +145,7 @@ The interactive subcommands drive one thread while you watch it.
 | Subcommand | What it does |
 |---|---|
 | `ask` | Start a new turn on a thread |
-| `code` | Start a coding turn in the tool-calling work loop (needs `--allow-changes` or a profile; see `docs/coding-harness/`) |
+| `code` | Start a coding turn in the tool-calling work loop (needs `--allow-changes` or a profile, and a route with a known context window; see [the coding guide](../guides/coding.md)) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on |
 | `continue` | Drive a paused thread forward without new input |
 | `list` | Show every thread in the session directory |

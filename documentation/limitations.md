@@ -159,6 +159,28 @@ cross-cutting query today — the circuit store is per scope and scope id with n
 enumeration, and terminal requests leave the pending view by design. Both need a
 new read-only storage query and a boundary-registry entry.
 
+## The coding harness has one real task run, not a real-model evaluation
+
+`tamoz code` (see [guides/coding.md](guides/coding.md)) has passed its offline
+suite and one real end-to-end task. A browser Game of Life and a follow-up
+change to it were delivered over OpenRouter DeepSeek v4.1 Flash on 2026-09-23.
+That is a demonstration, not a measurement:
+
+- **The real-model evaluation has not run.** The `agenteval` packs are built
+  and validated offline (`rake agenteval:prove`). `rake agenteval:harness:all`
+  refuses to start while the DeepSeek direct account has no balance.
+- **Cache savings are unmeasured.** OpenRouter answers correctly, but it
+  reported zero cached tokens on byte-identical requests. The cache-hit and
+  cache-adjusted-cost predictions need the DeepSeek direct route.
+- **File-context work is in progress.** Read deduplication, notes for files
+  changed outside the loop, pruning superseded reads, a change ledger, and
+  operator rewind are planned, not built (`docs/coding-harness/FILE-CONTEXT.md`).
+- **A check asks every time.** Under the bundled default policy, each
+  `run_check` is a separate approval prompt.
+- **Budgets are calls and time, not tokens or money.** A work turn stops on
+  model calls, tool calls, wall time and the context window. There is no spend
+  cap.
+
 ## Retired and absent capability areas
 
 ### The P14 streaming-input engine is retired
@@ -249,8 +271,10 @@ is recorded rather than smoothed over:
 - Three classes of defect in this project's history were found by running the
   product against a real model, never by the test corpus: a tool-error surfacing
   gap, an action-mode failure, and a forged corruption error on any non-ASCII
-  model reply. Green tests here are necessary and have repeatedly proven
-  insufficient.
+  model reply. The first real `tamoz code` run added more: a non-ASCII reply
+  crashed the work loop, approval previews printed twice, and a long turn hit
+  the graph's step limit before its own budget. Green tests here are necessary
+  and have repeatedly proven insufficient.
 
 [`../docs/GAUNTLET_PROGRESS.md`](../docs/GAUNTLET_PROGRESS.md) (repository-internal archive) §5 carries the full open-gap list.
 

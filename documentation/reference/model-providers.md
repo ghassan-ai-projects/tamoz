@@ -18,3 +18,35 @@ single `EpisodeModelTransport` OpenAI-compatible request shape.
 `anthropic` and `gemini` are not silently redirected. Operators using those
 model families must select `openrouter` and provide its provider-qualified
 model identifier.
+
+## Context windows
+
+The coding work loop (`tamoz code`) manages the model's context window, so it
+needs the window size of the route it calls. The window is resolved in this
+order:
+
+1. The profile role's `context_window` setting.
+2. The `TAMOZ_CONTEXT_WINDOW` environment variable.
+3. The route's recorded window in
+   `gems/tamoz-agent-kernel/data/model_windows.yml`, keyed on `provider/model`.
+
+A route is keyed on the pair, not the model name alone, because one model can
+have a different window at each gateway. A route with no recorded window and no
+override is refused before any model call.
+
+Recorded routes (each entry in the file names its source and the date it was
+checked):
+
+| Route | Context window | Max output |
+|---|---|---|
+| `deepseek/deepseek-flash` | 1,048,576 | 393,216 |
+| `deepseek/deepseek-v4-pro` | 1,048,576 | 393,216 |
+| `openrouter/deepseek/deepseek-v4.1-flash` | 1,048,576 | 384,000 |
+| `openrouter/deepseek/deepseek-v4-flash` | 1,048,576 | 384,000 |
+| `openrouter/deepseek/deepseek-chat` | 163,840 | 16,384 |
+
+To add a route, read the window from the provider's model listing and record
+it with its `source` and `checked` date.
+
+Tool-calling conversations do not run through the witness gateway; the work loop
+refuses a gateway route.
