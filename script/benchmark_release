@@ -41,15 +41,9 @@ require "digest"
 require "optparse"
 
 ROOT = File.expand_path("..", __dir__)
-$LOAD_PATH.unshift(File.join(ROOT, "gems", "tamoz-evals-runner", "lib"))
-$LOAD_PATH.unshift(File.join(ROOT, "gems", "tamoz-evals", "lib"))
-$LOAD_PATH.unshift(*%w[
-  tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-tools
-  tamoz-observability tamoz-comms tamoz-approval tamoz-agent-kernel
-  tamoz-agent-capabilities tamoz-agent-session tamoz-agent-memory
-  tamoz-agent-healing tamoz-agent-improvement tamoz-agent-profile tamoz-agent
-  tamoz-sqlite
-].map { |name| File.join(ROOT, "gems", name, "lib") })
+# Every gem lib, so extracting a class into a new gem cannot stale-date this
+# script's load path.
+$LOAD_PATH.unshift(*Dir[File.join(ROOT, "gems", "*", "lib")])
 require "tamoz/evals/runner"
 require "tamoz/sqlite"
 require "tamoz/agent"
