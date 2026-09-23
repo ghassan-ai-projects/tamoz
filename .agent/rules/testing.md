@@ -17,3 +17,13 @@
   globbed `script/*` and ran each hit, which ran `script/generate_legacy_session_fixture` and
   rewrote a committed fixture — the *next* test to read it went red. Name the subjects a runner
   probe covers; never discover them by glob.
+- **A test that passes locally and fails only on CI is usually reading the WORKING TREE, not the
+  checkout.** `documentation_test` resolves every markdown link against the filesystem, so a tracked
+  doc linking to an untracked directory (`docs/coding-harness/README.md` →
+  `docs/active-investigation/`) resolves on the author's machine and dangles in CI, which checks out
+  tracked files only. To reproduce a doc/packaging failure, move the untracked path aside first —
+  `git stash` does not cover untracked files and will "reproduce" nothing.
+- **Fix the failure the pipeline reports, not the one you inferred.** A `FAILED:` line lists every
+  file in the failing SHARD, not every failing file: one assertion fails and shard-mates are named
+  with it. Read the numbered failure bodies at the end of the output to find the real subject —
+  the CI summary's file list is not a to-do list.

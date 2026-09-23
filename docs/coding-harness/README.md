@@ -87,7 +87,7 @@ and the `agenteval` harness. What is missing is narrower:
 
 ## How this relates to active investigation
 
-[../active-investigation/](../active-investigation/README.md) is planned on the
+`docs/active-investigation/` is planned on the
 same branch and touches the same session, CLI and chat seams. It does not conflict
 with this plan. Its governed probes register as one more read-only capability
 source. The work loop in this plan sees them the same way it sees `read_file`.
