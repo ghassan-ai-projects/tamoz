@@ -81,8 +81,8 @@ addressed or recorded, and its commit exists. "A commit exists" alone is not don
 | R9 | FC2 (tools half): the ranged-read byte budget | suite green | F2 (part) | partial | R9 |
 | R10 | The pinned requirements manifest (known-red 3) | generator refusal recorded | — | done | R10 |
 | R11 | The two remaining phase-1 regressions in the slow/serial lane (known-red 4, 5) | recorded below | — | done | R11 |
-| R12 | FC3 part one: the observation ledger, gate pinning, `not_observed`/`stale_file`, the default read window, reads never spilled | recorded below | F2, F3, F4 | done | R12 |
-| R13 | FC3 part two: read dedup (short form), the outside-change pass, secret scrub through the new paths | pending | F5, F6, F17 | pending | — |
+| R12 | FC3 part one: the observation ledger, gate pinning, `not_observed`/`stale_file`, the default read window, reads never spilled | recorded below | F2, F3, F4 | done | R12, `fb9b31cd` |
+| R13 | FC3 part two: read dedup (short form), the outside-change pass, secret scrub through the new paths | **not landed** — see below | F5, F6, F17 | **open** | — |
 | R3 | ~~FC3 (one round)~~ — split into R12/R13; the original row stays for the plan's numbering | — | — | split | — |
 | R4 | FC7 superseded-read prune (after its producer) | pending | F12 | pending | — |
 | R5 | FC5 change ledger + diffstat · FC4 references + guidance digests/notice | pending | F9, F10 | pending | — |
@@ -453,6 +453,54 @@ proven otherwise — restore it (`git checkout -- <path>`) before believing the 
 
 **Still open in FC3:** read dedup, the outside-change pass, and secret scrub through the note and
 the net diff (F5, F6, F17) — R13. **Reviewer debt for R12 is not yet discharged.**
+
+### R13 — FC3 part two: **researched and prototyped, deliberately NOT landed**
+
+R13 was implemented, debugged to a working state, and then **reverted**. This section is the
+handover, because the next session should not repeat the debugging.
+
+**What was built and working** (reverted, not committed):
+
+- `Surface.visible_matching(entries, **fields)` — a bounded scan for the visible entry whose
+  `observes` matches, so a repeated read can find its earlier result. `FIELDS` gains `observes`.
+- The gate attaches `observes = {path, sha, whole, read, step}` to the read's own `tool_result`
+  entry, and a repeat renders `lib/value.rb unchanged since step 2 (sha256 e13df8c44af5…); that
+  result is still above.` Verified end to end: the second whole read shortens, a 3,000-line
+  windowed read does not.
+- The ledger records `range` **and** `total` from the read's own header, so "the model saw the whole
+  file" is decidable — a read is whole when its window covered every line. This matters because the
+  gate now always applies the default window, so *every* read looks ranged.
+
+**Four defects found the hard way** (all fixed in the prototype, all easy to reintroduce):
+
+1. `move(...).merge(window)` with symbol keys mixed `:range`/`:total` into a string-keyed record;
+   `observes` and `refusal` then silently missed. The window hash must be string-keyed.
+2. `result` ran **before** `observation_update`, so the entry was created while `work_observes` was
+   still nil. The observation must be computed first and passed into `result`.
+3. `observation_update` returning `{}` for a non-observing call (`run_check`) still wrote
+   `work_observations: nil` over a good ledger, because `executed` merged the key unconditionally.
+   **This wiped the ledger after every check** and refused the next patch `not_observed` — a real
+   behaviour regression, caught by `test_a_repeated_check_after_each_edit_is_progress_not_a_loop`.
+   Merge the update hash itself, never a fixed key list.
+4. `work_observes` is a per-call scratch value; `work_observe` clears it each step, which is right —
+   but it must not be treated as durable.
+
+**Why it was reverted rather than committed.** Landing it costs one more real `Surface` method and
+`WORK_GRAPH_VERSION` bookkeeping, and the module is already at its `Metrics/ModuleLength` budget, so
+a clean landing needs a deliberate structural decision (where the matching predicate lives) that is
+worth doing on its own rather than under a round's last minutes. A red or over-budget tree was not
+an acceptable way to claim F5/F6.
+
+**Suggested first step next session:** re-apply the four fixes above in that order, put
+`visible_matching` on `Surface` with the module-length question settled first, and prove the
+`test_a_repeated_check_after_each_edit_is_progress_not_a_loop` case before adding the dedup tests —
+that case is the regression detector for defect 3.
+
+**Then, still R13:** the outside-change pass (one appended `system_update` per pass that found
+changes, cheap `stat` per observed path, ledger moved to the new sha, 3-context-line diff from the
+retained bytes, `nil` past `read.max_bytes` → "changed, re-read what you need"), the `Tamoz::Tools`
+text-to-text diff it needs, the `outside_changes.md` prompt and its digest pin, and the secret scrub
+through the note and net diff (F17).
 
 ## Verified against DSH, 2026-09-23
 
