@@ -27,3 +27,10 @@
   file in the failing SHARD, not every failing file: one assertion fails and shard-mates are named
   with it. Read the numbered failure bodies at the end of the output to find the real subject —
   the CI summary's file list is not a to-do list.
+- **A gate that is red before your change is not yours to chase — prove it, then say so.**
+  `rake quality:reek` on this branch reports `script/adr_catalog.rb`, `script/adr_traceability.rb`
+  and `script/adr_validate.rb` at baseline 0, which reads as your regression because the task names
+  bare files. Settle it against the committed revision with a detached worktree
+  (`git worktree add --detach /tmp/x HEAD`, same task there) before spending time on symbols the
+  diff never touched; it costs a minute. Untracked files do not follow into that worktree, so it is
+  also the honest way to reproduce a gate that reads the tracked tree only.

@@ -91,9 +91,12 @@ module Tamoz
         File.exist?(path) || File.symlink?(path)
       end
 
+      # A process started alongside this one may create the file first; verify! then judges what it made.
       def create_database_file!
         File.open(path, exclusive_write_flags, FILE_MODE) { nil }
         File.chmod(FILE_MODE, path)
+      rescue Errno::EEXIST
+        nil
       end
 
       def exclusive_write_flags

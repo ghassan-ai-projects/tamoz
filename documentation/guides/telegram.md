@@ -12,6 +12,30 @@ gated on evidence, and the base policy lets the paired chat approve. The full
 model is recorded in
 [ADR-049](../adr/adr-049-telegram-approval.md).
 
+## 0. Quick start (the short path)
+
+Create the bot with [@BotFather](https://t.me/botfather), export the token, then
+run two commands. `setup` is the one-time pairing; `start` runs the gateway and
+the worker together in the foreground until Ctrl-C:
+
+```bash
+export TAMOZ_TELEGRAM_BOT_TOKEN='<token from BotFather>'
+rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project
+rbenv exec bundle exec tamoz telegram start
+```
+
+`setup` authenticates the token (`getMe`), waits up to 120s for your first
+private message, prints the sender's name and id, and asks you to confirm it is
+you. On `y` it writes the channel and a workspace profile into the runtime
+directory (default `~/.tamoz`, or `--runtime-dir PATH`). `start` verifies the
+token and picks the first configured provider that answers a real call — a
+missing key, a refused key, or an empty account is named before anything runs —
+then starts both processes. It refuses a missing token, a refused token, or a
+runtime with no channel in one plain `tamoz:` line.
+
+The rest of this guide is the manual path: what those two commands write, and how
+to configure each piece by hand if you want a different shape.
+
 ## 1. Create the bot
 
 Create a bot with [@BotFather](https://t.me/botfather). The token it gives you
@@ -95,10 +119,12 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms serve
 
 The **worker** executes the turns those messages became, and streams its
 lifecycle events as newline-delimited JSON. Without it the gateway still admits
-messages durably and nothing is ever answered:
+messages durably and nothing is ever answered. Chat turns need the tool-calling
+work loop, so pass `--work-routing` — without it the worker serves chat on the
+older plan/review path:
 
 ```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz worker --json
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz --work-routing worker --json
 ```
 
 Both exit cleanly on `SIGINT`/`SIGTERM` after finishing the work in hand. The

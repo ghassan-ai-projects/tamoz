@@ -21,7 +21,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   USAGE_REPLY = 'Usage: /start <pairing code>'
   WAITING_REPLY = 'That code matches a pending pairing request. Waiting for operator approval.'
   NO_MATCH_REPLY = "That code doesn't match a pending pairing request."
-  PAIRED_REPLY = 'This chat is already paired.'
+  PAIRED_REPLY = Tamoz::Comms::Gateway::START_PAIRED_REPLY
 
   def test_first_unbound_message_issues_one_hashed_challenge_and_names_the_code
     with_gateway do |gateway, transport, store|
@@ -146,7 +146,7 @@ class CommsPairingFirstContactTest < Minitest::Test
                                          now: NOW + 10)
 
       assert_equal PAIRED_REPLY, drive_command(gateway, transport, '/start WHATEVER1', id: 2)
-      assert_equal USAGE_REPLY, drive_command(gateway, transport, '/start', id: 3)
+      assert_equal PAIRED_REPLY, drive_command(gateway, transport, '/start', id: 3)
     end
   end
 

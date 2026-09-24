@@ -1439,6 +1439,12 @@ module Tamoz
       def apply_migrations(connection, from:, set_application_id:)
         connection.execute("BEGIN EXCLUSIVE")
         begin
+          # A process opening the same fresh database may have migrated it while this one waited for the lock.
+          if connection.get_first_value("PRAGMA user_version") == CURRENT_VERSION
+            connection.execute("COMMIT")
+            return self.class.verify_connection!(connection)
+          end
+
           transaction = nil
           (from + 1..CURRENT_VERSION).each do |ordinal|
             transaction = apply_pending_migration(connection:, ordinal:)

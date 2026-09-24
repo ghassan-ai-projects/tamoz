@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 # One scenario per expectation in docs/telegram-chat/GOAL.md; checks read observations, never wording.
+# rubocop:disable Metrics/ModuleLength -- one scenario per bar row; splitting the
+#   module would hide the row-to-check mapping this file exists to make visible.
 module TelegramChatScenarios
   module_function
 
@@ -11,7 +13,29 @@ module TelegramChatScenarios
     eval.check(scenario, 'plain answer, no system caveat', noisy.empty?, noisy.map(&:text).join(' | '))
   end
 
-  def all = %w[greet memory reset arabic workspace_read create_file long help burst photo stranger provider_down]
+  def all = %w[setup greet memory reset arabic workspace_read create_file long help burst photo stranger provider_down]
+
+  # S1: the one documented command wrote a runnable runtime; every later scenario
+  # runs on it, so the chat checks double as evidence the command's output works.
+  def setup(eval)
+    written = eval.setup
+    check_setup_identity(eval, written)
+    check_setup_pairing(eval, written)
+  end
+
+  def check_setup_identity(eval, written)
+    channel = written[:channel]
+    eval.check('setup', 'the documented command exited 0', written[:status].zero?, written[:err])
+    eval.check('setup', 'it pinned the authenticated bot id',
+               channel['expected_bot_id'] == eval.fake.bot_id, channel['expected_bot_id'].inspect)
+  end
+
+  def check_setup_pairing(eval, written)
+    paired = written[:channel].dig('admission', 'correspondents')
+    eval.check('setup', 'it paired only the confirmed owner',
+               paired == ["telegram:user:#{TelegramChatEval::USERS.first}"], paired.inspect)
+    eval.check('setup', 'it wrote the workspace profile', File.exist?(written[:profile]), written[:profile])
+  end
 
   def greet(eval)
     turn = eval.turn(eval.fresh_user, 'hi')
@@ -67,11 +91,15 @@ module TelegramChatScenarios
     turns = [eval.turn(user, 'Create a file named notes.txt in the workspace containing exactly the word: hello')]
     approve = turns.last.button('approve:')
     turns << eval.turn(user, tap: approve) if approve
-    eval.check('create_file', 'file really created', eval.workspace_text('notes.txt').include?('hello'))
-    eval.check('create_file', 'user told the outcome', !turns.last.reply.strip.empty?, turns.last.reply)
-    eval.check('create_file', 'says no check verified it', turns.last.reply.include?(Tamoz::Agent::ChatReply::UNVERIFIED),
-               turns.last.reply)
+    check_created_file(eval, turns.last)
     eval.hygiene('create_file', turns)
+  end
+
+  def check_created_file(eval, turn)
+    reply = turn.reply
+    eval.check('create_file', 'file really created', eval.workspace_text('notes.txt').include?('hello'))
+    eval.check('create_file', 'user told the outcome', !reply.strip.empty?, reply)
+    eval.check('create_file', 'says no check verified it', reply.include?(Tamoz::Agent::ChatReply::UNVERIFIED), reply)
   end
 
   def long(eval)
@@ -85,8 +113,10 @@ module TelegramChatScenarios
   def help(eval)
     turn = eval.turn(eval.fresh_user, '/help')
     eval.check('help', 'lists /new', turn.reply.include?('/new'), turn.reply)
+    eval.check('help', 'lists /help', turn.reply.include?('/help'), turn.reply)
     eval.check('help', 'answer within 5s', turn.first_reply_s.to_f <= 5,
                format('%.1fs', turn.first_reply_s.to_f))
+    eval.hygiene('help', [turn])
   end
 
   def burst(eval)
@@ -99,14 +129,27 @@ module TelegramChatScenarios
   def photo(eval)
     turn = eval.turn(eval.fresh_user, photo: true, timeout: 20)
     eval.check('photo', 'non-text gets a reply', !turn.reply.strip.empty?, turn.reply)
+    eval.hygiene('photo', [turn])
   end
 
   def stranger(eval)
     stranger = TelegramChatEval::STRANGER
     eval.fake.say(stranger, 'hi, who are you?')
-    sleep 0.3 while eval.inbound_dispositions(stranger).empty? && eval.ensure_children_alive
+    wait_for_disposition(eval, stranger)
     seen = eval.inbound_dispositions(stranger)
     eval.check('stranger', 'stranger never reaches the model', seen.any? && seen.none?('request'), seen.inspect)
+    check_no_reply(eval, stranger)
+  end
+
+  def wait_for_disposition(eval, stranger)
+    deadline = Time.now + 15
+    sleep 0.3 while eval.inbound_dispositions(stranger).empty? && Time.now < deadline && eval.ensure_children_alive
+  end
+
+  def check_no_reply(eval, stranger)
+    calls = eval.fake.calls(chat: stranger)
+    eval.check('stranger', 'stranger gets no reply', calls.none? { |call| call.name == 'sendMessage' },
+               calls.map(&:name).inspect)
   end
 
   # Runs last: it restarts the worker with a key the provider refuses.
@@ -119,3 +162,4 @@ module TelegramChatScenarios
     eval.hygiene('provider_down', [turn])
   end
 end
+# rubocop:enable Metrics/ModuleLength

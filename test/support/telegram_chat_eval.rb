@@ -5,11 +5,13 @@ require 'json'
 require 'open3'
 require 'psych'
 require 'rbconfig'
+require 'stringio'
 require 'timeout'
 require 'tmpdir'
 
+require 'tamoz/agent_cli'
+require 'tamoz/telegram'
 require_relative 'telegram_bot_api_fake'
-require_relative 'comms_runtime_profile'
 
 # Drives the real gateway and worker against a fake Bot API; see docs/telegram-chat/GOAL.md.
 class TelegramChatEval
@@ -51,7 +53,7 @@ class TelegramChatEval
     end
   end
 
-  attr_reader :fake, :results, :transcript
+  attr_reader :fake, :results, :transcript, :setup
 
   def initialize(provider:, model:, routing:)
     @provider = provider
@@ -169,33 +171,40 @@ class TelegramChatEval
 
   private
 
+  # The runtime is written by the documented one command (S1), not by hand: the
+  # gateway and worker below then run on exactly what `tamoz telegram setup`
+  # produced. The allowlist is widened afterwards the way an operator adds
+  # teammates, so each scenario gets its own conversation.
   def provision
     FileUtils.mkdir_p(@workspace)
     File.write(File.join(@workspace, 'README.md'),
                "# Orchard\n\nA small demo project.\n\nProject codename: BLUE-HERON-42\nOwner: the platform team\n")
     File.write(File.join(@workspace, 'todo.txt'), "- water the plants\n- renew passport\n")
     FileUtils.mkdir_p(@runtime, mode: 0o700)
-    CommsRuntimeProfile.write(@runtime, @workspace, profile_id: 'chat')
-    path = File.join(@runtime, 'config.yaml')
-    File.write(path, Psych.dump(config))
-    File.chmod(0o600, path)
+    @setup = run_setup
+    widen_allowlist
   end
 
-  def config
-    {
-      'runtime' => { 'schema_version' => 2 },
-      'workspace' => { 'root' => @workspace },
-      'channels' => {
-        'telegram-eval' => {
-          'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat',
-          'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-          'expected_bot_id' => @fake.bot_id,
-          'transport' => { 'poll_timeout_s' => 20 },
-          'admission' => { 'direct' => 'allowlist', 'correspondents' => USERS.map { |id| "telegram:user:#{id}" } },
-          'approvals' => { 'mode' => 'deny_only', 'prompt_ttl_s' => 900 }
-        }
-      }
-    }
+  def run_setup
+    out = StringIO.new
+    err = StringIO.new
+    status = Tamoz::Agent::CLI.run(
+      ['--runtime-dir', @runtime, 'telegram', 'setup', '--workspace', @workspace, '--owner', USERS.first.to_s],
+      out:, err:, input: StringIO.new, env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '123:eval' },
+      comms_client_factory: ->(token) { Tamoz::Telegram::Client.new(token, origin: @fake.origin) }
+    )
+    directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {})
+    { status:, out: out.string, err: err.string, channel: directory.channels.fetch('telegram'),
+      profile: File.join(directory.profiles_path, 'telegram.yaml') }
+  end
+
+  def widen_allowlist
+    path = File.join(@runtime, 'config.yaml')
+    document = Psych.safe_load_file(path, aliases: false)
+    document.fetch('channels').fetch('telegram')['admission']['correspondents'] =
+      USERS.map { |id| "telegram:user:#{id}" }
+    File.write(path, Psych.dump(document))
+    File.chmod(0o600, path)
   end
 
   def chat(user) = "telegram:chat:#{user}"

@@ -10,6 +10,11 @@ from its public release line onward.
 
 ### Added
 
+- `tamoz telegram setup|start`: pair a Telegram bot and run it from two
+  commands. `setup` authenticates the token, pairs the first private sender the
+  operator confirms, and writes the channel and workspace profile; `start`
+  verifies the token and picks the first provider that answers, then runs the
+  gateway and worker together. Chat turns run on the tool-calling work loop.
 - `tamoz code`: the coding harness. A durable tool-calling work loop in
   `tamoz-agent-session`, with two new gems: `tamoz-context-engine` (frozen
   request header, append-only surface, spill, pruner, compaction, token meter,
@@ -39,6 +44,12 @@ from its public release line onward.
 - A long work turn ends on its loop budget with a handoff, instead of on the
   graph's 200-step limit.
 - A reply cut off at the token limit continues the turn instead of failing it.
+- `tamoz telegram setup` repairs a runtime directory that already has a channel
+  but no `profiles/` directory (it adopts the unpinned channel and writes the
+  profile) instead of dying with a raw backtrace; a missing or refused token and
+  a missing, refused or out-of-credit key are each one named line.
+- The gateway and worker can open a fresh runtime database at the same time
+  without one dying on the migration lock.
 
 ### Removed
 

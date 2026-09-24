@@ -694,7 +694,7 @@ EVIDENCE = {
   # ---- CLI verbs (one behavioral assertion per verb; ledger gap 12) -------
   "CLI-improve" => {test: "test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories"},
   "CLI-code" => {test: "test/cli_code_test.rb#test_code_runs_the_work_loop_and_exits_zero_on_a_verified_change",
-               supporting: ["test/cli_code_test.rb#test_code_refuses_a_thread_that_is_not_a_work_thread"]},
+                 supporting: ["test/cli_code_test.rb#test_code_refuses_a_thread_that_is_not_a_work_thread"]},
   "CLI-ask" => {test: "test/agent_cli_test.rb#test_ask_creates_session_file"},
   "CLI-resume" => {test: "test/agent_cli_test.rb#test_resume_collects_interrupt_answers",
                    supporting: ["test/agent_cli_test.rb#test_resume_non_interactive_with_answer"]},
@@ -745,6 +745,9 @@ EVIDENCE = {
 
   "CLI-comms" => {test: "test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly",
                   supporting: ["test/comms_cli_test.rb#test_comms_list_shows_bindings_routes_and_outbox_depth"]},
+  "CLI-telegram" => {test: "test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel",
+                     supporting: ["test/cli_telegram_test.rb#test_setup_repairs_an_existing_unpinned_channel_without_a_profiles_directory",
+                                  "test/cli_telegram_test.rb#test_start_names_a_revoked_bot_token"]},
   "CLI-config" => {test: "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
                    supporting: ["test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"]},
   "CLI-observe" => {test: "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal"},

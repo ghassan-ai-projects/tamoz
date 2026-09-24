@@ -100,7 +100,15 @@ Work an operator runs against the runtime directory.
 | `observe` | Tail the local journal, render metrics, run the redaction self-test | verbs below |
 | `trace` | Reconstruct the journal view for one thread | `THREAD`, `--execution ID` |
 | `comms` | The channel surface | verbs below |
+| `telegram` | Set up and run the Telegram bot | verbs below |
 | `config` | Explicit configuration migration | `migrate` |
+
+### Telegram verbs
+
+| Verb | Purpose | Options |
+|---|---|---|
+| `telegram setup` | Pair the bot once and write its channel + workspace profile | `--workspace PATH`, `--owner TELEGRAM_USER_ID`, `--runtime-dir PATH` |
+| `telegram start` | Verify the token and provider, then run the gateway and worker together | `--env-file PATH`, `--provider NAME`, `--model NAME`, `--runtime-dir PATH` |
 
 ### Queue verbs
 

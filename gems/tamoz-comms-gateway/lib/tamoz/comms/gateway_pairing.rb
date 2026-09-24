@@ -7,12 +7,8 @@ module Tamoz
       module Pairing
         private
 
-        # `/start` is feedback only; binding activation stays with operator approval.
-        def start_text(arguments)
-          return START_USAGE_REPLY unless arguments
-
-          START_PAIRED_REPLY
-        end
+        # A command reaches here only from an admitted correspondent, so /start is a greeting.
+        def start_text(_arguments) = START_PAIRED_REPLY
 
         # Pairing first contact names one live challenge and reuses its plaintext
         # while the durable challenge remains pending.

@@ -185,6 +185,7 @@ request inboxes and the checkpoints.
 | `observe` | Tail the local journal, render metrics, or run the redaction self-test |
 | `trace` | Reconstruct the journal view for one thread from durable correlation identity |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
+| `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
 | `config` | Explicit configuration migration (`migrate`) |
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 

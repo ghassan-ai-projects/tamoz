@@ -59,7 +59,8 @@ module Tamoz
       START_WAITING_REPLY =
         'That code matches a pending pairing request. Waiting for operator approval.'
       START_NO_MATCH_REPLY = "That code doesn't match a pending pairing request."
-      START_PAIRED_REPLY = 'This chat is already paired.'
+      START_PAIRED_REPLY = "Hi! I'm Tamoz. Just send me a message; /help lists the commands.\n" \
+                           'أهلاً! أنا تاموز. أرسل لي رسالة، و/help يعرض الأوامر.'
       PAIRING_PENDING_REPLY =
         "This chat isn't paired yet. Read this code to your operator for approval: "
       PAIRING_CODE_TTL_S = 86_400.0

@@ -147,8 +147,23 @@ answers people the operator put on an allowlist and nobody else; the gateway
 holds the bot token and never constructs a session or opens a workspace file.
 The paired chat can Approve or Deny a gated action; approval is evidence-gated (ADR-049).
 
-The full walkthrough — creating the bot, authenticating it, collecting the
-allowlist, configuring the surface, and running the gateway and worker — is in
+From a checkout, two commands:
+
+```bash
+export TAMOZ_TELEGRAM_BOT_TOKEN='<token from @BotFather>'
+rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project   # pair, once
+rbenv exec bundle exec tamoz telegram start                            # run the bot
+```
+
+`setup` authenticates the token, waits for your first Telegram message, asks you
+to confirm it is you, and writes a runtime directory (default `~/.tamoz`). It
+names one clear error for a missing or refused token and for a missing or
+out-of-credit model key; `start` picks the first provider that answers, then runs
+the gateway and worker together until Ctrl-C. Pass `--runtime-dir PATH` to either
+command to keep the runtime elsewhere.
+
+The full walkthrough — creating the bot, the manual bootstrap, collecting the
+allowlist, the config reference and the two processes individually — is in
 [`documentation/guides/telegram.md`](documentation/guides/telegram.md). The
 approval and recovery operations are in
 [`documentation/operations/operations.md`](documentation/operations/operations.md).
