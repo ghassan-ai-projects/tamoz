@@ -147,23 +147,56 @@ answers people the operator put on an allowlist and nobody else; the gateway
 holds the bot token and never constructs a session or opens a workspace file.
 The paired chat can Approve or Deny a gated action; approval is evidence-gated (ADR-049).
 
+### Run it
+
+You need a bot token from [@BotFather](https://t.me/botfather) and one model
+provider key (`OPENROUTER_API_KEY` or `DEEPSEEK_API_KEY`), in the environment or
+in a `KEY=value` file:
+
+```bash
+# .env
+TAMOZ_TELEGRAM_BOT_TOKEN=<token from @BotFather>
+OPENROUTER_API_KEY=<your key>
+```
+
 From a checkout, two commands:
 
 ```bash
-export TAMOZ_TELEGRAM_BOT_TOKEN='<token from @BotFather>'
-rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project   # pair, once
-rbenv exec bundle exec tamoz telegram start                            # run the bot
+rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project --env-file .env   # pair, once
+rbenv exec bundle exec tamoz telegram start --env-file .env                            # run the bot
 ```
 
-`setup` authenticates the token, waits for your first Telegram message, asks you
-to confirm it is you, and writes a runtime directory (default `~/.tamoz`). It
-names one clear error for a missing or refused token and for a missing or
-out-of-credit model key; `start` picks the first provider that answers, then runs
-the gateway and worker together until Ctrl-C. Pass `--runtime-dir PATH` to either
-command to keep the runtime elsewhere.
+`setup` authenticates the token, waits for your first private message to the
+bot, asks you to confirm it is you, and writes a runtime directory (default
+`~/.tamoz`; `--runtime-dir PATH` on both commands keeps it elsewhere). `start`
+checks the token, tries each configured provider with one real call and uses the
+first that answers, then runs the gateway and the worker together until Ctrl-C.
+A missing or refused token or key, or an empty provider account, is one named
+error before anything starts.
 
-The full walkthrough — creating the bot, the manual bootstrap, collecting the
-allowlist, the config reference and the two processes individually — is in
+### Using it
+
+Message the bot like a person. It answers in one plain reply with a typing
+indicator, remembers the conversation (across restarts too) and replies in your
+language. Questions about the workspace are answered from its files; a change is
+shown to you first — the file and its content, the diff, or the command — with
+**Approve** and **Deny** buttons.
+
+| Command | What it does |
+|---|---|
+| `/new` | Start a fresh conversation. |
+| `/status` | One sentence: working, queued, waiting for your tap, stopping, or idle. |
+| `/cancel` | Stop the work in progress; the answer never arrives, you get "Stopped.". |
+| `/help` | The commands; `/help more` lists all of them. |
+
+Markdown in replies shows as formatting. A change nothing verified ends with a
+one-line note to check it; a provider problem (refused key, empty account, rate
+limit) is named in one sentence. The expectations the chat is held to, and the
+real-provider eval that checks them (`script/telegram_chat_eval`, 82/82), are in
+[`docs/telegram-chat/GOAL.md`](docs/telegram-chat/GOAL.md).
+
+The full walkthrough — the manual setup, the config reference, running the two
+processes individually, troubleshooting — is in
 [`documentation/guides/telegram.md`](documentation/guides/telegram.md). The
 approval and recovery operations are in
 [`documentation/operations/operations.md`](documentation/operations/operations.md).

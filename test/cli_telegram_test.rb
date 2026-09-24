@@ -71,6 +71,18 @@ class CliTelegramTest < Minitest::Test
     end
   end
 
+  def test_setup_reads_the_token_from_an_env_file
+    with_dirs do |runtime, workspace|
+      env_file = File.join(workspace, '.env')
+      File.write(env_file, "export TAMOZ_TELEGRAM_BOT_TOKEN='123:from-file'\n")
+      argv = %W[telegram setup --workspace #{workspace} --owner #{OWNER} --env-file #{env_file}]
+      status, out, err = cli(runtime, argv, bot: Bot.new([]), env: {})
+
+      assert_equal 0, status, err
+      assert_includes out, "Paired with Telegram user #{OWNER}"
+    end
+  end
+
   def test_start_skips_a_provider_that_refuses_and_names_why
     with_dirs do |runtime, workspace|
       cli(runtime, %W[telegram setup --workspace #{workspace} --owner #{OWNER}], bot: Bot.new([]))

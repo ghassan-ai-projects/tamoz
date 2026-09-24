@@ -67,6 +67,8 @@ from its public release line onward.
   the diff, or the command) instead of "I want to create a file". Its buttons are
   cleared once answered, the tap shows a toast, and a late tap on an old prompt
   says it is no longer waiting.
+- `tamoz telegram setup` accepts `--env-file` like `start`, so both commands
+  read the bot token from the same file.
 - `/status` answers in one plain sentence (working, queued, waiting for your
   approval, stopping, or nothing running); `--diagnostic` keeps the detail.
 

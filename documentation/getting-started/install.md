@@ -285,7 +285,9 @@ performs the explicit, backup-and-atomic-rename migration:
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
 ```
 
-The full channel walkthrough — creating the bot, authenticating it, collecting
+The short path is two commands — `tamoz telegram setup --workspace PATH
+--env-file .env` once, then `tamoz telegram start --env-file .env` — and needs
+only the bot token and one provider key. The full channel walkthrough — creating the bot, authenticating it, collecting
 the allowlist, configuring the surface, and running the gateway and worker — is
 in [`../guides/telegram.md`](../guides/telegram.md). The gateway holds the bot
 token and never constructs a session, loads a model credential, or opens a file

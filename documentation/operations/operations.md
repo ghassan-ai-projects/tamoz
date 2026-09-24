@@ -158,6 +158,19 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms delivery resolve <ID> 
 journal and the outbox agree. An `:unknown` delivery stays visible in
 `tamoz status` until resolved, and blocks purge under invariant 54.
 
+### Stopping work from a channel
+
+`/cancel` stamps every open request in the conversation (`/cancel r<ref>` one)
+and queues the durable cancel. The running worker sees the stamp within half a
+second (`Worker#watching_for_stop`): the work loop's next step ends at its
+`cancelled_by_user` terminal, a model call already in flight is abandoned and
+recorded as a failed attempt, and no further tool runs. A tool call that was
+already executing finishes first — cancellation never interrupts an effect
+halfway. A queued request stops as soon as a worker picks it up, before any model call;
+one parked on approval stops when the queued cancel runs. `/status --diagnostic` shows the requested/observed/terminal
+timeline; a cancel that raced a finished turn is reported as finished, never as
+stopped.
+
 ### Approving from a channel or the terminal
 
 Approval authority is a function of evidence strength, not of which transport
@@ -170,6 +183,12 @@ operator path always works:
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz approve REQUEST_ID
 ```
+
+The Telegram prompt shows what the change will do — the file and its content
+(with the mode when it is not `0644`), the diff for an edit, or the command for
+a check — in a code block the content cannot break out of. After a tap the
+buttons are removed and the tap shows a toast; a tap on a prompt that was
+already answered or expired says so and records nothing.
 
 An approval records a decision; the worker resumes the same occurrence on its
 next pass. Deny with `--deny`. The evidence model is in

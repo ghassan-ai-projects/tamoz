@@ -107,8 +107,18 @@ Work an operator runs against the runtime directory.
 
 | Verb | Purpose | Options |
 |---|---|---|
-| `telegram setup` | Pair the bot once and write its channel + workspace profile | `--workspace PATH`, `--owner TELEGRAM_USER_ID`, `--runtime-dir PATH` |
+| `telegram setup` | Pair the bot once and write its channel + workspace profile | `--workspace PATH`, `--owner TELEGRAM_USER_ID`, `--env-file PATH`, `--runtime-dir PATH` |
 | `telegram start` | Verify the token and provider, then run the gateway and worker together | `--env-file PATH`, `--provider NAME`, `--model NAME`, `--runtime-dir PATH` |
+
+### Chat commands (sent in Telegram)
+
+| Command | Reply |
+|---|---|
+| `/help [more]` | The short command list, or every command. |
+| `/new` | Starts a fresh conversation; earlier messages are no longer used. |
+| `/status [r<ref>] [--diagnostic]` | One plain sentence (working, queued, waiting for Approve/Deny, stopping, nothing running); `--diagnostic` prints every state axis. |
+| `/cancel [r<ref>]` | Stops every open message in the conversation (or one), replies "Stopping…", and the turn ends with "Stopped." at its next step. |
+| `/start <code>` | Pairing: shows the code to read to the operator, or the greeting once paired. |
 
 ### Queue verbs
 

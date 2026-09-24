@@ -47,16 +47,21 @@ module Tamoz
         workspace = options[:root]
         explicit_workspace = false
         owner = nil
+        env_file = nil
         OptionParser.new do |parser|
-          parser.banner = 'Usage: tamoz telegram setup [--workspace PATH] [--owner TELEGRAM_USER_ID]'
+          parser.banner = 'Usage: tamoz telegram setup [--workspace PATH] [--owner TELEGRAM_USER_ID] [--env-file PATH]'
           parser.on('--workspace PATH', 'Folder the agent works in (default: current folder)') do |path|
             workspace = path
             explicit_workspace = true
           end
           parser.on('--owner ID', Integer, 'Your Telegram user id, instead of pairing by message') { |id| owner = id }
+          parser.on('--env-file PATH', 'Read KEY=value secrets from this file') { |path| env_file = path }
           telegram_help(parser)
         end.parse!(argv)
-        token = @env[TOKEN_ENV].to_s
+        problem = env_file_problem(env_file)
+        return telegram_fail(problem) if problem
+
+        token = env_with_file(env_file)[TOKEN_ENV].to_s
         return telegram_fail("set #{TOKEN_ENV} to the token @BotFather gave you") if token.empty?
 
         workspace = File.expand_path(workspace || Dir.pwd)
@@ -203,8 +208,6 @@ module Tamoz
         File.chmod(0o600, path)
       end
 
-      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-      #   -- one guard per operator mistake, each named before anything is spawned.
       def telegram_start(options, argv)
         env_file = nil
         OptionParser.new do |parser|
@@ -220,7 +223,7 @@ module Tamoz
         problem = env_file_problem(env_file)
         return telegram_fail(problem) if problem
 
-        base = @env.to_h.merge(env_file ? read_env_file(env_file) : {})
+        base = env_with_file(env_file)
         return telegram_fail("set #{TOKEN_ENV} (or pass --env-file)") if base[TOKEN_ENV].to_s.empty?
         return telegram_fail(NO_CHANNEL) unless File.exist?(
           File.join(telegram_runtime_path(options), RuntimeDirectory::CONFIG_FILE)
@@ -239,7 +242,8 @@ module Tamoz
         @out.puts "Tamoz is starting as @#{entry['bot_username'] || surface} with #{provider}/#{model}."
         run_telegram(directory, surface, base.merge('TAMOZ_PROVIDER' => provider, 'TAMOZ_MODEL' => model))
       end
-      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+      def env_with_file(env_file) = @env.to_h.merge(env_file ? read_env_file(env_file) : {})
 
       def env_file_problem(env_file)
         "cannot read --env-file #{env_file}" if env_file && !File.readable?(env_file)

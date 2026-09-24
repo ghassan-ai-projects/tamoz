@@ -14,27 +14,51 @@ model is recorded in
 
 ## 0. Quick start (the short path)
 
-Create the bot with [@BotFather](https://t.me/botfather), export the token, then
-run two commands. `setup` is the one-time pairing; `start` runs the gateway and
+You need a bot token from [@BotFather](https://t.me/botfather) and one model
+provider key (`OPENROUTER_API_KEY` or `DEEPSEEK_API_KEY`). Put them in the
+environment or in a `KEY=value` file such as `.env`:
+
+```bash
+TAMOZ_TELEGRAM_BOT_TOKEN=<token from BotFather>
+OPENROUTER_API_KEY=<your key>
+```
+
+Then two commands. `setup` is the one-time pairing; `start` runs the gateway and
 the worker together in the foreground until Ctrl-C:
 
 ```bash
-export TAMOZ_TELEGRAM_BOT_TOKEN='<token from BotFather>'
-rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project
-rbenv exec bundle exec tamoz telegram start
+rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project --env-file .env
+rbenv exec bundle exec tamoz telegram start --env-file .env
 ```
 
 `setup` authenticates the token (`getMe`), waits up to 120s for your first
-private message, prints the sender's name and id, and asks you to confirm it is
-you. On `y` it writes the channel and a workspace profile into the runtime
-directory (default `~/.tamoz`, or `--runtime-dir PATH`). `start` verifies the
-token and picks the first configured provider that answers a real call — a
-missing key, a refused key, or an empty account is named before anything runs —
-then starts both processes. It refuses a missing token, a refused token, or a
-runtime with no channel in one plain `tamoz:` line.
+private message to the bot, prints the sender's name and id, and asks you to
+confirm it is you (`--owner TELEGRAM_USER_ID` skips the question). On `y` it
+writes the channel and a workspace profile into the runtime directory (default
+`~/.tamoz`, or `--runtime-dir PATH` on both commands). Running it again on an
+existing runtime repairs it: an unpinned channel is adopted and a missing
+profile is written.
 
-The rest of this guide is the manual path: what those two commands write, and how
-to configure each piece by hand if you want a different shape.
+`start` verifies the token, then tries each configured provider with one real
+call and uses the first that answers (DeepSeek, then OpenRouter; force one with
+`--provider NAME --model NAME`). A missing token, a refused token, a missing or
+refused key, or an empty provider account is named in one `tamoz:` line before
+anything runs. The worker runs with `--work-routing`, the tool-calling loop chat
+is built on.
+
+Now message the bot. Section 7 describes what to expect; the rest of this guide
+is the manual path — what those two commands write, and how to configure each
+piece by hand.
+
+### When it does not answer
+
+| Symptom | Cause and fix |
+|---|---|
+| `start` says the key was refused or the account is out of credit | Top up or switch provider; `start` names the variable it tried. |
+| The bot replies "I can't reach my AI model: …" | The worker lost its provider mid-run (key revoked, credit ran out, rate limit). The reply names which. |
+| A stranger gets no reply at all | By design: only paired correspondents reach the model. Add their `telegram:user:<id>` to `correspondents` (§3–4). |
+| Nothing happens after you tap **Approve** | Make sure `start` (or a worker) is still running; the decision is durable and the turn resumes on the worker's next pass. |
+| `comms doctor` reports a poller conflict | Another gateway or a webhook is reading the same bot. Stop it; one bot token, one gateway. |
 
 ## 1. Create the bot
 
@@ -181,19 +205,51 @@ operator-side approval, delivery-resolution and revocation commands, and
 
 ## 7. What the chat does
 
-- Each message gets one plain reply, with the typing indicator while Tamoz works.
-  Markdown the model writes (`code`, **bold**, code blocks, links) shows as
-  formatting.
-- `/new` starts a fresh conversation, `/status` says in one sentence whether
-  Tamoz is working, waiting for you, or idle, and `/cancel` stops the work in
-  progress: no further model call or tool runs, and you get "Stopped." instead
-  of the answer. `/help more` lists every command.
-- A change that needs approval shows what it will do (the file and its content,
-  the diff, or the command) with **Approve** and **Deny**. The buttons disappear
-  once you answer, and a late tap on an old prompt says it is no longer waiting.
-- A change no configured check verified ends with one plain note asking you to
-  give it a quick look; a provider problem (refused key, empty account, rate
-  limit) is named in one sentence.
+Each message gets one plain reply, with Telegram's typing indicator while Tamoz
+works. A greeting or a question is answered directly; a question about the
+workspace reads the files; a change is proposed and, when policy asks, waits for
+your tap. The conversation is remembered across messages and across restarts
+until you send `/new`. Replies come in the language you write in.
+
+| Command | What it does |
+|---|---|
+| `/help` | The short list; `/help more` lists every command. |
+| `/new` | Starts a fresh conversation; earlier messages are no longer used. |
+| `/status` | One sentence: working on your message, queued, waiting for your Approve/Deny, stopping, or nothing running. `/status --diagnostic` prints every state axis for an operator. |
+| `/cancel` | Stops the work in progress: no further model call or tool runs, a model call already under way is abandoned, and you get "Stopped." instead of the answer. It stops every open message in the conversation; `/cancel r<ref>` stops one. |
+
+- **Formatting.** Markdown the model writes — `code`, **bold**, code blocks,
+  links — shows as formatting. The transport sends it as escaped Telegram HTML
+  that always parses, so a reply is never refused for bad markup.
+- **Approvals.** A change that needs approval shows what it will do: the file
+  and its content (and the mode, if not `0644`), the diff for an edit, or the
+  command for a check, followed by **Approve** and **Deny**. Content is shown in
+  a code block its own text cannot break out of. After your tap the buttons
+  disappear and Telegram shows a short toast ("Approved"/"Denied"); a tap on an
+  old prompt says it is no longer waiting. Deny writes nothing and closes the
+  request.
+- **Honest endings.** A change no configured check verified ends with "No
+  automatic check covered this change, so give it a quick look." A turn that
+  failed, gave up, or lost its provider says so in one sentence. Long answers
+  arrive whole, split across messages at Telegram's 4096-character limit.
+- **Other messages.** Photos, stickers and other non-text messages get "I can
+  only read text messages for now."
+
+### Checking the experience yourself
+
+`script/telegram_chat_eval` plays every expectation in
+[`docs/telegram-chat/GOAL.md`](../../docs/telegram-chat/GOAL.md) as a Telegram
+user against the real gateway and worker on a real provider, with a local
+stand-in for Telegram's servers that refuses what Telegram refuses. It writes a
+report with a transcript and the steps each turn took:
+
+```bash
+rbenv exec bundle exec ruby script/telegram_chat_eval
+```
+
+`--only greet,memory` runs a subset; the key comes from the environment or
+`.env` (default OpenRouter `deepseek/deepseek-v4.1-flash`, override with
+`TAMOZ_PROVIDER`/`TAMOZ_MODEL`). It costs a few cents of model calls.
 
 ## Next reads
 
