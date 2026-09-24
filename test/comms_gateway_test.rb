@@ -62,8 +62,9 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
-  def descriptor(limits: {})
+  def descriptor(limits: {}, profile_digest: nil)
     Comms::SurfaceDescriptor.build(
+      profile_digest:,
       surface_id: 'telegram-ops', revision: 1,
       transport: { mode: 'long_poll',
                    credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
@@ -78,6 +79,32 @@ class CommsGatewayTest < Minitest::Test
                 control_capacity: 50, per_chat_messages_per_s: 1.0,
                 global_messages_per_s: 25.0 }.merge(limits)
     )
+  end
+
+  # Re-running setup rewrites the profile; the conversation must keep working, on a fresh thread.
+  def test_a_changed_profile_moves_the_conversation_to_a_fresh_thread_instead_of_failing
+    with_gateway do |gateway, transport, store, adapter, checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(1, text: 'first')])
+      gateway.serve_once(drain: false)
+      old_thread = store.conversation(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+                        .fetch('thread_id')
+      changed = Tamoz::Comms::Gateway.new(adapter:, checkpoints:, transport:, poller_owner: 'gateway:test',
+                                          descriptor: descriptor(profile_digest: "sha256:#{'b' * 64}"))
+
+      transport.batch([update(2, text: 'second')])
+      changed.serve_once(drain: false)
+
+      generation = store.conversation_generation(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+      new_thread = Tamoz::Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222', generation:)
+
+      assert_equal 1, checkpoints.request_history(thread_id: new_thread).length
+      assert_equal Tamoz::Comms::Gateway::SETTINGS_CHANGED_REPLY, appended.last.fetch('text')
+      refute_equal old_thread, new_thread, 'the second message runs on a fresh thread'
+      binding = adapter.store.get(Tamoz::Comms::Gateway::THREAD_PROFILE_NAMESPACE, new_thread).value
+
+      assert_equal "sha256:#{'b' * 64}", binding['profile_digest']
+    end
   end
 
   def binding_wire

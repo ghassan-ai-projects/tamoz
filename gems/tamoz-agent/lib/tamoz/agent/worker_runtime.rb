@@ -949,11 +949,17 @@ module Tamoz
       end
 
       # The governed MCP source (which is also how websearch arrives), built once
-      # per runtime because each server is a supervised subprocess.
+      # per runtime because each server is a supervised subprocess. A server that
+      # cannot be reached removes its tools, never the whole session: the turn runs
+      # with less capability, and the next session build tries the server again.
       def mcp_source
         return @mcp_source if defined?(@mcp_source)
 
         @mcp_source = McpSourceBuilder.new(@directory).build
+      rescue Tamoz::Error, SystemCallError, IOError => e
+        warn "tamoz: an MCP server could not be started (#{e.class.name.split('::').last}: #{e.message}); " \
+             'running without its tools'
+        nil
       end
 
       def local_capability_catalog

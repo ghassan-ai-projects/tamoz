@@ -67,6 +67,17 @@ from its public release line onward.
   the diff, or the command) instead of "I want to create a file". Its buttons are
   cleared once answered, the tap shows a toast, and a late tap on an old prompt
   says it is no longer waiting.
+- Re-running `tamoz telegram setup` (or editing the channel's profile) no longer
+  breaks the conversations bound to the old profile: every message used to fail
+  on the stale authority pin. The conversation moves to a fresh thread bound to
+  the current profile and the bot says so once.
+- An unreachable MCP server no longer fails every session: its tools are left
+  out and the worker log says which server could not be started.
+- `tamoz telegram start` refuses to start a second bot on the same token and
+  names the running pid, waits out a crashed run's hold on Telegram, and names
+  the key variable a refused provider was tried with.
+- `TAMOZ_TELEGRAM_API_ORIGIN` points the Telegram client at a self-hosted Bot
+  API server (or the eval's stand-in).
 - `tamoz telegram setup` accepts `--env-file` like `start`, so both commands
   read the bot token from the same file.
 - `/status` answers in one plain sentence (working, queued, waiting for your

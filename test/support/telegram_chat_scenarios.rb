@@ -14,8 +14,8 @@ module TelegramChatScenarios
   end
 
   def all
-    %w[setup greet memory reset arabic formatting workspace_read create_file deny long help status_cancel burst photo
-       stranger restart provider_down]
+    %w[setup returning_owner greet memory reset arabic formatting workspace_read create_file deny long help
+       status_cancel burst photo stranger restart provider_down]
   end
 
   # S1: the one documented command wrote a runnable runtime; every later scenario
@@ -34,10 +34,19 @@ module TelegramChatScenarios
   end
 
   def check_setup_pairing(eval, written)
-    paired = written[:channel].dig('admission', 'correspondents')
-    eval.check('setup', 'it paired only the confirmed owner',
-               paired == ["telegram:user:#{TelegramChatEval::USERS.first}"], paired.inspect)
+    paired = Array(written[:channel].dig('admission', 'correspondents'))
+    eval.check('setup', 'it paired the owner who messaged the bot', paired.include?("telegram:user:#{eval.owner}"),
+               "#{paired.inspect} #{written[:out].lines.last(3).join.strip}")
     eval.check('setup', 'it wrote the workspace profile', File.exist?(written[:profile]), written[:profile])
+  end
+
+  # The owner's own chat, which on a lived-in runtime already has history bound to an older profile:
+  # the first message after setup must get a real answer, not "something went wrong".
+  def returning_owner(eval)
+    turn = eval.turn(eval.owner, 'hi')
+    eval.check('returning_owner', 'the owner gets a real answer',
+               !turn.reply.include?(Tamoz::Agent::ChatReply::FAILED) && turn.reply.match?(/\p{L}{2}/), turn.reply)
+    eval.hygiene('returning_owner', [turn])
   end
 
   def greet(eval)
@@ -189,12 +198,11 @@ module TelegramChatScenarios
   end
 
   def ask_while_down(eval, user, text)
-    eval.stop_worker
-    eval.restart_gateway
+    eval.stop
     sent = Time.now.to_f
     eval.say(user, text)
     sleep 2
-    eval.start_worker
+    eval.start
     eval.await(user, "#{text} (sent while the bot was down)", since: sent)
   end
 
@@ -248,11 +256,21 @@ module TelegramChatScenarios
                calls.map(&:name).inspect)
   end
 
-  # Runs last: it restarts the worker with a key the provider refuses.
+  # Runs last. A key the provider refuses is named by `start` before anything runs; a key that stops
+  # working while the bot runs (revoked, out of credit) is named in the chat.
   def provider_down(eval)
-    eval.restart_worker(eval.provider_key_name => 'sk-invalid')
-    turn = eval.turn(eval.fresh_user, 'hi', timeout: 60)
-    eval.check('provider_down', 'user told within 30s', turn.answer_s <= 30, format('%.1fs', turn.answer_s))
+    eval.stop
+    refused = eval.start_with_refused_key
+    eval.check('provider_down', 'start refuses a rejected key within 30s',
+               refused[:status] != 0 && refused[:seconds] <= 30, format('exit %<status>s in %<seconds>.1fs', refused))
+    eval.check('provider_down', 'start names the key it tried', refused[:out].include?('OPENROUTER_API_KEY'),
+               refused[:out].lines.last(2).join.strip)
+    eval.run_with_revoked_key
+    check_revoked_key_reply(eval, eval.turn(eval.fresh_user, 'hi', timeout: 60))
+  end
+
+  def check_revoked_key_reply(eval, turn)
+    eval.check('provider_down', 'the chat is told within 30s', turn.answer_s <= 30, format('%.1fs', turn.answer_s))
     eval.check('provider_down', 'names the model provider as the problem',
                turn.reply =~ /provider|API key|model service/i, turn.reply)
     eval.hygiene('provider_down', [turn])

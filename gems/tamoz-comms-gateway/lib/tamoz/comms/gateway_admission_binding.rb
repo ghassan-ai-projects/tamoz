@@ -44,6 +44,22 @@ module Tamoz
           nil
         end
 
+        # A thread stays pinned to the authority it was bound under; when the surface's profile has
+        # changed since (re-running setup, editing the profile), the conversation moves to a new thread
+        # bound to the current profile instead of every message failing on the stale pin.
+        def stale_authority?(thread)
+          entry = @adapter.store.get(THREAD_PROFILE_NAMESPACE, thread)
+          return false if entry.nil? || entry.deleted
+
+          entry.value.values_at('profile', 'profile_digest') != [@descriptor.profile_id, @descriptor.profile_digest]
+        end
+
+        def fresh_thread_for_new_authority(envelope, conversation, now:)
+          @store.bump_generation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+          append_control(SETTINGS_CHANGED_REPLY, envelope, now:)
+          admission_thread(envelope, conversation)
+        end
+
         # Write-once: an operator pairing is never overwritten by allowlist data.
         def bind_allowlisted_correspondent(envelope, now:)
           @store.bind_correspondent(

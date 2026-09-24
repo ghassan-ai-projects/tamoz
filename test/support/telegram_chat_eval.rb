@@ -13,7 +13,8 @@ require 'tamoz/agent_cli'
 require 'tamoz/telegram'
 require_relative 'telegram_bot_api_fake'
 
-# Drives the real gateway and worker against a fake Bot API; see docs/telegram-chat/GOAL.md.
+# Drives the real `tamoz telegram setup` and `tamoz telegram start` against a stand-in Bot API, on a
+# real model provider, from a fresh runtime or a copy of a lived-in one; see docs/telegram-chat/GOAL.md.
 # rubocop:disable Metrics/ClassLength -- one collaborator per concern (processes, the
 #   fake, DB observations, settlement, reporting); splitting it would scatter the settle
 #   rules every scenario depends on.
@@ -27,8 +28,8 @@ class TelegramChatEval
     [/\b(effect_unknown|effect_key|occurrence_id|request_id|execution_id)\b|sha256:\h{8}/, 'internal vocabulary'],
     [/\A\s*[{\[]/, 'raw JSON']
   ].freeze
-  ROUTING_FLAGS = { 'experimental' => '--experimental-routing', 'work' => '--work-routing',
-                    'adaptive' => '--adaptive-routing' }.freeze
+  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY].freeze
+  TOKEN = '123:eval'
   USERS = (1001..1040).to_a.freeze
   STRANGER = 9_999
   # How long a turn may take, how long the chat must stay quiet to count as
@@ -62,16 +63,17 @@ class TelegramChatEval
     end
   end
 
-  attr_reader :fake, :results, :transcript, :setup
+  attr_reader :fake, :results, :transcript, :setup, :owner
 
-  def initialize(provider:, model:, routing:)
+  # runtime_from: a runtime directory (e.g. ~/.tamoz) to copy and run on, as its owner would.
+  def initialize(provider: nil, model: nil, runtime_from: nil)
     @provider = provider
     @model = model
-    @routing = routing
+    @runtime_from = runtime_from
     @root = Dir.mktmpdir('tamoz-telegram-eval')
     @workspace = File.join(@root, 'workspace')
     @runtime = File.join(@root, 'runtime')
-    @fake = TelegramBotApiFake.new
+    @fake = TelegramBotApiFake.new(**lived_in_bot)
     @results = []
     @transcript = []
     @pids = {}
@@ -79,35 +81,44 @@ class TelegramChatEval
     provision
   end
 
-  def label = "#{@provider}/#{@model} routing=#{@routing || 'legacy'}"
+  def label
+    chosen = log_tail(:start, 50)[/starting as \S+ with (\S+)\./, 1] || [@provider, @model].compact.join('/')
+    where = @runtime_from ? "copy of #{@runtime_from}" : 'fresh runtime'
+    "#{chosen.empty? ? 'first provider that answers' : chosen} · #{where}"
+  end
 
   def fresh_user = @users.shift
 
-  def provider_key_name = "#{@provider.upcase}_API_KEY"
+  def model = @model || 'deepseek/deepseek-v4.1-flash'
 
+  # The one command the operator runs: gateway and worker together, supervised by `start`.
   def start
-    restart_gateway
-    wait_until('gateway deployed') { rows('select surface_id from tamoz_comms_surfaces').any? }
-    start_worker
+    spawn_child(:start, [EXE, '--runtime-dir', @runtime, 'telegram', 'start', '--env-file', env_file,
+                         *(['--provider', @provider, '--model', @model] if @provider)])
+    started = Time.now.to_f
+    wait_until('worker started', timeout: 90) { log_tail(:worker, 200).include?('worker.started') }
+    wait_until('gateway polling') { @fake.polled_since?(started) }
   end
 
-  def start_worker(env = {})
-    spawn_child(:worker, [EXE, '--runtime-dir', @runtime, '--provider', @provider, '--model', @model,
-                          *ROUTING_FLAGS[@routing], 'worker', '--json'], env)
+  def stop = stop_child(:start)
+
+  # `start` against a key the provider refuses: it must name the problem, not run.
+  def start_with_refused_key
+    file = File.join(@root, 'refused.env')
+    File.write(file, "TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}\nOPENROUTER_API_KEY=sk-invalid\n")
+    started = Time.now
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'telegram', 'start',
+                                  '--env-file', file, '--provider', 'openrouter', '--model', model, chdir: ROOT)
+    { out:, status: status.exitstatus, seconds: Time.now - started }
+  end
+
+  # A worker whose key stopped working mid-run (revoked, out of credit): the chat must say so.
+  def run_with_revoked_key
+    spawn_child(:gateway, [EXE, '--runtime-dir', @runtime, 'comms', 'serve'])
+    spawn_child(:worker, [EXE, '--runtime-dir', @runtime, '--provider', 'openrouter', '--model',
+                          model, '--work-routing', 'worker', '--json'],
+                'OPENROUTER_API_KEY' => 'sk-invalid')
     wait_until('worker started') { log_tail(:worker, 200).include?('worker.started') }
-  end
-
-  def restart_worker(env)
-    stop_worker
-    start_worker(env)
-  end
-
-  def stop_worker = stop_child(:worker)
-
-  def restart_gateway
-    stop_child(:gateway)
-    spawn_child(:gateway, [File.join(ROOT, 'script/telegram_chat_eval'), '--gateway', @fake.origin,
-                           '--runtime-dir', @runtime, 'comms', 'serve'])
   end
 
   # Sends without waiting for the reply, for scenarios that act while a turn runs.
@@ -116,8 +127,8 @@ class TelegramChatEval
   def wait_for(what, timeout: 60, &) = wait_until(what, timeout:, &)
 
   def shutdown
-    @logs = %i[gateway worker].to_h { |name| [name, log_tail(name)] }
-    %i[gateway worker].each { |name| stop_child(name) }
+    @logs = %i[start gateway worker].to_h { |name| [name, log_tail(name, 40)] }
+    %i[start gateway worker].each { |name| stop_child(name) }
     @fake.stop
   end
 
@@ -193,7 +204,7 @@ class TelegramChatEval
     end
     count = query("select #{open} + (select count(*) from tamoz_comms_outbox where conversation_id = " \
                   "'#{chat(user)}' and status in ('pending','claimed'))")
-    count.nil? || count.to_i.positive?
+    count.to_i.positive?
   end
 
   def ensure_children_alive
@@ -212,35 +223,71 @@ class TelegramChatEval
 
   private
 
-  # The runtime is written by the documented one command (S1), not by hand: the
-  # gateway and worker below then run on exactly what `tamoz telegram setup`
-  # produced. Two operator edits follow, both of which a real operator makes:
-  # the allowlist is widened the way a teammate is added, and the approval
-  # profile is tightened to `unattended` so a workspace write really asks --
-  # which is the only way the Approve button (D1) can appear at all.
+  # The runtime is written by the documented one command (S1), pairing by message the way a person
+  # does it: the owner messages the bot, `setup` shows who wrote, the operator answers y. Two operator
+  # edits follow, both of which a real operator makes: the allowlist is widened the way a teammate is
+  # added, and the approval profile is tightened to `unattended` so a workspace write really asks.
   def provision
     FileUtils.mkdir_p(@workspace)
     File.write(File.join(@workspace, 'README.md'),
                "# Orchard\n\nA small demo project.\n\nProject codename: BLUE-HERON-42\nOwner: the platform team\n")
     File.write(File.join(@workspace, 'todo.txt'), "- water the plants\n- renew passport\n")
-    FileUtils.mkdir_p(@runtime, mode: 0o700)
+    copy_lived_in_runtime
+    @owner = lived_in_owner || USERS.first
+    @users.delete(@owner)
     @setup = run_setup
     widen_allowlist
     ask_before_changes
   end
 
+  def copy_lived_in_runtime
+    return FileUtils.mkdir_p(@runtime, mode: 0o700) unless @runtime_from
+
+    FileUtils.cp_r(File.expand_path(@runtime_from), @runtime, preserve: true)
+    File.chmod(0o700, @runtime)
+    # The copy is a second machine: the original's live gateway lease does not follow it.
+    query('update tamoz_comms_poll_state set poller_expires_at_ms = 0')
+    FileUtils.rm_rf(Dir[File.join(@runtime, '{logs,*.log,worker-*.ndjson}')])
+  end
+
+  def lived_in_config
+    return nil unless @runtime_from
+
+    @lived_in_config ||= Psych.safe_load_file(File.join(File.expand_path(@runtime_from), 'config.yaml'), aliases: false)
+  end
+
+  def lived_in_channel = lived_in_config && telegram_channel(lived_in_config.fetch('channels', {}))
+
+  def lived_in_bot
+    channel = lived_in_channel
+    return {} unless channel
+
+    { bot_id: channel['expected_bot_id'], username: channel['bot_username'] || 'tamoz_eval_bot',
+      first_update_id: lived_in_offset(channel['expected_bot_id']) }
+  end
+
+  def lived_in_offset(bot_id)
+    database = File.join(File.expand_path(@runtime_from), 'runtime.sqlite3')
+    sql = "select max(next_offset) from tamoz_comms_poll_state where bot_id = #{bot_id.to_i}"
+    out, = Open3.capture2('sqlite3', database, sql)
+    [out.to_i, 101].max
+  end
+
+  def lived_in_owner
+    owner = lived_in_channel&.dig('admission', 'correspondents')&.first
+    owner && owner.delete_prefix('telegram:user:').to_i
+  end
+
   def run_setup
-    out = StringIO.new
-    err = StringIO.new
-    status = Tamoz::Agent::CLI.run(
-      ['--runtime-dir', @runtime, 'telegram', 'setup', '--workspace', @workspace, '--owner', USERS.first.to_s],
-      out:, err:, input: StringIO.new, env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '123:eval' },
-      comms_client_factory: ->(token) { Tamoz::Telegram::Client.new(token, origin: @fake.origin) }
-    )
+    @fake.say(@owner, '/start')
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'telegram', 'setup',
+                                  '--workspace', @workspace, '--env-file', env_file, stdin_data: "y\n", chdir: ROOT)
     directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {})
-    { status:, out: out.string, err: err.string, channel: directory.channels.fetch('telegram'),
+    { status: status.exitstatus, out:, err: out, channel: telegram_channel(directory.channels) || {},
       profile: File.join(directory.profiles_path, 'telegram.yaml') }
   end
+
+  def telegram_channel(channels) = channels.values.find { |channel| channel['kind'] == 'telegram' }
 
   def edit_config
     path = File.join(@runtime, 'config.yaml')
@@ -252,8 +299,8 @@ class TelegramChatEval
 
   def widen_allowlist
     edit_config do |document|
-      document.fetch('channels').fetch('telegram')['admission']['correspondents'] =
-        USERS.map { |id| "telegram:user:#{id}" }
+      telegram_channel(document.fetch('channels'))['admission']['correspondents'] =
+        [@owner, *USERS].uniq.map { |id| "telegram:user:#{id}" }
     end
   end
 
@@ -261,18 +308,29 @@ class TelegramChatEval
     edit_config { |document| document['approval'] = { 'profile' => 'unattended' } }
   end
 
+  # The operator's own secrets file, with the bot token swapped for the stand-in's.
+  def env_file
+    @env_file ||= File.join(@root, 'eval.env').tap do |path|
+      keys = PROVIDER_KEYS.filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
+      File.write(path, "#{["TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}", *keys].join("\n")}\n")
+      File.chmod(0o600, path)
+    end
+  end
+
   def chat(user) = "telegram:chat:#{user}"
 
   def query(sql)
-    out, _err, status = Open3.capture3('sqlite3', '-readonly', File.join(@runtime, 'runtime.sqlite3'), sql)
-    status.success? ? out.strip : nil
+    out, err, status = Open3.capture3('sqlite3', File.join(@runtime, 'runtime.sqlite3'), sql)
+    raise "eval query failed: #{err.strip}" unless status.success?
+
+    out.strip
   end
 
   def rows(sql) = query(sql).to_s.split("\n")
 
-  def child_env(extra)
-    { 'LANG' => 'en_US.UTF-8', 'LC_ALL' => 'en_US.UTF-8', 'TAMOZ_TELEGRAM_BOT_TOKEN' => '123:eval',
-      provider_key_name => secret(provider_key_name).to_s }.merge(extra)
+  def child_env(extra = {})
+    { 'LANG' => 'en_US.UTF-8', 'LC_ALL' => 'en_US.UTF-8', 'TAMOZ_TELEGRAM_API_ORIGIN' => @fake.origin,
+      'TAMOZ_TELEGRAM_BOT_TOKEN' => TOKEN }.merge(extra)
   end
 
   def secret(name)
@@ -284,6 +342,12 @@ class TelegramChatEval
   def spawn_child(name, args, env = {})
     log = File.join(@root, "#{name}.log")
     @pids[name] = Process.spawn(child_env(env), RbConfig.ruby, *args, out: log, err: log, chdir: ROOT)
+  end
+
+  # `start` writes its children's output under the runtime's logs; a hand-started child logs beside it.
+  def log_path(name)
+    supervised = File.join(@runtime, 'logs', "#{name}.log")
+    name == :start || @pids.key?(name) || !File.exist?(supervised) ? File.join(@root, "#{name}.log") : supervised
   end
 
   def stop_child(name)
@@ -375,7 +439,7 @@ class TelegramChatEval
   end
 
   def log_tail(name, lines = 20)
-    File.readlines(File.join(@root, "#{name}.log")).last(lines).join
+    File.readlines(log_path(name)).last(lines).join
   rescue Errno::ENOENT
     ''
   end

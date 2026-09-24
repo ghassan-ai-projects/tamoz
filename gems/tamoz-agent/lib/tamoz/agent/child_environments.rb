@@ -26,8 +26,9 @@ module Tamoz
         standard_env(base).merge(
           'TAMOZ_RUNTIME_DIR' => runtime_dir,
           'TAMOZ_TELEGRAM_SURFACE' => surface,
-          'TAMOZ_TELEGRAM_BOT_TOKEN' => base.fetch('TAMOZ_TELEGRAM_BOT_TOKEN')
-        )
+          'TAMOZ_TELEGRAM_BOT_TOKEN' => base.fetch('TAMOZ_TELEGRAM_BOT_TOKEN'),
+          'TAMOZ_TELEGRAM_API_ORIGIN' => base['TAMOZ_TELEGRAM_API_ORIGIN']
+        ).compact
       end
 
       # The worker alone validates provider credential selection; the

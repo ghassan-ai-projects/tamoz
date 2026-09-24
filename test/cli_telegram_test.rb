@@ -4,8 +4,9 @@ require_relative 'test_helper'
 require 'tmpdir'
 
 # `tamoz telegram setup|start` against a scripted Bot API client and scripted models.
-# rubocop:disable Metrics/AbcSize, Minitest/MultipleAssertions -- one command
-#   writes several fields; asserting them together is one test of one command.
+# rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Minitest/MultipleAssertions -- one command
+#   writes several fields; asserting them together is one test of one command, and every
+#   operator mistake the two commands name has its test here.
 class CliTelegramTest < Minitest::Test
   BOT = { 'id' => 7_000_000_001, 'username' => 'tamoz_test_bot', 'is_bot' => true }.freeze
   OWNER = 5_640_479_090
@@ -99,7 +100,7 @@ class CliTelegramTest < Minitest::Test
       end
       out, err = capture_start(runtime, factory, 'DEEPSEEK_API_KEY' => 'dk', 'OPENROUTER_API_KEY' => 'ok')
 
-      assert_includes err, 'deepseek/deepseek-chat: the account is out of credit'
+      assert_includes err, 'deepseek/deepseek-chat (DEEPSEEK_API_KEY): the account is out of credit'
       assert_equal %w[openrouter deepseek/deepseek-v4.1-flash], out
     end
   end
@@ -155,6 +156,26 @@ class CliTelegramTest < Minitest::Test
 
       assert_equal 1, status
       assert_includes err, 'refused the bot token'
+    end
+  end
+
+  def test_start_refuses_while_another_bot_holds_telegram
+    with_dirs do |runtime, workspace|
+      cli(runtime, %W[telegram setup --workspace #{workspace} --owner #{OWNER}], bot: Bot.new([]))
+      hold_poller(runtime, owner: "gateway:#{Process.pid}")
+
+      status, _out, err = cli(runtime, %w[telegram start], bot: Bot.new([]))
+
+      assert_equal 1, status
+      assert_includes err, "already running for this bot (pid #{Process.pid})"
+    end
+  end
+
+  def hold_poller(runtime, owner:)
+    Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+                     .send(:with_comms_runtime, { runtime_dir: runtime }) do |_directory, _adapter, store, _checkpoints|
+      store.acquire_poller_lease(surface_id: 'telegram', bot_id: BOT.fetch('id'), owner:, fence: 1, ttl_s: 60,
+                                 now: Time.now.utc)
     end
   end
 
@@ -334,4 +355,4 @@ class CliTelegramTest < Minitest::Test
     [chosen, err.string]
   end
 end
-# rubocop:enable Metrics/AbcSize, Minitest/MultipleAssertions
+# rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Minitest/MultipleAssertions

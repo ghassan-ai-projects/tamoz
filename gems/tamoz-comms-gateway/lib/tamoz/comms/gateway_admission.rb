@@ -59,6 +59,7 @@ module Tamoz
         def admit_request(envelope, now:)
           conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
           thread = admission_thread(envelope, conversation)
+          thread = fresh_thread_for_new_authority(envelope, conversation, now:) if stale_authority?(thread)
           bind_admission(envelope, thread, conversation, now:)
           history = @store.conversation_history(
             surface_id:, conversation_id: envelope.fetch('conversation_id'), thread_id: thread

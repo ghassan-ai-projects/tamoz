@@ -208,6 +208,8 @@ module Tamoz
         File.chmod(0o600, path)
       end
 
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+      #   -- one guard per operator mistake, each named before anything is spawned.
       def telegram_start(options, argv)
         env_file = nil
         OptionParser.new do |parser|
@@ -233,7 +235,7 @@ module Tamoz
         surface, entry = configured_telegram_channel(directory)
         return telegram_fail(NO_CHANNEL) unless surface
 
-        problem = token_problem(base)
+        problem = token_problem(base) || already_running(options, entry)
         return telegram_fail(problem) if problem
 
         provider, model = working_provider(options, base)
@@ -241,6 +243,33 @@ module Tamoz
 
         @out.puts "Tamoz is starting as @#{entry['bot_username'] || surface} with #{provider}/#{model}."
         run_telegram(directory, surface, base.merge('TAMOZ_PROVIDER' => provider, 'TAMOZ_MODEL' => model))
+      end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+      # A second bot on the same token loses the poller race and exits; name the one that owns it instead.
+      # A lease left by a run that crashed expires within a minute, so that case waits it out.
+      def already_running(options, entry)
+        with_comms_runtime(options) do |_directory, _adapter, store, _checkpoints|
+          state = store.poll_state(bot_id: entry.fetch('expected_bot_id')) || {}
+          remaining = (state['poller_expires_at_ms'].to_i / 1000.0) - Time.now.to_f
+          pid = state['poller_owner_id'].to_s[/\A#{CLICommsShared::GATEWAY_POLLER_PREFIX}:(\d+)\z/o, 1]&.to_i
+          next unless remaining.positive? && pid
+
+          next "Tamoz is already running for this bot (pid #{pid}); stop it first (Ctrl-C where it runs)" if alive?(pid)
+
+          @out.puts "Waiting #{remaining.ceil}s for the previous run's hold on Telegram to expire..."
+          sleep(remaining)
+          nil
+        end
+      end
+
+      def alive?(pid)
+        Process.kill(0, pid)
+        true
+      rescue Errno::ESRCH
+        false
+      rescue Errno::EPERM
+        true
       end
 
       def env_with_file(env_file) = @env.to_h.merge(env_file ? read_env_file(env_file) : {})
@@ -290,7 +319,7 @@ module Tamoz
           problem = provider_problem(provider, model, base)
           return [provider, model] unless problem
 
-          @err.puts "tamoz: #{provider}/#{model}: #{problem}"
+          @err.puts "tamoz: #{provider}/#{model} (#{Providers::ENV_KEYS.fetch(provider.to_sym)}): #{problem}"
         end
         telegram_fail('no model provider answered; fix the key or account above')
         nil
@@ -341,6 +370,7 @@ module Tamoz
           raise
         end
         @out.puts "Running. Message the bot on Telegram; Ctrl-C stops it. Logs: #{logs}"
+        @out.flush
         supervise(children, logs)
       end
 

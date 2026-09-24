@@ -12,7 +12,8 @@ class TelegramBotApiFake
 
   attr_reader :bot_id
 
-  def initialize(bot_id: 7_000_000_001, username: 'tamoz_eval_bot')
+  # first_update_id continues a runtime's real poll offset, which Telegram's update ids always exceed.
+  def initialize(bot_id: 7_000_000_001, username: 'tamoz_eval_bot', first_update_id: 101)
     @bot_id = bot_id
     @username = username
     @server = TCPServer.new('127.0.0.1', 0)
@@ -21,7 +22,7 @@ class TelegramBotApiFake
     @updates = []
     @calls = []
     @messages = {}
-    @update_id = 100
+    @update_id = first_update_id - 1
     @message_id = 1_000
     @running = true
     @acceptor = Thread.new { accept_loop }
@@ -67,6 +68,8 @@ class TelegramBotApiFake
   end
 
   def message(id) = @lock.synchronize { @messages[id]&.dup }
+
+  def polled_since?(time) = @lock.synchronize { @polled_at.to_f >= time }
 
   private
 
@@ -121,13 +124,18 @@ class TelegramBotApiFake
   def dispatch(method, params)
     case method
     when 'getMe' then ok('id' => @bot_id, 'is_bot' => true, 'username' => @username, 'first_name' => 'Tamoz')
-    when 'getUpdates' then ok(long_poll(params))
+    when 'getUpdates' then ok(polled { long_poll(params) })
     when 'sendMessage' then record(method, params) { send_message(params) }
     when 'editMessageText' then record(method, params) { edit_message(params) }
     when 'editMessageReplyMarkup' then record(method, params) { edit_markup(params) }
     when 'sendChatAction', 'answerCallbackQuery' then record(method, params) { ok(true) }
     else [404, { 'ok' => false, 'error_code' => 404, 'description' => 'Not Found' }]
     end
+  end
+
+  def polled
+    @lock.synchronize { @polled_at = Time.now.to_f }
+    yield
   end
 
   def ok(result) = [200, { 'ok' => true, 'result' => result }]

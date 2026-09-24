@@ -59,6 +59,9 @@ piece by hand.
 | A stranger gets no reply at all | By design: only paired correspondents reach the model. Add their `telegram:user:<id>` to `correspondents` (§3–4). |
 | Nothing happens after you tap **Approve** | Make sure `start` (or a worker) is still running; the decision is durable and the turn resumes on the worker's next pass. |
 | `comms doctor` reports a poller conflict | Another gateway or a webhook is reading the same bot. Stop it; one bot token, one gateway. |
+| `start` says Tamoz is already running for this bot | An earlier `start` is still running (maybe in another terminal). Stop it with Ctrl-C there, then start again. After a crash, `start` waits the few seconds until Telegram lets go. |
+| The bot says "My settings changed since we last talked…" | Expected once after re-running `setup` or editing the profile: the conversation continues on a fresh thread bound to the new settings. |
+| The worker log says an MCP server could not be started | A configured MCP server (`sources.mcp`) is unreachable. Chat keeps working without that server's tools; fix or remove the server and restart. |
 
 ## 1. Create the bot
 
@@ -247,9 +250,12 @@ report with a transcript and the steps each turn took:
 rbenv exec bundle exec ruby script/telegram_chat_eval
 ```
 
-`--only greet,memory` runs a subset; the key comes from the environment or
-`.env` (default OpenRouter `deepseek/deepseek-v4.1-flash`, override with
-`TAMOZ_PROVIDER`/`TAMOZ_MODEL`). It costs a few cents of model calls.
+It runs the real `setup` and `start` commands; only Telegram's servers are a
+stand-in (`TAMOZ_TELEGRAM_API_ORIGIN`). `--runtime-from ~/.tamoz` runs every
+scenario on a copy of your own runtime — its history, profiles and MCP
+sources — which is how problems that only an existing install has are found.
+`--only greet,memory` runs a subset; keys come from the environment or `.env`,
+and `--provider`/`--model` pin one. It costs a few cents of model calls.
 
 ## Next reads
 
