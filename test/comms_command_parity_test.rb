@@ -87,16 +87,11 @@ class CommsCommandParityTest < Minitest::Test
 
       reply = drive_command(gateway, transport, '/status', id: 103)
 
-      assert_leads_with reply, 'Work status: '
-      assert_includes reply, 'State: queued'
-      assert_includes reply, 'Delivery: not sent yet'
-      assert_includes reply, 'Now: '
-      assert_includes reply, 'Next: '
-      refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, reply)
-      assert_includes reply, derived_ref(update(101)), 'the aggregate names every open request'
-      assert_includes reply, "Active request: #{active_ref}."
-      assert_match(/Queue position 1\. Age \d+ ms\./, reply)
-      assert_includes reply, 'Open requests: 2; refs: '
+      assert_equal "Your message is queued; I'll start on it shortly. 1 more message is waiting.", reply
+      diagnostic = drive_command(gateway, transport, '/status --diagnostic', id: 104)
+
+      assert_includes diagnostic, "Reference #{active_ref}."
+      assert_match(/Queue position 1\. Age \d+ ms\./, diagnostic)
       assert_equal 2, all_request_rows(checkpoints).length, '/status admits no work of its own'
     end
   end
@@ -108,10 +103,7 @@ class CommsCommandParityTest < Minitest::Test
 
       reply = drive_command(gateway, transport, "/status #{first_ref}", id: 102)
 
-      assert_leads_with reply, "Request #{first_ref}: "
-      assert_includes reply, 'State: queued'
-      assert_includes reply, 'Delivery: not sent yet', 'accepted controls are not request-local delivery'
-      refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, reply)
+      assert_equal "Your message is queued; I'll start on it shortly.", reply
 
       assert_equal UNKNOWN_REF_REPLY,
                    drive_command(gateway, transport, '/status r0000000000', id: 103)
@@ -143,11 +135,7 @@ class CommsCommandParityTest < Minitest::Test
 
       reply = drive_command(gateway, transport, "/status #{ref}", id: 102)
 
-      assert_leads_with reply, "Request #{ref}: "
-      assert_includes reply, 'State: failed', 'a failed request renders the bounded state'
-      assert_includes reply, 'Delivery: delivered', "'succeeded' outbox rows render as delivered"
-      assert_includes reply, 'Now: The request ended with an error.'
-      assert_includes reply, 'Next: No further action.'
+      assert_equal 'That one ended with an error.', reply
       refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, reply)
       refute_includes reply, 'provider_failed'
     ensure
@@ -198,8 +186,8 @@ class CommsCommandParityTest < Minitest::Test
 
       reply = drive_command(gateway, transport, "/status #{old_ref}", id: 92)
 
-      assert_leads_with reply, "Request #{old_ref}: ",
-                        'audit history stays queryable by reference after /new'
+      assert_equal "Your message is queued; I'll start on it shortly.", reply,
+                   'audit history stays queryable by reference after /new'
 
       reopened = Tamoz::SQLite::Adapter.new(path: adapter.path)
       begin

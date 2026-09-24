@@ -432,9 +432,7 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([update(4, text: '/cancel')])
       assert_equal :served, gateway.serve_once(drain: false)
 
-      request = checkpoints.request_history(thread_id: new_thread).find { |entry| entry.operation == :turn }
-      expected_ref = Tamoz::Comms::Lifecycle::RequestRef.for(request.request_id)
-      assert_equal "Cancellation requested for #{expected_ref}.", appended.last.fetch('text')
+      assert_equal 'Stopping…', appended.last.fetch('text')
       assert_equal 1, cancellation_stamped_count(store, new_thread),
                    'the live request on the CURRENT generation is stamped'
       assert_equal 0, cancellation_stamped_count(store, old_thread),
@@ -480,12 +478,10 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([update(4, text: '/status')])
       assert_equal :served, gateway.serve_once(drain: false)
 
-      status_reply = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
-                          .map { |row| row.fetch('text') }
-                          .reverse.find { |text| text.start_with?('Work status:') }
+      status_reply = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).last.fetch('text')
 
-      assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
-      refute_match(/State: accepted/, status_reply)
+      assert_equal "Your message is queued; I'll start on it shortly. 1 more message is waiting.", status_reply,
+                   'the aggregate names the live state of the rotated request'
     end
   end
 

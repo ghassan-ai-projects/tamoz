@@ -6,7 +6,7 @@ module Tamoz
     module ChatReply
       FAILED = "Sorry, something went wrong on my side and I couldn't finish. Please try again."
       GAVE_UP = "I couldn't get this done after several tries. Try rephrasing it or splitting it into smaller steps."
-      UNVERIFIED = "I couldn't confirm this worked, so please check it."
+      UNVERIFIED = 'No automatic check covered this change, so give it a quick look.'
       REASONS = {
         'model_key_refused' => "I can't reach my AI model: the provider rejected the API key. " \
                                'Check the key the worker runs with.',

@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
+require 'cgi'
 require 'json'
 require 'socket'
 
 # A live Bot API stand-in that refuses what Telegram refuses, so a send that fails in production fails here.
 class TelegramBotApiFake
   MAX_TEXT = 4096
+  HTML_TAGS = %w[b strong i em u ins s strike del code pre a blockquote tg-spoiler].freeze
   Call = Struct.new(:name, :params, :at, :ok, keyword_init: true)
 
   attr_reader :bot_id
@@ -64,6 +66,8 @@ class TelegramBotApiFake
     end
   end
 
+  def message(id) = @lock.synchronize { @messages[id]&.dup }
+
   private
 
   def user(user_id) = { 'id' => user_id, 'is_bot' => false, 'first_name' => "User#{user_id}" }
@@ -120,6 +124,7 @@ class TelegramBotApiFake
     when 'getUpdates' then ok(long_poll(params))
     when 'sendMessage' then record(method, params) { send_message(params) }
     when 'editMessageText' then record(method, params) { edit_message(params) }
+    when 'editMessageReplyMarkup' then record(method, params) { edit_markup(params) }
     when 'sendChatAction', 'answerCallbackQuery' then record(method, params) { ok(true) }
     else [404, { 'ok' => false, 'error_code' => 404, 'description' => 'Not Found' }]
     end
@@ -144,43 +149,77 @@ class TelegramBotApiFake
     [status, body]
   end
 
+  # What the phone shows: parse_mode HTML is parsed the way Telegram parses it,
+  # and markup it cannot parse is refused, not shown raw.
+  def rendered(params)
+    text = params['text'].to_s
+    return [text, nil] unless params['parse_mode'] == 'HTML'
+
+    problem = html_problem(text)
+    problem ? [nil, "can't parse entities: #{problem}"] : [CGI.unescapeHTML(text.gsub(/<[^>]*>/, '')), nil]
+  end
+
+  def html_problem(text)
+    open = []
+    text.scan(%r{<(/?)([a-z-]+)(?:\s[^>]*)?>|<|&(?!(?:lt|gt|amp|quot|#\d+);)}) do |closing, tag|
+      return 'unescaped < or &' if tag.nil?
+      return "unsupported tag <#{tag}>" unless HTML_TAGS.include?(tag)
+      next open.push(tag) if closing.empty?
+      return "unexpected </#{tag}>" unless open.pop == tag
+    end
+    "unclosed <#{open.last}>" unless open.empty?
+  end
+
   def text_problem(text)
     return 'message text is empty' if text.to_s.strip.empty?
 
     'message is too long' if text.encode('UTF-16LE').bytesize / 2 > MAX_TEXT
   end
 
-  def unchanged?(message, params) = message[:text] == params['text'] && message[:markup] == params['reply_markup']
+  def unchanged?(message, text, params) = message[:text] == text && message[:markup] == params['reply_markup']
 
-  def revise(message, params)
-    message[:text] = params['text']
+  def revise(message, text, params)
+    message[:text] = text
     message[:markup] = params['reply_markup']
     message[:touched] = Time.now.to_f
   end
 
   def send_message(params)
-    problem = text_problem(params['text'])
+    text, problem = rendered(params)
+    problem ||= text_problem(text)
     return bad(problem) if problem
 
     id = next_message_id
     @lock.synchronize do
-      @messages[id] = { id:, chat: params['chat_id'], text: params['text'], markup: params['reply_markup'],
+      @messages[id] = { id:, chat: params['chat_id'], text:, markup: params['reply_markup'],
                         at: Time.now.to_f, touched: Time.now.to_f }
     end
-    ok('message_id' => id, 'date' => Time.now.to_i, 'chat' => { 'id' => params['chat_id'] }, 'text' => params['text'])
+    ok('message_id' => id, 'date' => Time.now.to_i, 'chat' => { 'id' => params['chat_id'] }, 'text' => text)
   end
 
   def edit_message(params)
-    problem = text_problem(params['text'])
+    text, problem = rendered(params)
+    problem ||= text_problem(text)
     return bad(problem) if problem
 
     @lock.synchronize do
       message = @messages[params['message_id'].to_i]
       return bad('message to edit not found') unless message
-      return bad('message is not modified') if unchanged?(message, params)
+      return bad('message is not modified') if unchanged?(message, text, params)
 
-      revise(message, params)
-      ok('message_id' => message[:id], 'date' => Time.now.to_i, 'text' => params['text'])
+      revise(message, text, params)
+      ok('message_id' => message[:id], 'date' => Time.now.to_i, 'text' => text)
+    end
+  end
+
+  def edit_markup(params)
+    @lock.synchronize do
+      message = @messages[params['message_id'].to_i]
+      return bad('message to edit not found') unless message
+      return bad('message is not modified') if message[:markup].to_h == params['reply_markup'].to_h
+
+      message[:markup] = params['reply_markup']
+      ok(true)
     end
   end
 end

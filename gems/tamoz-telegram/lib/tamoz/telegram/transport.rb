@@ -50,10 +50,8 @@ module Tamoz
       # :reek:FeatureEnvy, :reek:TooManyStatements -- the send maps one
       #   Delivery to one API effect.
       def deliver(delivery)
-        params = {
-          'chat_id' => chat_id(delivery.conversation_id),
-          'text' => delivery.text
-        }
+        params = { 'chat_id' => chat_id(delivery.conversation_id), 'text' => Markup.html(delivery.text),
+                   'parse_mode' => 'HTML' }
         editing = delivery.operation == 'edit_message'
         if editing
           params['message_id'] = delivery.reply_to
@@ -74,8 +72,14 @@ module Tamoz
       def signal(kind, **fields)
         case kind
         when :ack
-          @client.call('answerCallbackQuery', { 'callback_query_id' => fields.fetch(:callback_query_id) })
+          @client.call('answerCallbackQuery', { 'callback_query_id' => fields.fetch(:callback_query_id),
+                                                'text' => fields[:text] }.compact)
           :acked
+        when :clear_buttons
+          @client.call('editMessageReplyMarkup', { 'chat_id' => chat_id(fields.fetch(:conversation_id)),
+                                                   'message_id' => fields.fetch(:message_id),
+                                                   'reply_markup' => { 'inline_keyboard' => [] } })
+          :cleared
         when :typing
           @client.call('sendChatAction', { 'chat_id' => chat_id(fields.fetch(:conversation_id)), 'action' => 'typing' },
                        idempotent: true)

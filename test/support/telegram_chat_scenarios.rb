@@ -13,7 +13,10 @@ module TelegramChatScenarios
     eval.check(scenario, 'plain answer, no system caveat', noisy.empty?, noisy.map(&:text).join(' | '))
   end
 
-  def all = %w[setup greet memory reset arabic workspace_read create_file long help burst photo stranger provider_down]
+  def all
+    %w[setup greet memory reset arabic formatting workspace_read create_file deny long help status_cancel burst photo
+       stranger restart provider_down]
+  end
 
   # S1: the one documented command wrote a runnable runtime; every later scenario
   # runs on it, so the chat checks double as evidence the command's output works.
@@ -91,23 +94,108 @@ module TelegramChatScenarios
   # resumed turn runs the whole work loop again, so the tap gets its own budget.
   def create_file(eval)
     user = eval.fresh_user
-    turns = [eval.turn(user, 'Create a file named notes.txt in the workspace containing exactly the word: hello')]
-    approve = turns.last.button('approve:')
-    eval.check('create_file', 'the write asks and offers Approve on the phone',
-               !approve.nil?, turns.last.reply)
+    asked = eval.turn(user, 'Create a file named notes.txt in the workspace containing exactly the word: hello')
+    approve = asked.button('approve:')
+    check_write_prompt(eval, 'create_file', asked, approve, %w[notes.txt hello])
     eval.check('create_file', 'nothing is written before approval',
                !eval.workspace_text('notes.txt').include?('hello'), 'file exists before the tap')
+    turns = [asked]
     turns << eval.turn(user, tap: approve, timeout: 180) if approve
-    check_created_file(eval, turns.last)
+    check_created_file(eval, turns.last, approve)
     eval.hygiene('create_file', turns)
   end
 
-  def check_created_file(eval, turn)
+  # W3: the person deciding sees what will change, on a button they can press.
+  def check_write_prompt(eval, scenario, turn, button, shown)
+    eval.check(scenario, 'the write asks and offers the button on the phone', !button.nil?, turn.reply)
+    eval.check(scenario, 'the prompt names the file and shows the content',
+               shown.all? { |text| turn.reply.include?(text) }, turn.reply)
+  end
+
+  def check_created_file(eval, turn, approve)
     reply = turn.reply
     eval.check('create_file', 'file really created', eval.workspace_text('notes.txt').include?('hello'))
     eval.check('create_file', 'the reply is the outcome, not just the approval',
                reply.strip != 'Approved.' && !reply.strip.empty?, reply)
     eval.check('create_file', 'says no check verified it', reply.include?(Tamoz::Agent::ChatReply::UNVERIFIED), reply)
+    eval.check('create_file', 'the buttons go away after the tap', approve && !eval.buttons?(approve.first))
+  end
+
+  def deny(eval)
+    user = eval.fresh_user
+    asked = eval.turn(user, 'Create a file named secret.txt in the workspace containing exactly: nope')
+    deny = asked.button('deny:')
+    check_write_prompt(eval, 'deny', asked, deny, %w[secret.txt nope])
+    return eval.hygiene('deny', [asked]) unless deny
+
+    denied = eval.turn(user, tap: deny, timeout: 60)
+    check_denied(eval, eval.settles(user), denied, deny)
+    eval.hygiene('deny', [asked, denied])
+  end
+
+  def check_denied(eval, settles, denied, deny)
+    eval.check('deny', 'nothing is written', eval.workspace_text('secret.txt').empty?)
+    eval.check('deny', 'the user is told it was not done', !denied.reply.strip.empty?, denied.reply)
+    eval.check('deny', 'the buttons go away after the tap', !eval.buttons?(deny.first))
+    eval.check('deny', 'the request is closed, not left waiting', settles.last != 'admitted', settles.inspect)
+  end
+
+  # C7: what the model writes as Markdown shows as formatting on the phone, not as symbols.
+  def formatting(eval)
+    turn = eval.turn(eval.fresh_user, 'Show me a tiny Ruby snippet that reverses a string, ' \
+                                      'and put the most important word of your explanation in bold.')
+    raw = turn.reply.scan(/\*\*|```|`/).uniq
+    eval.check('formatting', 'no raw Markdown symbols on screen', raw.empty?, "#{raw.join(' ')} in #{turn.reply}")
+    eval.check('formatting', 'the snippet is shown as code',
+               turn.calls.any? { |call| call.params['text'].to_s.match?(/<(pre|code)\b/) }, turn.reply)
+    eval.hygiene('formatting', [turn])
+  end
+
+  # C8: /status tells working apart from idle, and /cancel really stops the work.
+  def status_cancel(eval)
+    user = eval.fresh_user
+    idle = eval.turn(user, '/status', timeout: 20)
+    start_long_task(eval, user)
+    busy = eval.command(user, '/status')
+    eval.check('status_cancel', '/status tells working apart from idle', busy.reply != idle.reply,
+               "idle: #{idle.reply} / busy: #{busy.reply}")
+    cancel = eval.command(user, '/cancel')
+    after = eval.await(user, '(after /cancel)', since: cancel.settled_at, timeout: 90)
+    check_cancelled(eval, eval.settles(user), cancel, after)
+    eval.hygiene('status_cancel', [idle, busy, cancel, after])
+  end
+
+  def start_long_task(eval, user)
+    started = Time.now.to_f
+    eval.say(user, 'Write a 1500-word story about a lighthouse keeper, as one message.')
+    eval.wait_for('the story to start', timeout: 30) { eval.fake.calls(since: started, chat: user).any? }
+  end
+
+  def check_cancelled(eval, settles, cancel, after)
+    eval.check('status_cancel', '/cancel is acknowledged', !cancel.reply.strip.empty?, cancel.reply)
+    eval.check('status_cancel', 'the work is stopped', settles.include?('stopped'), settles.inspect)
+    eval.check('status_cancel', 'the story never arrives', after.reply.length < 1000, "#{after.reply.length} chars")
+    eval.check('status_cancel', 'stopped within 30s', after.answer_s <= 30, format('%.1fs', after.answer_s))
+  end
+
+  # R3: a restart loses neither the conversation nor a message sent while the bot was down.
+  def restart(eval)
+    user = eval.fresh_user
+    told = eval.turn(user, 'Please remember my locker number: 4417.')
+    asked = ask_while_down(eval, user, 'What is my locker number? Just the number.')
+    eval.check('restart', 'the message sent while down is answered', !asked.reply.strip.empty?, asked.reply)
+    eval.check('restart', 'the conversation survives the restart', asked.reply.include?('4417'), asked.reply)
+    eval.hygiene('restart', [told, asked])
+  end
+
+  def ask_while_down(eval, user, text)
+    eval.stop_worker
+    eval.restart_gateway
+    sent = Time.now.to_f
+    eval.say(user, text)
+    sleep 2
+    eval.start_worker
+    eval.await(user, "#{text} (sent while the bot was down)", since: sent)
   end
 
   def long(eval)

@@ -37,6 +37,7 @@ module Tamoz
       DEFAULT_POLL_INTERVAL = 1.0
       DEFAULT_CONCURRENCY = 1
       DEFAULT_BATCH = 50
+      STOP_POLL_SECONDS = 0.5
 
       # Why the worker stopped looking at a thread. `:progressed` is the only
       # value that counts as work for the idle/backoff decision.
@@ -341,7 +342,9 @@ module Tamoz
 
       def run_queued_resume(session, thread_id:, occurrence_id:)
         unpark(thread_id)
-        request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        request = watching_for_stop(thread_id, occurrence_id) do
+          session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        end
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
       end
@@ -478,7 +481,9 @@ module Tamoz
                     observability: {execution_id: view.execution_id})
         notify_sink(thread_id, event, message, request_id: occurrence_id)
         unpark(thread_id)
-        request = session.resume(answers, thread: thread_id, request_id: resume_request_id, owner_id: owner_id)
+        request = watching_for_stop(thread_id, occurrence_id) do
+          session.resume(answers, thread: thread_id, request_id: resume_request_id, owner_id: owner_id)
+        end
         @runtime.consume_decision(consume_decision_id, now: consumed_at) if consume_decision_id
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:)
@@ -519,10 +524,59 @@ module Tamoz
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
-        request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        stopped_before = already_stopped?(session, thread_id)
+        request = watching_for_stop(thread_id, occurrence_id) do
+          session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        end
         observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
+        return settle_quiet_stop(thread_id, occurrence_id) if stopped_before && cancellation_redirect?(request)
+
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      # A chat's /cancel stamps the request; the watcher turns the stamp into the thread's stop, so the
+      # work stops at its next step (abandoning a model call in flight) instead of after it finishes.
+      def watching_for_stop(thread_id, occurrence_id, &)
+        return yield unless comms_store
+
+        stop = Tamoz::CancellationToken.new
+        finished = Tamoz::CancellationToken.new
+        stop.cancel!("cancelled_by_user") if stop_requested?(thread_id, occurrence_id)
+        watcher = Thread.new { watch_for_stop(stop, finished, thread_id, occurrence_id) }
+        Tamoz::Cancellation::Stops.during(thread_id, stop, &)
+      ensure
+        finished&.cancel!("turn finished")
+        watcher&.join
+      end
+
+      def watch_for_stop(stop, finished, thread_id, occurrence_id)
+        until stop.cancelled? || Tamoz::Cancellation.interruptible_sleep(STOP_POLL_SECONDS, token: finished)
+          stop.cancel!("cancelled_by_user") if stop_requested?(thread_id, occurrence_id)
+        end
+      end
+
+      # A lookup that fails reads as "not yet" and the next poll tries again.
+      def stop_requested?(thread_id, occurrence_id)
+        return false unless comms_store.cancellation_requested?(thread_id:, request_id: occurrence_id)
+
+        comms_store.mark_cancellation_observed(thread_id:, now: Time.now.utc)
+        true
+      rescue StandardError
+        false
+      end
+
+      def already_stopped?(session, thread_id)
+        view = view_of(session, thread_id)
+        view ? cancellation_terminal?(view) : false
+      end
+
+      # The turn already stopped for the user's /cancel; the queued cancel that follows it says nothing more.
+      def settle_quiet_stop(thread_id, occurrence_id)
+        @runtime.close_occurrence(thread_id)
+        unpark(thread_id)
+        emit("request.stopped", thread: thread_id, request_id: occurrence_id, reason: "cancelled_by_user")
+        PROGRESSED
       end
 
       def start_child_task(thread_id)
@@ -538,9 +592,9 @@ module Tamoz
       # one, which is what keeps a crash from becoming a second effect.
       def recover(session, thread_id:, occurrence_id:)
         emit("request.recovered", thread: thread_id, request_id: occurrence_id)
-        request = session.app.durable_runner.recover(
-          thread: thread_id, request_id: occurrence_id, owner_id: owner_id
-        )
+        request = watching_for_stop(thread_id, occurrence_id) do
+          session.app.durable_runner.recover(thread: thread_id, request_id: occurrence_id, owner_id:)
+        end
         observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)

@@ -55,6 +55,20 @@ from its public release line onward.
   used to leave the worker's work list for good: the press was accepted and
   nothing happened. The worker re-admits a parked thread while a decision is
   waiting for it, and the resumed turn delivers its outcome to the chat.
+- `/cancel` in Telegram stops the turn in progress. It used to queue behind the
+  running turn, so the full answer arrived and only then "Stopped.". The worker
+  now watches for the chat's cancel while a turn runs: an in-flight model call is
+  abandoned, no further tool runs, and the chat gets "Stopped." instead of the
+  answer. A bare `/cancel` stops everything open in the conversation.
+- Telegram replies render Markdown (`code`, **bold**, code blocks, links) as
+  formatting instead of raw symbols; the transport sends escaped HTML that
+  always parses.
+- A Telegram approval prompt shows what will change (the file and its content,
+  the diff, or the command) instead of "I want to create a file". Its buttons are
+  cleared once answered, the tap shows a toast, and a late tap on an old prompt
+  says it is no longer waiting.
+- `/status` answers in one plain sentence (working, queued, waiting for your
+  approval, stopping, or nothing running); `--diagnostic` keeps the detail.
 
 ### Removed
 

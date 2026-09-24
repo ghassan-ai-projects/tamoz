@@ -57,6 +57,11 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
   an unanswered call is resolved by its safety class (`:idempotent` grants a fresh
   attempt, `:unsafe` stops as unknown). The one-shot ephemeral runtime journals
   through the same dispatcher over in-memory stores by design.
+- **A user's stop ends the turn; it never aborts the graph.** Cancelling the graph context's
+  token makes the executor drop the running superstep and leave the request `running`, so the next
+  pass recovers it and the answer still arrives. A chat `/cancel` goes through
+  `Tamoz::Cancellation::Stops` (registered by `Worker#watching_for_stop`): the work loop's next
+  step routes to its `cancelled_by_user` terminal, and an in-flight model call is abandoned.
 - **Pin authority; never re-derive it by id.** A reloaded profile must match the
   `canonical_digest` recorded at bind time (`WorkerRuntime#child_profile_for`,
   `validate_thread_profile`); effect mutations bind to the active lease

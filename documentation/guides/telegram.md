@@ -179,6 +179,22 @@ See [`../operations/operations.md`](../operations/operations.md) for the
 operator-side approval, delivery-resolution and revocation commands, and
 [ADR-049](../adr/adr-049-telegram-approval.md) for the threat model.
 
+## 7. What the chat does
+
+- Each message gets one plain reply, with the typing indicator while Tamoz works.
+  Markdown the model writes (`code`, **bold**, code blocks, links) shows as
+  formatting.
+- `/new` starts a fresh conversation, `/status` says in one sentence whether
+  Tamoz is working, waiting for you, or idle, and `/cancel` stops the work in
+  progress: no further model call or tool runs, and you get "Stopped." instead
+  of the answer. `/help more` lists every command.
+- A change that needs approval shows what it will do (the file and its content,
+  the diff, or the command) with **Approve** and **Deny**. The buttons disappear
+  once you answer, and a late tap on an old prompt says it is no longer waiting.
+- A change no configured check verified ends with one plain note asking you to
+  give it a quick look; a provider problem (refused key, empty account, rate
+  limit) is named in one sentence.
+
 ## Next reads
 
 - [`../operations/operations.md`](../operations/operations.md) — revocation, `:unknown` deliveries, approvals.

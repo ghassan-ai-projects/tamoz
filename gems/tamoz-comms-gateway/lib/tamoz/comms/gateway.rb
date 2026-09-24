@@ -42,7 +42,7 @@ module Tamoz
                         '/context, /think <low|medium|high>, /verbose <quiet|normal|detailed>. ' \
                         'Commands are controls, not task text.'
       HELP_USAGE_REPLY = 'Usage: /help [more]'
-      NO_WORK_REPLY = 'No work is admitted for this conversation.'
+      NO_WORK_REPLY = 'Nothing is running right now.'
       STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
@@ -66,7 +66,8 @@ module Tamoz
       PAIRING_CODE_TTL_S = 86_400.0
       REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'
       FINISHED_REQUEST_REPLY = 'That request has already finished.'
-      CANCEL_NO_WORK_REPLY = 'No running request to cancel on this conversation.'
+      CANCEL_NO_WORK_REPLY = "There's nothing to stop right now."
+      CANCEL_REPLY = 'Stopping…'
       CANCEL_USAGE_REPLY = 'Usage: /cancel [r<reference>]'
       CANCEL_STALE_REF_REPLY = 'That request is no longer open on this conversation.'
 

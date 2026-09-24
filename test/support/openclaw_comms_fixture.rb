@@ -132,7 +132,7 @@ module Tamoz
         # so two runs enqueue byte-identical work.
         CLI_REQUEST_DOMAIN = 'tamoz.evals.benchmark.cli.v1'
         CANCEL_REASON = 'cancelled_by_user'
-        CANCEL_REPLY = 'Cancellation requested for '
+        CANCEL_REPLY = 'Stopping…'
         CLI_CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => CANCEL_REASON } }.freeze
 
         def cli_request_id(thread_id, purpose)

@@ -5,6 +5,8 @@ module Tamoz
     # The durable work loop: one tool-calling model step, its gated tool calls, then a context check.
     class SessionWork
       CONTROLS = { 'reasoning_depth' => 'think', 'answer_verbosity' => 'verbose' }.freeze
+      # The user's /cancel, seen at the next step: no further model call or tool runs.
+      CANCELLED = { next_node: 'terminal', terminal_reason: 'cancelled_by_user' }.freeze
 
       def initialize(services:)
         @services = services
@@ -30,8 +32,9 @@ module Tamoz
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan])
       end
 
-      # rubocop:disable Metrics/AbcSize -- one model step and its four outcomes, in journal order
       def step(state, context)
+        return CANCELLED if stopped?(context)
+
         exhausted = state[:work_exhausted] || budget_reason(state)
         return handoff(state, exhausted) if exhausted
 
@@ -39,17 +42,10 @@ module Tamoz
         call = @services.effects.converse(context, stage: :work_step, messages:, tools: @work.header.tools,
                                                    iteration: state.fetch(:work_step_count),
                                                    attempt: state.fetch(:work_overflowed) ? 1 : 0)
-        return answered(state, call, messages) if call.status == :succeeded
-        return overflow(state) if window_exceeded?(call)
-        raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
-        return failed_step(call) if call.status == :failed
-
-        @services.evidence.blocked_update(call, 'work model call outcome is unknown',
-                                          operation: 'model.converse.work_step')
+        stopped?(context) ? CANCELLED : stepped(state, call, messages)
       end
-      # rubocop:enable Metrics/AbcSize
 
-      def gate(state, context) = @gate.gate(state, context)
+      def gate(state, context) = stopped?(context) ? CANCELLED : @gate.gate(state, context)
 
       def execute(state, context) = @gate.execute(state, context)
 
@@ -63,6 +59,18 @@ module Tamoz
       end
 
       private
+
+      def stopped?(context) = Tamoz::Cancellation::Stops.requested?(context.thread_id)
+
+      def stepped(state, call, messages)
+        return answered(state, call, messages) if call.status == :succeeded
+        return overflow(state) if window_exceeded?(call)
+        raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
+        return failed_step(call) if call.status == :failed
+
+        @services.evidence.blocked_update(call, 'work model call outcome is unknown',
+                                          operation: 'model.converse.work_step')
+      end
 
       def now_ms = (Time.now.to_f * 1000).to_i
 

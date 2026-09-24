@@ -5,13 +5,25 @@ module Tamoz
     class Gateway
       # Resolves callback presses after the inbound disposition is durable.
       module Callbacks
+        TOASTS = {
+          approve: 'Approved', deny: 'Denied', stale: 'This is no longer waiting for an answer.',
+          binding_mismatch: 'This button is not for you.',
+          insufficient_evidence: 'Only the operator can approve this; Deny still works.'
+        }.freeze
+        SETTLED = %i[approve deny stale].freeze
+
         private
 
-        # answerCallbackQuery is best-effort after durable admission.
-        def acknowledge_callback(envelope)
+        # The toast and the cleared buttons are best-effort after durable admission: a
+        # settled prompt shows no buttons, so nobody taps a question that was answered.
+        def acknowledge_callback(envelope, outcome)
           return unless envelope['callback_query_id']
 
-          @transport.signal(:ack, callback_query_id: envelope.fetch('callback_query_id'))
+          @transport.signal(:ack, callback_query_id: envelope.fetch('callback_query_id'), text: TOASTS.fetch(outcome))
+          return unless SETTLED.include?(outcome)
+
+          @transport.signal(:clear_buttons, conversation_id: envelope.fetch('conversation_id'),
+                                            message_id: envelope.fetch('callback_message_id'))
         rescue Comms::Error, NotImplementedError
           nil
         end
@@ -21,25 +33,21 @@ module Tamoz
         def resolve_callback(envelope, now:)
           action, reference = split_callback(envelope.fetch('text').to_s)
           digest, prompt = callback_prompt(reference)
-
-          unless active_prompt?(prompt)
-            record_disposition(envelope, disposition: 'ignored', reason: 'unknown_reference', now:)
-            return
-          end
-
+          return refuse_callback(envelope, 'ignored', 'unknown_reference', :stale, now:) unless active_prompt?(prompt)
           unless prompt_binding_matches?(prompt, envelope)
-            record_disposition(envelope, disposition: 'rejected', reason: 'binding_mismatch', now:)
-            return
+            return refuse_callback(envelope, 'rejected', 'binding_mismatch', :binding_mismatch, now:)
           end
-
           if action == 'approve' && approval_insufficient_evidence?(prompt)
-            record_disposition(envelope, disposition: 'rejected', reason: 'insufficient_evidence', now:)
-            return
+            return refuse_callback(envelope, 'rejected', 'insufficient_evidence', :insufficient_evidence, now:)
           end
 
-          record_callback_decision(
-            envelope, prompt, digest, action, now:
-          )
+          outcome = record_callback_decision(envelope, prompt, digest, action, now:)
+          outcome == :consumed ? action.to_sym : :stale
+        end
+
+        def refuse_callback(envelope, disposition, reason, outcome, now:)
+          record_disposition(envelope, disposition:, reason:, now:)
+          outcome
         end
 
         def callback_prompt(reference)
@@ -61,6 +69,7 @@ module Tamoz
           )
           outcome = @store.consume_prompt(reference_digest: digest, decision_wire: decision.wire, now:)
           record_disposition(envelope, disposition: 'decision', reason: outcome.to_s, now:)
+          outcome
         end
 
         def prompt_binding_matches?(prompt, envelope)

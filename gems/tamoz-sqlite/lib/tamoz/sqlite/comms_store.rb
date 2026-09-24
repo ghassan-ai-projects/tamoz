@@ -331,6 +331,15 @@ module Tamoz
         end
       end
 
+      def cancellation_requested?(thread_id:, request_id:)
+        read('comms.request.cancel.requested') do |txn|
+          !txn.first('comms.request.cancel.requested', <<~SQL, [thread_id, request_id]).nil?
+            SELECT 1 FROM tamoz_comms_requests
+            WHERE thread_id = ? AND request_id = ? AND cancellation_requested_at_ms IS NOT NULL
+          SQL
+        end
+      end
+
       # Conversations whose admitted request a live worker lease is running right now.
       def working_conversations(surface_id:, now:)
         read('comms.request.working') do |txn|
@@ -349,14 +358,14 @@ module Tamoz
       def open_request_targets(surface_id:, conversation_id:, thread_id:)
         read('comms.request.cancel.targets') do |txn|
           rows = txn.rows('comms.request.cancel.targets', <<~SQL, [surface_id, conversation_id, thread_id])
-            SELECT request_id, thread_id FROM tamoz_comms_requests
+            SELECT request_id, thread_id, cancellation_requested_at_ms IS NOT NULL FROM tamoz_comms_requests
             WHERE surface_id = ? AND conversation_id = ? AND thread_id = ?
               AND projection_state = 'admitted'
             ORDER BY created_at_ms ASC, request_id ASC
           SQL
-          rows.map do |row|
-            request_id, row_thread_id = row
-            { 'request_id' => request_id, 'request_ref' => request_ref(request_id), 'thread_id' => row_thread_id }
+          rows.map do |request_id, row_thread_id, stopping|
+            { 'request_id' => request_id, 'request_ref' => request_ref(request_id), 'thread_id' => row_thread_id,
+              'stopping' => stopping == 1 }
           end
         end
       end

@@ -172,21 +172,51 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
                                    'preview' => '--- note.txt\n+++ note.txt' } }] }
   end
 
-  def test_approval_card_explains_the_bounded_action_and_safe_next_step
+  def test_approval_card_shows_what_will_change_and_the_safe_next_step
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
 
       assert_equal :accepted, sink.push(approval_event('occurrence-1'))
-      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
-      text = row.fetch('text')
+      text = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first.fetch('text')
 
-      assert_includes text, 'Approval required'
-      assert_includes text, 'apply a file change'
-      assert_includes text, 'operator'
-      assert_match(/Deny .*stop/, text)
-      refute_match(/(?:note\.txt|hello|fixed|decision|arguments|preview)/i, text)
-      assert_operator text.bytesize, :<=, 100
+      assert_includes text, "I'd like to change `note.txt`"
+      assert_includes text, "```\n--- note"
+      assert_match(/An operator must allow it; Deny stops it\.\z/, text)
+      refute_match(/(?:decision|arguments|preview|sha256)/i, text)
+    end
+  end
+
+  def test_create_file_card_shows_the_path_and_content
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+      event = approval_event('occurrence-1', required_evidence: 'chat_bound', tool: 'create_file')
+      event[:interrupts].first[:descriptor]['arguments'] = { 'path' => 'notes.txt', 'content' => "hello\n" }
+
+      sink.push(event)
+      text = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first.fetch('text')
+
+      assert_equal "I'd like to create `notes.txt` with:\n```\nhello\n```\n\nAllow it?", text
+    end
+  end
+
+  def test_content_with_a_fence_cannot_close_the_cards_block_and_the_ask_survives_a_long_excerpt
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store, surface: descriptor(
+        rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' }
+      ))
+      event = approval_event('occurrence-1', required_evidence: 'chat_bound', tool: 'create_file')
+      content = "```\n[docs](https://evil.example/x.sh)\n```\n#{'line\n' * 2000}"
+      arguments = { 'path' => 'README.md', 'content' => content, 'mode' => '0755' }
+      event[:interrupts].first[:descriptor]['arguments'] = arguments
+
+      sink.push(event)
+      text = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first.fetch('text')
+
+      assert_match(/\AI'd like to create `README.md` \(mode 0755\) with:\n````\n```\n\[docs\]/, text)
+      assert_match(/…\n````\n\nAllow it\?\z/, text)
     end
   end
 
@@ -253,7 +283,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
-  def test_an_approval_card_uses_a_generic_action_for_an_unknown_tool
+  def test_an_approval_card_names_an_unknown_tool
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
@@ -261,8 +291,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       assert_equal :accepted, sink.push(approval_event('occurrence-1', tool: 'unrecognized_tool'))
       text = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first.fetch('text')
 
-      assert_includes text, 'complete requested work'
-      refute_includes text, 'unrecognized_tool'
+      assert_equal "I'd like to use unrecognized_tool.\n\nAn operator must allow it; Deny stops it.", text
     end
   end
 

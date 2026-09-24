@@ -681,17 +681,8 @@ module Tamoz
           }
         end
 
-        # Maps the /status card's human state word back into the closed
-        # Lifecycle vocabulary the inbox view reports; unknown words yield nil.
-        CARD_STATE_TO_LIFECYCLE = {
-          'idle' => 'idle', 'accepted' => 'accepted', 'queued' => 'queued',
-          'working' => 'running', 'waiting' => 'waiting', 'completed' => 'completed',
-          'failed' => 'failed', 'blocked' => 'blocked', 'stopped' => 'stopped'
-        }.freeze
-
         def status_probe_words(fixture, thread, update_id:)
-          state = control_reply_text(fixture, update_id, '/status')[/State: ([a-z]+)/, 1]
-          { 'reply_word' => state && CARD_STATE_TO_LIFECYCLE[state],
+          { 'reply_word' => control_reply_text(fixture, update_id, '/status --diagnostic')[/task=([a-z_]+)/, 1],
             'view_word' => inbox_task_word(fixture, thread) }
         end
 
@@ -933,11 +924,9 @@ module Tamoz
           text = control_reply_text(fixture, update_id, "/status #{reference}")
           {
             'reference' => reference,
-            'claims_stopped' => text.include?('stopped'),
-            'claims_completed_before_effect' =>
-              text.include?('completed before the cancellation took effect'),
-            'claims_failed_before_effect' =>
-              text.include?('failed before the cancellation took effect'),
+            'claims_stopped' => text.match?(/\bstopped\b/i),
+            'claims_completed_before_effect' => text.include?('finished before the cancel took effect'),
+            'claims_failed_before_effect' => text.include?('failed before the cancel took effect'),
             'claims_blocked' => text.include?('blocked')
           }
         end

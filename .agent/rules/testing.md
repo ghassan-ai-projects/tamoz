@@ -44,3 +44,8 @@
   tap turn read "Approved." as the whole reply because it counted every `sendMessage` in the
   conversation (the prompt plus the ack already satisfied `> 1`) and treated a reply carrying
   buttons as waiting-on-user. Count within the turn and require the answer that follows the ack.
+- **A wrapper that moves a call onto another thread must forward every exception, not only
+  `StandardError`.** The work-loop tests simulate worker loss with an `Exception` subclass; the first
+  `Tamoz::Cancellation.race` rescued `StandardError`, the thread died silently, and the caller waited
+  on its queue forever — `work_loop_test.rb` hung instead of failing. Re-raise whatever the block
+  raised on the caller's thread.

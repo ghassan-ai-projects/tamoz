@@ -199,18 +199,25 @@ class ExperienceHarnessTest < Minitest::Test
     harness&.close
   end
 
-  def test_bare_cancel_disambiguates_multiple_open_requests_without_mutating_them
+  def test_bare_cancel_stops_every_open_request
     @harness.admit('prepare the report')
     @harness.admit('draft the email')
-    references = [@harness.reference(0), @harness.reference(1)]
 
     cards = @harness.say('/cancel')
-    reply = cards.find { |card| card[:kind] == 'control' && card[:text].include?('Choose one') }
 
-    refute_nil reply, "expected a cancellation choice, got: #{cards.inspect}"
-    references.each { |reference| assert_includes reply.fetch(:text), reference }
-    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms').nil? },
-           'ambiguous cancellation must not stamp any request'
+    assert_includes cards.map { |card| [card[:kind], card[:text]] }, %w[control Stopping…]
+    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms') },
+           'a bare /cancel stamps every open request'
+  end
+
+  def test_a_second_cancel_stops_the_newer_message_too
+    @harness.admit('prepare the report')
+    @harness.say('/cancel')
+    @harness.admit('draft the email')
+    cards = @harness.say('/cancel')
+
+    assert_includes cards.map { |card| card[:text] }, 'Stopping…'
+    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms') }, 'both messages are stamped'
   end
 
   def test_cancel_reference_targets_one_open_request
@@ -220,7 +227,7 @@ class ExperienceHarnessTest < Minitest::Test
     second_reference = @harness.reference(1)
 
     cards = @harness.say("/cancel #{first_reference}")
-    reply = cards.find { |card| card[:kind] == 'control' && card[:text].include?(first_reference) }
+    reply = cards.find { |card| card[:kind] == 'control' && card[:text] == 'Stopping…' }
 
     refute_nil reply, "expected a reference-addressed cancellation, got: #{cards.inspect}"
     stamps = @harness.cancellation_stamp_rows.to_h { |row| [row.fetch('request_id'), row] }
@@ -245,8 +252,8 @@ class ExperienceHarnessTest < Minitest::Test
     first_status = request_status_text(first_reference)
     second_status = request_status_text(second_reference)
 
-    assert_match(/Request #{first_reference}:.*Delivery: unknown/, first_status)
-    assert_match(/Request #{second_reference}:.*Delivery: delivered/, second_status)
+    assert_match(/Request #{first_reference}:.*delivery=unknown/, first_status)
+    assert_match(/Request #{second_reference}:.*delivery=delivered/, second_status)
   end
 
   def test_worker_unavailable_state_is_distinct_from_working
@@ -257,8 +264,7 @@ class ExperienceHarnessTest < Minitest::Test
     queued = @harness.status_only(reference)
     queued_text = queued.find { |card| card[:kind] == 'control' }.fetch(:text)
 
-    assert_match(/Now: Waiting for a worker to pick up this request\./, queued_text)
-    refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, queued_text)
+    assert_equal "Your message is queued; I'll start on it shortly.", queued_text
 
     @harness.work_off
 
@@ -312,7 +318,7 @@ class ExperienceHarnessTest < Minitest::Test
   private
 
   def request_status_text(reference)
-    cards = @harness.say("/status #{reference}")
+    cards = @harness.say("/status #{reference} --diagnostic")
     cards.find { |card| card[:kind] == 'control' && card[:text].start_with?("Request #{reference}:") }.fetch(:text)
   end
 

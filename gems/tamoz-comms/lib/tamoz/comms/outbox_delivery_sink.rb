@@ -39,13 +39,7 @@ module Tamoz
       # Kinds whose rows the admission reservation covers (design §12): the
       # request is finished once they are durable, so the reservation releases.
       TERMINAL_KINDS = %w[answer failed stopped blocked].freeze
-      APPROVAL_ACTIONS = {
-        'apply_patch' => 'apply a file change',
-        'create_file' => 'create a file',
-        'run_check' => 'run a local check',
-        'child_task' => 'start a child task'
-      }.freeze
-      GENERIC_APPROVAL_ACTION = 'complete requested work'
+      APPROVAL_EXCERPT_CHARACTERS = 1500
 
       def initialize(adapter:, checkpoints:, rendering: Comms::Rendering)
         @store = adapter.bind_comms_store(checkpoints)
@@ -210,21 +204,45 @@ module Tamoz
       def approval_part(event, actions, surface)
         limits = surface.fetch('rendering')
         @rendering.plain(
-          approval_text(event, actions), max_parts: 1, thread: event.fetch(:thread_id),
+          approval_text(event.fetch(:interrupts).first.fetch(:descriptor), actions, limits.fetch('part_characters')),
+          max_parts: 1, thread: event.fetch(:thread_id),
           part_characters: limits.fetch('part_characters'), overflow: limits.fetch('overflow')
         ).fetch(0)
       end
 
-      def approval_text(event, actions)
-        action = approval_action(event.fetch(:interrupts))
-        return "Approval required: I want to #{action}. Allow it?" if actions.include?('approve')
-
-        "Approval required: I want to #{action}. An operator must allow it; Deny stops it."
+      # The person deciding sees what will change (the file and its content, the diff, or the
+      # command); the excerpt shrinks to the surface's bound so the ask itself is never cut.
+      def approval_text(descriptor, actions, characters)
+        ask = actions.include?('approve') ? 'Allow it?' : 'An operator must allow it; Deny stops it.'
+        action, detail = approval_action(descriptor)
+        budget = [characters - action.length - ask.length - 16, APPROVAL_EXCERPT_CHARACTERS].min
+        "#{action}#{excerpt(detail, budget) if detail && budget.positive?}\n\n#{ask}"
       end
 
-      def approval_action(interrupts)
-        descriptor = interrupts.first.fetch(:descriptor)
-        APPROVAL_ACTIONS.fetch(descriptor['tool'], GENERIC_APPROVAL_ACTION)
+      def approval_action(descriptor)
+        arguments = descriptor['arguments'] || {}
+        case descriptor['tool']
+        when 'create_file'
+          ["I'd like to create `#{arguments['path']}`#{mode_note(arguments)} with:", arguments['content']]
+        when 'apply_patch' then ["I'd like to change `#{arguments['path']}`:", descriptor['preview']]
+        when 'run_check' then ["I'd like to run:", descriptor['preview'].to_s.delete_prefix('$ ')]
+        when 'child_task' then ["I'd like to start a child task."]
+        else ["I'd like to use #{descriptor['tool']}."]
+        end
+      end
+
+      def mode_note(arguments)
+        mode = arguments['mode'].to_s
+        mode.empty? || mode == '0644' ? '' : " (mode #{mode})"
+      end
+
+      # The fence is longer than any backtick run in the content, so the content can never close it
+      # early and render as links or formatting the approver did not ask for.
+      def excerpt(text, budget)
+        text = text.to_s.chomp
+        shown = text.length > budget ? "#{text[0, budget - 1]}…" : text
+        fence = '`' * [3, (shown.scan(/`+/).map(&:length).max || 0) + 1].max
+        "\n#{fence}\n#{shown}\n#{fence}"
       end
 
       # The turn is parked on a human answer this channel cannot collect:

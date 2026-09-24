@@ -145,12 +145,13 @@ module Tamoz
 
         COMMAND_SIGNATURES = {
           'help' => ['Just send me a message'],
-          'status' => ['Work status:'],
+          'status' => ['Nothing is running', "I'm working on", 'Your message is queued', "I'm waiting for you",
+                       'Stopping, as you asked'],
           'new' => ['New conversation started'],
-          'cancel' => ['No running request to cancel', 'Cancellation requested'],
+          'cancel' => ["There's nothing to stop", 'Stopping…'],
           'redirect' => ['Redirecting', 'That request has already finished.', 'Usage: /redirect'],
           'whoami' => ['You are telegram:user:'],
-          'start' => ['Usage: /start'],
+          'start' => ['Usage: /start', "Hi! I'm Tamoz"],
           'reset' => ['Episode reset on generation '],
           'compact' => ['Transcript compacted; '],
           'usage' => ['Usage: requests '],
@@ -219,9 +220,9 @@ module Tamoz
 
         def c7(facts, conversation:)
           prompt = rows_of_kind(facts, 'approval_request').first
-          # Card copy names the reason ("Approval required: …") and the denial
-          # verdict ("Denied") — the semantic anchors the gate exists for.
-          named = prompt&.dig('text').to_s.include?('Approval required')
+          # Card copy names the change it asks about ("I'd like to …") and the
+          # denial verdict ("Denied") — the semantic anchors the gate exists for.
+          named = prompt&.dig('text').to_s.include?("I'd like to")
           consumed = facts['prompt_consumed'] == true
           denied_terminal = rows_of_kind(facts, 'answer').any? { |row| row['text'].to_s.include?('Denied') } ||
                             rows_of_kind(facts, 'failed').length >= 1

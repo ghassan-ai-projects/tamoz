@@ -40,7 +40,7 @@ class TelegramChatEval
 
   class ProcessDied < StandardError; end
 
-  Turn = Struct.new(:user, :text, :sent_at, :messages, :calls, :settled_at, keyword_init: true) do
+  Turn = Struct.new(:user, :text, :sent_at, :messages, :calls, :settled_at, :steps, keyword_init: true) do
     def reply = messages.map { |message| message[:text] }.join("\n")
     def sends = calls.count { |call| call.name == 'sendMessage' }
     def refused = calls.reject(&:ok)
@@ -86,8 +86,7 @@ class TelegramChatEval
   def provider_key_name = "#{@provider.upcase}_API_KEY"
 
   def start
-    spawn_child(:gateway, [File.join(ROOT, 'script/telegram_chat_eval'), '--gateway', @fake.origin,
-                           '--runtime-dir', @runtime, 'comms', 'serve'])
+    restart_gateway
     wait_until('gateway deployed') { rows('select surface_id from tamoz_comms_surfaces').any? }
     start_worker
   end
@@ -99,9 +98,22 @@ class TelegramChatEval
   end
 
   def restart_worker(env)
-    stop_child(:worker)
+    stop_worker
     start_worker(env)
   end
+
+  def stop_worker = stop_child(:worker)
+
+  def restart_gateway
+    stop_child(:gateway)
+    spawn_child(:gateway, [File.join(ROOT, 'script/telegram_chat_eval'), '--gateway', @fake.origin,
+                           '--runtime-dir', @runtime, 'comms', 'serve'])
+  end
+
+  # Sends without waiting for the reply, for scenarios that act while a turn runs.
+  def say(user, text) = @fake.say(user, text)
+
+  def wait_for(what, timeout: 60, &) = wait_until(what, timeout:, &)
 
   def shutdown
     @logs = %i[gateway worker].to_h { |name| [name, log_tail(name)] }
@@ -109,14 +121,33 @@ class TelegramChatEval
     @fake.stop
   end
 
+  # A tap on Approve resumes work whose answer follows the ack; a Deny only closes the request.
   def turn(user, text = nil, photo: false, tap: nil, timeout: 180)
+    resumes = tap&.last.to_s.start_with?('approve:')
     sent_at = Time.now.to_f
     if tap then @fake.tap(user, *tap)
     elsif photo then @fake.send_photo(user)
     else @fake.say(user, text)
     end
     settle_and_record(user, tap ? "(tap #{tap.last})" : text || '(photo)', sent_at,
-                      SettleWindow.new(timeout:, awaiting_work: !tap.nil?))
+                      SettleWindow.new(timeout:, awaiting_work: resumes))
+  end
+
+  # A command sent while other work runs: judged on its own first reply, not on the chat settling.
+  def command(user, text, timeout: 15)
+    sent_at = Time.now.to_f
+    @fake.say(user, text)
+    wait_until("reply to #{text}", timeout:) { first_send(user, sent_at) }
+    record_turn(user, text, sent_at, first_send(user, sent_at).at)
+  end
+
+  # Records whatever arrives from `since` until the chat settles.
+  def await(user, label, since:, timeout: 180)
+    settle_and_record(user, label, since, SettleWindow.new(timeout:))
+  end
+
+  def buttons?(message_id)
+    Array(@fake.message(message_id)&.dig(:markup, 'inline_keyboard')).flatten.any?
   end
 
   def burst(user, texts, timeout: 240)
@@ -277,12 +308,25 @@ class TelegramChatEval
 
   def settle_and_record(user, text, sent_at, window)
     wait_settled(user, sent_at, window)
-    turn = Turn.new(user:, text:, sent_at:, settled_at: Time.now.to_f,
-                    messages: @fake.visible_messages(user, since: sent_at - 0.01),
-                    calls: @fake.calls(since: sent_at, chat: user))
+    record_turn(user, text, sent_at, Time.now.to_f)
+  end
+
+  def record_turn(user, text, sent_at, settled_at)
+    calls = @fake.calls(since: sent_at, chat: user).select { |call| call.at <= settled_at }
+    messages = @fake.visible_messages(user, since: sent_at - 0.01).select { |message| message[:at] <= settled_at }
+    turn = Turn.new(user:, text:, sent_at:, settled_at:, messages:, calls:, steps: steps(user, sent_at, settled_at))
     @transcript << turn
     turn
   end
+
+  # What the worker did for this turn, from the effect journal: model calls and tools, in order.
+  def steps(user, from, to)
+    rows("select replace(replace(operation, 'model.converse.', 'model:'), 'tool.', '') from tamoz_effects " \
+         "where thread_id in (select thread_id from tamoz_comms_requests where conversation_id = '#{chat(user)}') " \
+         "and created_at_ms between #{(from * 1000).to_i} and #{(to * 1000).to_i} order by created_at_ms")
+  end
+
+  def first_send(user, since) = @fake.calls(since:, chat: user).find { |call| call.name == 'sendMessage' }
 
   # Settled: nothing open, nothing queued to send, and the chat has been quiet.
   # After a tap the approval itself must also have left the paused projection, or
@@ -353,6 +397,7 @@ class TelegramChatEval
     first = turn.first_reply_s ? format('%.1fs', turn.first_reply_s) : '—'
     ["**user #{turn.user}:** #{turn.text}  _(first reply #{first}, settled " \
      "#{format('%.1fs', turn.answer_s)}, #{turn.sends} msgs, #{turn.typing} typing)_",
+     *(turn.steps.empty? ? [] : ["_steps: #{turn.steps.join(' → ')}_"]),
      *turn.messages.map { |message| message_line(message) }, '']
   end
 

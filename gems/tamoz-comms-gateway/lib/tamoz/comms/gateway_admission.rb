@@ -39,8 +39,7 @@ module Tamoz
               admit_request(envelope, now:)
             end
           when :decision
-            resolve_callback(envelope, now:)
-            acknowledge_callback(envelope)
+            acknowledge_callback(envelope, resolve_callback(envelope, now:))
           when :rejected
             record_disposition(envelope, disposition: 'rejected', reason: decision.reason.to_s, now:)
             append_control(decision.control_reply, envelope, now:) if decision.control_reply

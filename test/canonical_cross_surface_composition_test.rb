@@ -229,8 +229,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     cancel_reply = control_reply(fixture, raw_update(131, '/cancel', user_id: USER_A,
                                                      conversation_id: CONVERSATION_A))
 
-    # The accepted /cancel reply binds the target reference (c69b55e card copy).
-    assert_equal "Cancellation requested for #{reference}.", cancel_reply&.fetch('text')
+    assert_equal 'Stopping…', cancel_reply&.fetch('text')
 
     observed = fixture.store.mark_cancellation_observed(thread_id: thread, now: @clock)
 
@@ -244,7 +243,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     assert_equal 'terminal', timeline[:state]
     assert_equal 'stopped', timeline[:terminal_word]
 
-    status_reply = control_reply(fixture, raw_update(132, "/status #{reference}",
+    status_reply = control_reply(fixture, raw_update(132, "/status #{reference} --diagnostic",
                                                      user_id: USER_A, conversation_id: CONVERSATION_A))
     text = status_reply&.fetch('text').to_s
 
