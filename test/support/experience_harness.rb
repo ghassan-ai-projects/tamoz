@@ -142,6 +142,10 @@ module Tamoz
 
       def provider_label = "#{@provider}/#{@model}"
 
+      def reference(index = -1)
+        Tamoz::Comms::Lifecycle::RequestRef.for(request_ids_for(Fixture::CONVERSATION_A).fetch(index))
+      end
+
       private
 
       def real_model_factory
@@ -177,8 +181,7 @@ module Tamoz
         sink = Tamoz::Comms::OutboxDeliverySink.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
         )
-        @recording_sink = Fixture::RecordingSink.new(sink)
-        @runtime.instance_variable_set(:@delivery_sink, @recording_sink)
+        @runtime.instance_variable_set(:@delivery_sink, sink)
         @worker = capturing_worker
       end
 

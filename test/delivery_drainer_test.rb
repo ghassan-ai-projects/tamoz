@@ -37,6 +37,21 @@ class DeliveryDrainerTest < Minitest::Test
     end
   end
 
+  def test_typing_repeats_every_four_seconds_while_a_worker_runs_and_stops_after
+    store = WorkingStore.new
+    transport = SignalTransport.new
+    drainer = Tamoz::Comms::DeliveryDrainer.new(store:, transport:, descriptor:, owner: 'drainer:typing',
+                                                sleeper: ->(_seconds) {})
+    store.working = ['telegram:chat:1']
+
+    [0, 1, 4].each { |offset| drainer.drain_once(now: now + offset) }
+    assert_equal [[:typing, 'telegram:chat:1']] * 2, transport.signals
+
+    store.working = []
+    drainer.drain_once(now: now + 9)
+    assert_equal 2, transport.signals.length
+  end
+
   def test_two_drainers_race_one_claim_and_one_transport_send
     with_runtime do |_main_adapter, first_adapter, main_store, _first_store, second_adapter, _second_store, _checkpoints|
       main_store.append_delivery(delivery('answer'), surface_id: 'telegram-ops', capacity: 10, now:)
@@ -323,6 +338,22 @@ class DeliveryDrainerTest < Minitest::Test
 
   def now
     Time.utc(2026, 8, 11, 12, 0, 0)
+  end
+
+  class WorkingStore
+    attr_accessor :working
+
+    def initialize = @working = []
+    def reconcile_expired_deliveries(now:) = now
+    def outbox_rows(surface_id:, statuses:, limit:) = []
+    def working_conversations(surface_id:, now:) = @working
+  end
+
+  class SignalTransport
+    attr_reader :signals
+
+    def initialize = @signals = []
+    def signal(kind, conversation_id:) = @signals << [kind, conversation_id]
   end
 
   class ScriptedTransport

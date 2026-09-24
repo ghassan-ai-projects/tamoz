@@ -5,15 +5,12 @@ require_relative 'support/autonomy_case'
 
 # What reconnecting actually guarantees. A client that walks away mid-turn and
 # comes back gets: the identity round-trip (the short reference resolves to the
-# same request and thread), per-request monotonic milestone sequences in the
-# durable outbox markup, and resumption of STATE from durable rows alone with
+# same request and thread) and resumption of STATE from durable rows alone with
 # nothing re-run and no second terminal delivery.
 #
 # What it does NOT get — recorded here as a named limitation rather than
 # invented: there is no protocol that resumes EVENT STREAMING from a last-seen
-# sequence. Milestone facts coalesce onto one live card per reference instead
-# of accumulating a replayable stream, so a reconnecting client reads current
-# state; it never replays history.
+# sequence, so a reconnecting client reads current state; it never replays history.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 class ReconnectionResumeProtocolTest < Minitest::Test
   include AutonomyCase
@@ -48,13 +45,6 @@ class ReconnectionResumeProtocolTest < Minitest::Test
         assert worker.poll_once
 
         reference = Comms::Lifecycle::RequestRef.for(request_id)
-        sequences = milestone_sequences(
-          runtime.adapter.bind_comms_store(runtime.checkpoints), reference
-        )
-        assert sequences.any?, 'the turn projected its claimed milestone into the outbox'
-        assert_equal sequences.sort, sequences.uniq.sort,
-                     'milestone sequences are monotonic within the request'
-
         view = runtime.session_for(THREAD).view(thread: THREAD)
         assert_equal :completed, view.status
       ensure
@@ -95,22 +85,6 @@ class ReconnectionResumeProtocolTest < Minitest::Test
       review: [accepted_review],
       verify: [{ 'answer' => 'hello', 'satisfied' => true, 'evidence' => ['note.txt'] }]
     }
-  end
-
-  def milestone_sequences(store, reference)
-    store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending claimed succeeded])
-         .filter_map { |row| control_row_sequence(row, reference) }
-  end
-
-  def control_row_sequence(row, reference)
-    return nil unless row.fetch('kind') == 'control' && row['markup']
-
-    facts = JSON.parse(row.fetch('markup'))
-    return nil unless facts.is_a?(Hash) && facts['request_ref'] == reference
-
-    Integer(facts.fetch('sequence'))
-  rescue JSON::ParserError
-    nil
   end
 
   def answer_rows(store)

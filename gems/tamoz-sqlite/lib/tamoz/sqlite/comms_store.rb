@@ -331,6 +331,19 @@ module Tamoz
         end
       end
 
+      # Conversations whose admitted request a live worker lease is running right now.
+      def working_conversations(surface_id:, now:)
+        read('comms.request.working') do |txn|
+          binds = [DEFAULT_NAMESPACE, DEFAULT_NAMESPACE, now_ms(now), surface_id]
+          txn.rows('comms.request.working', <<~SQL, binds).map(&:first)
+            SELECT DISTINCT c.conversation_id FROM tamoz_comms_requests c
+            JOIN tamoz_requests r ON r.thread_id = c.thread_id AND r.namespace = ?
+            JOIN tamoz_namespaces n ON n.thread_id = c.thread_id AND n.namespace = ? AND n.lease_expires_at_ms > ?
+            WHERE c.surface_id = ? AND c.projection_state = 'admitted' AND r.status IN ('claimed', 'running')
+          SQL
+        end
+      end
+
       # The current-generation admitted requests available to a caller-bound
       # cancellation command, in queue order.
       def open_request_targets(surface_id:, conversation_id:, thread_id:)
@@ -656,9 +669,9 @@ module Tamoz
       # lines are only the CONFIRMED successful terminal deliveries
       # (invariant 11). Bounded twice — `limit` entries, each truncated —
       # because the transcript rides the request payload into a model prompt.
-      def conversation_history(surface_id:, conversation_id:, limit: HISTORY_LIMIT)
-        entries = recent_request_tasks(surface_id:, conversation_id:, limit:) +
-                  recent_terminal_deliveries(surface_id:, conversation_id:, limit:)
+      def conversation_history(surface_id:, conversation_id:, thread_id:, limit: HISTORY_LIMIT)
+        entries = recent_request_tasks(surface_id:, conversation_id:, thread_id:, limit:) +
+                  recent_terminal_deliveries(surface_id:, conversation_id:, thread_id:, limit:)
         entries.sort_by { |entry| entry.fetch(:at) }.last(limit).map do |entry|
           { 'role' => entry.fetch(:role), 'text' => entry.fetch(:text) }
         end
@@ -1239,11 +1252,11 @@ module Tamoz
         JSON.parse(row.fetch(0)).fetch('limits')
       end
 
-      def recent_request_tasks(surface_id:, conversation_id:, limit:)
+      def recent_request_tasks(surface_id:, conversation_id:, thread_id:, limit:)
         rows = read('comms.history.requests') do |txn|
-          txn.rows('comms.history.requests', <<~SQL, [surface_id, conversation_id, limit])
+          txn.rows('comms.history.requests', <<~SQL, [surface_id, conversation_id, thread_id, limit])
             SELECT request_id, thread_id, created_at_ms FROM tamoz_comms_requests
-            WHERE surface_id = ? AND conversation_id = ?
+            WHERE surface_id = ? AND conversation_id = ? AND thread_id = ?
             ORDER BY created_at_ms DESC LIMIT ?
           SQL
         end
@@ -1271,11 +1284,12 @@ module Tamoz
       # correspondent CONFIRMABLY saw (invariant 11, plan 02 work item 5):
       # only `succeeded` rows qualify. Pending, claimed, unknown and failed
       # rows never enter a later model prompt.
-      def recent_terminal_deliveries(surface_id:, conversation_id:, limit:)
+      def recent_terminal_deliveries(surface_id:, conversation_id:, thread_id:, limit:)
         rows = read('comms.history.deliveries') do |txn|
-          txn.rows('comms.history.deliveries', <<~SQL, [surface_id, conversation_id, limit])
+          txn.rows('comms.history.deliveries', <<~SQL, [surface_id, conversation_id, thread_id, limit])
             SELECT text, created_at_ms FROM tamoz_comms_outbox
             WHERE surface_id = ? AND conversation_id = ? AND journaled = 1
+              AND request_id IN (SELECT request_id FROM tamoz_requests WHERE thread_id = ?)
               AND status = 'succeeded'
               AND kind IN ('answer', 'failed', 'stopped', 'blocked') AND part_index = 0
             ORDER BY created_at_ms DESC LIMIT ?

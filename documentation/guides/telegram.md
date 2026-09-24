@@ -7,10 +7,9 @@ file.
 
 Current version: `0.1.0.alpha.1` (pre-release).
 
-The approval semantics are the load-bearing part of the design: a chat identity
-is weaker evidence than local filesystem authority. Telegram can **deny**, and
-under the current policy every approval still requires `filesystem_operator`
-evidence, so the channel is deny-only in practice. The full model is recorded in
+The approval semantics are the load-bearing part of the design: approval is
+gated on evidence, and the base policy lets the paired chat approve. The full
+model is recorded in
 [ADR-049](../adr/adr-049-telegram-approval.md).
 
 ## 1. Create the bot
@@ -132,7 +131,7 @@ Add `--once` to either command to do a single pass and exit, which is what you
 want from cron or a test; `comms serve --once --json` reports each surface's
 outcome for deterministic supervision.
 
-## 6. Approval flow (deny-only)
+## 6. Approval flow
 
 Under ADR-049, approval authority is a function of evidence strength, not of
 which transport pressed a button:
@@ -143,9 +142,10 @@ chat_bound  <  filesystem_operator
 
 - A bound Telegram correspondent supplies `chat_bound` and may **deny** any
   active prompt — denial is unconditional and fail-safe.
-- The v1 policy requires `filesystem_operator` for every effect, so a Telegram
-  approve is refused for every action today. Local operator approvals via
-  `tamoz approve` supply `filesystem_operator` and are the working path.
+- The base policy requires `chat_bound` to approve, so the paired chat gets
+  **Approve** and **Deny** buttons. Raise `evidence.approve` to
+  `filesystem_operator` in the policy to make the chat deny-only; `tamoz approve`
+  at the computer always works.
 - Absent or ambiguous evidence never approves; an unknown delivery is resolved
   by the operator, never guessed.
 
@@ -155,6 +155,6 @@ operator-side approval, delivery-resolution and revocation commands, and
 
 ## Next reads
 
-- [`../operations/operations.md`](../operations/operations.md) — revocation, `:unknown` deliveries, deny-only approvals.
+- [`../operations/operations.md`](../operations/operations.md) — revocation, `:unknown` deliveries, approvals.
 - [`../adr/adr-049-telegram-approval.md`](../adr/adr-049-telegram-approval.md) — the evidence-gated approval decision.
 - [`../reference/config.md`](../reference/config.md) — env vars and the runtime directory.

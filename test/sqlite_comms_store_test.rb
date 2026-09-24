@@ -371,7 +371,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   # 11 — the answer enters only once its delivery is `succeeded`). Control
   # deliveries ('Accepted…') and non-admitted messages never enter it.
   def test_conversation_history_interleaves_admitted_tasks_and_terminal_replies
-    with_engine do |store, _adapter, _checkpoints|
+    with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
       store.admit_and_enqueue(
         envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
@@ -379,7 +379,8 @@ class SQLiteCommsStoreTest < Minitest::Test
                                                       reservation: 1, now:
       )
       answer = delivery(text: 'done, it is blue')
-      store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1,
+                                    reserved_request_id: request_ids(checkpoints, 'tg.ops.abc').first)
       claim_and_mark!(store, answer.fetch('delivery_id'), 'succeeded')
       store.append_delivery(
         delivery(text: 'Accepted. I will report committed progress.', kind: 'control',
@@ -393,7 +394,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       )
 
       history = store.conversation_history(
-        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.abc'
       )
 
       assert_equal(
@@ -404,6 +405,9 @@ class SQLiteCommsStoreTest < Minitest::Test
         ],
         history
       )
+      assert_empty store.conversation_history(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.after-new'
+      ), '/new starts a thread with no earlier transcript'
     end
   end
 
@@ -798,6 +802,31 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  def test_a_conversation_is_working_only_while_a_worker_holds_its_admitted_request
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 55))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      assert_empty store.working_conversations(surface_id: 'telegram-ops', now:), 'queued is not working'
+
+      checkpoints.open_writer(
+        thread_id: 'tg.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
+      ) do |writer|
+        writer.claim_next_request(validator: nil)
+
+        assert_equal ['telegram:chat:22222222'], store.working_conversations(surface_id: 'telegram-ops', now: Time.now.utc)
+      end
+
+      assert_empty store.working_conversations(surface_id: 'telegram-ops', now: Time.now.utc),
+                   'a released lease means no worker is on it'
+      store.complete_request(thread_id: 'tg.ops.abc', request_id:, settle_kind: 'answer')
+
+      assert_empty store.working_conversations(surface_id: 'telegram-ops', now:), 'a settled request is not working'
+    end
+  end
+
   def test_worker_status_uses_the_claim_window_then_claim_facts
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
@@ -1084,14 +1113,18 @@ class SQLiteCommsStoreTest < Minitest::Test
   # delivery — a journaled terminal answer enters only when its SAME row is
   # `succeeded`; pending and unknown stay out of every later model prompt.
   def test_history_includes_only_confirmed_successful_terminal_deliveries
-    with_engine do |store|
+    with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
+      admit(store, envelope(update_id: 1, text: 'first'))
+      admit(store, envelope(update_id: 2, text: 'second'))
+      first_id, second_id = request_ids(checkpoints, 'tg.ops.abc')
       draft = delivery(text: 'draft answer', content_digest: 'b' * 63 + '1')
       lost = delivery(text: 'lost reply', content_digest: 'b' * 63 + '2')
-      store.append_delivery(draft, surface_id: 'telegram-ops', capacity: 10, now:)
-      store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      store.append_delivery(draft, surface_id: 'telegram-ops', capacity: 10, now:, reserved_request_id: first_id)
+      store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1, reserved_request_id: second_id)
       assistant_texts = lambda {
-        store.conversation_history(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+        store.conversation_history(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+                                   thread_id: 'tg.ops.abc')
              .select { |entry| entry.fetch('role') == 'assistant' }.map { |entry| entry.fetch('text') }
       }
 

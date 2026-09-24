@@ -23,7 +23,7 @@ module Tamoz
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:NilCheck
     # :reek:BooleanParameter -- `journaled` is part of the delivery contract.
     class Delivery
-      KINDS = %w[accepted answer approval_request failed stopped blocked control].freeze
+      KINDS = %w[answer approval_request failed stopped blocked control].freeze
       OPERATIONS = %w[send_message edit_message].freeze
       DIGEST_DOMAIN = 'tamoz.comms.delivery.v1'
       MAX_TEXT_BYTES = 4096

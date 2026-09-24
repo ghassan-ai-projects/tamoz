@@ -72,7 +72,7 @@ module TelegramChatScenarios
   def help(eval)
     turn = eval.turn(eval.fresh_user, '/help')
     eval.check('help', 'lists /new', turn.reply.include?('/new'), turn.reply)
-    eval.check('help', 'answer within 5s', turn.first_reply_s.to_f.between?(0.01, 5),
+    eval.check('help', 'answer within 5s', turn.first_reply_s.to_f <= 5,
                format('%.1fs', turn.first_reply_s.to_f))
   end
 

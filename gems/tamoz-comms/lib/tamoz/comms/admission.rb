@@ -27,6 +27,7 @@ module Tamoz
     module Admission
       # The disposition of one update. `command_intent` is typed and bounded;
       # it is not task text and cannot be forwarded to a model.
+      TEXT_ONLY_REPLY = 'I can only read text messages for now.'
       Decision = Data.define(
         :disposition, :reason, :control_reply, :thread_id, :command_intent
       )
@@ -35,6 +36,7 @@ module Tamoz
 
       def decide(envelope, surface:, binding: nil, conversation: nil, bot_username: nil)
         return reject(:surface_disabled, 'the surface is disabled') if surface.disabled?
+        return unsupported(envelope, surface:, binding:) if envelope.fetch('kind') == 'unsupported'
         return ignore(:unsupported_kind) unless %w[text command callback].include?(envelope.fetch('kind'))
         return reject(:group_chat, 'group chats are refused in v1') if group_chat?(envelope.fetch('conversation_id'))
         return reject(:unbound, 'the correspondent is not bound') if binding && binding.fetch('status') != 'active'
@@ -65,16 +67,8 @@ module Tamoz
       end
 
       def command_admission(envelope, surface:, binding:, bot_username:)
-        case surface.admission.fetch(:direct)
-        when 'allowlist'
-          authorized = surface.admission.fetch(:correspondents).include?(envelope.fetch('correspondent_id')) ||
-                       binding&.fetch('status') == 'active'
-          return ignore(:unbound) unless authorized
-        when 'pairing'
-          return ignore(:pairing_pending) unless binding&.fetch('status') == 'active'
-        else
-          return reject(:disabled, 'admission is disabled')
-        end
+        refusal = admission_refusal(envelope, surface:, binding:)
+        return refusal if refusal
 
         command_disposition(envelope, bot_username:)
       end
@@ -87,29 +81,17 @@ module Tamoz
       end
 
       def text_disposition(envelope, surface:, binding:, conversation:)
+        admission_refusal(envelope, surface:, binding:) || request_disposition(envelope, surface:, conversation:)
+      end
+
+      # The configured allowlist IS the admission, and an approved pairing binding
+      # is the dynamic operator addition to it; an empty allowlist admits nobody.
+      def admission_refusal(envelope, surface:, binding:)
         direct = surface.admission.fetch(:direct)
-        case direct
-        when 'allowlist'
-          # The configured list IS the admission (design §7: explicit numeric
-          # ids are admitted); an approved pairing binding is the dynamic
-          # operator addition to it. An empty allowlist is a configuration
-          # error, not allow-everything.
-          if surface.admission.fetch(:correspondents).include?(envelope.fetch('correspondent_id')) ||
-             binding&.fetch('status') == 'active'
-            return request_disposition(envelope, surface:, conversation:)
-          end
+        return reject(:disabled, 'admission is disabled') unless %w[allowlist pairing].include?(direct)
+        return nil if authorized?(envelope, surface:, binding:)
 
-          ignore(:unbound)
-        when 'pairing'
-          # An approved challenge IS the binding: `tamoz comms pair approve`
-          # consumes the challenge and writes the active binding in one step
-          # (design §7), so an active binding is the consumed-challenge proof.
-          return request_disposition(envelope, surface:, conversation:) if binding&.fetch('status') == 'active'
-
-          ignore(:pairing_pending)
-        else
-          reject(:disabled, 'admission is disabled')
-        end
+        ignore(direct == 'pairing' ? :pairing_pending : :unbound)
       end
 
       def request_disposition(envelope, surface:, conversation:)
@@ -119,6 +101,21 @@ module Tamoz
         else
           Decision.new(:request, :bound, nil, conversation.fetch('thread_id'), nil)
         end
+      end
+
+      # A photo or sticker from someone allowed to talk gets told why nothing happens.
+      def unsupported(envelope, surface:, binding:)
+        conversation_id = envelope.fetch('conversation_id')
+        return ignore(:unsupported_kind) if group_chat?(conversation_id) || !authorized?(envelope, surface:, binding:)
+
+        Decision.new(:ignored, :unsupported_kind, TEXT_ONLY_REPLY, nil, nil)
+      end
+
+      def authorized?(envelope, surface:, binding:)
+        active = binding&.fetch('status') == 'active'
+        return active unless surface.admission.fetch(:direct) == 'allowlist'
+
+        active || surface.admission.fetch(:correspondents).include?(envelope.fetch('correspondent_id'))
       end
 
       def callback_disposition

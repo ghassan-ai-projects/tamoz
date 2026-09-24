@@ -18,11 +18,7 @@ module Tamoz
     #
     # The CLI rendering contract: an attached turn renders the graph's stream
     # events (JSON envelopes; human-mode task/error/interrupt lines) plus the
-    # terminal and `show` views. Committed milestone facts never ride a
-    # turn-scoped stream event — the engine emits only run/task/update/
-    # checkpoint parts, which carry no state axes — so their operator surface
-    # is the reconnectable view (`tamoz comms request`), answered from the
-    # comms outbox markup that OutboxDeliverySink projects.
+    # terminal and `show` views.
     #
     # Every method here was PRIVATE on the CLI before the extraction and stays
     # private, so including this module does not widen CLI's surface.

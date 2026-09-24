@@ -1181,7 +1181,7 @@
       "num": "049",
       "id": 49,
       "title": "ADR-049 — Telegram approval is evidence-gated, not transport-gated",
-      "status": "Accepted 2026-08-12",
+      "status": "Accepted 2026-08-12; policy amended 2026-09-24 (owner): `base.yaml` requires `chat_bound` to approve, so the bound correspondent can Approve. A profile can still require `filesystem_operator`.",
       "state": "accepted",
       "date": "2026-08-12",
       "tier": "F",

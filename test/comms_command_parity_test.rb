@@ -59,7 +59,7 @@ class CommsCommandParityTest < Minitest::Test
     end
   end
 
-  def test_every_accepted_acknowledgement_names_the_derived_reference
+  def test_an_admitted_message_sends_no_acknowledgement_and_its_reference_resolves
     with_gateway do |gateway, transport, store|
       first = update(101, text: 'make it blue')
       second = update(102, text: 'and the font?')
@@ -68,20 +68,14 @@ class CommsCommandParityTest < Minitest::Test
       assert_equal :served, gateway.serve_once(now: NOW, drain: false)
 
       first_ref = derived_ref(first)
-      second_ref = derived_ref(second)
-      accepted = capture.select { |wire| wire.fetch('kind') == 'accepted' }
-
-      assert_equal "Received #{first_ref}.",
-                   accepted.fetch(0).fetch('text')
-      assert_equal "Received #{second_ref}.",
-                   accepted.fetch(1).fetch('text')
+      assert_empty capture, 'the typing indicator, not a message, acknowledges a request'
 
       resolved = store.request_status(
         surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID, ref: first_ref, now: NOW
       )
 
       assert_equal first_ref, resolved.fetch('request_ref'),
-                   'the acknowledged reference resolves the stored request'
+                   'the derived reference resolves the stored request'
     end
   end
 
@@ -171,7 +165,7 @@ class CommsCommandParityTest < Minitest::Test
       assert_includes aggregate, 'event=unknown#'
       assert_includes aggregate, 'effect=not_started'
       assert_includes aggregate, 'capability=not_inspected'
-      assert_includes aggregate, 'delivery=pending'
+      assert_includes aggregate, 'delivery=none'
 
       request = drive_command(gateway, transport, "/status #{reference} --diagnostic", id: 103)
       assert_includes request, 'phase=unknown'
@@ -189,7 +183,7 @@ class CommsCommandParityTest < Minitest::Test
       old_thread = admit_turn(gateway, transport, store, 101)
       old_ref = derived_ref(update(101))
 
-      assert_equal 'New conversation started; earlier history stays in the audit record.',
+      assert_equal "New conversation started. I won't use earlier messages.",
                    drive_command(gateway, transport, '/new', id: 91)
       assert_equal 1, store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
 

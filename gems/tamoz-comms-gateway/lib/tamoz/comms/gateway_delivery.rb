@@ -8,8 +8,8 @@ module Tamoz
         private
 
         # All control replies pass through one bounded delivery construction point.
-        def append_control(reply_text, envelope, now:, kind: 'control')
-          delivery = build_control_delivery(reply_text, envelope, kind:)
+        def append_control(reply_text, envelope, now:)
+          delivery = build_control_delivery(reply_text, envelope, kind: 'control')
           @store.append_delivery(delivery.wire, surface_id:, capacity: control_capacity, now:)
         end
 

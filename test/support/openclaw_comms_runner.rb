@@ -835,7 +835,7 @@ module Tamoz
             snapshot = fixture.snapshot(conversations: [conversation])
             snapshot.merge(
               'driven_update_ids' => [871, 872],
-              'waiting_milestone_recorded' => milestone_phase_recorded?(snapshot, 'waiting'),
+              'approval_prompt_recorded' => snapshot['outbox'].any? { |row| row['kind'] == 'approval_request' },
               'cancel_command_accepted' => cancel_accepted,
               'observation_stamp_accepted' => observed == :observed,
               'cancellation_timelines' =>
@@ -952,11 +952,6 @@ module Tamoz
         def cancelled_thread?(fixture, conversation)
           fixture.view(fixture.thread_for(conversation))&.terminal&.dig('reason') ==
             @adapter.cancel_reason
-        end
-
-        def milestone_phase_recorded?(facts, phase)
-          OpenclawCommsOracles.milestone_rows(facts)
-                              .any? { |row| row.dig('milestone_facts', 'phase') == phase }
         end
 
         def first_terminal_settle_ms(fixture)

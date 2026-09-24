@@ -5,7 +5,7 @@ require "digest"
 require "securerandom"
 require "set"
 
-require_relative "terminal_progress"
+require_relative "chat_reply"
 
 module Tamoz
   module Agent
@@ -71,7 +71,6 @@ module Tamoz
         @observability = Tamoz::Observability::Producer.new(recorder:, policy: content_policy)
         @model_effect_keys = Set.new
         @model_effect_monitor = Mutex.new
-        @milestone_sequences = {}
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
@@ -367,16 +366,9 @@ module Tamoz
       end
 
       def close_failed_occurrence(thread_id, occurrence_id)
-        close_occurrence(thread_id, occurrence_id)
+        @runtime.close_occurrence(thread_id)
       rescue StandardError => error
         emit('worker.error', reason: "failed occurrence cleanup: #{error.message}")
-      end
-
-      # Closing an occurrence ends its milestone sequence: the map entry is
-      # dropped so per-request sequence state never accumulates across turns.
-      def close_occurrence(thread_id, request_id)
-        @monitor.synchronize { @milestone_sequences.delete(request_id) }
-        @runtime.close_occurrence(thread_id)
       end
 
       # Which budget, if any, this thread has spent. Returns nil when the profile
@@ -421,7 +413,7 @@ module Tamoz
         # the operator would collect one stop event per poll forever. Raising the
         # ceiling and re-queueing is the deliberate way to continue, which is the
         # right amount of friction for work that already spent its budget.
-        close_occurrence(thread_id, occurrence_id)
+        @runtime.close_occurrence(thread_id)
         unpark(thread_id)
         emit("request.stopped",
              thread: thread_id,
@@ -514,7 +506,6 @@ module Tamoz
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
-        notify_milestone(thread_id, "request.claimed", occurrence_id, phase: "claimed")
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
         observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
@@ -537,7 +528,6 @@ module Tamoz
         request = session.app.durable_runner.recover(
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
-        notify_milestone(thread_id, "request.recovered", occurrence_id, phase: "recovered")
         observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
@@ -667,7 +657,7 @@ module Tamoz
                     'That message could not be started because earlier work in this conversation ' \
                     'never settled. Please send it again.',
                     request_id: occurrence_id)
-        close_occurrence(thread_id, occurrence_id)
+        @runtime.close_occurrence(thread_id)
         unpark(thread_id)
         emit("request.failed",
              thread: thread_id, request_id: occurrence_id,
@@ -681,6 +671,8 @@ module Tamoz
         when :completed
           if cancellation_terminal?(view)
             settle_cancelled_view(view, thread_id, occurrence_id, duration_ms)
+          elsif model_refused?(view)
+            settle_failed_view(view, thread_id, occurrence_id, duration_ms)
           else
             settle_completed_view(view, thread_id, occurrence_id, duration_ms)
           end
@@ -688,37 +680,20 @@ module Tamoz
         when :blocked then settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
         when :paused then settle_paused_view(view, thread_id, occurrence_id, duration_ms)
         else
-          notify_milestone(thread_id, "request.running", occurrence_id,
-                           phase: committed_phase(view) || "running")
           PROGRESSED
         end
       end
 
-      # The latest engine lifecycle phase in the committed checkpoint state —
-      # a durable fact, never a guess about work still ahead.
-      def committed_phase(view)
-        Array(view.lifecycle_events).last&.fetch("phase", nil)
-      end
-
       # Outbox row BEFORE close (design §11): a crash between the two still
       # leaves the terminal answer deliverable.
-      def settle_terminal_delivery(thread_id, kind, occurrence_id, text, phase: nil)
-        notify_sink(thread_id, kind, text, request_id: occurrence_id, phase:)
-        close_occurrence(thread_id, occurrence_id)
+      def settle_terminal_delivery(thread_id, kind, occurrence_id, text)
+        notify_sink(thread_id, kind, text, request_id: occurrence_id)
+        @runtime.close_occurrence(thread_id)
         unpark(thread_id)
       end
 
       def pending_status_projection(view, occurrence_id)
         SessionStatusProjection.document(view, request_id: occurrence_id, delivery_state: 'pending')
-      end
-
-      # A verified completion is "Verified"; a direct chat response completes
-      # without proving anything, so its terminal card must not over-claim
-      # verification. The phase rides to the sink, which renders the class.
-      def completion_verification_phase(view)
-        return 'direct_response' if view.terminal&.fetch('reason', nil) == 'direct_response'
-
-        nil
       end
 
       # The graph checkpoint status of a cancellation terminal is :completed, but
@@ -728,6 +703,11 @@ module Tamoz
       # verified completion.
       def cancellation_terminal?(view)
         view.terminal&.fetch('reason', nil) == 'cancelled_by_user'
+      end
+
+      # The provider answered with an error, so the turn ended without work: a failure, not a completion.
+      def model_refused?(view)
+        view.terminal&.fetch('reason', nil).to_s.start_with?('model_')
       end
 
       def settle_cancelled_view(view, thread_id, occurrence_id, duration_ms)
@@ -743,8 +723,7 @@ module Tamoz
 
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
         @monitor.synchronize { @processed += 1 }
-        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view),
-                                 phase: completion_verification_phase(view))
+        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view))
         emit("request.completed",
              thread: thread_id, request_id: occurrence_id, status: "completed",
              duration_ms:,
@@ -803,14 +782,13 @@ module Tamoz
                observability: {execution_id: view.execution_id})
         elsif reason == 'clarification_required'
           delivery = notify_sink(thread_id, "request.clarification_request", nil,
-                                  request_id: occurrence_id, interrupts: interrupt_facts(view))
+                                 request_id: occurrence_id, interrupts: interrupt_facts(view))
           if delivery == :capacity_refused
             emit('worker.error', reason: 'clarification delivery refused: outbox capacity')
             return IDLE
           end
           emit_paused_request(thread_id, occurrence_id, view, reason:)
         else
-          notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")
           notify_sink(thread_id, "request.approval_request", "Approval requested.",
                       request_id: occurrence_id, interrupts: interrupt_facts(view))
           emit_paused_request(thread_id, occurrence_id, view, reason:)
@@ -868,57 +846,20 @@ module Tamoz
       # answer. Nil-safe — an unconfigured worker delivers nothing. A
       # human-answer pause carries the occurrence and its exact interrupt set so
       # the rendered question answers THAT question (ADR-043).
-      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil, sequence: nil, phase: nil)
-        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:,
-                                     sequence:, phase:)
+      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil)
+        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:)
       end
 
-      # One lifecycle milestone (plan 03, work item 1): projected from a fact
-      # that has ALREADY committed, with the request's short reference and a
-      # sequence monotonic within the request. A projection failure is
-      # dropped, never fatal to the turn that produced the fact.
-      def notify_milestone(thread_id, kind, request_id, phase:)
-        return unless request_id
-
-        sequence = @monitor.synchronize do
-          @milestone_sequences[request_id] = (@milestone_sequences[request_id] || 0) + 1
-        end
-        notify_sink(thread_id, kind, nil, request_id:, sequence:, phase:)
-      rescue StandardError
-        nil
-      end
-
-      # What a correspondent receives when a turn completes: the VERIFIED
-      # answer, the same text `tamoz show` prints — never the session state
-      # that produced it, which is internal detail and unbounded. A completion
-      # that verified nothing still owes the channel a terminal message, so it
-      # says so plainly rather than delivering an empty one.
-      # :reek:UtilityFunction -- a pure function of the view. # -- the message remains one bounded
-      # deterministic projection of the terminal state.
       def completion_text(view)
-        answer = view.state&.dig(:verification, "answer").to_s
-        satisfied = view.terminal&.fetch('satisfied', false)
-        if satisfied
-          [answer.empty? ? 'Completed.' : answer, TerminalProgress.artifact_line(view)].compact.join("\n")
-        elsif view.terminal&.fetch('reason') == 'direct_response'
-          [answer, 'Response provided; no task completion was claimed.'].reject(&:empty?).join("\n")
-        else
-          [answer, TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
-           'Verification was not satisfied.',
-           "Next action: #{TerminalProgress.next_action(view.terminal&.fetch('reason', nil))}"].compact.reject(&:empty?).join("\n")
-        end
+        ChatReply.completed(view)
       end
 
-      def blocked_text(view)
-        stop_text(view, reason: 'effect_unknown')
+      def blocked_text(_view)
+        ChatReply.stopped('effect_unknown')
       end
 
-      # rubocop:disable Style/StringConcatenation -- the terminal message is
-      # assembled from bounded independent lines.
       def failure_text(view)
-        [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
-         'Work failed before verified completion.',
-         "Next action: #{TerminalProgress.next_action('failed')}"].compact.join("\n") + '.'
+        ChatReply.stopped(view&.terminal&.fetch('reason', nil))
       end
 
       # The reason a settled turn failed, derived from the session state the
@@ -949,12 +890,9 @@ module Tamoz
         Array(review['issues'])
       end
 
-      def stop_text(view, reason:, budget: nil)
-        [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
-         'Work stopped before verified completion.',
-         "Next action: #{TerminalProgress.next_action(reason, budget:)}"].compact.join("\n") + '.'
+      def stop_text(_view, reason:, budget: nil)
+        ChatReply.stopped(reason, budget:)
       end
-      # rubocop:enable Style/StringConcatenation
 
       # What a correspondent receives when a turn dies by raising (never by
       # settling): static phrases only. The error's own text stays in the
@@ -968,7 +906,7 @@ module Tamoz
         elsif error.is_a?(Tamoz::CheckpointConflictError)
           'That request stopped safely. Check its status before retrying.'
         else
-          'That request failed before it could finish. Please try sending it again.'
+          ChatReply::FAILED
         end
       end
 

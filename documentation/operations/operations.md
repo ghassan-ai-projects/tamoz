@@ -158,13 +158,14 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms delivery resolve <ID> 
 journal and the outbox agree. An `:unknown` delivery stays visible in
 `tamoz status` until resolved, and blocks purge under invariant 54.
 
-### Approvals are deny-only from a channel
+### Approving from a channel or the terminal
 
 Approval authority is a function of evidence strength, not of which transport
-pressed a button. A Telegram correspondent supplies `chat_bound` evidence and
-may deny any active prompt; under the current policy every effect requires
-`filesystem_operator` evidence, so no channel approve succeeds. The operator
-approval path is local, at the runtime directory:
+pressed a button. A Telegram correspondent supplies `chat_bound` evidence; the
+base policy (`gems/tamoz-approval/policy/base.yaml`, `evidence.approve`)
+accepts it, so the paired chat can Approve or Deny. A policy that raises
+`evidence.approve` to `filesystem_operator` makes the chat deny-only. The local
+operator path always works:
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz approve REQUEST_ID

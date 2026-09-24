@@ -72,10 +72,16 @@ module Tamoz
       end
 
       def signal(kind, **fields)
-        return :unsupported unless kind == :ack
-
-        @client.call('answerCallbackQuery', { 'callback_query_id' => fields.fetch(:callback_query_id) })
-        :acked
+        case kind
+        when :ack
+          @client.call('answerCallbackQuery', { 'callback_query_id' => fields.fetch(:callback_query_id) })
+          :acked
+        when :typing
+          @client.call('sendChatAction', { 'chat_id' => chat_id(fields.fetch(:conversation_id)), 'action' => 'typing' },
+                       idempotent: true)
+          :typing
+        else :unsupported
+        end
       end
 
       private

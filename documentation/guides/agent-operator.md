@@ -286,7 +286,7 @@ A send that reaches Telegram and then fails is recorded as `unknown`, never
 blindly resent; authentication failures and a competing poller/webhook stop
 the process with a named error so a supervisor can alert or restart it. The
 full walkthrough — creating the bot, the allowlist, the config, and the
-deny-only approval flow — is in [`telegram.md`](telegram.md).
+approval flow — is in [`telegram.md`](telegram.md).
 
 ## 7. Debugging checklist
 

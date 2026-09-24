@@ -26,7 +26,6 @@ module Tamoz
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- the projection pipeline.
     class OutboxDeliverySink
       EVENT_KINDS = {
-        'request.accepted' => 'accepted',
         'request.approved' => 'answer',
         'request.denied' => 'answer',
         'request.completed' => 'answer',
@@ -34,25 +33,12 @@ module Tamoz
         'request.stopped' => 'stopped',
         'request.blocked' => 'blocked',
         'request.approval_request' => 'approval_request',
-        'request.clarification_request' => 'clarification_request',
-        'request.claimed' => 'running',
-        'request.running' => 'running',
-        'request.waiting' => 'waiting',
-        'request.recovered' => 'progress',
-        'request.phase' => 'progress'
+        'request.clarification_request' => 'clarification_request'
       }.freeze
 
       # Kinds whose rows the admission reservation covers (design §12): the
       # request is finished once they are durable, so the reservation releases.
       TERMINAL_KINDS = %w[answer failed stopped blocked].freeze
-      VERIFICATION_CLASSES = {
-        'request.completed' => 'Verified',
-        'request.approved' => 'Response only',
-        'request.denied' => 'Not verified',
-        'request.failed' => 'Not verified',
-        'request.stopped' => 'Not verified',
-        'request.blocked' => 'Not verified'
-      }.freeze
       APPROVAL_ACTIONS = {
         'apply_patch' => 'apply a file change',
         'create_file' => 'create a file',
@@ -60,26 +46,6 @@ module Tamoz
         'child_task' => 'start a child task'
       }.freeze
       GENERIC_APPROVAL_ACTION = 'complete requested work'
-
-      # Non-terminal milestone kinds (plan 03, work items 1-2): each projects
-      # one committed worker fact onto ONE coalesced control row whose markup
-      # carries the request reference. They never reserve, never terminate,
-      # and never journal into conversation history.
-      MILESTONE_KINDS = %w[running waiting progress].freeze
-      MILESTONE_TASK_STATES = { 'running' => 'running', 'waiting' => 'waiting', 'progress' => 'running' }.freeze
-      MILESTONE_TEXT_CHARACTERS = 200
-      MILESTONE_COPY = {
-        'claimed' => ['Starting work on your request.', 'Continue working.'],
-        'discovery' => ['Checking the request.', 'Continue working.'],
-        'read_only' => ['Reviewing the available information.', 'Prepare the response.'],
-        'action' => ['Preparing the requested change.', 'Check the result.'],
-        'repair' => ['Checking the requested change.', 'Check the result.'],
-        'waiting' => ['Paused for the next step.', 'Reply when ready.'],
-        'recovered' => ['Resuming work on your request.', 'Continue working.'],
-        'running' => ['Working on your request.', 'Share the result when ready.'],
-        'progress' => ['Continuing work on your request.', 'Share the result when ready.']
-      }.transform_values(&:freeze).freeze
-      GENERIC_MILESTONE_COPY = ['Working on your request.', 'Share the result when ready.'].freeze
 
       def initialize(adapter:, checkpoints:, rendering: Comms::Rendering)
         @store = adapter.bind_comms_store(checkpoints)
@@ -101,7 +67,6 @@ module Tamoz
         surface = @store.surface(surface_id: route.fetch('surface_id'))
         return nil unless surface
 
-        return push_milestone(event, kind, route, surface) if MILESTONE_KINDS.include?(kind)
         return push_clarification_question(event, route, surface) if kind == 'clarification_request'
 
         if kind == 'approval_request'
@@ -113,7 +78,7 @@ module Tamoz
         end
 
         render_limits = surface.fetch('rendering')
-        parts = @rendering.plain(terminal_text(event, kind),
+        parts = @rendering.plain(event.fetch(:text).to_s,
                                  max_parts: render_limits.fetch('max_parts'),
                                  part_characters: render_limits.fetch('part_characters'),
                                  overflow: render_limits.fetch('overflow'),
@@ -149,91 +114,6 @@ module Tamoz
       end
 
       private
-
-      def terminal_text(event, kind)
-        text = event.fetch(:text).to_s
-        return text unless event[:request_id] && TERMINAL_KINDS.include?(kind)
-
-        reference = Lifecycle::RequestRef.for(event.fetch(:request_id))
-        "#{reference} · #{verification_class(event)}: result — #{text}"
-      end
-
-      # A completed turn is "Verified"; a direct chat response completes without
-      # proving anything, so it is "Response only" — the worker marks it with a
-      # direct_response phase so the card does not over-claim verification.
-      def verification_class(event)
-        return 'Response only' if event[:phase] == 'direct_response'
-
-        VERIFICATION_CLASSES.fetch(event.fetch(:kind))
-      end
-
-      # One committed worker fact -> ONE bounded control row whose markup is
-      # the milestone projection (plan 03, behavior model 1/5). The row is
-      # journaled = 0 (invariant 11), reserves nothing (TERMINAL_KINDS are
-      # untouched), and the store coalesces it into the request's live pending
-      # row instead of streaming new messages.
-      def push_milestone(event, kind, route, surface)
-        request_id = event[:request_id]
-        return nil unless request_id
-
-        reference = Lifecycle::RequestRef.for(request_id)
-        phase = event[:phase] ? event[:phase].to_s : kind
-        text = milestone_text(reference, phase)
-        markup = JSON.generate(
-          'request_ref' => reference,
-          'milestone' => kind,
-          'phase' => phase,
-          'sequence' => Integer(event.fetch(:sequence)),
-          'task_state' => Lifecycle.task_state_for(MILESTONE_TASK_STATES.fetch(kind)),
-          'delivery_state' => Lifecycle.delivery_state_for('pending')
-        )
-        # Once the request's first card carries a delivery receipt, every
-        # successor milestone UPDATES that same platform message (plan 03,
-        # behavior model 1) instead of sending a new one. While no receipt
-        # exists — first card still pending or lost — the row stays an
-        # ordinary send and coalescing keeps it one live row.
-        card = delivered_card_message_id(route, reference)
-        @store.append_delivery(
-          Comms::Delivery.build(
-            conversation_id: route.fetch('conversation_id'), kind: 'control',
-            operation: card ? 'edit_message' : 'send_message', reply_to: card,
-            text:, part_index: 0, part_count: 1, journaled: false,
-            render_version: @rendering::RENDER_VERSION,
-            content_digest: @rendering.content_digest(text),
-            identity_key: request_id.to_s, markup:
-          ).wire,
-          surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
-          now: Time.now.utc
-        )
-        :accepted
-      end
-
-      def milestone_text(reference, phase)
-        now, next_action = MILESTONE_COPY.fetch(phase, GENERIC_MILESTONE_COPY)
-        "#{reference} · Now: #{now} Next: #{next_action}".byteslice(0, MILESTONE_TEXT_CHARACTERS)
-      end
-
-      # The platform message id the request's live card is bound to: the
-      # receipt of the NEWEST delivered milestone row for the reference.
-      # Rows come back oldest-first, so the scan runs newest-first.
-      def delivered_card_message_id(route, request_ref)
-        @store.outbox_rows(surface_id: route.fetch('surface_id'), statuses: %w[succeeded])
-              .reverse_each
-              .filter_map { |row| card_message_id(row, request_ref) }
-              .first
-      end
-
-      def card_message_id(row, request_ref)
-        return nil unless row.fetch('kind') == 'control' && row['markup'] && row['receipt']
-
-        facts = JSON.parse(row.fetch('markup'))
-        return nil unless facts.is_a?(Hash) && facts['request_ref'] == request_ref &&
-                          facts['milestone'].is_a?(String)
-
-        JSON.parse(row.fetch('receipt')).fetch('message_id')
-      rescue JSON::ParserError
-        nil
-      end
 
       def push_clarification_question(event, route, surface)
         request_id = event[:request_id]
@@ -275,7 +155,7 @@ module Tamoz
       def clarification_markup(request_id)
         JSON.generate(
           'request_ref' => Lifecycle::RequestRef.for(request_id),
-          'milestone' => 'waiting', 'phase' => 'clarification_required', 'actions' => ['answer']
+          'phase' => 'clarification_required', 'actions' => ['answer']
         )
       end
 
@@ -337,10 +217,9 @@ module Tamoz
 
       def approval_text(event, actions)
         action = approval_action(event.fetch(:interrupts))
-        next_step = actions.include?('approve') ?
-          'Approve or Deny; Deny stops safely.' : 'ask an operator; Deny stops safely.'
-        request_reference = Lifecycle::RequestRef.for(event.fetch(:request_id))
-        "#{request_reference} · Approval required: #{action}. Next: #{next_step}"
+        return "Approval required: I want to #{action}. Allow it?" if actions.include?('approve')
+
+        "Approval required: I want to #{action}. An operator must allow it; Deny stops it."
       end
 
       def approval_action(interrupts)

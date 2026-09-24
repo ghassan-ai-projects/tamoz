@@ -350,6 +350,16 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  def test_typing_signal_sends_the_chat_action_to_the_conversation
+    with_transport do |transport, server|
+      server.script('sendChatAction', body: { 'ok' => true, 'result' => true }, times: 1)
+
+      assert_equal :typing, transport.signal(:typing, conversation_id: 'telegram:chat:22222222')
+      sent = server.requests.find { |request| request[:method] == 'sendChatAction' }
+      assert_equal({ 'chat_id' => '22222222', 'action' => 'typing' }, JSON.parse(sent[:body]))
+    end
+  end
+
   def test_normalizer_marks_group_chats_and_membership
     with_transport do |_transport, _server|
       group = Tamoz::Telegram::Normalizer.new(surface_id: 's', surface_revision: 1)

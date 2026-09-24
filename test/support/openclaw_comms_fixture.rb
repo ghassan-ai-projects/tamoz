@@ -31,8 +31,6 @@ module Tamoz
         USER_BOUND = 111_111_11
         USER_OTHER = 44_444_444
         USER_UNKNOWN = 999_999_99
-        MILESTONE_EVENT_KINDS = %w[request.claimed request.running request.waiting
-                                   request.recovered].freeze
 
         attr_reader :transport, :store, :runtime, :now
 
@@ -116,22 +114,6 @@ module Tamoz
           end
 
           def signal(*) = nil
-        end
-
-        # Records exactly what the worker pushed while the real outbox sink
-        # still runs: the committed-fact backing evidence for milestones.
-        class RecordingSink
-          attr_reader :pushed
-
-          def initialize(inner)
-            @inner = inner
-            @pushed = []
-          end
-
-          def push(event)
-            @pushed << event
-            @inner.push(event)
-          end
         end
 
         def self.model_factory(**responses)
@@ -326,7 +308,7 @@ module Tamoz
         end
 
         def history(conversation_id)
-          @store.conversation_history(surface_id: SURFACE_ID, conversation_id: conversation_id)
+          @store.conversation_history(surface_id: SURFACE_ID, conversation_id:, thread_id: thread_for(conversation_id))
         end
 
         def outbox(statuses: %w[pending claimed succeeded failed unknown])
@@ -362,8 +344,7 @@ module Tamoz
               [conversation, view_snapshot(view(thread_for(conversation)))]
             end,
             'effects' => effect_rows,
-            'sends' => @transport.sends.map { |send| send.transform_keys(&:to_s) },
-            'pushed_milestones' => pushed_milestones
+            'sends' => @transport.sends.map { |send| send.transform_keys(&:to_s) }
           }
           references = facts['requests'].filter_map { |row| row['request_ref'] }.uniq
           facts['request_projections'] = resolved_request_projections(references, conversations)
@@ -412,8 +393,7 @@ module Tamoz
           sink = Tamoz::Comms::OutboxDeliverySink.new(
             adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
           )
-          @recording_sink = RecordingSink.new(sink)
-          @runtime.install_delivery_sink(@recording_sink)
+          @runtime.install_delivery_sink(sink)
           @worker = new_worker
         end
 
@@ -444,15 +424,6 @@ module Tamoz
           return { direct: 'pairing', correspondents: [] } if mode == :pairing
 
           { direct: 'allowlist', correspondents: ["telegram:user:#{USER_BOUND}"] }
-        end
-
-        def pushed_milestones
-          @recording_sink.pushed.filter_map do |event|
-            next nil unless MILESTONE_EVENT_KINDS.include?(event[:kind].to_s)
-
-            { 'kind' => event[:kind].to_s, 'phase' => event[:phase].to_s,
-              'sequence' => event[:sequence], 'request_id' => event[:request_id].to_s }
-          end
         end
 
         def effect_rows
@@ -512,20 +483,11 @@ module Tamoz
 
         def outbox_snapshot
           outbox.map do |row|
-            facts = row['markup'] ? safe_parse(row['markup']) : nil
             # The stored text is what history is compared against, so the
             # snapshot must not truncate it.
             row.except('expires_at_ms', 'claim_expires_at_ms', 'created_at_ms', 'updated_at_ms',
                        'send_started_at_ms')
-               .merge('milestone_facts' =>
-                        facts.is_a?(Hash) && facts['request_ref'].is_a?(String) ? facts : nil)
           end
-        end
-
-        def safe_parse(markup)
-          JSON.parse(markup)
-        rescue JSON::ParserError
-          nil
         end
 
         def write_config(runtime_dir, approval_ask)

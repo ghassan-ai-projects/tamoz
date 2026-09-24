@@ -1,6 +1,6 @@
 # ADR-049 — Telegram approval is evidence-gated, not transport-gated
 
-**Status:** Accepted 2026-08-12
+**Status:** Accepted 2026-08-12; policy amended 2026-09-24 (owner): `base.yaml` requires `chat_bound` to approve, so the bound correspondent can Approve. A profile can still require `filesystem_operator`.
 **Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 **Date:** 2026-08-12

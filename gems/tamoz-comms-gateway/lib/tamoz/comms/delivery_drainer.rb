@@ -11,6 +11,8 @@ module Tamoz
     # rubocop:disable Metrics/ParameterLists, Metrics/AbcSize, Metrics/MethodLength, Naming/PredicateMethod
     class DeliveryDrainer
       CLAIM_TTL_S = 30.0
+      # Telegram shows "typing" for about five seconds per signal.
+      TYPING_EVERY_S = 4.0
 
       def initialize(store:, transport:, descriptor:, owner:, batch_size: 50,
                      clock: -> { Time.now.utc }, sleeper: ->(seconds) { sleep seconds })
@@ -23,6 +25,7 @@ module Tamoz
         @sleeper = sleeper
         @fence = 0
         @stopping = false
+        @typed_at = {}
       end
 
       def serve_loop(interval_s: 0.25)
@@ -50,6 +53,7 @@ module Tamoz
 
           return :authentication_refused if send_row(row, now:) == :authentication_refused
         end
+        pulse_typing(now)
         :drained
       rescue Comms::ThrottledError => e
         @retry_after_s = e.retry_after
@@ -57,6 +61,20 @@ module Tamoz
       end
 
       private
+
+      # A lost pulse costs nothing: the next pass sends another.
+      def pulse_typing(now)
+        working = @store.working_conversations(surface_id:, now:)
+        @typed_at.select! { |conversation_id, _| working.include?(conversation_id) }
+        working.each do |conversation_id|
+          next if @typed_at[conversation_id] && now - @typed_at[conversation_id] < TYPING_EVERY_S
+
+          @typed_at[conversation_id] = now
+          @transport.signal(:typing, conversation_id:)
+        end
+      rescue StandardError
+        nil
+      end
 
       def claim(row, now:)
         @store.claim_delivery(

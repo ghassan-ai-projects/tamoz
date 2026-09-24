@@ -6,7 +6,6 @@ require 'json'
 
 require_relative 'delivery_drainer'
 require_relative 'gateway_admission'
-require_relative 'gateway_admission_acknowledgement'
 require_relative 'gateway_admission_binding'
 require_relative 'gateway_answers'
 require_relative 'gateway_callbacks'
@@ -35,8 +34,8 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
       STOP_OUTCOMES = %i[auth_failed poller_lost].freeze
 
-      HELP_REPLY = 'Example: send a task; use /status r<reference> to check it; use /cancel r<reference> ' \
-                   'to stop it. Primary: /help, /status, /cancel, /new. More: /help more.'
+      HELP_REPLY = "Just send me a message. /new starts a fresh conversation, /status shows what I'm doing, " \
+                   '/cancel stops it. /help more lists every command.'
       HELP_MORE_REPLY = 'Commands: /help [more], /status [r<reference>] [--diagnostic], /new, ' \
                         '/cancel [r<reference>], /redirect r<reference> <new task>, /whoami, ' \
                         '/start <pairing code>, /answer r<reference> <answer>, /reset, /compact, /usage, ' \
@@ -47,7 +46,7 @@ module Tamoz
       STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
-      NEW_CONVERSATION_REPLY = 'New conversation started; earlier history stays in the audit record.'
+      NEW_CONVERSATION_REPLY = "New conversation started. I won't use earlier messages."
       NEW_CONVERSATION_UNBOUND_REPLY =
         'No conversation is bound for this channel yet; send a message first.'
       REDIRECT_USAGE_REPLY = 'Usage: /redirect r<reference> <new task>'
@@ -102,7 +101,6 @@ module Tamoz
       }.freeze
 
       include Admission
-      include AdmissionAcknowledgement
       include AdmissionBinding
       include Answers
       include Callbacks

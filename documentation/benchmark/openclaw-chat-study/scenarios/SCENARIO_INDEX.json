@@ -28,8 +28,8 @@
       "allowed_run_kinds": ["fixture", "real"],
       "seed_policy": "paired_scenario_seed",
       "oracle_id": "openclaw.comms-scenario.c1.v1",
-      "metrics": ["admission_before_ack", "reference_stability", "completion", "delivery_axis", "context_inclusion", "parity"],
-      "hard_zeros": ["ack_before_admission", "unconfirmed_output_in_history", "identity_conflict_deduplicated"],
+      "metrics": ["admitted", "reference_stability", "completion", "delivery_axis", "context_inclusion", "parity"],
+      "hard_zeros": ["reply_without_admission", "unconfirmed_output_in_history", "identity_conflict_deduplicated"],
       "artifact_root_template": "fixtures/scenarios/C1/<seed>",
       "local_prerequisites": [
         "The Phase 1 lifecycle vocabulary, reason-code registry, and request references exist.",
@@ -54,11 +54,10 @@
       "allowed_run_kinds": ["fixture", "real"],
       "seed_policy": "paired_scenario_seed",
       "oracle_id": "openclaw.comms-scenario.c2.v1",
-      "metrics": ["liveness", "progress_bound", "context_inclusion", "completion", "parity", "latency_to_ack", "latency_to_terminal", "update_count"],
-      "hard_zeros": ["fabricated_milestone", "unconfirmed_output_in_history", "token_stream"],
+      "metrics": ["liveness", "context_inclusion", "completion", "parity", "latency_to_ack", "latency_to_terminal", "update_count"],
+      "hard_zeros": ["unconfirmed_output_in_history"],
       "artifact_root_template": "fixtures/scenarios/C2/<seed>",
       "local_prerequisites": [
-        "The Phase 2 worker-to-outbox milestone projection and coalescing bound exist.",
         "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
         "A multi-phase deterministic provider and a per-(request,surface) coalescing bound are materialized by the driver."
       ],

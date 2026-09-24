@@ -39,10 +39,22 @@ class AgentTerminalProgressTest < Minitest::Test
 
     text = worker.send(:completion_text, view)
 
-    refute_includes text, 'Completed.'
-    assert_includes text, '1 of 3 planned steps'
-    assert_includes text, 'Verification was not satisfied.'
-    assert_includes text, 'narrower next step'
+    assert_equal "Some facts were found.\n\n#{Tamoz::Agent::ChatReply::GAVE_UP}", text
+  end
+
+  def test_an_unverified_change_says_so_but_an_unchecked_answer_does_not
+    worker = Tamoz::Agent::Worker.new(
+      runtime: nil, session_builder: ->(_thread) {}, emitter: ->(_event) {}
+    )
+    change = view_with(terminal: { 'reason' => 'completed_without_check', 'satisfied' => false },
+                       state: { verification: { 'answer' => 'Fixed it.' }, route: { 'route' => 'managed_action' } },
+                       receipts: [])
+    answer = view_with(terminal: { 'reason' => 'completed_without_check', 'satisfied' => false },
+                       state: { verification: { 'answer' => 'Teal.' }, route: { 'route' => 'read_only_work' } },
+                       receipts: [])
+
+    assert_equal "Fixed it.\n\n#{Tamoz::Agent::ChatReply::UNVERIFIED}", worker.send(:completion_text, change)
+    assert_equal 'Teal.', worker.send(:completion_text, answer)
   end
 
   def test_direct_response_is_not_presented_as_verified_task_completion
@@ -57,7 +69,7 @@ class AgentTerminalProgressTest < Minitest::Test
 
     text = worker.send(:completion_text, view)
 
-    assert_equal "The answer.\nResponse provided; no task completion was claimed.", text
+    assert_equal 'The answer.', text
   end
 
   def test_cli_terminal_rendering_exposes_progress_and_the_next_action

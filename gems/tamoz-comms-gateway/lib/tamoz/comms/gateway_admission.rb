@@ -47,9 +47,14 @@ module Tamoz
           when :control
             admit_control(envelope, decision, now:)
           else
-            record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
-            handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
+            ignore_update(envelope, decision, now:)
           end
+        end
+
+        def ignore_update(envelope, decision, now:)
+          record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
+          handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
+          append_control(decision.control_reply, envelope, now:) if decision.control_reply
         end
 
         def admit_request(envelope, now:)
@@ -57,20 +62,13 @@ module Tamoz
           thread = admission_thread(envelope, conversation)
           bind_admission(envelope, thread, conversation, now:)
           history = @store.conversation_history(
-            surface_id:, conversation_id: envelope.fetch('conversation_id')
+            surface_id:, conversation_id: envelope.fetch('conversation_id'), thread_id: thread
           )
           outcome = @store.admit_and_enqueue(
             envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
                       reservation: reservation_slots, now:, history:
           )
-          if outcome == :enqueued
-            append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
-            return
-          end
-
-          # A replayed update already has its admission durable. Re-rendering
-          # it can create a second control row when queue state has changed.
-          return if outcome == :duplicate
+          return if %i[enqueued duplicate].include?(outcome)
 
           refuse_admission(envelope, outcome, now:)
         end

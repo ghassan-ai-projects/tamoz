@@ -277,7 +277,7 @@ class ApprovalEngineTest < Minitest::Test
     assert_equal 'local_execute', record[:tier]
     assert_equal 'tier.local_execute', record[:rule_id]
     assert_equal 'ask', record[:verdict]
-    assert_equal 'filesystem_operator', record[:evidence]
+    assert_equal 'chat_bound', record[:evidence]
     assert_equal eng.policy.policy_rev, record[:policy_rev]
 
     # Arguments are digests, never cleartext; the digests cover the exact

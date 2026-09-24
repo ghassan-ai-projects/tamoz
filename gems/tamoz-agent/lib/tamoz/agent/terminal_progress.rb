@@ -15,7 +15,12 @@ module Tamoz
         'approval_denied' => 'approve the required action or revise the request',
         'cancelled_by_user' => 'submit the remaining work again if it is still needed',
         'completed_without_check' => 'run the configured check before treating the result as verified',
-        'direct_response' => 'request evidence-backed work when current state is needed'
+        'direct_response' => 'request evidence-backed work when current state is needed',
+        'model_key_refused' => 'check the model provider API key',
+        'model_out_of_credit' => 'top up the model provider account or switch provider',
+        'model_rate_limited' => 'wait for the provider rate limit, then retry',
+        'model_provider_down' => 'retry when the model provider recovers',
+        'model_refused' => 'check the model provider settings, then retry'
       }.freeze
 
       module_function

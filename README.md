@@ -145,7 +145,7 @@ from its index:
 A channel is a **user surface**, not a capability the model can call. The bot
 answers people the operator put on an allowlist and nobody else; the gateway
 holds the bot token and never constructs a session or opens a workspace file.
-Approvals over the channel are deny-only and evidence-gated (ADR-049).
+The paired chat can Approve or Deny a gated action; approval is evidence-gated (ADR-049).
 
 The full walkthrough — creating the bot, authenticating it, collecting the
 allowlist, configuring the surface, and running the gateway and worker — is in

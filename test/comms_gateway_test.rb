@@ -108,15 +108,6 @@ class CommsGatewayTest < Minitest::Test
     store.bind_correspondent(binding_wire, now:)
   end
 
-  def request_ref(update, transport)
-    Comms::Lifecycle::RequestRef.for(
-      Tamoz::Core::RequestIdentity.request_id(
-        surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
-        update_id: update.fetch('update_id'), raw_payload_hash: transport.digest_of(update)
-      )
-    )
-  end
-
   def inbound_dispositions(store, update_id)
     store.__send__(:read, 'test.gateway.inbound.read') do |txn|
       txn.rows('test.gateway.inbound.read', <<~SQL, [update_id])
@@ -193,37 +184,30 @@ class CommsGatewayTest < Minitest::Test
         text: 'and the font?',
         fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
       ), { 'task' => task }
-      replies = transport.deliveries.map(&:text)
-      first_ref = request_ref(first, transport)
-
-      assert_equal "Received #{first_ref}.", replies.first
-      assert_equal "Received #{request_ref(second, transport)}.", replies.last
+      assert_empty transport.deliveries, 'admission sends no acknowledgement message'
     end
   end
 
-  def test_a_replayed_update_does_not_create_a_second_accepted_delivery
+  def test_a_replayed_update_does_not_create_a_second_request
     with_gateway do |gateway, transport, store, adapter, checkpoints|
       seed_binding(store)
       transport.batch([update(101, text: 'first'), update(102, text: 'second')])
 
       assert_equal :served, gateway.serve_once(drain: false)
 
-      # The replay sees a different queue state, so its old implementation
-      # rendered a second, different accepted/queued control for update 101.
       transport.batch([update(101, text: 'first')])
       restarted_gateway = Tamoz::Comms::Gateway.new(
         adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:restarted'
       )
       assert_equal :served, restarted_gateway.serve_once(drain: false)
 
-      accepted = store.outbox_rows(
-        surface_id: 'telegram-ops', statuses: %w[pending]
-      ).select { |row| row.fetch('kind') == 'accepted' }
-      assert_equal 2, accepted.length, 'one accepted control per admitted update'
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      assert_equal 2, checkpoints.request_history(thread_id: thread).length, 'one request per admitted update'
+      assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
     end
   end
 
-  def test_accepted_control_is_unowned_when_terminal_request_delivery_succeeds
+  def test_request_delivery_state_follows_its_terminal_delivery
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       now = Time.utc(2026, 8, 10, 12, 0, 0)
@@ -233,10 +217,6 @@ class CommsGatewayTest < Minitest::Test
 
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       request_id = checkpoints.request_history(thread_id: thread).first.request_id
-      accepted = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
-                       .find { |row| row.fetch('kind') == 'accepted' }
-      assert_nil accepted.fetch('request_id')
-
       terminal = Comms::Delivery.build(
         conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'answer',
         part_index: 0, part_count: 1, journaled: true, render_version: 1,
@@ -841,8 +821,8 @@ class CommsGatewayTest < Minitest::Test
       assert_equal :served, gateway.serve_once(drain: false)
 
       reply = appended.last.fetch('text')
-      assert_match(/Example:.*\/status.*\/cancel/i, reply)
-      assert_includes reply, 'More: /help more.'
+      assert_match(%r{/new.*/status.*/cancel}, reply)
+      assert_includes reply, '/help more'
       refute_match(%r{/think|/verbose|/usage|/context}, reply)
       assert_operator reply.scan(%r{/[a-z]+(?:\s|$)}i).uniq.length, :<=, 5
     end
