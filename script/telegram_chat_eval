@@ -5,9 +5,9 @@
 # provider, and a fake Bot API standing in for Telegram. See
 # test/support/telegram_chat_eval.rb.
 #
-#   bundle exec ruby script/telegram_chat_eval [--only greet,memory] [--routing work]
+#   bundle exec ruby script/telegram_chat_eval [--only greet,memory] [--routing experimental]
 #
-# Provider: TAMOZ_PROVIDER / TAMOZ_MODEL (default openrouter, deepseek/deepseek-chat);
+# Provider: TAMOZ_PROVIDER / TAMOZ_MODEL (default openrouter, deepseek/deepseek-v4.1-flash); routing: work;
 # the key comes from the environment or .env. Report: tmp/telegram-eval/<stamp>/.
 
 require 'bundler/setup'
@@ -28,8 +28,8 @@ require 'telegram_chat_eval'
 require 'telegram_chat_scenarios'
 
 options = { provider: ENV.fetch('TAMOZ_PROVIDER', 'openrouter'),
-            model: ENV.fetch('TAMOZ_MODEL', 'deepseek/deepseek-chat'),
-            routing: nil, only: TelegramChatScenarios.all }
+            model: ENV.fetch('TAMOZ_MODEL', 'deepseek/deepseek-v4.1-flash'),
+            routing: 'work', only: TelegramChatScenarios.all }
 OptionParser.new do |parser|
   parser.on('--only LIST') { |list| options[:only] = list.split(',') }
   parser.on('--routing NAME', TelegramChatEval::ROUTING_FLAGS.keys + ['legacy']) { |name| options[:routing] = name }

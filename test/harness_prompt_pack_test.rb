@@ -22,7 +22,7 @@ class HarnessPromptPackTest < Minitest::Test
     'previous_turn.md' => 'sha256:566860246bd035a6c7c1841125ec5461f3c25a30ad18b85701133e47855ba0e0',
     'project_guidance.md' => 'sha256:a8e2b6073185b579da2ace4549987dc74c69c8a3f0cf98b583a94abdd59b21f9',
     'repeat_reminder.md' => 'sha256:73edd19fe59abbe9bd8622a27029f967327845b2dca40e31577830a64fd9189d',
-    'surface_chat.md' => 'sha256:87aa32b17c674c6a888988abe426d5ef3bf40c6e82e3f8704f08c8e1282fe8a4',
+    'surface_chat.md' => 'sha256:fecaf6af4bb4f28781d97e2d572f035c312dae713db1058ecf1aefd353d25460',
     'surface_cli.md' => 'sha256:12d434d8ea184a85dbc2ca9ed6c7b904f77a1a62904a1235d9f572d022d98478',
     'tools.md' => 'sha256:ae6e51411f1e99b55468f7314aaad66ec648734a98b330a3e56fbbef09778e08'
   }.freeze

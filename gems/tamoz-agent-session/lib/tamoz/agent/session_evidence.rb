@@ -164,8 +164,8 @@ module Tamoz
       end
 
       def blocked_update(outcome, reason, step_id: nil, operation: nil)
-        refusal = model_refusal(outcome)
-        return { next_node: 'terminal', terminal_reason: refusal } if refusal
+        refused = refusal_update(outcome)
+        return refused if refused
 
         {
           next_node: 'terminal',
@@ -185,6 +185,12 @@ module Tamoz
         }
       end
 
+      # A provider that answered with an error refused the call; its outcome is known, not unknown.
+      def refusal_update(outcome)
+        refusal = model_refusal(outcome)
+        refusal && { next_node: 'terminal', terminal_reason: refusal }
+      end
+
       def tool_error_message(outcome)
         error = outcome.error
         return 'tool effect failed' unless error.is_a?(Hash)
@@ -194,7 +200,6 @@ module Tamoz
 
       private
 
-      # A provider that answered with an error refused the call; its outcome is known, not unknown.
       def model_refusal(outcome)
         error = outcome.error
         return nil unless outcome.status == :failed && error.is_a?(Hash) && error['class'] == ModelCallError.name

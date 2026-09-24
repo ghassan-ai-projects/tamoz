@@ -327,7 +327,7 @@ module Tamoz
       def conversation_transcript(thread_id:, request_id:)
         state = stored_state(thread_id)
         offset = SessionContextControls.visible_fragment_offset(Array(state[:context_controls])) if state
-        fragments = SessionPlanningContext.conversation_history(@app.checkpointer, thread_id:)
+        fragments = SessionPlanningContext.conversation_history(@app.checkpointer, thread_id:, through: request_id)
         offset ? fragments.drop(offset) : fragments
       end
       private :conversation_transcript

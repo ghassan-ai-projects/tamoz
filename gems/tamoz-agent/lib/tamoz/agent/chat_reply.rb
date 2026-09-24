@@ -23,7 +23,9 @@ module Tamoz
         'repeated_action' => GAVE_UP,
         'repeated_failure' => GAVE_UP,
         'repeated_tool_failure' => GAVE_UP,
-        'repair_plan_rejected' => GAVE_UP
+        'repair_plan_rejected' => GAVE_UP,
+        'work_failed' => FAILED,
+        'done_unverified' => UNVERIFIED
       }.freeze
 
       module_function
@@ -31,17 +33,17 @@ module Tamoz
       def completed(view)
         terminal = view.terminal || {}
         caveat = unsatisfied_caveat(view, terminal['reason']) unless terminal['satisfied']
+        return caveat if terminal['reason'] == 'work_failed'
+
         answer = view.state&.dig(:verification, 'answer').to_s.strip
         return [answer, caveat].compact.join("\n\n") unless answer.empty?
 
         caveat || (terminal['satisfied'] ? 'Done.' : FAILED)
       end
 
-      # An answer needs no check; a change that nothing verified must say so.
+      # A change that nothing verified must say so; an answer needs no check.
       def unsatisfied_caveat(view, reason)
-        REASONS.fetch(reason) do
-          UNVERIFIED unless view.state&.dig(:route, 'route') == 'read_only_work' || reason == 'direct_response'
-        end
+        REASONS.fetch(reason) { UNVERIFIED if view.state&.dig(:route, 'route') == 'managed_action' }
       end
 
       def stopped(reason, budget: nil)

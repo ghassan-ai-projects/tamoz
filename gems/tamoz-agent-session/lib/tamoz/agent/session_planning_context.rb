@@ -325,15 +325,15 @@ module Tamoz
       # The durable prior-turn conversation for one thread, oldest first.
       # Context controls (/reset, /compact) truncate what the frame shows;
       # the durable request rows stay untouched either way.
-      def self.conversation_history(checkpointer, thread_id:)
-        prior_turn_fragments(checkpointer, thread_id:)
+      def self.conversation_history(checkpointer, thread_id:, through: nil)
+        prior_turn_fragments(checkpointer, thread_id:, through:)
       end
 
       # Builds the same durable input shape used by CommsStore for a CLI
       # follow-up. Prior request payloads are the source of truth; no live
       # conversation object is consulted.
       def self.follow_up_payload(checkpointer, thread_id:, request_id:, text:)
-        fragments = prior_turn_fragments(checkpointer, thread_id:)
+        fragments = prior_turn_fragments(checkpointer, thread_id:).last(Tamoz::Core::TurnContext::MAX_FRAGMENTS)
         turn_payload(thread_id:, request_id:, text:, fragments:)
       end
 
@@ -447,11 +447,12 @@ module Tamoz
       # rubocop:enable Metrics/MethodLength
       # rubocop:enable Metrics/AbcSize
 
-      def self.prior_turn_fragments(checkpointer, thread_id:)
+      # `through` stops at that request, so a turn never sees messages queued after it.
+      def self.prior_turn_fragments(checkpointer, thread_id:, through: nil)
         return [] unless checkpointer.respond_to?(:request_history)
 
         fragments = []
-        checkpointer.request_history(thread_id:, namespace: []).each do |request|
+        requests_through(checkpointer.request_history(thread_id:, namespace: []), through).each do |request|
           next unless request.operation.to_sym == :turn
 
           task = request.payload.fetch('task', nil)
@@ -468,6 +469,11 @@ module Tamoz
         fragments
       end
 
+      def self.requests_through(history, through)
+        last = through && history.index { |request| request.request_id == through }
+        last ? history.first(last + 1) : history
+      end
+
       def self.task_parts(task)
         return [nil, nil] if task.is_a?(Hash) && task['cancel'] == true
         return [task, nil] if task.is_a?(String)
@@ -475,7 +481,7 @@ module Tamoz
 
         [task['text'], task['context']]
       end
-      private_class_method :prior_turn_fragments, :task_parts
+      private_class_method :prior_turn_fragments, :requests_through, :task_parts
 
       def action_context(state, phase)
         return {} unless ACTION_PHASES.include?(phase)

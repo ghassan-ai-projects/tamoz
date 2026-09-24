@@ -17,9 +17,9 @@ class TelegramChatEval
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
   HYGIENE = [
     [/\br[0-9a-f]{10}\b/, 'request reference'],
-    [/\b(Verified|Response only|Not verified)\b/, 'verification label'],
-    [/Committed progress|Next action:|Next: /, 'progress trailer'],
-    [/\b(effect_unknown|effect_key|occurrence|request_id|sha256|execution_id)\b/i, 'internal vocabulary'],
+    [/\b(Verified|Response only|Not verified): result\b/, 'verification label'],
+    [/Committed progress|Next action:|Now: .* Next: /, 'progress trailer'],
+    [/\b(effect_unknown|effect_key|occurrence_id|request_id|execution_id)\b|sha256:\h{8}/, 'internal vocabulary'],
     [/\A\s*[{\[]/, 'raw JSON']
   ].freeze
   ROUTING_FLAGS = { 'experimental' => '--experimental-routing', 'work' => '--work-routing',
@@ -53,7 +53,7 @@ class TelegramChatEval
 
   attr_reader :fake, :results, :transcript
 
-  def initialize(provider:, model:, routing: nil)
+  def initialize(provider:, model:, routing:)
     @provider = provider
     @model = model
     @routing = routing

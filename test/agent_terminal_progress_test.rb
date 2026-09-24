@@ -42,7 +42,7 @@ class AgentTerminalProgressTest < Minitest::Test
     assert_equal "Some facts were found.\n\n#{Tamoz::Agent::ChatReply::GAVE_UP}", text
   end
 
-  def test_an_unverified_change_says_so_but_an_unchecked_answer_does_not
+  def test_an_unverified_planned_change_says_so_but_an_unchecked_answer_does_not
     worker = Tamoz::Agent::Worker.new(
       runtime: nil, session_builder: ->(_thread) {}, emitter: ->(_event) {}
     )

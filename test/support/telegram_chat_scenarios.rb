@@ -4,6 +4,13 @@
 module TelegramChatScenarios
   module_function
 
+  # A plain answer carries no system caveat; the caveats are for work that failed or went unchecked.
+  def plain(eval, scenario, turns)
+    caveats = [Tamoz::Agent::ChatReply::UNVERIFIED, Tamoz::Agent::ChatReply::GAVE_UP, Tamoz::Agent::ChatReply::FAILED]
+    noisy = turns.select { |turn| caveats.any? { |caveat| turn.reply.include?(caveat) } }
+    eval.check(scenario, 'plain answer, no system caveat', noisy.empty?, noisy.map(&:text).join(' | '))
+  end
+
   def all = %w[greet memory reset arabic workspace_read create_file long help burst photo stranger provider_down]
 
   def greet(eval)
@@ -13,6 +20,7 @@ module TelegramChatScenarios
     eval.check('greet', 'typing indicator shown', turn.typing.positive?)
     eval.check('greet', 'answer within 15s', turn.answer_s <= 15, format('%.1fs', turn.answer_s))
     eval.hygiene('greet', [turn])
+    plain(eval, 'greet', [turn])
   end
 
   def memory(eval)
@@ -23,6 +31,7 @@ module TelegramChatScenarios
     eval.check('memory', 'one bubble per reply', [told, asked].all? { |turn| turn.sends <= 1 },
                [told, asked].map(&:sends).inspect)
     eval.hygiene('memory', [told, asked])
+    plain(eval, 'memory', [told, asked])
   end
 
   def reset(eval)
@@ -42,6 +51,7 @@ module TelegramChatScenarios
     turn = eval.turn(eval.fresh_user, 'مرحبا، كيف حالك؟')
     eval.check('arabic', 'replies in Arabic', turn.reply =~ /\p{Arabic}{3,}/, turn.reply)
     eval.hygiene('arabic', [turn])
+    plain(eval, 'arabic', [turn])
   end
 
   def workspace_read(eval)
@@ -49,6 +59,7 @@ module TelegramChatScenarios
     eval.check('workspace_read', 'answers from the workspace file', turn.reply.include?('BLUE-HERON-42'), turn.reply)
     eval.check('workspace_read', 'answer within 45s', turn.answer_s <= 45, format('%.1fs', turn.answer_s))
     eval.hygiene('workspace_read', [turn])
+    plain(eval, 'workspace_read', [turn])
   end
 
   def create_file(eval)
@@ -58,6 +69,8 @@ module TelegramChatScenarios
     turns << eval.turn(user, tap: approve) if approve
     eval.check('create_file', 'file really created', eval.workspace_text('notes.txt').include?('hello'))
     eval.check('create_file', 'user told the outcome', !turns.last.reply.strip.empty?, turns.last.reply)
+    eval.check('create_file', 'says no check verified it', turns.last.reply.include?(Tamoz::Agent::ChatReply::UNVERIFIED),
+               turns.last.reply)
     eval.hygiene('create_file', turns)
   end
 

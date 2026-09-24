@@ -211,6 +211,21 @@ class SessionContextControlsTest < Minitest::Test
     end
   end
 
+  # Two quick messages queue two turns; the first turn's transcript ends at itself.
+  def test_a_turn_transcript_never_includes_a_message_queued_after_it
+    with_session do |session, _workspace|
+      checkpointer = session.app.checkpointer
+      %w[first second].each do |text|
+        checkpointer.enqueue_request(thread_id: THREAD, request_id: "burst.#{text}", operation: :turn,
+                                     payload: { 'task' => text }, delivery: :queue)
+      end
+
+      frame = session.send(:conversation_transcript, thread_id: THREAD, request_id: 'burst.first')
+
+      assert_equal ['first'], frame.map { |fragment| fragment.fetch('text') }
+    end
+  end
+
   # A second truncating control records its CUMULATIVE prefix, so fragments
   # hidden by the first control never re-enter a later frame.
   def test_a_second_reset_keeps_every_truncation_cumulative
