@@ -48,4 +48,19 @@ class CoreTurnContextTest < Minitest::Test
       Tamoz::Core::TurnContext.fragments_from(context, thread_id: 'thread-1', request_id: 'request-1')
     end
   end
+
+  # A chat reply is often longer than a fragment and multi-byte (Arabic, emoji, dashes); the next
+  # message must still be admitted, with the history clipped rather than the turn refused.
+  def test_long_multibyte_history_is_clipped_to_the_bounds_instead_of_refused
+    reply = "مرحبا — #{'نعم ' * 200}✅\nnext line"
+    fragments = Array.new(14) { |index| { 'role' => index.even? ? 'user' : 'assistant', 'text' => reply } }
+
+    task = Tamoz::Core::TurnContext.task(thread_id: 't', request_id: 'r', text: 'x' * 6_000, fragments:)
+                                   .fetch('task')
+    kept = Tamoz::Core::TurnContext.fragments_from(task.fetch('context'), thread_id: 't', request_id: 'r')
+
+    refute_empty kept
+    assert(kept.all? { |fragment| fragment['text'].bytesize <= 500 && fragment['text'].valid_encoding? })
+    assert_operator Tamoz::Core.jcs(task).bytesize, :<=, Tamoz::Core::TurnContext::MAX_CONTEXT_BYTES
+  end
 end

@@ -67,6 +67,14 @@ from its public release line onward.
   the diff, or the command) instead of "I want to create a file". Its buttons are
   cleared once answered, the tap shows a toast, and a late tap on an old prompt
   says it is no longer waiting.
+- A Telegram conversation no longer takes the bot down after a few long replies.
+  History was trimmed to 500 characters but checked at 500 bytes, so a reply
+  with Arabic, emoji or a dash crashed the gateway on the next message (and
+  again after every restart). History is now clipped to the byte bounds, a
+  message that still cannot be admitted gets a plain refusal instead of stopping
+  the gateway, a long multi-byte answer is delivered (parts were checked at 4096
+  bytes, not characters), and a reply the channel cannot carry ends with the
+  failure line instead of silence.
 - Re-running `tamoz telegram setup` (or editing the channel's profile) no longer
   breaks the conversations bound to the old profile: every message used to fail
   on the stale authority pin. The conversation moves to a fresh thread bound to

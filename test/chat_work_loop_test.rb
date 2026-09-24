@@ -64,6 +64,25 @@ class ChatWorkLoopTest < Minitest::Test
     harness&.close
   end
 
+  def test_a_reply_the_channel_refuses_still_ends_with_the_failure_line
+    model = ScriptedConversationModel.new(turns: [{ content: ANSWER }])
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work)
+    sink = harness.instance_variable_get(:@runtime).delivery_sink
+    sink.singleton_class.prepend(Module.new do
+      def push(kind:, **)
+        raise Tamoz::Comms::ValidationError, 'text must be a bounded string' if kind == 'request.completed'
+
+        super
+      end
+    end)
+
+    texts = capture_io { harness.say('hello') }.then { harness.instance_variable_get(:@transport).outbound }
+
+    assert_equal [Tamoz::Agent::ChatReply::FAILED], texts.map { |card| card[:text] }
+  ensure
+    harness&.close
+  end
+
   def story_harness(entered, release)
     story = lambda do |_messages|
       entered << true

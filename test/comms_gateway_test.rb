@@ -81,6 +81,23 @@ class CommsGatewayTest < Minitest::Test
     )
   end
 
+  # One message that cannot become a turn must not stop the bot, or every restart re-reads it.
+  def test_an_unadmittable_message_is_refused_and_the_gateway_keeps_serving
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      gateway.instance_variable_get(:@store).singleton_class.define_method(:admit_and_enqueue) do |*, **|
+        raise Tamoz::ConfigurationError, 'too big'
+      end
+      transport.batch([update(1, text: 'poison')])
+
+      _out, err = capture_io { assert_equal :served, gateway.serve_once(drain: false) }
+
+      assert_equal Tamoz::Comms::Gateway::UNADMITTABLE_REPLY, appended.last.fetch('text')
+      assert_includes err, 'could not admit update 1'
+      assert_operator store.poll_offset(bot_id: 7_463_512_990), :>, 1, 'the offset moves past the message'
+    end
+  end
+
   # Re-running setup rewrites the profile; the conversation must keep working, on a fresh thread.
   def test_a_changed_profile_moves_the_conversation_to_a_fresh_thread_instead_of_failing
     with_gateway do |gateway, transport, store, adapter, checkpoints, appended|

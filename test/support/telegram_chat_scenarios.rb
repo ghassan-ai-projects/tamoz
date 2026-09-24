@@ -15,7 +15,7 @@ module TelegramChatScenarios
 
   def all
     %w[setup returning_owner greet memory reset arabic formatting workspace_read create_file deny long help
-       status_cancel burst photo stranger restart provider_down]
+       status_cancel burst photo stranger long_conversation restart provider_down]
   end
 
   # S1: the one documented command wrote a runnable runtime; every later scenario
@@ -185,6 +185,19 @@ module TelegramChatScenarios
     eval.check('status_cancel', 'the work is stopped', settles.include?('stopped'), settles.inspect)
     eval.check('status_cancel', 'the story never arrives', after.reply.length < 1000, "#{after.reply.length} chars")
     eval.check('status_cancel', 'stopped within 30s', after.answer_s <= 30, format('%.1fs', after.answer_s))
+  end
+
+  # R5: a real chat keeps going. Long multi-byte replies pile up in the history every later
+  # message carries, past the history's line and size limits; every message still gets an answer.
+  def long_conversation(eval)
+    user = eval.fresh_user
+    turns = [eval.turn(user, 'اشرح لي بالتفصيل، في ثلاث فقرات طويلة مع رموز تعبيرية، كيف تعمل الطاقة الشمسية ☀️')]
+    turns += (1..13).map { |index| eval.turn(user, "Follow-up #{index}: add one more short fact, one sentence.") }
+    answered = turns.count { |turn| !turn.reply.strip.empty? && !turn.reply.include?(Tamoz::Agent::ChatReply::FAILED) }
+    eval.check('long_conversation', 'all 14 messages answered', answered == turns.length,
+               "#{answered}/#{turns.length}; last: #{turns.last.reply}")
+    eval.check('long_conversation', 'the bot stayed up', eval.alive?, 'a process exited')
+    eval.hygiene('long_conversation', turns)
   end
 
   # R3: a restart loses neither the conversation nor a message sent while the bot was down.

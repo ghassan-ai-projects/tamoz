@@ -26,7 +26,8 @@ module Tamoz
       KINDS = %w[answer approval_request failed stopped blocked control].freeze
       OPERATIONS = %w[send_message edit_message].freeze
       DIGEST_DOMAIN = 'tamoz.comms.delivery.v1'
-      MAX_TEXT_BYTES = 4096
+      # A part is at most 4096 characters (the renderer's ceiling), and a character is up to four bytes.
+      MAX_TEXT_BYTES = 16_384
       MAX_MARKUP_BYTES = 8192
 
       # @!attribute [r] reply_to

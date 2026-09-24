@@ -137,6 +137,22 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
+  # Telegram's limit is characters; an Arabic or emoji part is two to four bytes per character.
+  def test_a_long_multibyte_answer_is_delivered_in_full_character_sized_parts
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store, surface: descriptor(
+        rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' }
+      ))
+
+      assert_equal :accepted, sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'نعم ☀️ ' * 900)
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal 2, rows.length
+      assert_operator rows.first.fetch('text').bytesize, :>, 4096
+    end
+  end
+
   def test_repeated_approval_occurrences_create_distinct_deliveries
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)

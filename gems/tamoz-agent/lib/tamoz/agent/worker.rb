@@ -913,8 +913,15 @@ module Tamoz
       # answer. Nil-safe — an unconfigured worker delivers nothing. A
       # human-answer pause carries the occurrence and its exact interrupt set so
       # the rendered question answers THAT question (ADR-043).
+      # A reply the channel refuses to carry still ends the turn in the chat, with the plain failure
+      # line, so the person is never left looking at silence.
       def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil)
         @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:)
+      rescue Tamoz::Comms::ValidationError => e
+        raise if text == ChatReply::FAILED || interrupts
+
+        warn "tamoz: the #{kind} reply could not be delivered (#{e.message}); sent the failure line instead"
+        @runtime.delivery_sink.push(thread_id:, kind: "request.failed", text: ChatReply::FAILED, request_id:)
       end
 
       def completion_text(view)

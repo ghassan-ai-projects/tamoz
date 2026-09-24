@@ -40,3 +40,7 @@ harness that scores an agent.
   documented command itself (`tamoz telegram start`, not its children) and run it on a copy of the
   real runtime (`script/telegram_chat_eval --runtime-from ~/.tamoz`); a copy also carries state a
   stand-in must honour, such as Telegram's real update offset.
+- **Exercise non-ASCII and length together, over many turns.** Two limits were enforced in bytes
+  but sized in characters (history lines, reply parts); every ASCII scenario passed, and the
+  owner's bot died after a few long replies containing a dash and emoji. A soak that runs a long
+  conversation with multi-byte replies (`long_conversation`) found both in one run.

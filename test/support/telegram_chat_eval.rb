@@ -207,6 +207,8 @@ class TelegramChatEval
     count.to_i.positive?
   end
 
+  def alive? = @pids.none? { |_name, pid| Process.wait(pid, Process::WNOHANG) }
+
   def ensure_children_alive
     @pids.each do |name, pid|
       raise ProcessDied, "#{name} exited: #{log_tail(name, 3).strip}" if Process.wait(pid, Process::WNOHANG)

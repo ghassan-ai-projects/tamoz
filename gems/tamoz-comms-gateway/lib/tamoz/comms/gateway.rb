@@ -47,6 +47,7 @@ module Tamoz
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
       NEW_CONVERSATION_REPLY = "New conversation started. I won't use earlier messages."
+      UNADMITTABLE_REPLY = "Sorry, I couldn't take that message in. Please send it again, or /new to start fresh."
       SETTINGS_CHANGED_REPLY = "My settings changed since we last talked, so I've started a fresh conversation."
       NEW_CONVERSATION_UNBOUND_REPLY =
         'No conversation is bound for this channel yet; send a message first.'

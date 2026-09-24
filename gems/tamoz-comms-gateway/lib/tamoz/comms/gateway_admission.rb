@@ -7,9 +7,15 @@ module Tamoz
       module Admission
         # Resolves one normalized update to its durable disposition (design
         # §5): request, control reply, ignored, rejected, or callback decision.
+        # A message that cannot be shaped into a turn is refused on its own; it never stops the
+        # gateway, which would otherwise read the same message again after every restart.
         def admit(envelope, now:)
           decision = admission_decision(envelope)
           route_admission(envelope, decision, now:)
+        rescue Tamoz::ConfigurationError => e
+          warn "tamoz: could not admit update #{envelope['update_id']}: #{e.message}"
+          record_disposition(envelope, disposition: 'rejected', reason: 'unadmittable', now:)
+          append_control(UNADMITTABLE_REPLY, envelope, now:)
         end
 
         private
