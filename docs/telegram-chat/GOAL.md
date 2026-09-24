@@ -46,14 +46,13 @@ the model's wording. The report and transcript land in `tmp/telegram-eval/<stamp
 | 1 | One plain reply per message, typing indicator, provider errors named, photo reply, `/new` resets, chat can Approve. | 33/40 (experimental, deepseek-chat). Left: answer quality — the plan/review path answers memory questions "Unknown", fails small file edits when its reviewer rejects three plans, and elides long answers. |
 | 2 | Chat runs on the work loop (native tool calls): the whole conversation is in its context every turn, and the chat surface prompt says answer in the chat, remember, stay short, no hashes. Work-loop provider refusals mapped too. | **45/45** (work, deepseek-v4.1-flash; after review: an unchecked change says so, a turn never sees later messages). Simple replies 1.5–4s; the file edit ~25s. |
 | 3 | `tamoz telegram setup\|start` — one pair command and one start command, documented in the README, the guide and the CLI reference; `setup` repairs a runtime that already has a channel but no `profiles/` (the owner's own `.runtime-telegram/`), adopts an unpinned channel, and names a missing/refused token and a missing/refused/out-of-credit key in one line; `start` verifies the token before spawning; the eval now provisions through the real command and grades S1; `/start` is a bilingual greeting; `scripts/start-tamoz-comms.sh` delegates to `tamoz telegram start`; two processes can open a fresh database together. | **55/55** (work, deepseek-v4.1-flash). The gateway and worker run on the runtime `tamoz telegram setup` wrote, so every chat row doubles as evidence the command's output runs. `setup` 4/4; hygiene added to `/help` and photo; a stranger gets no reply. |
+| 4 | Grading W2/D1 for real exposed a product bug, not a test gap: a decision from the **channel** records a decision but no queued resume request, and a parked thread was filtered out of the worker's work list forever, so tapping Approve was durably accepted and the turn never resumed. The worker now re-admits a parked thread when a decision is waiting. The eval tightens the approval profile to `unattended` so a write really asks, taps the real **Approve** button, and grades that the resumed turn delivers the outcome. | **57/57** (work, deepseek-v4.1-flash). `create_file` 7/7: the prompt offers Approve, nothing is written before the tap, the tap resumes the same occurrence, the file is created, and the reply is the outcome (not just "Approved.") with the honest unverified caveat. |
 
-Coverage note (honest): the eval's real-run evidence covers S1, S4, C1–C6, W1, W2 (the file is
-really created), R1, R2 and R4. S2's refused *model key* is the eval's `provider_down`; S2's
-missing/refused *bot token* is covered by the CLI tests in `test/cli_telegram_test.rb`
-(`setup`/`start`), not by the eval — the bot cannot answer a user it cannot authenticate to.
-W2's phone-**Approve** path (D1) has integration tests
-(`test/comms_evidence_gated_approval_test.rb`, `test/comms_deny_callback_test.rb`) but is not
-exercised by the eval, whose profile allows changes without a prompt.
+Coverage note (honest): the eval's real-run evidence covers S1, S2's refused *model key*, S4,
+C1–C6, W1, W2 including the phone-**Approve** path (D1), R1, R2 and R4. The only bar row without
+eval evidence is S2's missing/refused *bot token*, which is covered by the CLI tests in
+`test/cli_telegram_test.rb` (`setup`/`start`) — the bot cannot answer a user it cannot
+authenticate to, so that case is a CLI/process error, not a chat reply.
 
 Found outside the eval: the owner's DeepSeek account is out of credit (`Insufficient Balance`), so
 every message the owner ever sent failed; `scripts/start-tamoz-comms.sh` launched

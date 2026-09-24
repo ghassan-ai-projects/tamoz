@@ -202,13 +202,26 @@ module Tamoz
       end
 
       def actionable_entries
-        work_list.reject { |entry| parked?(entry) && !resume_queued?(entry) }
+        work_list.reject { |entry| parked?(entry) && !resume_queued?(entry) && !decision_waiting?(entry) }
       rescue WorkerRuntime::StoreUnavailableError => error
         # The work list could not be read. That is reported and retried on the
         # next pass — it is NOT an empty inbox, and the difference has to be
         # visible or a sick store looks exactly like a quiet one.
         emit("worker.error", reason: error.message)
         []
+      end
+
+      # A pending decision re-admits a parked thread, exactly as a queued resume
+      # request does. The channel records a decision and NO queued request, so
+      # without this the owner's Approve press is durably accepted and the turn
+      # never resumes while the worker holds the park in memory.
+      def decision_waiting?(entry)
+        thread_id = entry.fetch(:thread_id)
+        view = view_of(@runtime.session_for(thread_id), thread_id)
+        return false unless view && paused_view?(view)
+
+        @runtime.pending_decision(thread_id, entry.fetch(:head_request_id),
+                                  interrupt_digest: interrupt_digest(view), now: Time.now.utc)
       end
 
       def advance_entries(entries)

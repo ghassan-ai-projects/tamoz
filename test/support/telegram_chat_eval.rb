@@ -14,6 +14,9 @@ require 'tamoz/telegram'
 require_relative 'telegram_bot_api_fake'
 
 # Drives the real gateway and worker against a fake Bot API; see docs/telegram-chat/GOAL.md.
+# rubocop:disable Metrics/ClassLength -- one collaborator per concern (processes, the
+#   fake, DB observations, settlement, reporting); splitting it would scatter the settle
+#   rules every scenario depends on.
 class TelegramChatEval
   ROOT = File.expand_path('../..', __dir__)
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
@@ -28,6 +31,12 @@ class TelegramChatEval
                     'adaptive' => '--adaptive-routing' }.freeze
   USERS = (1001..1040).to_a.freeze
   STRANGER = 9_999
+  # How long a turn may take, how long the chat must stay quiet to count as
+  # finished, and whether work was unblocked by a tap (which delivers its answer
+  # after the approval ack).
+  SettleWindow = Struct.new(:timeout, :quiet, :awaiting_work, keyword_init: true) do
+    def quiet = self[:quiet] || 2.5
+  end
 
   class ProcessDied < StandardError; end
 
@@ -106,13 +115,14 @@ class TelegramChatEval
     elsif photo then @fake.send_photo(user)
     else @fake.say(user, text)
     end
-    settle_and_record(user, tap ? "(tap #{tap.last})" : text || '(photo)', sent_at, timeout:)
+    settle_and_record(user, tap ? "(tap #{tap.last})" : text || '(photo)', sent_at,
+                      SettleWindow.new(timeout:, awaiting_work: !tap.nil?))
   end
 
   def burst(user, texts, timeout: 240)
     sent_at = Time.now.to_f
     texts.each { |text| @fake.say(user, text) }
-    settle_and_record(user, texts.join(' ⏎ '), sent_at, timeout:, quiet: 4)
+    settle_and_record(user, texts.join(' ⏎ '), sent_at, SettleWindow.new(timeout:, quiet: 4))
   end
 
   def check(scenario, name, pass, detail = nil)
@@ -173,8 +183,10 @@ class TelegramChatEval
 
   # The runtime is written by the documented one command (S1), not by hand: the
   # gateway and worker below then run on exactly what `tamoz telegram setup`
-  # produced. The allowlist is widened afterwards the way an operator adds
-  # teammates, so each scenario gets its own conversation.
+  # produced. Two operator edits follow, both of which a real operator makes:
+  # the allowlist is widened the way a teammate is added, and the approval
+  # profile is tightened to `unattended` so a workspace write really asks --
+  # which is the only way the Approve button (D1) can appear at all.
   def provision
     FileUtils.mkdir_p(@workspace)
     File.write(File.join(@workspace, 'README.md'),
@@ -183,6 +195,7 @@ class TelegramChatEval
     FileUtils.mkdir_p(@runtime, mode: 0o700)
     @setup = run_setup
     widen_allowlist
+    ask_before_changes
   end
 
   def run_setup
@@ -198,13 +211,23 @@ class TelegramChatEval
       profile: File.join(directory.profiles_path, 'telegram.yaml') }
   end
 
-  def widen_allowlist
+  def edit_config
     path = File.join(@runtime, 'config.yaml')
     document = Psych.safe_load_file(path, aliases: false)
-    document.fetch('channels').fetch('telegram')['admission']['correspondents'] =
-      USERS.map { |id| "telegram:user:#{id}" }
+    yield document
     File.write(path, Psych.dump(document))
     File.chmod(0o600, path)
+  end
+
+  def widen_allowlist
+    edit_config do |document|
+      document.fetch('channels').fetch('telegram')['admission']['correspondents'] =
+        USERS.map { |id| "telegram:user:#{id}" }
+    end
+  end
+
+  def ask_before_changes
+    edit_config { |document| document['approval'] = { 'profile' => 'unattended' } }
   end
 
   def chat(user) = "telegram:chat:#{user}"
@@ -252,8 +275,8 @@ class TelegramChatEval
     true
   end
 
-  def settle_and_record(user, text, sent_at, timeout:, quiet: 2.5)
-    wait_settled(user, sent_at, timeout:, quiet:)
+  def settle_and_record(user, text, sent_at, window)
+    wait_settled(user, sent_at, window)
     turn = Turn.new(user:, text:, sent_at:, settled_at: Time.now.to_f,
                     messages: @fake.visible_messages(user, since: sent_at - 0.01),
                     calls: @fake.calls(since: sent_at, chat: user))
@@ -262,21 +285,39 @@ class TelegramChatEval
   end
 
   # Settled: nothing open, nothing queued to send, and the chat has been quiet.
-  def wait_settled(user, since, timeout:, quiet:)
-    deadline = Time.now + timeout
-    until settled?(user, since, quiet)
-      raise Timeout::Error, "chat #{user} still busy after #{timeout}s" if Time.now > deadline
+  # After a tap the approval itself must also have left the paused projection, or
+  # the turn is judged while the work it unblocked is still running.
+  def wait_settled(user, since, window)
+    deadline = Time.now + window.timeout
+    until settled?(user, since, window)
+      raise Timeout::Error, "chat #{user} still busy after #{window.timeout}s" if Time.now > deadline
 
       ensure_children_alive
       sleep 0.3
     end
   end
 
-  def settled?(user, since, quiet)
+  # A tap resolves a prompt the chat was waiting on, so the reply that follows it
+  # arrives without buttons; waiting_on_user must be judged on the LATEST send,
+  # not on any send in the window, or the pre-tap prompt makes the turn look
+  # settled while the resumed work is still running.
+  def settled?(user, since, window)
     calls = @fake.calls(since:, chat: user)
+    quiet = window.quiet
     return false if calls.empty? || Time.now.to_f - [since, *calls.map(&:at)].max <= quiet
+    return false if window.awaiting_work && !approval_resolved?(user, since)
 
-    !busy?(user, waiting_on_user: calls.any? { |call| call.params['reply_markup'] })
+    !busy?(user, waiting_on_user: calls.last.params['reply_markup'])
+  end
+
+  # A tap turn sends the approval ack first and the resumed turn's answer second.
+  # The request projection turns terminal a moment BEFORE that answer is
+  # delivered, so the delivered second message is what proves the work finished;
+  # counting every message in the conversation would be satisfied by the ack plus
+  # the earlier prompt.
+  def approval_resolved?(user, since)
+    sends = @fake.calls(since:, chat: user).count { |call| call.name == 'sendMessage' }
+    sends > 1 && !busy?(user)
   end
 
   def wait_until(what, timeout: 60)
@@ -321,3 +362,4 @@ class TelegramChatEval
     "> #{message[:text].to_s[0, 1200].gsub("\n", "\n> ")}#{buttons}"
   end
 end
+# rubocop:enable Metrics/ClassLength

@@ -34,3 +34,13 @@
   (`git worktree add --detach /tmp/x HEAD`, same task there) before spending time on symbols the
   diff never touched; it costs a minute. Untracked files do not follow into that worktree, so it is
   also the honest way to reproduce a gate that reads the tracked tree only.
+- **A test that restarts the process between cause and effect cannot see in-memory state.** A
+  phone-approve test written as two `worker --once` invocations passed with and without the fix,
+  because exiting clears the worker's in-memory park that the long-running process keeps. Drive one
+  live worker across the event (`once: false` in a thread, wait on its emitted events) or the test
+  proves nothing. Prove the test discriminates before trusting it: revert the fix, watch it fail
+  with the real symptom, restore, watch it pass.
+- **A settle predicate that counts the wrong window silently grades the wrong moment.** The eval's
+  tap turn read "Approved." as the whole reply because it counted every `sendMessage` in the
+  conversation (the prompt plus the ack already satisfied `> 1`) and treated a reply carrying
+  buttons as waiting-on-user. Count within the turn and require the answer that follows the ack.

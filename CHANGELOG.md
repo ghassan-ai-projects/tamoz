@@ -50,6 +50,11 @@ from its public release line onward.
   a missing, refused or out-of-credit key are each one named line.
 - The gateway and worker can open a fresh runtime database at the same time
   without one dying on the migration lock.
+- Approving from the paired Telegram chat now resumes the paused turn. A channel
+  decision records a decision but no queued resume request, so a parked thread
+  used to leave the worker's work list for good: the press was accepted and
+  nothing happened. The worker re-admits a parked thread while a decision is
+  waiting for it, and the resumed turn delivers its outcome to the chat.
 
 ### Removed
 
