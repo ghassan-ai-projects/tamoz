@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 561 | 289 | 15 | **no** |
+| 563 | 292 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 531 |
+| pass | 533 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -476,8 +476,10 @@ generating run.
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-improve` | cli_command | yes | pass | `test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
+| `CLI-investigate` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
 | `CLI-observe` | cli_command | yes | pass | `test/observability_cli_test.rb#test_observe_commands_read_the_local_journal` |
+| `CLI-probes` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server` |
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
 | `CLI-queue` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `CLI-redirect` | cli_command | yes | pass | `test/agent_cli_test.rb#test_redirect_replaces_in_flight_goal` |

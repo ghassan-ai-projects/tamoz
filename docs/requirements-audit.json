@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-09-24T14:04:06Z",
-  "manifest_requirements": 561,
-  "named_cases_run": 289,
+  "generated_at": "2026-09-25T10:44:34Z",
+  "manifest_requirements": 563,
+  "named_cases_run": 292,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 15,
-    "pass": 531
+    "pass": 533
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -7028,6 +7028,23 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-investigate",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz investigate",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero",
+      "supporting_tests": [
+        "test/agent_cli_investigate_test.rb#test_investigate_refuses_anything_but_a_read_only_turn"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-list",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7050,6 +7067,21 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-probes",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz probes",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -8845,7 +8877,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
