@@ -54,14 +54,18 @@ module Tamoz
           catalogs: {}, descriptors: [], supervisors: {}, source_digests: {}, database_policies: {}
         }
         configs = server_configs
-        return nil if configs.empty?
+        if configs.empty?
+          raise Error, "sources.probes needs the MCP servers its probes back onto" if probes_enabled?
+
+          return nil
+        end
 
         begin
           configs.each do |config, settings|
             build_server(config, settings, state)
           end
 
-          compose_source(state)
+          with_probes(compose_source(state), configs)
         rescue StandardError
           close_supervisors(state)
           raise
@@ -160,6 +164,17 @@ module Tamoz
         when Tamoz::Mcp::AmbiguousOutcomeError
           Tamoz::EffectUnknownError.new(error.message)
         end
+      end
+
+      def probes_enabled? = @directory.enabled_sources.include?("probes")
+
+      def with_probes(source, configs)
+        return source unless probes_enabled?
+
+        servers = configs.to_h { |config, settings| [config.server_id, settings] }
+        ProbeSource.new(source:, catalog: ProbeCatalog.new(@directory.source_settings("probes"), servers:))
+      rescue ProbeCatalog::Error => error
+        raise Error, error.message
       end
 
       def close_supervisors(state)

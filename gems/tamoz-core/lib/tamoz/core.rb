@@ -50,6 +50,8 @@ module Tamoz
       /\bAKIA[0-9A-Z]{16}\b/,
       /\bAIza[0-9A-Za-z_-]{35}\b/
     ].freeze
+    # The header pattern above only detects a key; redaction must take the body too.
+    PRIVATE_KEY_BLOCK = /-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(?:-----END [A-Z ]*PRIVATE KEY-----|\z)/m
 
     loader = Zeitwerk::Loader.new
     loader.tag = "tamoz-core"
@@ -122,6 +124,12 @@ module Tamoz
     # digest in this repo uses.
     def valid_digest?(value)
       JCS.valid_digest?(value)
+    end
+
+    def scrub_secrets(text)
+      ([PRIVATE_KEY_BLOCK] + SECRET_VALUE_PATTERNS).reduce(String(text)) do |scrubbed, pattern|
+        scrubbed.gsub(pattern, "[REDACTED]")
+      end
     end
 
     # True when value is, or (recursively, through Hash/Array) contains, a

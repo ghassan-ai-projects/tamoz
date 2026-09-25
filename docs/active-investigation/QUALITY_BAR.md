@@ -15,17 +15,17 @@ proves nothing.
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| A1 | I1 — a probe whose backing tool is not in `read_only_tools` does not load; nor does an unknown free type, a name outside `probe_`, a duplicate, or an unknown placeholder | unit test, mutation: drop the `read_only_tools` check | OPEN |
+| A1 | I1 — a probe whose backing tool is not in `read_only_tools` does not load; nor does an unknown free type, a name outside `probe_`, a duplicate, or an unknown placeholder | unit test, mutation: drop the `read_only_tools` check | PASS — `agent_probe_catalog_test`, `agent_probe_source_test#test_a_probe_whose_backing_tool…`; mutation (drop the `read_only_tools` check) fails |
 | A2 | I2 — an episode probe that the local catalog declares but the wire catalog does not grant is refused | unit test, mutation: drop the grant check | OPEN |
-| A3 | I3 — a model-supplied pinned or unknown argument is refused; an unresolved placeholder is a refusal, not a call | unit test, mutation: merge instead of refuse | OPEN |
-| A4 | I4 — free slots enforce type and bounds; results over `max_result_bytes` are cut and marked `truncated` | unit tests | OPEN |
+| A3 | I3 — a model-supplied pinned or unknown argument is refused; an unresolved placeholder is a refusal, not a call | unit test, mutation: merge instead of refuse | PASS — `agent_probe_source_test` (pinned/unknown/missing refused; single-pass fill; enum fill); mutations (merge unknown keys, drop the missing check) fail |
+| A4 | I4 — free slots enforce type and bounds; results over `max_result_bytes` are cut and marked `truncated` | unit tests | PASS (probe side) — `test_free_slots_are_bounded`, `test_results_are_scrubbed…capped_within_the_declared_bound` |
 | A5 | I5 — episode tool calls replay from the journal; a crash between slot 1 and 2 of a three-request turn re-executes nothing already done; a crash *during* a slot re-runs that slot (idempotent) | graph test over the real checkpointer | OPEN |
 | A6 | I6 — tool results appear only in the user section, fenced and attributed | frame test | OPEN |
-| A7 | I7 — a secret-shaped value in a probe result never reaches the frame, the journal or the report | unit test | OPEN |
+| A7 | I7 — a secret-shaped value in a probe result never reaches the frame, the journal or the report | unit test | PASS (probe side) — key bodies, tokens and structured content scrubbed via `Tamoz::Core.scrub_secrets`; mutation (header-only patterns) fails |
 | A8 | I8 — an episode citing an ungathered tool id is refused; a report citing an ungathered call id is refused | unit tests, mutation: drop the check | OPEN |
 | A9 | I9 — no mutating capability is reachable in an investigation turn; `report_findings` executes nothing | work-loop test | OPEN |
-| A10 | `sql_select` refuses writes and multi-statements (reusing `GovernedDatabaseSource`) | unit test | OPEN |
-| A11 | Gap K — a server that backs a probe exposes no raw tool on the capability surface | unit test | OPEN |
+| A10 | `sql_select` refuses writes and multi-statements (reusing `GovernedDatabaseSource`) | unit test | PASS — `test_free_slots_are_bounded` (DELETE and multi-statement refused); database servers accept only a `query` slot |
+| A11 | Gap K — a server that backs a probe exposes no raw tool on the capability surface | unit test | PASS — execute/validate/preview/maximum_effect_output_bytes/read_only? refuse hidden tools; integration test over the real MCP test server; mutation fails |
 | A12 | Error, refusal and `budget_spent` tool entries are not citable (episode) and failed probe calls are not citable (report) | unit tests | OPEN |
 | A13 | Approval: a `probe_*` call is `allow` under `base` and `plan`; an unlisted MCP tool still asks; the verdict comes only from policy data | approval engine test | OPEN |
 
@@ -99,3 +99,4 @@ intelligence.
 | Package | Reviewer findings (critical/high) | Resolution | Commit |
 |---|---|---|---|
 | WP0 plan | 1 critical (probe calls hit the `local_execute` approval fallback), 4 high (Go/Tamoz stream-tool names never match; model budget runs out before the tool budget; repair-path reuse could loop; bar gaps), 7 medium, 7 low | All folded into PLAN §3 and README R5, R6, R10, R13; new bar items A12, A13, B2b–B2e, B4b, B4c, B6b; E2 and D5 corrected | this commit |
+| WP1 probes | 2 high (private-key body survived the scrub; a non-succeeded MCP outcome crashed an episode probe), 6 medium (empty targets, database-server argument drop, structured results lost, backing tool not checked against the catalog, test gaps, reek), 8 low | All fixed: `Tamoz::Core.scrub_secrets` (also used by the work loop and MCP payloads), non-success → `probe_failed` result, catalog/load checks, structured text, plain wrapper class (no delegation), cap includes the mark, `probes:catalog` digest key, probes-without-MCP refused; tests added and mutation-checked. Deferred to WP4: probe descriptions on the legacy planning surface | WP1 commit |

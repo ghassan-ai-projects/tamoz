@@ -80,7 +80,7 @@ module Tamoz
         append(entries, 'user', scrub(task), pinned: true)
       end
 
-      def scrub(text) = Tamoz::Core::SECRET_VALUE_PATTERNS.reduce(text) { |value, pattern| value.gsub(pattern, '[REDACTED]') }
+      def scrub(text) = Tamoz::Core.scrub_secrets(text)
 
       private
 
