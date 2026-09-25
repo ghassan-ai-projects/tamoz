@@ -557,11 +557,11 @@ module Tamoz
       end
 
       # A lookup that fails reads as "not yet" and the next poll tries again.
+      # The stamp is NOT marked here: observing the cancel before the turn runs
+      # makes the durable order say the cancel preceded a turn that then
+      # answered. The run marks the observation once it sees the cancellation.
       def stop_requested?(thread_id, occurrence_id)
-        return false unless comms_store.cancellation_requested?(thread_id:, request_id: occurrence_id)
-
-        comms_store.mark_cancellation_observed(thread_id:, now: Time.now.utc)
-        true
+        comms_store.cancellation_requested?(thread_id:, request_id: occurrence_id)
       rescue StandardError
         false
       end

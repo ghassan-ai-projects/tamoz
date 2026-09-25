@@ -14,13 +14,19 @@ module Tamoz
         end
 
         def build_control_delivery(reply_text, envelope, kind:, identity_key: nil)
-          text = String(reply_text).scrub.byteslice(0, Comms::Delivery::MAX_TEXT_BYTES)
+          text = clamp_control_text(reply_text)
           Comms::Delivery.build(
             conversation_id: envelope.fetch('conversation_id'), reply_to: reply_target(envelope), kind:,
             text:, part_index: 0, part_count: 1, journaled: false,
             render_version: Comms::Rendering::RENDER_VERSION,
             content_digest: Comms::Rendering.content_digest(text), identity_key:
           )
+        end
+
+        # A control reply is one message, so it clamps on a character boundary to
+        # the delivery's own ceiling: the build can never raise on length.
+        def clamp_control_text(reply_text)
+          String(reply_text).scrub[0, Comms::Delivery::MAX_TEXT_CHARACTERS]
         end
 
         # A control reply targets the platform message id carried by the update.
