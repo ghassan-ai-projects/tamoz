@@ -10,6 +10,8 @@ require_relative "cancellation/version"
 require_relative "cancellation_token"
 require_relative "cancellation/trap"
 require_relative "cancellation/sleep"
+require_relative "cancellation/race"
+require_relative "cancellation/stops"
 require_relative "cancellation/process_group"
 
 module Tamoz

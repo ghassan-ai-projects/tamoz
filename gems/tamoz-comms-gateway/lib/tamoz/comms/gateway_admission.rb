@@ -7,9 +7,15 @@ module Tamoz
       module Admission
         # Resolves one normalized update to its durable disposition (design
         # §5): request, control reply, ignored, rejected, or callback decision.
+        # A message that cannot be shaped into a turn is refused on its own; it never stops the
+        # gateway, which would otherwise read the same message again after every restart.
         def admit(envelope, now:)
           decision = admission_decision(envelope)
           route_admission(envelope, decision, now:)
+        rescue Tamoz::ConfigurationError => e
+          warn "tamoz: could not admit update #{envelope['update_id']}: #{e.message}"
+          record_disposition(envelope, disposition: 'rejected', reason: 'unadmittable', now:)
+          append_control(UNADMITTABLE_REPLY, envelope, now:)
         end
 
         private
@@ -39,38 +45,36 @@ module Tamoz
               admit_request(envelope, now:)
             end
           when :decision
-            resolve_callback(envelope, now:)
-            acknowledge_callback(envelope)
+            acknowledge_callback(envelope, resolve_callback(envelope, now:))
           when :rejected
             record_disposition(envelope, disposition: 'rejected', reason: decision.reason.to_s, now:)
             append_control(decision.control_reply, envelope, now:) if decision.control_reply
           when :control
             admit_control(envelope, decision, now:)
           else
-            record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
-            handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
+            ignore_update(envelope, decision, now:)
           end
+        end
+
+        def ignore_update(envelope, decision, now:)
+          record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
+          handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
+          append_control(decision.control_reply, envelope, now:) if decision.control_reply
         end
 
         def admit_request(envelope, now:)
           conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
           thread = admission_thread(envelope, conversation)
+          thread = fresh_thread_for_new_authority(envelope, conversation, now:) if stale_authority?(thread)
           bind_admission(envelope, thread, conversation, now:)
           history = @store.conversation_history(
-            surface_id:, conversation_id: envelope.fetch('conversation_id')
+            surface_id:, conversation_id: envelope.fetch('conversation_id'), thread_id: thread
           )
           outcome = @store.admit_and_enqueue(
             envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
                       reservation: reservation_slots, now:, history:
           )
-          if outcome == :enqueued
-            append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
-            return
-          end
-
-          # A replayed update already has its admission durable. Re-rendering
-          # it can create a second control row when queue state has changed.
-          return if outcome == :duplicate
+          return if %i[enqueued duplicate].include?(outcome)
 
           refuse_admission(envelope, outcome, now:)
         end

@@ -630,6 +630,90 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  # A decision that arrives from the CHANNEL (the paired owner pressing Approve
+  # on their phone) records a decision but queues no resume request, unlike
+  # `tamoz approve`. The parked thread must still be re-examined, or the tap is
+  # accepted durably and the turn never resumes — exactly the "I pressed Approve
+  # and nothing happened" experience.
+  #
+  # ONE long-lived worker across the press on purpose: the park lives in the
+  # worker's memory, so a worker restarted between the press and the resume would
+  # clear it and hide this defect entirely.
+  def test_a_channel_approval_resumes_the_parked_occurrence_without_a_queued_resume
+    with_runtime(approval_profile: "unattended") do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.cli(%W[queue add --task Fix\ note.txt --thread t1 --profile trusted], factory: edit_factory)
+
+      events = []
+      runtime = open_runtime(rt)
+      worker = nil
+      begin
+        worker = live_worker(runtime, events)
+        wait_until("the turn pauses for approval") do
+          events.any? { |event| event["event"] == "request.paused" }
+        end
+
+        record_channel_approval(rt, rt.pending_approvals.first.fetch("request_id"))
+
+        wait_until("the phone approval resumes the occurrence") do
+          events.any? { |event| event["event"] == "request.completed" }
+        end
+      ensure
+        worker&.stop!("done")
+        runtime.close
+      end
+
+      assert_equal "fixed\n", File.read(File.join(rt.workspace, "note.txt")),
+                   "the approved change must be the one that ran"
+    end
+  end
+
+  def live_worker(runtime, events)
+    worker = Tamoz::Agent::Worker.new(runtime:, session_builder: session_builder_for(runtime),
+                                      emitter: ->(event) { events << event }, poll_interval: 0.1)
+    Thread.new { worker.run }
+    worker
+  end
+
+  def wait_until(what, timeout: 15)
+    deadline = Time.now + timeout
+    sleep 0.05 until yield || Time.now > deadline
+    raise "timed out waiting for: #{what}" unless yield
+  end
+
+  def open_runtime(runtime_case)
+    Tamoz::Agent::WorkerRuntime.open(
+      Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_case.dir, env: {}),
+      model_factory: ->(profile:) { edit_factory.call(profile) }
+    )
+  end
+
+  def session_builder_for(runtime) = ->(thread_id) { runtime.session_for(thread_id) }
+
+  # The same record the gateway writes for a paired correspondent pressing
+  # Approve: chat_bound evidence, `telegram_user` actor, no queued resume.
+  def record_channel_approval(runtime_case, request_id)
+    thread_id = runtime_case.pending_approvals.first.fetch("thread_id")
+    runtime = Tamoz::Agent::WorkerRuntime.open(
+      Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_case.dir, env: {}),
+      model_factory: ->(profile:) { edit_factory.call(profile) }
+    )
+    view = runtime.session_for(thread_id).view(thread: thread_id)
+    facts = view.interrupts.map do |interrupt|
+      { task_id: interrupt.task_id, call_index: interrupt.call_index, descriptor: interrupt.descriptor }
+    end
+    runtime.record_decision(
+      Tamoz::Comms::DecisionRecord.build(
+        thread_id:, occurrence_id: request_id,
+        interrupts: facts, direction: :approve,
+        actor_kind: "telegram_user", actor_id: "telegram:user:1001", source: "telegram",
+        evidence: Tamoz::Comms::AuthorityEvidence.chat_bound.to_s, reason: "callback"
+      )
+    )
+  ensure
+    runtime&.close
+  end
+
   def test_worker_processes_several_threads_with_bounded_concurrency
     with_runtime do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")

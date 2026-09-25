@@ -350,6 +350,52 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  def test_deliver_sends_markdown_as_telegram_html
+    calls = []
+    client = Object.new
+    client.define_singleton_method(:call) do |method, params|
+      calls << [method, params]
+      { 'message_id' => 42, 'date' => 1_752_700_800 }
+    end
+    transport = Tamoz::Telegram::Transport.new(client:, normalizer: nil)
+    delivery = Comms::Delivery.build(
+      conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'Use **`a<b`**',
+      part_index: 0, part_count: 1, journaled: true, render_version: 1, content_digest: 'b' * 64
+    )
+
+    transport.deliver(delivery)
+
+    assert_equal({ 'chat_id' => '22222222', 'text' => 'Use <b><code>a&lt;b</code></b>', 'parse_mode' => 'HTML' },
+                 calls.fetch(0).last)
+  end
+
+  def test_a_settled_prompt_toasts_and_clears_its_buttons
+    with_transport do |transport, server|
+      server.script('answerCallbackQuery', body: { 'ok' => true, 'result' => true }, times: 1)
+      server.script('editMessageReplyMarkup', body: { 'ok' => true, 'result' => true }, times: 1)
+
+      transport.signal(:ack, callback_query_id: 'q-1', text: 'Approved')
+
+      assert_equal :cleared, transport.signal(:clear_buttons, conversation_id: 'telegram:chat:22222222', message_id: 7)
+
+      bodies = server.requests.to_h { |request| [request[:method], JSON.parse(request[:body])] }
+
+      assert_equal({ 'callback_query_id' => 'q-1', 'text' => 'Approved' }, bodies.fetch('answerCallbackQuery'))
+      assert_equal({ 'chat_id' => '22222222', 'message_id' => 7, 'reply_markup' => { 'inline_keyboard' => [] } },
+                   bodies.fetch('editMessageReplyMarkup'))
+    end
+  end
+
+  def test_typing_signal_sends_the_chat_action_to_the_conversation
+    with_transport do |transport, server|
+      server.script('sendChatAction', body: { 'ok' => true, 'result' => true }, times: 1)
+
+      assert_equal :typing, transport.signal(:typing, conversation_id: 'telegram:chat:22222222')
+      sent = server.requests.find { |request| request[:method] == 'sendChatAction' }
+      assert_equal({ 'chat_id' => '22222222', 'action' => 'typing' }, JSON.parse(sent[:body]))
+    end
+  end
+
   def test_normalizer_marks_group_chats_and_membership
     with_transport do |_transport, _server|
       group = Tamoz::Telegram::Normalizer.new(surface_id: 's', surface_revision: 1)

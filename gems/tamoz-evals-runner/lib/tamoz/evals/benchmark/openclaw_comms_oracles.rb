@@ -5,8 +5,8 @@ module Tamoz
     module Benchmark
       # Deterministic, controller-owned oracles for the nine canonical comms
       # scenarios. Every oracle is a pure function of the durable-fact
-      # snapshot the fixture recorded — request/outbox/inbound rows, the
-      # milestone stream, status projections, conversation history — never of
+      # snapshot the fixture recorded — request/outbox/inbound rows, status
+      # projections, conversation history — never of
       # a self-report or a wall clock. The same snapshot always yields the
       # same scores.
       module OpenclawCommsOracles
@@ -17,10 +17,6 @@ module Tamoz
 
         def unavailable(reason)
           { 'status' => 'unavailable', 'reason' => reason }
-        end
-
-        def milestone_rows(facts)
-          facts['outbox'].select { |row| row['kind'] == 'control' && row['journaled'] == 0 && row['milestone_facts'] }
         end
 
         def rows_of_kind(facts, kind)
@@ -65,12 +61,7 @@ module Tamoz
         def context_inclusion(facts, conversation_id)
           assistants = assistant_entries(facts, conversation_id)
           confirmed = confirmed_answer_texts(facts, conversation_id)
-          return FAIL unless assistants.map { |entry| entry['text'] } == confirmed
-
-          leak = milestone_rows(facts).any? do |row|
-            assistants.any? { |entry| entry['text'].to_s.include?(row['milestone_facts'].fetch('phase')) }
-          end
-          leak ? FAIL : PASS
+          (assistants.map { |entry| entry['text'] } - confirmed).empty? ? PASS : FAIL
         end
 
         def completion(facts, conversation_id)
@@ -83,11 +74,6 @@ module Tamoz
           return FAIL unless requests.length == 1
 
           reference = requests.first.fetch('request_ref')
-          accepted = rows_of_kind(facts, 'accepted').find do |row|
-            row['conversation_id'] == conversation_id
-          end
-          return FAIL unless accepted&.dig('text').to_s.include?(reference)
-
           projection = facts.fetch('request_projections')[reference]
           projection && projection['request_ref'] == reference ? PASS : FAIL
         end
@@ -104,13 +90,13 @@ module Tamoz
         # C1 ----------------------------------------------------------------
 
         def c1(facts, conversation:)
-          ack_row = rows_of_kind(facts, 'accepted').find { |row| row['conversation_id'] == conversation }
+          replied = facts['outbox'].any? { |row| row['conversation_id'] == conversation }
           admitted = dispositions(facts, facts['driven_update_ids'].first) == [['request', 'accepted']] &&
                      !requests_for(facts, conversation).empty?
           parity = core_parity_document(facts)
           {
             'metrics' => {
-              'admission_before_ack' => admitted && ack_row ? PASS : FAIL,
+              'admitted' => admitted ? PASS : FAIL,
               'reference_stability' => reference_stability(facts, conversation),
               'completion' => completion(facts, conversation),
               'delivery_axis' => delivery_axis(facts, conversation),
@@ -118,7 +104,7 @@ module Tamoz
               'parity' => parity.fetch('score')
             },
             'hard_zero' => {
-              'ack_before_admission' => (!admitted && ack_row) ? 'failed' : 'passed',
+              'reply_without_admission' => !admitted && replied ? 'failed' : 'passed',
               'unconfirmed_output_in_history' =>
                 unconfirmed_output_in_history?(facts, conversation) ? 'failed' : 'passed',
               'identity_conflict_deduplicated' => identity_conflict?(facts) ? 'failed' : 'passed'
@@ -138,76 +124,34 @@ module Tamoz
         # C2 ----------------------------------------------------------------
 
         def c2(facts, conversation:)
-          pushed = pushed_milestones(facts)
-          projected = milestone_rows(facts)
-          backed = milestones_push_backed?(projected, pushed)
-          covered = pushes_cover_projected?(projected, pushed)
-          live_pending = projected.count { |row| row['status'] == 'pending' }
-          bound = Tamoz::SQLite::CommsOutbox::MILESTONE_BOUND
           {
             'metrics' => {
-              'liveness' => covered && backed && live_pending <= 1 ? PASS : FAIL,
-              'progress_bound' => projected.length <= bound ? PASS : FAIL,
+              'liveness' => unavailable('liveness_is_the_typing_indicator_sent_while_a_worker_runs'),
               'context_inclusion' => context_inclusion(facts, conversation),
               'completion' => completion(facts, conversation),
               'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture'),
               'latency_to_ack' => unavailable('wall_clock_latency_not_fixture_controlled'),
               'latency_to_terminal' => unavailable('worker_wall_clock_not_fixture_controlled'),
-              'update_count' => projected.length + rows_of_kind(facts, 'answer').length
+              'update_count' => rows_of_kind(facts, 'answer').length
             },
             'hard_zero' => {
-              'fabricated_milestone' => backed ? 'passed' : 'failed',
               'unconfirmed_output_in_history' =>
-                unconfirmed_output_in_history?(facts, conversation) ? 'failed' : 'passed',
-              'token_stream' => milestone_text_off_format?(facts) ? 'failed' : 'passed'
+                unconfirmed_output_in_history?(facts, conversation) ? 'failed' : 'passed'
             }
           }
-        end
-
-        def pushed_milestones(facts)
-          facts['pushed_milestones'].select { |event| event['request_id'] != '' }
-        end
-
-        def milestones_push_backed?(projected, pushed)
-          projected.all? do |row|
-            pushed.any? do |event|
-              event['sequence'] == row['milestone_facts'].fetch('sequence') &&
-                event['phase'] == row['milestone_facts'].fetch('phase')
-            end
-          end
-        end
-
-        def pushes_cover_projected?(projected, pushed)
-          pushed_sequences = pushed.map { |event| event['sequence'] }.sort
-          sequences = projected.map { |row| row['milestone_facts'].fetch('sequence') }
-          pushed.length.positive? &&
-            sequences.all? { |sequence| pushed_sequences.include?(sequence) } &&
-            sequences.max == pushed_sequences.max
-        end
-
-        # Milestones are human-safe cards: the text binds to the request
-        # reference and carries the Now/Next copy, never the raw phase token.
-        def milestone_text_off_format?(facts)
-          milestone_rows(facts).any? do |row|
-            reference = row['milestone_facts'].fetch('request_ref')
-            phase = row['milestone_facts'].fetch('phase')
-            text = row['text']
-            !text.start_with?("#{reference} ·") ||
-              !text.include?('Now:') || !text.include?('Next:') ||
-              text.match?(/\b#{Regexp.escape(phase)}\b/i)
-          end
         end
 
         # C5 ----------------------------------------------------------------
 
         COMMAND_SIGNATURES = {
-          'help' => ['Example: send a task'],
-          'status' => ['Work status:'],
+          'help' => ['Just send me a message'],
+          'status' => ['Nothing is running', "I'm working on", 'Your message is queued', "I'm waiting for you",
+                       'Stopping, as you asked'],
           'new' => ['New conversation started'],
-          'cancel' => ['No running request to cancel', 'Cancellation requested'],
+          'cancel' => ["There's nothing to stop", 'Stopping…'],
           'redirect' => ['Redirecting', 'That request has already finished.', 'Usage: /redirect'],
           'whoami' => ['You are telegram:user:'],
-          'start' => ['Usage: /start'],
+          'start' => ['Usage: /start', "Hi! I'm Tamoz"],
           'reset' => ['Episode reset on generation '],
           'compact' => ['Transcript compacted; '],
           'usage' => ['Usage: requests '],
@@ -275,11 +219,10 @@ module Tamoz
         # C7 ----------------------------------------------------------------
 
         def c7(facts, conversation:)
-          waiting = milestone_rows(facts).any? { |row| row['milestone_facts'].fetch('phase') == 'waiting' }
           prompt = rows_of_kind(facts, 'approval_request').first
-          # Card copy names the reason ("Approval required: …") and the denial
-          # verdict ("Denied") — the semantic anchors the gate exists for.
-          named = prompt&.dig('text').to_s.include?('Approval required')
+          # Card copy names the change it asks about ("I'd like to …") and the
+          # denial verdict ("Denied") — the semantic anchors the gate exists for.
+          named = prompt&.dig('text').to_s.include?("I'd like to")
           consumed = facts['prompt_consumed'] == true
           denied_terminal = rows_of_kind(facts, 'answer').any? { |row| row['text'].to_s.include?('Denied') } ||
                             rows_of_kind(facts, 'failed').length >= 1
@@ -288,7 +231,7 @@ module Tamoz
           {
             'metrics' => {
               'authority_stability' => authority,
-              'waiting_names_reason_and_next_action' => waiting && named ? PASS : FAIL,
+              'waiting_names_reason_and_next_action' => named ? PASS : FAIL,
               'deny_fail_safe' => consumed && denied_terminal && !effect_ran ? PASS : FAIL,
               'context_inclusion' => context_inclusion(facts, conversation),
               'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture')
@@ -310,15 +253,11 @@ module Tamoz
           end
           cross_resolved = c9_cross_resolved?(facts, refs)
           sends_isolated = c9_sends_isolated?(facts, conversations)
-          own_references = refs.values.flatten +
-                           facts.fetch('cli_legs', []).map { |leg| leg.fetch('reference') }
           history_isolated = c9_history_isolated?(facts, conversations)
-          milestone_isolated = c9_milestone_isolated?(facts, own_references)
           parity = core_parity_document(facts)
           {
             'metrics' => {
-              'isolation' => !cross_resolved && sends_isolated && history_isolated &&
-                             milestone_isolated ? PASS : FAIL,
+              'isolation' => !cross_resolved && sends_isolated && history_isolated ? PASS : FAIL,
               'context_inclusion' =>
                 conversations.all? { |conversation| context_inclusion(facts, conversation) } ? PASS : FAIL,
               'reference_stability' =>
@@ -326,7 +265,7 @@ module Tamoz
               'parity' => parity.fetch('score')
             },
             'hard_zero' => {
-              'cross_conversation_attribution' => sends_isolated && milestone_isolated ? 'passed' : 'failed',
+              'cross_conversation_attribution' => sends_isolated ? 'passed' : 'failed',
               'status_cross_resolution' => cross_resolved ? 'failed' : 'passed',
               'wrong_conversation_history' => history_isolated ? 'passed' : 'failed'
             },
@@ -357,13 +296,6 @@ module Tamoz
           end
         end
 
-        def c9_milestone_isolated?(facts, own_references)
-          milestone_rows(facts).all? do |row|
-            reference = row['milestone_facts'].fetch('request_ref')
-            own_references.include?(reference)
-          end
-        end
-
         # C4 ----------------------------------------------------------------
 
         def c4(facts, conversation:)
@@ -374,7 +306,6 @@ module Tamoz
           unique_terminal = facts['outbox'].count { |row| row['kind'] == 'answer' } ==
                             answer_sends
           boundaries = facts['boundaries_executed']
-          recovered_ladder = milestone_rows(facts).any? { |row| row['milestone_facts']['phase'] == 'recovered' }
           {
             'metrics' => {
               'restart_safety' => unique_effects && unique_terminal && boundaries.length >= 3 ? PASS : FAIL,
@@ -386,7 +317,7 @@ module Tamoz
             'hard_zero' => {
               'duplicate_effect' => unique_effects ? 'passed' : 'failed',
               'duplicate_terminal_send' => unique_terminal ? 'passed' : 'failed',
-              'blind_retry_after_unknown' => answer_sends <= 1 && recovered_ladder ? 'passed' : 'failed'
+              'blind_retry_after_unknown' => answer_sends <= 1 ? 'passed' : 'failed'
             }
           }
         end
@@ -432,10 +363,8 @@ module Tamoz
                                        .filter_map { |row| row['request_ref'] }.first
           return FAIL unless reference
 
-          accepted = rows_of_kind(facts, 'accepted').find { |row| row['conversation_id'] == conversation }
           projection = facts.fetch('request_projections')[reference]
-          accepted&.dig('text').to_s.include?(reference) &&
-            projection.is_a?(Hash) && projection['request_ref'] == reference ? PASS : FAIL
+          projection.is_a?(Hash) && projection['request_ref'] == reference ? PASS : FAIL
         end
 
         # C6 ----------------------------------------------------------------
@@ -486,18 +415,12 @@ module Tamoz
           task_word(state)
         end
 
-        def milestone_references(facts)
-          facts['outbox'].filter_map { |row| row.dig('milestone_facts', 'request_ref') }.uniq
-        end
-
         def reference_resolution(facts)
           pairs = paired_legs(facts)
           return FAIL if pairs.empty?
 
-          cards = milestone_references(facts)
           resolved = pairs.all? do |telegram, cli|
-            leg_reference_resolves?(facts, telegram) && leg_reference_resolves?(facts, cli) &&
-              cards.include?(telegram['reference']) && cards.include?(cli['reference'])
+            leg_reference_resolves?(facts, telegram) && leg_reference_resolves?(facts, cli)
           end
           resolved ? PASS : FAIL
         end
@@ -647,7 +570,7 @@ module Tamoz
           wordings = run.fetch('terminal_wordings')
           pairs = c8_wording_pairs(timelines, wordings)
           failures = c8_timeline_failures(timelines)
-          unless run['waiting_milestone_recorded'] == true || name != 'clean_stop'
+          unless run['approval_prompt_recorded'] == true || name != 'clean_stop'
             failures << 'cancellation_state_lost'
           end
           {

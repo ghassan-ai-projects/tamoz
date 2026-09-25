@@ -215,6 +215,35 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
+  def test_a_decided_press_toasts_and_clears_the_buttons_and_a_second_press_says_it_is_settled
+    with_engine do |adapter, checkpoints|
+      store, harness = boot(adapter, checkpoints)
+      reference, = active_prompt(store, required_evidence: :chat_bound)
+
+      press(harness, "approve:#{reference}", update_id: 64)
+      press(harness, "approve:#{reference}", update_id: 65)
+
+      assert_equal [[:ack, { callback_query_id: 'q-64', text: 'Approved' }],
+                    [:clear_buttons, { conversation_id: 'telegram:chat:22222222', message_id: 2001 }],
+                    [:ack, { callback_query_id: 'q-65', text: 'This is no longer waiting for an answer.' }],
+                    [:clear_buttons, { conversation_id: 'telegram:chat:22222222', message_id: 2001 }]],
+                   harness.transport.signals
+    end
+  end
+
+  def test_a_refused_approve_keeps_the_buttons_so_deny_still_works
+    with_engine do |adapter, checkpoints|
+      store, harness = boot(adapter, checkpoints)
+      reference, = active_prompt(store)
+
+      press(harness, "approve:#{reference}", update_id: 66)
+
+      refused = 'Only the operator can approve this; Deny still works.'
+
+      assert_equal [[:ack, { callback_query_id: 'q-66', text: refused }]], harness.transport.signals
+    end
+  end
+
   # C3 / INV-E extension: an approve on an unknown reference (missing
   # evidence) never creates a decision — the single-use reference is the only
   # key to a prompt, and there is no prompt here.
@@ -421,6 +450,12 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
 
   class ScriptedTransport
     attr_accessor :receipt
+    attr_reader :signals
+
+    def signal(kind, **fields)
+      (@signals ||= []) << [kind, fields]
+      kind
+    end
 
     def initialize(surface_id: 'telegram-ops', surface_revision: 1)
       bind_surface(surface_id:, surface_revision:)
@@ -455,7 +490,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
         parser_version: 1, kind: 'callback',
         correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
         conversation_id: "telegram:chat:#{message.fetch('chat').fetch('id')}",
-        callback_message_id: message.fetch('message_id'),
+        callback_message_id: message.fetch('message_id'), callback_query_id: callback.fetch('id'),
         text: callback.fetch('data'), observed_time: Time.utc(2026, 8, 10, 12, 0, 0)
       ).wire
     end

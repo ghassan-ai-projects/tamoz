@@ -101,6 +101,29 @@ class AgentWorkerMcpTest < Minitest::Test
   end
   # rubocop:enable Metrics/MethodLength
 
+  # An MCP server that is down (a laptop off the network that hosts it) must cost its tools,
+  # not every chat turn: the session is built without it and the operator is told once.
+  def test_an_unreachable_server_removes_its_tools_instead_of_failing_every_session
+    with_runtime do |rt|
+      configure_mcp(rt, { "mcp" => { "enabled" => true, "servers" => [{
+        "id" => "offline", "transport" => "http", "endpoint" => "http://127.0.0.1:9/mcp",
+        "read_only_tools" => ["finish"]
+      }] } })
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        assert_output(nil, /an MCP server could not be started .* running without its tools/) do
+          assert_nil runtime.mcp_source
+        end
+        refute_nil runtime.session_for_profile(nil)
+      ensure
+        runtime.close
+      end
+    end
+  end
+
   # Websearch is an MCP server with a reserved id, which is what keeps it one of
   # the four closed-world sources rather than a fifth.
   def test_websearch_is_configured_as_its_own_source

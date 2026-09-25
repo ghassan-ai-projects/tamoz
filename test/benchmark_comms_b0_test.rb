@@ -52,16 +52,14 @@ class BenchmarkCommsB0Test < Minitest::Test
     end
   end
 
-  def test_slow_request_liveness_ladder_scores_end_to_end
+  def test_slow_request_scores_end_to_end
     with_runner(scenarios: ['C2']) do |runner, _|
       records = scores(runner)
       record = records.fetch('C2')
 
       assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'liveness')
-      assert_equal 1, record.dig('metrics', 'progress_bound')
       assert_equal 1, record.dig('metrics', 'context_inclusion')
-      assert_equal 'passed', record.dig('hard_zero', 'fabricated_milestone')
+      assert_equal 'passed', record.dig('hard_zero', 'unconfirmed_output_in_history')
     end
   end
 
@@ -71,7 +69,7 @@ class BenchmarkCommsB0Test < Minitest::Test
       record = records.fetch('C1')
 
       assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'admission_before_ack')
+      assert_equal 1, record.dig('metrics', 'admitted')
       assert_equal 1, record.dig('metrics', 'reference_stability')
       assert_equal 1, record.dig('metrics', 'completion')
       assert_equal 1, record.dig('metrics', 'delivery_axis')
@@ -309,7 +307,7 @@ class BenchmarkCommsB0Test < Minitest::Test
         'id' => 'c1', 'status' => 'blocked',
         'metrics_schema_version' => Tamoz::Evals::Benchmark::OpenclawMissionRunner::METRICS_SCHEMA_VERSION,
         'metrics' => { 'completion' => 1 },
-        'hard_zero' => { 'ack_before_admission' => 'passed' },
+        'hard_zero' => { 'reply_without_admission' => 'passed' },
         'effect_outcomes' => [],
         'surface_executions' => {
           'cli' => { 'status' => 'executed', 'provenance' => { 'surface' => 'cli' } },
@@ -326,7 +324,7 @@ class BenchmarkCommsB0Test < Minitest::Test
           'schema_version' => 'openclaw.missions.v1',
           'missions' => [{
             'id' => 'c1', 'goal' => 'answer a short turn',
-            'metrics' => %w[completion], 'hard_zero' => %w[ack_before_admission],
+            'metrics' => %w[completion], 'hard_zero' => %w[reply_without_admission],
             'required_capabilities' => ['comms_channel'], 'surfaces' => %w[cli telegram]
           }]
         },

@@ -5,6 +5,8 @@ module Tamoz
     # The durable work loop: one tool-calling model step, its gated tool calls, then a context check.
     class SessionWork
       CONTROLS = { 'reasoning_depth' => 'think', 'answer_verbosity' => 'verbose' }.freeze
+      # The user's /cancel, seen at the next step: no further model call or tool runs.
+      CANCELLED = { next_node: 'terminal', terminal_reason: 'cancelled_by_user' }.freeze
 
       def initialize(services:)
         @services = services
@@ -14,23 +16,25 @@ module Tamoz
         @compaction = WorkCompaction.new(services:, work: @work)
       end
 
-      # Each turn is a fresh execution: it opens a new surface seeded from the previous turn's
-      # answer (a handoff note when that turn ran out) and carries the accepted plan forward.
+      # Each turn is a fresh execution: it opens a new surface seeded from the conversation transcript (or the
+      # previous turn's answer, a handoff note when that turn ran out), and carries the accepted plan forward.
       def intake(_state, context, base)
         return base if base[:next_node] == 'terminal'
 
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
-        entries = @work.opening(task: base.fetch(:task), transcript: transcript(context, previous),
-                                previous_answer: previous[:verification]&.fetch('answer'),
+        transcript = @services.planning_context.conversation_transcript(context)
+        entries = @work.opening(task: base.fetch(:task), transcript:,
+                                previous_answer: previous_answer(previous, transcript),
                                 updates: directive_updates(previous))
         base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan])
       end
 
-      # rubocop:disable Metrics/AbcSize -- one model step and its four outcomes, in journal order
       def step(state, context)
+        return CANCELLED if stopped?(context)
+
         exhausted = state[:work_exhausted] || budget_reason(state)
         return handoff(state, exhausted) if exhausted
 
@@ -38,19 +42,10 @@ module Tamoz
         call = @services.effects.converse(context, stage: :work_step, messages:, tools: @work.header.tools,
                                                    iteration: state.fetch(:work_step_count),
                                                    attempt: state.fetch(:work_overflowed) ? 1 : 0)
-        return answered(state, call, messages) if call.status == :succeeded
-        return overflow(state) if window_exceeded?(call)
-        raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
-        if call.status == :failed
-          return failed_turn("the model call failed: #{@services.evidence.tool_error_message(call)}")
-        end
-
-        @services.evidence.blocked_update(call, 'work model call outcome is unknown',
-                                          operation: 'model.converse.work_step')
+        stopped?(context) ? CANCELLED : stepped(state, call, messages)
       end
-      # rubocop:enable Metrics/AbcSize
 
-      def gate(state, context) = @gate.gate(state, context)
+      def gate(state, context) = stopped?(context) ? CANCELLED : @gate.gate(state, context)
 
       def execute(state, context) = @gate.execute(state, context)
 
@@ -65,12 +60,23 @@ module Tamoz
 
       private
 
+      def stopped?(context) = Tamoz::Cancellation::Stops.requested?(context.thread_id)
+
+      def stepped(state, call, messages)
+        return answered(state, call, messages) if call.status == :succeeded
+        return overflow(state) if window_exceeded?(call)
+        raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
+        return failed_step(call) if call.status == :failed
+
+        @services.evidence.blocked_update(call, 'work model call outcome is unknown',
+                                          operation: 'model.converse.work_step')
+      end
+
       def now_ms = (Time.now.to_f * 1000).to_i
 
-      def transcript(context, previous)
-        return [] unless previous.empty?
-
-        @services.planning_context.conversation_transcript(context)
+      # A chat transcript already holds the reply as delivered; a CLI transcript holds only the operator's lines.
+      def previous_answer(previous, transcript)
+        previous[:verification]&.fetch('answer') if transcript.none? { |fragment| fragment['role'] == 'assistant' }
       end
 
       # /think and /verbose recorded between turns become in-history operator updates.
@@ -169,6 +175,11 @@ module Tamoz
       def handoff(state, reason)
         plan = state[:work_plan] && Harness::PlanDocument.new(state.fetch(:work_plan).fetch('document'))
         stopped(Harness::Handoff.note(plan:, reason:, task: state.fetch(:task)), reason, 'handed_off')
+      end
+
+      def failed_step(call)
+        @services.evidence.refusal_update(call) ||
+          failed_turn("the model call failed: #{@services.evidence.tool_error_message(call)}")
       end
 
       def failed_turn(reason) = stopped("The work turn stopped: #{reason}.", reason, 'work_failed')

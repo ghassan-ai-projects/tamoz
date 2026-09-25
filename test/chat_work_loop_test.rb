@@ -22,4 +22,74 @@ class ChatWorkLoopTest < Minitest::Test
   ensure
     harness&.close
   end
+
+  # /cancel while the model is still answering: the call is abandoned, the answer never
+  # arrives, the chat hears "Stopped." once, and the queued cancel that follows stays quiet.
+  def test_cancel_stops_a_turn_whose_model_call_is_still_running
+    entered = Queue.new
+    release = Queue.new
+    harness = story_harness(entered, release)
+    harness.admit('write me a long story')
+    running = Thread.new { harness.work_off }
+    entered.pop
+
+    harness.admit('/cancel')
+    running.join(10)
+    harness.work_off
+
+    texts = harness.instance_variable_get(:@transport).outbound.map { |card| card[:text] }
+
+    assert_equal ['Stopping…', 'Stopped.'], texts
+  ensure
+    release&.push(true)
+    harness&.close
+  end
+
+  # A /cancel that lands while a tool runs: the turn must not resume and deliver its answer later.
+  def test_cancel_during_a_tool_step_never_delivers_the_answer
+    harness = nil
+    cancel_then_call_a_tool = lambda do |_messages|
+      harness.admit('/cancel')
+      sleep Tamoz::Agent::Worker::STOP_POLL_SECONDS * 2
+      { calls: [['list_directory', {}]] }
+    end
+    model = ScriptedConversationModel.new(turns: [cancel_then_call_a_tool, { content: 'the final answer' }])
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work)
+    harness.say('look around and tell me')
+    harness.work_off
+    texts = harness.instance_variable_get(:@transport).outbound.map { |card| card[:text] }
+
+    assert_equal ['Stopping…', 'Stopped.'], texts
+  ensure
+    harness&.close
+  end
+
+  def test_a_reply_the_channel_refuses_still_ends_with_the_failure_line
+    model = ScriptedConversationModel.new(turns: [{ content: ANSWER }])
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work)
+    sink = harness.instance_variable_get(:@runtime).delivery_sink
+    sink.singleton_class.prepend(Module.new do
+      def push(kind:, **)
+        raise Tamoz::Comms::ValidationError, 'text must be a bounded string' if kind == 'request.completed'
+
+        super
+      end
+    end)
+
+    texts = capture_io { harness.say('hello') }.then { harness.instance_variable_get(:@transport).outbound }
+
+    assert_equal [Tamoz::Agent::ChatReply::FAILED], texts.map { |card| card[:text] }
+  ensure
+    harness&.close
+  end
+
+  def story_harness(entered, release)
+    story = lambda do |_messages|
+      entered << true
+      release.pop
+      { content: 'a very long story' }
+    end
+    model = ScriptedConversationModel.new(turns: [story])
+    Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work)
+  end
 end

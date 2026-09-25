@@ -268,6 +268,11 @@ is sufficient.
 
 ## 6. Telegram gateway
 
+For one bot on one machine, `tamoz telegram setup` pairs it and `tamoz telegram
+start --env-file .env` runs the gateway and a `--work-routing` worker together;
+see [`telegram.md`](telegram.md) §0. The rest of this section is for running the
+processes under your own supervisor.
+
 The Telegram gateway is a separate operator process. It owns the bot token, the
 durable poller lease, inbound admission, and outbound delivery; the worker does
 not poll Telegram directly. Run the doctor before starting a long-lived
@@ -286,7 +291,7 @@ A send that reaches Telegram and then fails is recorded as `unknown`, never
 blindly resent; authentication failures and a competing poller/webhook stop
 the process with a named error so a supervisor can alert or restart it. The
 full walkthrough — creating the bot, the allowlist, the config, and the
-deny-only approval flow — is in [`telegram.md`](telegram.md).
+approval flow — is in [`telegram.md`](telegram.md).
 
 ## 7. Debugging checklist
 

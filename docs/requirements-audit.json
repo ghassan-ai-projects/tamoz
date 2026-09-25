@@ -1,15 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-09-23T10:57:28Z",
-  "manifest_requirements": 560,
-  "named_cases_run": 286,
+  "generated_at": "2026-09-24T14:04:06Z",
+  "manifest_requirements": 561,
+  "named_cases_run": 289,
   "counts": {
     "deferred-by-contract": 11,
-    "failing": 2,
     "indirect": 4,
     "missing": 15,
-    "pass": 528
+    "pass": 531
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -26,14 +25,9 @@
     "INV-59",
     "INV-60",
     "INV-61",
-    "OBJ-3",
-    "OBJ-7",
-    "PHASE-P3"
+    "OBJ-7"
   ],
-  "failing": [
-    "OBJ-3",
-    "PHASE-P3"
-  ],
+  "failing": [],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -809,7 +803,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-12",
+      "adr_status": "Accepted 2026-08-12; policy amended 2026-09-24 (owner): `base.yaml` requires `chat_bound` to approve, so the bound correspondent can Approve. A profile can still require `filesystem_operator`",
       "evidence_result": "pass",
       "owner_signature": null
     },
@@ -7213,6 +7207,24 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-telegram",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz telegram",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel",
+      "supporting_tests": [
+        "test/cli_telegram_test.rb#test_setup_repairs_an_existing_unpinned_channel_without_a_profiles_directory",
+        "test/cli_telegram_test.rb#test_start_names_a_revoked_bot_token"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-think",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -8743,7 +8755,7 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
       "title": "evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
       "supporting_tests": [
         "test/release_evaluation_manifest_test.rb#test_the_hard_zero_counters_are_pinned_at_zero",
@@ -8754,7 +8766,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -8833,7 +8845,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -9067,13 +9079,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Coding behavior scorecard — fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {

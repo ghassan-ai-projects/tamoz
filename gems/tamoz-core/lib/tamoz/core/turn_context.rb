@@ -17,8 +17,14 @@ module Tamoz
 
       module_function
 
+      CONTROL = /[\u0000-\u001f\u007f]+/u
+      # Room left for the identity, digest and keys around the text and fragments.
+      CONTEXT_OVERHEAD_BYTES = 768
+
+      # History is clipped to the bounds, never refused: each line is cut on a character
+      # boundary and the oldest lines give way when the whole turn would not fit.
       def task(thread_id:, request_id:, text:, fragments:)
-        normalized_fragments = normalize_fragments(fragments)
+        normalized_fragments = normalize_fragments(fitting(clipped(fragments), text))
         return { 'task' => normalize_text(text, 'task', MAX_TEXT_BYTES) } if normalized_fragments.empty?
 
         normalized_thread_id = normalize_text(thread_id, 'thread_id', MAX_ID_BYTES)
@@ -80,6 +86,20 @@ module Tamoz
         Core.digest(DIGEST_DOMAIN, Core.canonical(context))
       end
 
+      def clipped(fragments)
+        Array(fragments).last(MAX_FRAGMENTS).filter_map do |fragment|
+          text = String(fragment['text']).gsub(CONTROL, ' ').strip.byteslice(0, MAX_FRAGMENT_TEXT_BYTES).scrub('')
+          { 'role' => fragment['role'], 'text' => text } unless text.empty?
+        end
+      end
+
+      def fitting(fragments, text)
+        budget = MAX_CONTEXT_BYTES - CONTEXT_OVERHEAD_BYTES - Core.jcs(String(text)).bytesize
+        fragments = fragments.dup
+        fragments.shift while fragments.any? && Core.jcs(fragments).bytesize > budget
+        fragments
+      end
+
       def normalize_fragments(fragments)
         unless fragments.is_a?(Array) && fragments.length <= MAX_FRAGMENTS
           raise ConfigurationError, "turn context fragments must be an Array of at most #{MAX_FRAGMENTS} entries"
@@ -116,7 +136,7 @@ module Tamoz
         raise ConfigurationError, "#{name} must be valid UTF-8: #{e.message}"
       end
       private_class_method(
-        :normalize_fragments, :normalize_text, :validate_context_identity, :validate_context_digest
+        :normalize_fragments, :normalize_text, :validate_context_identity, :validate_context_digest, :clipped, :fitting
       )
     end
   end

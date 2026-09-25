@@ -42,7 +42,9 @@ class CancellationVisibilityTest < Minitest::Test
       )
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
-      text = drive_status(gateway, transport, store, 310, "/status #{ref(request_id)}")
+      assert_equal 'Stopped, as you asked.',
+                   drive_status(gateway, transport, store, 309, "/status #{ref(request_id)}")
+      text = drive_status(gateway, transport, store, 310, "/status #{ref(request_id)} --diagnostic")
 
       assert_match(/Cancellation requested \d+[smh] ago\./, text)
       assert_match(/Observed by the runner \d+[smh] ago\./, text)
@@ -66,9 +68,12 @@ class CancellationVisibilityTest < Minitest::Test
                    store.complete_request(thread_id: THREAD, request_id:, settle_kind: 'answer')
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
-      text = drive_status(gateway, transport, store, 311, "/status #{ref(request_id)}")
+      human = drive_status(gateway, transport, store, 308, "/status #{ref(request_id)}")
+      text = drive_status(gateway, transport, store, 311, "/status #{ref(request_id)} --diagnostic")
 
+      assert_equal 'That finished before the cancel took effect.', human
       assert_match(/Terminal: completed before the cancellation took effect\./, text)
+      refute_match(/stop/i, human, 'a raced completion must not be rendered as a stop')
       refute_match(/stopped/i, text, 'a raced completion must not be rendered as a stop')
     end
   end
@@ -90,9 +95,11 @@ class CancellationVisibilityTest < Minitest::Test
                    store.complete_request(thread_id: THREAD, request_id:, settle_kind: 'failed')
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
-      text = drive_status(gateway, transport, store, 312, "/status #{ref(request_id)}")
+      text = drive_status(gateway, transport, store, 312, "/status #{ref(request_id)} --diagnostic")
 
-      assert_match(/State: failed/, text)
+      assert_equal 'That failed before the cancel took effect.',
+                   drive_status(gateway, transport, store, 307, "/status #{ref(request_id)}")
+      assert_match(/task=failed/, text)
       assert_match(/Terminal: failed before the cancellation took effect\./, text)
       refute_match(/completed/i, text, 'a failed settle never reads as a completion')
     end
@@ -109,9 +116,10 @@ class CancellationVisibilityTest < Minitest::Test
         thread_id: THREAD, request_id: 'cancel-303', payload: CANCEL_PAYLOAD, now: NOW + 2
       )
 
-      text = drive_status(gateway, transport, store, 313, '/status')
+      assert_equal 'Stopping, as you asked.', drive_status(gateway, transport, store, 306, '/status')
+      text = drive_status(gateway, transport, store, 313, '/status --diagnostic')
 
-      assert_match(%r{Work status: State: queued}, text)
+      assert_match(/task=queued/, text)
       assert_match(/Cancellation requested/, text)
       assert_match(/Queue position 0\./, text)
     end
@@ -125,8 +133,7 @@ class CancellationVisibilityTest < Minitest::Test
 
       text = drive_status(gateway, transport, store, 314, '/status')
 
-      assert_match(%r{Work status: State: idle}, text)
-      refute_match(/active/i, text)
+      assert_equal 'Nothing is running right now.', text
     end
   end
 

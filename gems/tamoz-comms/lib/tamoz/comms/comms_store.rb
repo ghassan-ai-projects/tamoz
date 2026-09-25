@@ -85,6 +85,12 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # Conversations whose admitted request a live worker lease is running right now.
+      # @return [Array<String>] conversation ids
+      def working_conversations(surface_id:, now:)
+        raise NotImplementedError
+      end
+
       # One fenced poller per authenticated bot; an expired lease is
       # recoverable.
       # @return [:acquired, :not_acquirable]

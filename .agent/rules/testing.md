@@ -27,3 +27,25 @@
   file in the failing SHARD, not every failing file: one assertion fails and shard-mates are named
   with it. Read the numbered failure bodies at the end of the output to find the real subject —
   the CI summary's file list is not a to-do list.
+- **A gate that is red before your change is not yours to chase — prove it, then say so.**
+  `rake quality:reek` on this branch reports `script/adr_catalog.rb`, `script/adr_traceability.rb`
+  and `script/adr_validate.rb` at baseline 0, which reads as your regression because the task names
+  bare files. Settle it against the committed revision with a detached worktree
+  (`git worktree add --detach /tmp/x HEAD`, same task there) before spending time on symbols the
+  diff never touched; it costs a minute. Untracked files do not follow into that worktree, so it is
+  also the honest way to reproduce a gate that reads the tracked tree only.
+- **A test that restarts the process between cause and effect cannot see in-memory state.** A
+  phone-approve test written as two `worker --once` invocations passed with and without the fix,
+  because exiting clears the worker's in-memory park that the long-running process keeps. Drive one
+  live worker across the event (`once: false` in a thread, wait on its emitted events) or the test
+  proves nothing. Prove the test discriminates before trusting it: revert the fix, watch it fail
+  with the real symptom, restore, watch it pass.
+- **A settle predicate that counts the wrong window silently grades the wrong moment.** The eval's
+  tap turn read "Approved." as the whole reply because it counted every `sendMessage` in the
+  conversation (the prompt plus the ack already satisfied `> 1`) and treated a reply carrying
+  buttons as waiting-on-user. Count within the turn and require the answer that follows the ack.
+- **A wrapper that moves a call onto another thread must forward every exception, not only
+  `StandardError`.** The work-loop tests simulate worker loss with an `Exception` subclass; the first
+  `Tamoz::Cancellation.race` rescued `StandardError`, the thread died silently, and the caller waited
+  on its queue forever — `work_loop_test.rb` hung instead of failing. Re-raise whatever the block
+  raised on the caller's thread.

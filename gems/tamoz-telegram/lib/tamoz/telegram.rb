@@ -3,6 +3,7 @@
 require 'tamoz/comms'
 require_relative 'telegram/version'
 require_relative 'telegram/client'
+require_relative 'telegram/markup'
 require_relative 'telegram/normalizer'
 require_relative 'telegram/transport'
 

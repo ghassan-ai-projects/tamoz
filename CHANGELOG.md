@@ -10,6 +10,11 @@ from its public release line onward.
 
 ### Added
 
+- `tamoz telegram setup|start`: pair a Telegram bot and run it from two
+  commands. `setup` authenticates the token, pairs the first private sender the
+  operator confirms, and writes the channel and workspace profile; `start`
+  verifies the token and picks the first provider that answers, then runs the
+  gateway and worker together. Chat turns run on the tool-calling work loop.
 - `tamoz code`: the coding harness. A durable tool-calling work loop in
   `tamoz-agent-session`, with two new gems: `tamoz-context-engine` (frozen
   request header, append-only surface, spill, pruner, compaction, token meter,
@@ -39,6 +44,52 @@ from its public release line onward.
 - A long work turn ends on its loop budget with a handoff, instead of on the
   graph's 200-step limit.
 - A reply cut off at the token limit continues the turn instead of failing it.
+- `tamoz telegram setup` repairs a runtime directory that already has a channel
+  but no `profiles/` directory (it adopts the unpinned channel and writes the
+  profile) instead of dying with a raw backtrace; a missing or refused token and
+  a missing, refused or out-of-credit key are each one named line.
+- The gateway and worker can open a fresh runtime database at the same time
+  without one dying on the migration lock.
+- Approving from the paired Telegram chat now resumes the paused turn. A channel
+  decision records a decision but no queued resume request, so a parked thread
+  used to leave the worker's work list for good: the press was accepted and
+  nothing happened. The worker re-admits a parked thread while a decision is
+  waiting for it, and the resumed turn delivers its outcome to the chat.
+- `/cancel` in Telegram stops the turn in progress. It used to queue behind the
+  running turn, so the full answer arrived and only then "Stopped.". The worker
+  now watches for the chat's cancel while a turn runs: an in-flight model call is
+  abandoned, no further tool runs, and the chat gets "Stopped." instead of the
+  answer. A bare `/cancel` stops everything open in the conversation.
+- Telegram replies render Markdown (`code`, **bold**, code blocks, links) as
+  formatting instead of raw symbols; the transport sends escaped HTML that
+  always parses.
+- A Telegram approval prompt shows what will change (the file and its content,
+  the diff, or the command) instead of "I want to create a file". Its buttons are
+  cleared once answered, the tap shows a toast, and a late tap on an old prompt
+  says it is no longer waiting.
+- A Telegram conversation no longer takes the bot down after a few long replies.
+  History was trimmed to 500 characters but checked at 500 bytes, so a reply
+  with Arabic, emoji or a dash crashed the gateway on the next message (and
+  again after every restart). History is now clipped to the byte bounds, a
+  message that still cannot be admitted gets a plain refusal instead of stopping
+  the gateway, a long multi-byte answer is delivered (parts were checked at 4096
+  bytes, not characters), and a reply the channel cannot carry ends with the
+  failure line instead of silence.
+- Re-running `tamoz telegram setup` (or editing the channel's profile) no longer
+  breaks the conversations bound to the old profile: every message used to fail
+  on the stale authority pin. The conversation moves to a fresh thread bound to
+  the current profile and the bot says so once.
+- An unreachable MCP server no longer fails every session: its tools are left
+  out and the worker log says which server could not be started.
+- `tamoz telegram start` refuses to start a second bot on the same token and
+  names the running pid, waits out a crashed run's hold on Telegram, and names
+  the key variable a refused provider was tried with.
+- `TAMOZ_TELEGRAM_API_ORIGIN` points the Telegram client at a self-hosted Bot
+  API server (or the eval's stand-in).
+- `tamoz telegram setup` accepts `--env-file` like `start`, so both commands
+  read the bot token from the same file.
+- `/status` answers in one plain sentence (working, queued, waiting for your
+  approval, stopping, or nothing running); `--diagnostic` keeps the detail.
 
 ### Removed
 

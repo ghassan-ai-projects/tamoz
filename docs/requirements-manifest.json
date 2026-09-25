@@ -745,7 +745,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-12"
+      "adr_status": "Accepted 2026-08-12; policy amended 2026-09-24 (owner): `base.yaml` requires `chat_bound` to approve, so the bound correspondent can Approve. A profile can still require `filesystem_operator`"
     },
     {
       "id": "ADR-051",
@@ -6343,6 +6343,22 @@
       "named_test": "test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model",
       "supporting_tests": [
         "test/agent_worker_test.rb#test_status_safety_counters_are_present_and_zero_on_a_clean_runtime"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-telegram",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz telegram",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel",
+      "supporting_tests": [
+        "test/cli_telegram_test.rb#test_setup_repairs_an_existing_unpinned_channel_without_a_profiles_directory",
+        "test/cli_telegram_test.rb#test_start_names_a_revoked_bot_token"
       ],
       "classification": "direct",
       "rationale": null,

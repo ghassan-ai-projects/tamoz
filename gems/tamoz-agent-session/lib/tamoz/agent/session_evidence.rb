@@ -12,6 +12,8 @@ module Tamoz
     class SessionEvidence
       # Immutable details for a rejected or failed tool effect.
       ToolFailure = Data.define(:step, :tool, :error_class, :reason, :effect_receipt)
+      MODEL_REFUSALS = { 401 => 'model_key_refused', 403 => 'model_key_refused', 402 => 'model_out_of_credit',
+                         429 => 'model_rate_limited' }.freeze
 
       def initialize(configuration:)
         @configuration = configuration
@@ -162,6 +164,9 @@ module Tamoz
       end
 
       def blocked_update(outcome, reason, step_id: nil, operation: nil)
+        refused = refusal_update(outcome)
+        return refused if refused
+
         {
           next_node: 'terminal',
           terminal_reason: 'effect_unknown',
@@ -180,6 +185,12 @@ module Tamoz
         }
       end
 
+      # A provider that answered with an error refused the call; its outcome is known, not unknown.
+      def refusal_update(outcome)
+        refusal = model_refusal(outcome)
+        refusal && { next_node: 'terminal', terminal_reason: refusal }
+      end
+
       def tool_error_message(outcome)
         error = outcome.error
         return 'tool effect failed' unless error.is_a?(Hash)
@@ -188,6 +199,16 @@ module Tamoz
       end
 
       private
+
+      def model_refusal(outcome)
+        error = outcome.error
+        return nil unless outcome.status == :failed && error.is_a?(Hash) && error['class'] == ModelCallError.name
+
+        status = error['status'].to_i
+        return nil if status.zero?
+
+        MODEL_REFUSALS.fetch(status) { status >= 500 ? 'model_provider_down' : 'model_refused' }
+      end
 
       def failure_record(failure)
         {

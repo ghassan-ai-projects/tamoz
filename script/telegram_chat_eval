@@ -1,0 +1,65 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Telegram chat eval: the real `tamoz telegram setup` and `tamoz telegram start`, a real model
+# provider, and a stand-in Bot API for Telegram's servers. See test/support/telegram_chat_eval.rb.
+#
+#   bundle exec ruby script/telegram_chat_eval [--only greet,memory] [--runtime-from ~/.tamoz]
+#                                             [--provider NAME --model NAME]
+#
+# Keys come from the environment or .env; without --provider, `start` uses the first provider that
+# answers. --runtime-from copies a lived-in runtime (history, profiles, sources) and runs on the copy.
+# Report: tmp/telegram-eval/<stamp>/.
+
+require 'bundler/setup'
+require 'optparse'
+
+$LOAD_PATH.unshift(File.expand_path('../test/support', __dir__))
+require 'tamoz/agent'
+require 'telegram_chat_eval'
+require 'telegram_chat_scenarios'
+
+options = { provider: ENV.fetch('TAMOZ_PROVIDER', nil), model: ENV.fetch('TAMOZ_MODEL', nil),
+            runtime_from: nil, only: TelegramChatScenarios.all }
+OptionParser.new do |parser|
+  parser.on('--only LIST') { |list| options[:only] = list.split(',') }
+  parser.on('--runtime-from PATH') { |path| options[:runtime_from] = path }
+  parser.on('--provider NAME') { |name| options[:provider] = name }
+  parser.on('--model NAME') { |name| options[:model] = name }
+end.parse!
+
+evaluation = TelegramChatEval.new(**options.slice(:provider, :model, :runtime_from))
+begin
+  begin
+    evaluation.start
+  rescue StandardError => e
+    evaluation.check('start', 'tamoz telegram start runs the bot', false, "#{e.class}: #{e.message}")
+    options[:only] = []
+  end
+  puts "telegram chat eval — #{evaluation.label}"
+  (TelegramChatScenarios.all & options[:only]).each do |name|
+    print "  #{name} … "
+    started = Time.now
+    begin
+      TelegramChatScenarios.public_send(name, evaluation)
+    rescue TelegramChatEval::ProcessDied => e
+      evaluation.check(name, 'scenario ran', false, e.message)
+      break
+    rescue StandardError => e
+      evaluation.check(name, 'scenario ran', false, "#{e.class}: #{e.message}")
+    end
+    puts format('%.0fs', Time.now - started)
+  end
+ensure
+  evaluation.shutdown
+end
+
+directory = File.expand_path("../tmp/telegram-eval/#{Time.now.strftime('%Y%m%d-%H%M%S')}", __dir__)
+evaluation.write_report(directory)
+results = evaluation.results
+results.reject { |result| result[:pass] }.each do |result|
+  puts "  FAIL #{result[:scenario]}: #{result[:check]} — #{result[:detail].to_s[0, 110]}"
+end
+passed = results.count { |result| result[:pass] }
+puts "\n#{passed}/#{results.length} checks pass — #{directory}/report.md"
+exit(passed == results.length ? 0 : 1)

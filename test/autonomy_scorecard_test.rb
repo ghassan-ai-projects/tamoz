@@ -260,9 +260,7 @@ class AutonomyScorecardTest < Minitest::Test
 
       answers = rt.client.sent.select { |delivery| delivery.fetch("text") == "hello" }
       assert_equal 1, answers.length, "the terminal answer must be sent exactly once"
-      assert_operator rt.client.sent.length, :>=, 2, "the accepted acknowledgement must precede the answer"
-      assert_match(/\AAccepted\./, rt.client.sent.first.fetch("text"),
-                   "the acknowledgement must be the first channel delivery")
+      assert_equal 1, rt.client.sent.length, "one message per turn: the answer"
       assert_equal "22222222", answers.first.fetch("chat_id"),
                    "the answer returns to the conversation that asked"
       # The VERIFIED answer and nothing else. Asserting `include?` here would
@@ -400,7 +398,7 @@ class AutonomyScorecardTest < Minitest::Test
 
       completions = rt.events.select { |event| event["event"] == "request.completed" }
       assert_equal 1, completions.length, "saturated intake must refuse the second request"
-      assert rt.client.sent.any? { |message| message.fetch("text").include?("capacity") },
+      assert rt.client.sent.any? { |message| message.fetch("text").include?("try again later") },
              "the refused sender should get a busy notice, not a turn"
 
       # The reserved terminal answer appends (drain sends it once).
@@ -420,7 +418,7 @@ class AutonomyScorecardTest < Minitest::Test
   # ------------------------------------------------ 17. conversational turn
 
   # Rapid-fire messages are not dropped and not context-free: the follow-up
-  # queues behind the running turn, is told so, and is planned with the
+  # queues behind the running turn and is planned with the
   # thread's transcript (design §16's channel case, conversational bar).
   def test_case_17_follow_up_messages_queue_and_carry_the_transcript
     with_runtime(channels: channel_map(limits: {"per_chat_messages_per_s" => 100.0})) do |rt|
@@ -440,8 +438,6 @@ class AutonomyScorecardTest < Minitest::Test
 
       answers = rt.client.sent.select { |delivery| delivery.fetch("text") == "hello" }
       assert_equal 2, answers.length, "every message must get a terminal answer"
-      assert(rt.client.sent.any? { |delivery| delivery.fetch("text").include?("Queued behind earlier work") },
-             "the follow-up must be told it queued, not that it started")
       refute rt.events.any? { |event| event["event"] == "request.failed" },
              "no message may be dropped"
       plan_prompts = model.calls.select { |call| call.fetch(:stage) == :plan }

@@ -40,11 +40,6 @@ def events(harness)
   end
 end
 
-def ref_of(cards)
-  accepted = cards.find { |c| c[:kind] == 'accepted' }
-  accepted && accepted[:text][/r[0-9a-f]{10}/]
-end
-
 def deterministic(routing: :legacy, **responses)
   responses = F::DEFAULT_MODEL_RESPONSES if responses.empty?
   H.new(model_factory: F.model_factory(**responses), routing:)
@@ -72,7 +67,7 @@ PROBES = {
     h.close
   },
   'OF-5' => lambda {
-    puts '# OF-5 milestone card uses human-safe progress copy'
+    puts '# OF-5 a task gets one plain answer, no progress cards'
     h = deterministic
     show(h.say('read note.txt'))
     h.close
@@ -127,8 +122,8 @@ PROBES = {
     puts '# OF-14 accepted does not mean anyone is working'
     h = deterministic
     puts '👤 prepare the report'
-    accepted = h.admit('prepare the report')
-    reference = ref_of(accepted)
+    h.admit('prepare the report')
+    reference = h.reference
     puts "👤 /status #{reference} (worker stopped)"
     show(h.status_only(reference))
     puts '   worker pass'
@@ -140,7 +135,8 @@ PROBES = {
   'OF-12' => lambda {
     puts '# OF-12 redirect names the replacement ref and preserves the original'
     h = deterministic
-    ref = ref_of(h.admit('prepare the report'))
+    h.admit('prepare the report')
+    ref = h.reference
     puts "👤 /redirect #{ref} only compare the two candidates"
     show(h.say("/redirect #{ref} only compare the two candidates"))
     h.close

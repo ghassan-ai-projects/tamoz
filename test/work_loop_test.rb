@@ -386,6 +386,18 @@ class WorkLoopReviewFindingsTest < Minitest::Test
     end
   end
 
+  def test_a_provider_refusal_ends_the_turn_with_its_named_reason
+    with_work_workspace(files: {}) do |root, adapter|
+      { 402 => 'model_out_of_credit', 401 => 'model_key_refused' }.each do |status, reason|
+        refusal = ->(_) { raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status:) }
+        model = ScriptedConversationModel.new(turns: [refusal])
+        outcome = work_session(model:, root:, adapter:).start("hi", thread: "work-#{status}", request_id: "work-#{status}")
+
+        assert_equal reason, outcome.state.fetch(:terminal_reason)
+      end
+    end
+  end
+
   def test_a_follow_up_turn_carries_the_previous_answer_and_the_plan
     with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
       model = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { content: 'Planned; stopping here.' },

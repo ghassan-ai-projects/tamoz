@@ -196,12 +196,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     submit_update(fixture, raw_update(update_id, text, user_id:, conversation_id: conversation))
     work_until_terminal(fixture, conversation)
     drain_all(fixture)
-    reference = Lifecycle::RequestRef.for(fixture.request_ids_for(conversation).last)
-    accepted_text = fixture.outbox.find do |row|
-      row['conversation_id'] == conversation && row['kind'] == 'accepted'
-    end&.fetch('text')
-
-    assert accepted_text.to_s.include?(reference), 'acknowledgement lacks the request reference'
     leg_snapshot(fixture, conversation:, request_id: fixture.request_ids_for(conversation).last,
                         delivery_baseline: baseline)
   end
@@ -226,18 +220,16 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     fixture.work
 
     assert_equal :paused, fixture.view(thread)&.status, 'slow turn never parked on the approval ask'
-    waiting_card = Oracles.milestone_rows(fixture.snapshot(conversations: [conversation]))
-                          .any? { |row| row.dig('milestone_facts', 'phase') == 'waiting' }
+    prompt = fixture.outbox.any? { |row| row['conversation_id'] == conversation && row['kind'] == 'approval_request' }
 
-    assert waiting_card, 'no waiting milestone was projected for the parked turn'
+    assert prompt, 'the parked turn never asked for approval'
 
     request_id = fixture.request_ids_for(conversation).last
     reference = Lifecycle::RequestRef.for(request_id)
     cancel_reply = control_reply(fixture, raw_update(131, '/cancel', user_id: USER_A,
                                                      conversation_id: CONVERSATION_A))
 
-    # The accepted /cancel reply binds the target reference (c69b55e card copy).
-    assert_equal "Cancellation requested for #{reference}.", cancel_reply&.fetch('text')
+    assert_equal 'Stopping…', cancel_reply&.fetch('text')
 
     observed = fixture.store.mark_cancellation_observed(thread_id: thread, now: @clock)
 
@@ -251,7 +243,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     assert_equal 'terminal', timeline[:state]
     assert_equal 'stopped', timeline[:terminal_word]
 
-    status_reply = control_reply(fixture, raw_update(132, "/status #{reference}",
+    status_reply = control_reply(fixture, raw_update(132, "/status #{reference} --diagnostic",
                                                      user_id: USER_A, conversation_id: CONVERSATION_A))
     text = status_reply&.fetch('text').to_s
 
@@ -373,7 +365,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
 
   # Phase 4: cross-cutting invariants scored by the same oracles the B0
   # scenarios use — meaning-level CLI/Telegram parity, confirmed-deliveries
-  # history, reference isolation, and journal-backed milestones.
+  # history, and reference isolation.
   def cross_cutting_oracle_score(fixture, telegram_legs:, cli_legs:)
     facts = fixture.snapshot(conversations: [CONVERSATION_A, CONVERSATION_B])
                    .merge('telegram_legs' => telegram_legs, 'cli_legs' => cli_legs)
@@ -391,21 +383,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
       assert_equal Oracles::PASS, Oracles.first_reference_stable(facts, conversation)
     end
 
-    cards = Oracles.milestone_rows(facts)
-
-    refute_empty cards
-    assert cards.all? { |row| row['journaled'] == 0 }, 'milestone rows must be journaled=0'
-    assistants = facts['history'].values.flatten.select { |entry| entry['role'] == 'assistant' }
-    leaked = cards.any? do |row|
-      assistants.any? { |entry| entry['text'].to_s.include?(row.dig('milestone_facts', 'phase')) }
-    end
-
-    refute leaked, 'a milestone card leaked into conversation history'
-    phases = cards.map { |row| row.dig('milestone_facts', 'phase') }
-
-    assert_includes phases, 'waiting', 'the parked slow turn never projected waiting'
-    assert_includes phases, 'recovered', 'the fresh worker never projected recovery'
-
     ref_a = Lifecycle::RequestRef.for(fixture.request_ids_for(CONVERSATION_A).first)
     ref_b = Lifecycle::RequestRef.for(fixture.request_ids_for(CONVERSATION_B).first)
 
@@ -421,21 +398,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     sends = fixture.transport.sends.group_by { |send| send[:conversation_id] }.keys.sort
 
     assert_equal [CONVERSATION_A, CONVERSATION_B].sort, sends
-    own_references = Hash.new([])
-    facts['requests'].each do |row|
-      own_references[row['conversation_id']] += [row.fetch('request_ref')]
-    end
-    (telegram_legs + cli_legs).each do |leg|
-      own_references[leg.fetch('conversation_id')] += [leg.fetch('reference')]
-    end
-    facts['outbox'].each do |row|
-      reference = row.dig('milestone_facts', 'request_ref')
-      next unless reference
-
-      assert_includes own_references[row['conversation_id']], reference,
-                      'a milestone card crossed conversations'
-    end
-
     answers_b = facts['outbox'].select do |row|
       row['conversation_id'] == CONVERSATION_B && row['kind'] == 'answer'
     end

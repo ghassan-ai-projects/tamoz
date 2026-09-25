@@ -26,14 +26,7 @@ class ExperienceHarnessTest < Minitest::Test
 
     kinds = cards.map { |card| card[:kind] }
 
-    assert_includes kinds, 'accepted',
-                    "expected an accepted card, got: #{kinds.inspect}"
-
-    accepted = cards.find { |card| card[:kind] == 'accepted' }
-
-    assert_match(/\br[0-9a-f]{10}\b/, accepted[:text],
-                 "accepted card should carry a caller-bound ref: #{accepted[:text].inspect}")
-
+    assert_equal 1, cards.length, "one reply per message, got: #{kinds.inspect}"
     terminal = cards.reverse.find { |card| TERMINAL_KINDS.include?(card[:kind]) }
 
     refute_nil terminal, "expected a terminal card, got kinds: #{kinds.inspect}"
@@ -42,7 +35,7 @@ class ExperienceHarnessTest < Minitest::Test
   def test_outbound_is_captured_per_turn
     first = @harness.say('answer the task')
 
-    refute_empty first, 'first turn should produce at least the accepted card'
+    refute_empty first, 'first turn should produce its answer'
   end
 
   def test_clarification_pause_projects_a_bounded_question_without_approval_evidence
@@ -54,7 +47,6 @@ class ExperienceHarnessTest < Minitest::Test
 
     cards = harness.say('read the file and summarize it')
     question_cards = cards.select { |card| card[:kind] == 'control' }
-    accepted = cards.find { |card| card[:kind] == 'accepted' }
     paused = harness.events.find { |event| event['event'] == 'request.paused' }
 
     assert_equal 1, question_cards.length
@@ -65,7 +57,7 @@ class ExperienceHarnessTest < Minitest::Test
     refute_nil paused
     assert_equal 'clarification_required', paused.fetch('reason')
     assert_equal 1, harness.conversation_status.fetch('open_requests')
-    assert_match(/\br[0-9a-f]{10}\b/, accepted.fetch(:text))
+    assert_match(/\Ar[0-9a-f]{10}\z/, harness.reference)
   ensure
     harness&.close
   end
@@ -81,17 +73,15 @@ class ExperienceHarnessTest < Minitest::Test
     harness = Tamoz::ExperienceSim::Harness.new(model_factory: scripted)
 
     initial = harness.say('read the file and summarize it')
-    accepted = initial.find { |card| card[:kind] == 'accepted' }
+    expected_ref = harness.reference
     question = initial.find { |card| card[:kind] == 'control' }
 
     resumed = harness.reply('note.txt')
     request_ids = harness.request_ids_for(Fixture::CONVERSATION_A)
 
     assert_equal 1, request_ids.length
-    expected_ref = accepted.fetch(:text)[/\br[0-9a-f]{10}\b/]
     actual_ref = Tamoz::Comms::Lifecycle::RequestRef.for(request_ids.first)
     assert_equal expected_ref, actual_ref
-    refute_includes resumed.map { |card| card[:kind] }, 'accepted'
     assert resumed.any? { |card| TERMINAL_KINDS.include?(card[:kind]) },
            "expected the clarification answer to finish the original occurrence; got: #{resumed.inspect}"
     assert_match(/Which file did you mean/, question.fetch(:text))
@@ -109,9 +99,8 @@ class ExperienceHarnessTest < Minitest::Test
     scripted = Fixture.model_factory(plan: Fixture::DEFAULT_PLAN, review:, verify: Fixture::VERIFY_OK)
     harness = Tamoz::ExperienceSim::Harness.new(model_factory: scripted)
 
-    initial = harness.say('read the file and summarize it')
-    accepted = initial.find { |card| card[:kind] == 'accepted' }
-    reference = accepted.fetch(:text)[/\br[0-9a-f]{10}\b/]
+    harness.say('read the file and summarize it')
+    reference = harness.reference
     harness.admit('also inspect other.txt')
 
     resumed = harness.say("/answer #{reference} note.txt")
@@ -120,7 +109,6 @@ class ExperienceHarnessTest < Minitest::Test
 
     assert_equal %i[turn turn resume], history.map(&:operation)
     assert_equal %i[completed queued completed], history.map(&:status)
-    refute_includes resumed.map { |card| card[:kind] }, 'accepted'
     assert_includes resumed.map { |card| card[:kind] }, 'answer'
     refute harness.events.any? { |event| event['event'] == 'request.failed' }
   ensure
@@ -133,14 +121,40 @@ class ExperienceHarnessTest < Minitest::Test
 
     second = @harness.reply('thanks, also what about other.txt?')
 
-    assert_includes second.map { |card| card[:kind] }, 'accepted'
+    assert(second.any? { |card| TERMINAL_KINDS.include?(card[:kind]) })
     assert_equal 2, @harness.request_ids_for(Fixture::CONVERSATION_A).length
   end
 
   # OF-4 / I4 (finished worker migration): a conversational turn is routed to a
   # direct answer in the worker — no plan, no review, no PlanRejectedError — and
-  # its terminal card is honestly "Response only", never "Verified". The turn is
-  # still a durable request (the accepted contract for the worker-routed model).
+  # its terminal card is the answer alone. The turn is still a durable request.
+  def test_a_provider_that_refuses_the_call_is_named_in_one_plain_reply
+    out_of_credit = Object.new
+    def out_of_credit.generate(**) = raise(Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: 402))
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { out_of_credit }, routing: :experimental)
+
+    cards = harness.say('hi')
+
+    assert_equal [['failed', Tamoz::Agent::ChatReply::REASONS.fetch('model_out_of_credit')]],
+                 cards.map { |card| [card[:kind], card[:text]] }
+    assert harness.events.any? { |event| event['event'] == 'request.failed' && event['reason'] == 'model_out_of_credit' }
+  ensure
+    harness&.close
+  end
+
+  def test_a_photo_from_the_correspondent_gets_a_text_only_reply
+    @harness.transport.enqueue('update_id' => 9_001, 'message' => {
+                                 'message_id' => 9_001, 'date' => Time.now.to_i, 'from' => { 'id' => Fixture::USER_BOUND },
+                                 'chat' => { 'id' => 22_222_222, 'type' => 'private' }, 'photo' => [{ 'file_id' => 'p' }]
+                               })
+
+    @harness.send(:serve)
+    cards = @harness.work_off
+
+    assert_equal [Tamoz::Comms::Admission::TEXT_ONLY_REPLY], cards.map { |card| card[:text] }
+    assert_empty @harness.request_ids_for(Fixture::CONVERSATION_A), 'a photo is not a task'
+  end
+
   def test_conversational_turn_is_routed_to_a_direct_answer_without_planning
     scripted = Fixture.model_factory(
       route: [{ 'route' => 'direct_response', 'answer' => 'Hello there.', 'reason_class' => 'greeting' }]
@@ -152,8 +166,7 @@ class ExperienceHarnessTest < Minitest::Test
     operations = harness.effect_census.map { |row| row[:operation] }
 
     refute_nil answer, "expected a terminal answer, got: #{cards.map { |card| card[:kind] }.inspect}"
-    assert_match(/Response only: result — Hello there\./, answer.fetch(:text))
-    refute_match(/Verified/, answer.fetch(:text), 'a direct chat answer must not claim verification')
+    assert_equal 'Hello there.', answer.fetch(:text)
     refute harness.events.any? { |event| event['event'] == 'request.failed' },
            'a routed chat turn must not reach a plan/review failure'
     refute operations.any? { |op| op.to_s.include?('plan') || op.to_s.include?('review') },
@@ -162,7 +175,7 @@ class ExperienceHarnessTest < Minitest::Test
     harness&.close
   end
 
-  # A direct chat answer is multi-line ("<answer>\nResponse provided…"), and the
+  # A chat answer can be multi-line, and the
   # confirmed transcript feeds the NEXT turn's context. TurnContext forbids
   # control characters, so a second chat turn must not crash on the stored
   # newline — the store flattens transcript fragments before they become context.
@@ -181,33 +194,40 @@ class ExperienceHarnessTest < Minitest::Test
 
     refute harness.events.any? { |event| event['event'] == 'request.failed' },
            'the second chat turn must not fail on a control character in history'
-    assert_match(/Response only: result — Two plus two is four\./, answer.fetch(:text))
+    assert_equal 'Two plus two is four.', answer.fetch(:text)
   ensure
     harness&.close
   end
 
-  def test_bare_cancel_disambiguates_multiple_open_requests_without_mutating_them
-    first = @harness.admit('prepare the report')
-    second = @harness.admit('draft the email')
-    references = [first, second].map { |cards| cards.fetch(0).fetch(:text)[/\br[0-9a-f]{10}\b/] }
+  def test_bare_cancel_stops_every_open_request
+    @harness.admit('prepare the report')
+    @harness.admit('draft the email')
 
     cards = @harness.say('/cancel')
-    reply = cards.find { |card| card[:kind] == 'control' && card[:text].include?('Choose one') }
 
-    refute_nil reply, "expected a cancellation choice, got: #{cards.inspect}"
-    references.each { |reference| assert_includes reply.fetch(:text), reference }
-    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms').nil? },
-           'ambiguous cancellation must not stamp any request'
+    assert_includes cards.map { |card| [card[:kind], card[:text]] }, %w[control Stopping…]
+    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms') },
+           'a bare /cancel stamps every open request'
+  end
+
+  def test_a_second_cancel_stops_the_newer_message_too
+    @harness.admit('prepare the report')
+    @harness.say('/cancel')
+    @harness.admit('draft the email')
+    cards = @harness.say('/cancel')
+
+    assert_includes cards.map { |card| card[:text] }, 'Stopping…'
+    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms') }, 'both messages are stamped'
   end
 
   def test_cancel_reference_targets_one_open_request
-    first = @harness.admit('prepare the report')
-    second = @harness.admit('draft the email')
-    first_reference = first.fetch(0).fetch(:text)[/\br[0-9a-f]{10}\b/]
-    second_reference = second.fetch(0).fetch(:text)[/\br[0-9a-f]{10}\b/]
+    @harness.admit('prepare the report')
+    @harness.admit('draft the email')
+    first_reference = @harness.reference(0)
+    second_reference = @harness.reference(1)
 
     cards = @harness.say("/cancel #{first_reference}")
-    reply = cards.find { |card| card[:kind] == 'control' && card[:text].include?(first_reference) }
+    reply = cards.find { |card| card[:kind] == 'control' && card[:text] == 'Stopping…' }
 
     refute_nil reply, "expected a reference-addressed cancellation, got: #{cards.inspect}"
     stamps = @harness.cancellation_stamp_rows.to_h { |row| [row.fetch('request_id'), row] }
@@ -232,20 +252,19 @@ class ExperienceHarnessTest < Minitest::Test
     first_status = request_status_text(first_reference)
     second_status = request_status_text(second_reference)
 
-    assert_match(/Request #{first_reference}:.*Delivery: unknown/, first_status)
-    assert_match(/Request #{second_reference}:.*Delivery: delivered/, second_status)
+    assert_match(/Request #{first_reference}:.*delivery=unknown/, first_status)
+    assert_match(/Request #{second_reference}:.*delivery=delivered/, second_status)
   end
 
   def test_worker_unavailable_state_is_distinct_from_working
-    accepted = @harness.admit('prepare the report')
-    reference = accepted.first.fetch(:text)[/\br[0-9a-f]{10}\b/]
+    @harness.admit('prepare the report')
+    reference = @harness.reference
     request_id = @harness.request_ids_for(Fixture::CONVERSATION_A).first
 
     queued = @harness.status_only(reference)
     queued_text = queued.find { |card| card[:kind] == 'control' }.fetch(:text)
 
-    assert_match(/Now: Waiting for a worker to pick up this request\./, queued_text)
-    refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, queued_text)
+    assert_equal "Your message is queued; I'll start on it shortly.", queued_text
 
     @harness.work_off
 
@@ -265,8 +284,7 @@ class ExperienceHarnessTest < Minitest::Test
     cards = harness.say('hi')
     kinds = cards.map { |card| card[:kind] }
 
-    assert_includes kinds, 'accepted'
-    assert_includes kinds, 'answer'
+    assert_equal %w[answer], kinds
     request_id = harness.request_ids_for(Fixture::CONVERSATION_A).fetch(0)
     assert_equal 'direct_response', harness.snapshot.fetch('session')
                    .fetch(Fixture::CONVERSATION_A).fetch('terminal_reason')
@@ -282,9 +300,9 @@ class ExperienceHarnessTest < Minitest::Test
     scripted = Fixture.model_factory(plan: Fixture::DEFAULT_PLAN, review:, verify: Fixture::VERIFY_OK)
     harness = Tamoz::ExperienceSim::Harness.new(model_factory: scripted)
 
-    initial = harness.say('read the file and summarize it')
+    harness.say('read the file and summarize it')
     target_id = harness.request_ids_for(Fixture::CONVERSATION_A).fetch(0)
-    reference = initial.find { |card| card[:kind] == 'accepted' }.fetch(:text)[/\br[0-9a-f]{10}\b/]
+    reference = harness.reference
 
     harness.say("/answer #{reference} note.txt")
 
@@ -300,7 +318,7 @@ class ExperienceHarnessTest < Minitest::Test
   private
 
   def request_status_text(reference)
-    cards = @harness.say("/status #{reference}")
+    cards = @harness.say("/status #{reference} --diagnostic")
     cards.find { |card| card[:kind] == 'control' && card[:text].start_with?("Request #{reference}:") }.fetch(:text)
   end
 

@@ -64,10 +64,18 @@ module Tamoz
           logical_identity: logical_identity(context:, operation:, capability_id: "model:#{stage}", arguments: request,
                                              iteration:, sub_operation: attempt)
         ) do
-          response = model.converse(stage:, messages:, tools:, tool_choice:)
+          response = until_cancelled(context) { model.converse(stage:, messages:, tools:, tool_choice:) }
           ConversationProjection.from_response(response, request_digest: request.fetch('request_digest'))
         end
         outcome.status == :succeeded ? outcome.with(value: ConversationProjection.validate!(outcome.value)) : outcome
+      end
+
+      # A stop from the user abandons the call in flight and records it as a failed attempt.
+      def until_cancelled(context, &)
+        token = Tamoz::Cancellation::Stops.token(context.thread_id)
+        token ? Tamoz::Cancellation.race(token, &) : yield
+      rescue Tamoz::CancelledError
+        raise ToolError, 'cancelled by the user'
       end
 
       def conversation_model

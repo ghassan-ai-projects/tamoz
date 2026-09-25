@@ -12,32 +12,21 @@ module Tamoz
           'redirecting' => 'waiting', 'completed' => 'completed', 'failed' => 'failed',
           'blocked' => 'blocked', 'stopped' => 'stopped'
         }.freeze
-        WORKER_NOW = {
-          'accepted' => 'Waiting for a worker to begin.',
-          'queued-unclaimed' => 'Waiting for a worker to pick up this request.',
-          'working' => 'A worker is handling this request.'
+        HUMAN_NOW = {
+          'accepted' => "Your message is queued; I'll start on it shortly.",
+          'queued' => "Your message is queued; I'll start on it shortly.",
+          'working' => "I'm working on your message.",
+          'waiting' => "I'm working on your message."
         }.freeze
-        TASK_NOW = {
-          'idle' => 'No request is in progress.',
-          'accepted' => 'The request is accepted.',
-          'queued' => 'The request is queued.',
-          'working' => 'The request is in progress.',
-          'waiting' => 'The request is waiting for its next step.',
-          'completed' => 'The request is complete.',
-          'failed' => 'The request ended with an error.',
-          'blocked' => 'The request is blocked.',
-          'stopped' => 'The request is stopped.'
+        TERMINAL_NOW = {
+          'completed' => 'That one is finished.', 'failed' => 'That one ended with an error.',
+          'stopped' => 'That one was stopped.', 'blocked' => 'That one is blocked.'
         }.freeze
-        NEXT_ACTIONS = {
-          'inspect' => 'Check the request.',
-          'continue' => 'Continue working on the request.',
-          'approval' => 'Wait for your approval.',
-          'none' => 'No further action.'
-        }.freeze
-        DELIVERY_WORDS = {
-          'none' => 'not sent yet', 'pending' => 'pending', 'claimed' => 'pending',
-          'succeeded' => 'delivered', 'delivered' => 'delivered', 'failed' => 'failed',
-          'unknown' => 'unknown'
+        CANCELLATION_NOW = {
+          'stopped' => 'Stopped, as you asked.',
+          'completed_before_effect' => 'That finished before the cancel took effect.',
+          'failed_before_effect' => 'That failed before the cancel took effect.',
+          'blocked' => 'That was blocked when the cancel arrived.'
         }.freeze
 
         private
@@ -66,7 +55,7 @@ module Tamoz
           status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
           return NO_WORK_REPLY unless status
 
-          render_human_status(status, 'Work status', status['request_ref'])
+          render_human_status(status)
         end
 
         def human_request_status_text(envelope, reference)
@@ -76,53 +65,30 @@ module Tamoz
           return UNKNOWN_REF_REPLY if resolved == :unknown_ref
           return AMBIGUOUS_REF_REPLY if resolved == :ambiguous_ref
 
-          render_human_status(resolved, "Request #{resolved.fetch('request_ref')}", nil)
+          render_human_status(resolved, reference:)
         end
 
-        def render_human_status(projection, title, active_reference)
-          "#{title}: State: #{human_task_state(projection)}.#{active_request_sentence(active_reference)} " \
-            "Now: #{human_now(projection)} Next: #{human_next(projection)} " \
-            "Delivery: #{human_delivery(projection)}.#{human_queue_sentence(projection)}" \
-            "#{open_requests_sentence(projection)}#{cancellation_sentence(projection)}"
+        # One plain sentence for a person; `--diagnostic` keeps every axis for operators.
+        def render_human_status(projection, reference: nil)
+          now = human_now(projection, reference)
+          waiting = reference ? 0 : projection.fetch('open_requests', 1).to_i - 1
+          return now unless waiting.positive?
+
+          "#{now} #{waiting} more #{waiting == 1 ? 'message is' : 'messages are'} waiting."
+        end
+
+        # A cancel that raced a finished turn says so and never claims the work stopped.
+        def human_now(projection, reference)
+          cancellation = projection['cancellation']
+          return CANCELLATION_NOW.fetch(cancellation['terminal'].to_s, 'Stopping, as you asked.') if cancellation
+          return "I'm waiting for you to tap Approve or Deny." if projection['next_action'] == 'approval'
+
+          state = human_task_state(projection)
+          HUMAN_NOW.fetch(state) { reference ? TERMINAL_NOW.fetch(state, NO_WORK_REPLY) : NO_WORK_REPLY }
         end
 
         def human_task_state(projection)
           HUMAN_TASK_STATES.fetch(projection.fetch('task_state', 'not_started'), 'active')
-        end
-
-        def active_request_sentence(reference)
-          reference ? " Active request: #{reference}." : ''
-        end
-
-        def human_now(projection)
-          worker_state = projection['worker_state']
-          return WORKER_NOW.fetch(worker_state) if WORKER_NOW.key?(worker_state)
-
-          TASK_NOW.fetch(human_task_state(projection), 'The request is active.')
-        end
-
-        def human_next(projection)
-          NEXT_ACTIONS.fetch(projection.fetch('next_action', 'inspect'), 'Continue checking the request.')
-        end
-
-        def human_delivery(projection)
-          state = projection.fetch('active_delivery_state', projection.fetch('delivery_state', 'unknown'))
-          DELIVERY_WORDS.fetch(state, 'unknown')
-        end
-
-        def human_queue_sentence(projection)
-          return '' unless projection.key?('queue_position')
-
-          sentence = " Queue position #{projection.fetch('queue_position')}."
-          age = projection['queue_age_ms']
-          age ? "#{sentence} Age #{[age.to_i, 0].max} ms." : sentence
-        end
-
-        def open_requests_sentence(projection)
-          return '' unless projection.key?('open_request_refs')
-
-          refs = projection.fetch('open_request_refs')
-          " Open requests: #{projection.fetch('open_requests')}; refs: #{refs.join(', ')}."
         end
 
         def diagnostic_status_text(envelope, reference)

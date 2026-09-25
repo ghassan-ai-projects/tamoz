@@ -270,6 +270,8 @@ class PackagingTest < Minitest::Test
             @rows
           end
 
+          def working_conversations(**) = []
+
           def claim_delivery(**kwargs)
             @calls << [:claim, kwargs]
             :claimed

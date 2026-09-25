@@ -29,6 +29,7 @@ module Tamoz
       include CLICommsCommands
       include CLICommsDoctor
       include CLICommsOps
+      include CLITelegramCommands
 
       # Every subcommand dispatches to exactly one same-shaped cmd_* method
       # (three spellings share follow_up); `list` alone takes no argv.
@@ -53,6 +54,7 @@ module Tamoz
         "verbose" => :cmd_verbose,
         "profile" => :cmd_profile,
         "comms" => :cmd_comms,
+        "telegram" => :cmd_telegram,
         "config" => :cmd_config,
         "init" => :cmd_init,
         "queue" => :cmd_queue,
@@ -73,7 +75,7 @@ module Tamoz
       # and stops there, without opening a runtime directory it was never
       # asked to touch.
       NEEDS_HELP_CATCH = %w[
-        comms config init queue worker status schedule approve observe trace
+        comms telegram config init queue worker status schedule approve observe trace
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze

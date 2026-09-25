@@ -25,6 +25,7 @@ class CommsServeSupervisionTest < Minitest::Test
     end
 
     def outbox_rows(surface_id:, statuses:, limit:) = []
+    def working_conversations(surface_id:, now:) = []
   end
 
   # Blocks in its loop until supervised `stop` ends it.

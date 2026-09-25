@@ -23,10 +23,12 @@ module Tamoz
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:NilCheck
     # :reek:BooleanParameter -- `journaled` is part of the delivery contract.
     class Delivery
-      KINDS = %w[accepted answer approval_request failed stopped blocked control].freeze
+      KINDS = %w[answer approval_request failed stopped blocked control].freeze
       OPERATIONS = %w[send_message edit_message].freeze
       DIGEST_DOMAIN = 'tamoz.comms.delivery.v1'
-      MAX_TEXT_BYTES = 4096
+      # A part is at most 4096 characters (the renderer's ceiling), and a character is up to four bytes.
+      MAX_TEXT_BYTES = 16_384
+      MAX_TEXT_CHARACTERS = 4096
       MAX_MARKUP_BYTES = 8192
 
       # @!attribute [r] reply_to
@@ -139,7 +141,7 @@ module Tamoz
         raise ValidationError, "kind must be one of #{KINDS.join(', ')}" unless Shapes.member?(kind, KINDS)
         raise ValidationError, "operation must be one of #{OPERATIONS.join(', ')}" unless Shapes.member?(operation,
                                                                                                          OPERATIONS)
-        unless Shapes.bounded_string?(text, max_bytes: MAX_TEXT_BYTES)
+        unless Shapes.bounded_string?(text, max_bytes: MAX_TEXT_BYTES) && text.length <= MAX_TEXT_CHARACTERS
           raise ValidationError, 'text must be a bounded string'
         end
         unless part_index.is_a?(Integer) && part_index >= 0

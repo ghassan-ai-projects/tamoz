@@ -185,30 +185,12 @@ class BenchmarkCommsControlsTest < Minitest::Test
   end
 
   # C1
-  def adversary_c1_ack_before_admission(facts, _c) = (facts['requests'] = []) && facts
+  def adversary_c1_reply_without_admission(facts, _c) = (facts['requests'] = []) && facts
   def adversary_c1_unconfirmed_output_in_history(facts, c) = append_unconfirmed_history(facts, c)
   def adversary_c1_identity_conflict_deduplicated(facts, _c) = add_integrity_conflict(facts)
 
   # C2
-  def adversary_c2_fabricated_milestone(facts, _c)
-    facts['outbox'] << {
-      'kind' => 'control', 'journaled' => 0, 'status' => 'pending',
-      'milestone_facts' => { 'sequence' => 9999, 'phase' => 'phantom', 'request_ref' => 'rXXXX' },
-      'text' => 'rXXXX · Now: x Next: y'
-    }
-    facts
-  end
-
   def adversary_c2_unconfirmed_output_in_history(facts, c) = append_unconfirmed_history(facts, c)
-
-  def adversary_c2_token_stream(facts, _c)
-    facts['outbox'] << {
-      'kind' => 'control', 'journaled' => 0, 'status' => 'pending',
-      'milestone_facts' => { 'sequence' => 1, 'phase' => 'planning', 'request_ref' => 'rXXXX' },
-      'text' => 'raw planning token leaked'
-    }
-    facts
-  end
 
   # C3
   def adversary_c3_blind_retry_after_unknown(facts, _c) = (facts['unknown_preserved_no_resend'] = false) || facts
@@ -300,7 +282,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
   end
 
   def adversary_c8_cancellation_state_lost(facts, _c)
-    facts.fetch('clean_stop')['waiting_milestone_recorded'] = false
+    facts.fetch('clean_stop')['approval_prompt_recorded'] = false
     facts.fetch('clean_stop')['cancel_command_accepted'] = false
     facts
   end

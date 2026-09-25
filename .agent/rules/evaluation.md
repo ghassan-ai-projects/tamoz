@@ -33,3 +33,14 @@ harness that scores an agent.
   (HTTP bodies are ASCII-8BIT, the JSON parser kept them binary, the state codec refused them), every approval preview
   printed twice, and a 41-call turn hit the graph's 200-step backstop before the loop's own
   60-call budget could hand off. Fakes answer in ASCII, in few steps, without a terminal.
+- **Grade the owner's install, not a clean room.** The Telegram eval passed 82/82 on a fresh
+  runtime with hand-started gateway and worker; the owner's phone got "something went wrong" to
+  every message. Their `~/.tamoz` had conversations bound to an older profile (re-running `setup`
+  rewrote it) and an MCP server that was offline — neither exists in a fresh directory. Run the
+  documented command itself (`tamoz telegram start`, not its children) and run it on a copy of the
+  real runtime (`script/telegram_chat_eval --runtime-from ~/.tamoz`); a copy also carries state a
+  stand-in must honour, such as Telegram's real update offset.
+- **Exercise non-ASCII and length together, over many turns.** Two limits were enforced in bytes
+  but sized in characters (history lines, reply parts); every ASCII scenario passed, and the
+  owner's bot died after a few long replies containing a dash and emoji. A soak that runs a long
+  conversation with multi-byte replies (`long_conversation`) found both in one run.

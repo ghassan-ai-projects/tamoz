@@ -185,6 +185,7 @@ request inboxes and the checkpoints.
 | `observe` | Tail the local journal, render metrics, or run the redaction self-test |
 | `trace` | Reconstruct the journal view for one thread from durable correlation identity |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
+| `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
 | `config` | Explicit configuration migration (`migrate`) |
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 
@@ -284,7 +285,9 @@ performs the explicit, backup-and-atomic-rename migration:
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
 ```
 
-The full channel walkthrough — creating the bot, authenticating it, collecting
+The short path is two commands — `tamoz telegram setup --workspace PATH
+--env-file .env` once, then `tamoz telegram start --env-file .env` — and needs
+only the bot token and one provider key. The full channel walkthrough — creating the bot, authenticating it, collecting
 the allowlist, configuring the surface, and running the gateway and worker — is
 in [`../guides/telegram.md`](../guides/telegram.md). The gateway holds the bot
 token and never constructs a session, loads a model credential, or opens a file

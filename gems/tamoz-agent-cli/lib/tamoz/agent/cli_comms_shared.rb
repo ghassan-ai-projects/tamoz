@@ -151,7 +151,9 @@ module Tamoz
         @comms_client_factory || lambda do |token|
           require 'tamoz/telegram'
           cap = descriptor && descriptor.transport[:max_response_bytes]
-          Tamoz::Telegram::Client.new(token, max_response_bytes: cap)
+          origin = @env.to_h['TAMOZ_TELEGRAM_API_ORIGIN'].to_s
+          Tamoz::Telegram::Client.new(token, max_response_bytes: cap,
+                                             origin: origin.empty? ? Tamoz::Telegram::Client::DEFAULT_ORIGIN : origin)
         rescue LoadError
           raise MissingAdapterError,
                 'the Telegram adapter (tamoz-telegram) is not installed; install it to run comms commands'
