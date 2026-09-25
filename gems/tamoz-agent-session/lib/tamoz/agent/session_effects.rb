@@ -383,7 +383,7 @@ module Tamoz
         source = @configuration.mcp
         return {} unless source
 
-        allowed.filter_map { |name| mcp_entry(source, name) }.to_h.freeze
+        allowed.filter_map { |name| probe_entry(source, name) || mcp_entry(source, name) }.to_h.freeze
       end
 
       def prompt_safe(value)
@@ -433,6 +433,11 @@ module Tamoz
       def approval_argv(tool, arguments) = RequestProjection.argv(tool, arguments)
 
       def approval_targets(tool, arguments) = RequestProjection.targets(tool, arguments)
+
+      # A probe's description is operator-authored, not server text.
+      def probe_entry(source, name)
+        [name, source.probe_description(name)] if source.respond_to?(:probe?) && source.probe?(name)
+      end
 
       def mcp_entry(source, name)
         return unless source.name?(name)

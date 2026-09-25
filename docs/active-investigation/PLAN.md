@@ -216,20 +216,24 @@ sources:
    and the engine matches a `tool_tiers` key ending in `*` by prefix. Operator-declared
    probes are then allowed like `read_file`, including under the `plan` profile that
    `tamoz investigate` runs with. No verdict is written in Ruby.
-3. **Report (Gap J, D4).** When probes are on the surface, the header adds the harness
-   tool `report_findings` (schema in `harness_tools.json`; `Header.build` filters it
-   out when there are no probes). Arguments: `summary`,
-   `hypothesis`, `confidence` (low/medium/high), `findings: [{statement,
-   evidence: [tool_call_id]}]`, `gaps: [{datum, why}]`, `proposals: [{action,
-   rationale, evidence}]`. `Harness::FindingsReport.parse` validates it; every
-   evidence id must be a successful probe call this turn actually made (I8). An invalid report is
-   a tool error the model repairs. A valid report ends the turn: the rendered report is
-   the answer, and the report JSON is recorded on the verification record.
-4. **A probe turn must report.** A turn that called a probe and answers in free text
-   gets one `report_findings` reminder (the `cut_off` pattern). A second free-text
-   answer finishes as `answered` without a report.
-5. **CLI.** `tamoz investigate "<question>" [--json]` is a work-loop turn under the
-   `plan` approval profile (read-only). `--json` prints the report. `tamoz probes` loads and
+3. **Report (Gap J, D4).** On a read-only turn with probes (no mutating tool on the
+   header), the header adds the harness tool `report_findings` (schema in
+   `prompts/report_findings.json`, labels in `prompts/report_labels.json`, both
+   pinned). Arguments: `summary`, `hypothesis`, `confidence` (low/medium/high),
+   `findings: [{statement, evidence: [tool_call_id]}]`, `gaps: [{datum, why}]`,
+   `proposals: [{action, rationale, evidence}]`. `Harness::FindingsReport.parse`
+   validates it; every evidence id must be a probe call this turn made that answered
+   (I8). An invalid report, or one that is not the last call of its step, is a tool
+   error the model repairs. A valid report ends the turn: the rendered report is the
+   answer, the report JSON sits on the verification record, and the turn is
+   `reported`. A turn that may change files is never offered the report, so it cannot
+   end as "reported" after a change.
+4. **A probe turn must report.** A read-only turn that called a probe and answers in
+   free text gets one `report_findings` reminder (the `cut_off` pattern). A second
+   free-text answer finishes as `answered` without a report.
+5. **CLI.** `tamoz investigate "<question>" [--json]` is a work-loop turn with a
+   read-only toolbox under the `plan` approval profile; `--allow-changes` and
+   `--profile` are refused. `--json` prints the report. `tamoz probes` loads and
    validates the catalog and lists each probe (backing, pinned and free arguments)
    without starting a server.
 6. **Chat.** Chat turns with `--work-routing` get the same surface; the reply is the

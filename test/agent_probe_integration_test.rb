@@ -28,6 +28,8 @@ class AgentProbeIntegrationTest < Minitest::Test
         assert_includes binding.names(:discovery), 'probe_echo_status'
         refute(binding.names(:action).any? { |name| name.start_with?('mcp:probe/') })
         assert_equal :read_only, binding.effect_class('probe_echo_status')
+        assert_equal({ 'probe_echo_status' => 'Echo the unit status.' },
+                     binding.remote_planning_surface(['probe_echo_status']))
       ensure
         source.close
       end
