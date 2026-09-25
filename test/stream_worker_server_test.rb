@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "open3"
 require "tamoz/stream/worker_server"
 require "tamoz/stream/episode_worker"
 require "support/aquaculture_domain"
@@ -87,51 +88,93 @@ class StreamWorkerServerTest < Minitest::Test
   end
 
   def test_the_bin_launcher_composes_and_serves
-    script = ROOT.join("bin/tamoz-stream-worker")
+    with_launcher_files do |files|
+      served, status = launch_and_handshake(files)
+
+      assert served, "the launcher must serve a handshake over the UDS socket"
+      assert_predicate status, :success?
+    end
+  end
+
+  def test_the_bin_launcher_loads_operator_probes_and_stops_cleanly
+    with_launcher_files do |files|
+      runtime_dir = write_probe_runtime(files.fetch(:directory), probes: true)
+      served, status = launch_and_handshake(files, "--runtime-dir", runtime_dir)
+
+      assert served, "the launcher must serve with operator probes configured"
+      assert_predicate status, :success?, "TERM stops the server from a thread, so run returns and the sources close"
+    end
+  end
+
+  def test_the_bin_launcher_refuses_a_runtime_dir_without_probes
+    with_launcher_files do |files|
+      runtime_dir = write_probe_runtime(files.fetch(:directory), probes: false)
+      env = { "RUBYLIB" => Dir[File.join(ROOT, "gems/*/lib")].join(":") }
+      _out, err, status = Open3.capture3(env, RbConfig.ruby, ROOT.join("bin/tamoz-stream-worker").to_s,
+                                         "--profile", files.fetch(:profile), "--database", files.fetch(:database),
+                                         "--tenant", "acme", "--socket", files.fetch(:socket),
+                                         "--runtime-dir", runtime_dir)
+
+      assert_equal 2, status.exitstatus
+      assert_includes err, "enables no sources.probes"
+    end
+  end
+
+  private
+
+  def with_launcher_files
     directory = Dir.mktmpdir("tamoz-bin-worker")
-    database = File.join(directory, "tamoz.db")
-    socket_path = File.join(directory, "worker.sock")
     root = File.join(directory, "root")
     Dir.mkdir(root)
     profile_path = File.join(directory, "profile.yml")
-    File.write(
-      profile_path,
-      Psych.dump(AquacultureDomain.profile_document(endpoint: "http://127.0.0.1:1", root:))
-    )
+    File.write(profile_path, Psych.dump(AquacultureDomain.profile_document(endpoint: "http://127.0.0.1:1", root:)))
     File.chmod(0o600, profile_path)
-
-    env = { "RUBYLIB" => Dir[File.join(ROOT, "gems/*/lib")].join(":") }
-    pid = Process.spawn(
-      env,
-      RbConfig.ruby, script.to_s,
-      "--profile", profile_path,
-      "--database", database,
-      "--tenant", "acme",
-      "--socket", socket_path,
-      out: File::NULL, err: File::NULL
-    )
-    served = false
-    begin
-      deadline = Time.now + 20
-      loop do
-        if File.socket?(socket_path) && handshake_ok?(socket_path)
-          served = true
-          break
-        end
-        raise "worker did not serve in 20s" if Time.now > deadline
-
-        sleep 0.2
-      end
-    ensure
-      Process.kill("TERM", pid)
-      Process.wait(pid)
-    end
-    assert served, "the launcher must serve a handshake over the UDS socket"
+    yield({ directory:, root:, profile: profile_path, database: File.join(directory, "tamoz.db"),
+            socket: File.join(directory, "worker.sock") })
   ensure
     FileUtils.remove_entry(directory) if directory
   end
 
-  private
+  def launch_and_handshake(files, *extra)
+    env = { "RUBYLIB" => Dir[File.join(ROOT, "gems/*/lib")].join(":") }
+    pid = Process.spawn(env, RbConfig.ruby, ROOT.join("bin/tamoz-stream-worker").to_s,
+                        "--profile", files.fetch(:profile), "--database", files.fetch(:database),
+                        "--tenant", "acme", "--socket", files.fetch(:socket), *extra,
+                        out: File::NULL, err: File::NULL)
+    served = handshake_within_deadline?(files.fetch(:socket))
+    Process.kill("TERM", pid)
+    [served, Process.wait2(pid).last]
+  end
+
+  def handshake_within_deadline?(socket_path)
+    deadline = Time.now + 20
+    until File.socket?(socket_path) && handshake_ok?(socket_path)
+      return false if Time.now > deadline
+
+      sleep 0.2
+    end
+    true
+  end
+
+  def write_probe_runtime(directory, probes:)
+    runtime_dir = File.join(directory, "runtime")
+    FileUtils.mkdir_p(runtime_dir, mode: 0o700)
+    File.chmod(0o700, runtime_dir)
+    script = ROOT.join("script/mcp_test_server").to_s
+    server = { "id" => "logs", "command" => RbConfig.ruby, "arguments" => [script],
+               "env_allowlist" => %w[PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB],
+               "read_only_tools" => ["echo_constant"] }
+    catalog = { "enabled" => true, "targets" => { "pond-07" => { "stream" => "pond=07" } },
+                "probes" => [{ "name" => "probe_pond_log", "description" => "Echo the pond stream.",
+                               "backing" => { "server" => "logs", "tool" => "echo_constant" },
+                               "arguments" => { "value" => "{target.stream}" } }] }
+    config = { "runtime" => { "schema_version" => 1 }, "workspace" => { "root" => directory },
+               "sources" => { "mcp" => { "enabled" => true, "servers" => [server] } } }
+    config["sources"]["probes"] = catalog if probes
+    File.write(File.join(runtime_dir, "config.yaml"), Psych.dump(config))
+    File.chmod(0o600, File.join(runtime_dir, "config.yaml"))
+    runtime_dir
+  end
 
   def handshake_ok?(socket_path)
     handshake_on("unix://#{socket_path}").protocol_version == "1.0"

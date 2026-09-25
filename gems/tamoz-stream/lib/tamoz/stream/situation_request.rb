@@ -174,12 +174,27 @@ module Tamoz
         validate_allowed_intent_types!
         validate_intent_catalog_for_kind!
         validate_budget!
+        validate_tool_catalog!
         validate_trace_context!
         validate_kind!
         validate_lane!
         validate_risk_ceiling!
 
         true
+      end
+
+      # The grant list is read from these bytes, so they must match their digest before anything runs.
+      def validate_tool_catalog!
+        bytes = @wire.tool_catalog_json.to_s
+        return if bytes.empty?
+
+        unless tool_catalog_sha256 == "sha256:#{Digest::SHA256.hexdigest(bytes)}"
+          raise EpisodeRequestInvalidError, "tool catalog does not match its digest"
+        end
+        entries = Tamoz::Core.parse_json_strict(bytes)
+        return if entries.is_a?(Array) && entries.all? { |entry| entry.is_a?(Hash) && entry["name"].is_a?(String) }
+
+        raise EpisodeRequestInvalidError, "tool catalog must be a list of named tools"
       end
 
       def validate_protocol_version!
@@ -376,8 +391,10 @@ module Tamoz
     class EpisodeRunner
       include BlankToNil
 
+      # probe_source: the operator's governed probes (a Tamoz::Agent::ProbeSource), nil when none are configured.
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
-                     configured_tenant: nil, episode_tools: nil)
+                     configured_tenant: nil, episode_tools: nil, probe_source: nil)
+        @probe_source = probe_source
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
@@ -399,7 +416,7 @@ module Tamoz
             stream, adapter = open_stream(envelope)
             context = build_context(envelope, wire_request, snapshot, adapter)
             watcher = watch_cancellation(call, context)
-            result = execute_turn(envelope, context, snapshot)
+            result = execute_turn(envelope, context, snapshot, wire_request)
             finalize_stream(envelope:, stream:, adapter:, result:, snapshot:)
           rescue StandardError => error
             stream = fail_stream(stream, wire_request, error, code: wire_code_for(error))
@@ -491,8 +508,10 @@ module Tamoz
         )
       end
 
-      def execute_turn(envelope, context, snapshot)
-        payload = envelope.payload.merge("snapshot" => snapshot)
+      def execute_turn(envelope, context, snapshot, wire_request)
+        wire = envelope.payload.fetch("wire").merge("tool_surface" => tool_surface(wire_request),
+                                                    "probe_catalog_digest" => @probe_source&.catalog&.digest)
+        payload = envelope.payload.merge("wire" => wire, "snapshot" => snapshot)
         # P5: the recall node owns situation memory — the runner no longer
         # seeds the memory channels (they are written once by the graph).
         @durable_runner.deliver(
@@ -528,6 +547,7 @@ module Tamoz
         manifest = build_artifact_manifest(envelope, terminal_state)
         retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
         emit_model_events(adapter, terminal_state, envelope)
+        emit_tool_events(stream, envelope, terminal_state)
         emit_budget_update(stream, adapter, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
         manifest
       end
@@ -558,8 +578,25 @@ module Tamoz
         stream.budget(
           cumulative_usage: adapter.cumulative_usage(receipts),
           model_calls_used: receipts.length,
-          tool_calls_used: 0
+          tool_calls_used: terminal_state[:budget_state]&.fetch("tool_calls_used", 0).to_i
         )
+      end
+
+      # One lifecycle event per dispatched tool call, stream evidence and probe alike; a budget_spent
+      # entry never ran, so it is neither reported nor counted.
+      def emit_tool_events(stream, envelope, terminal_state)
+        dispatched_tools(terminal_state).each do |result|
+          stream.tool(
+            call_id: [envelope.request_id, "tool", result.fetch("slot")].join("."),
+            tool_name: result.fetch("tool"), state: :TOOL_STATE_COMPLETED, execution_started: true,
+            arguments_sha256: result["request_digest"], result_sha256: result["result_sha256"],
+            is_error: result.fetch("is_error", false), error_code: result["error_code"].to_s
+          )
+        end
+      end
+
+      def dispatched_tools(terminal_state)
+        Array(terminal_state[:tool_results]).reject { |result| result["dispatched"] == false }
       end
 
       # P1: the typed reason on a FAILED terminal — the durable request's
@@ -796,17 +833,54 @@ module Tamoz
         implementations = build_tool_implementations(source)
         EpisodeCapabilityHost.new(
           implementations,
-          max_result_bytes: host_result_cap(wire_request)
+          max_result_bytes: host_result_cap(wire_request),
+          probes: episode_probes(wire_request, snapshot),
+          granted: tool_catalog(wire_request).map { |entry| entry.fetch("name") }
         )
       end
 
-      def evidence_source_for(wire_request, snapshot)
-        if wire_request.evidence_tools_endpoint.to_s.empty? ||
-           wire_request.capability_token.to_s.empty?
-          :unavailable
-        else
-          build_evidence_client(wire_request, snapshot)
+      def episode_probes(wire_request, snapshot)
+        return {} unless @probe_source
+
+        @probe_source.episode_tools(entity_id: snapshot.fetch("entity").fetch("id"),
+                                    time_range: evidence_range(wire_request.evidence_time_range))
+      end
+
+      # agentic-stream's evidence range as given; nil unless both bounds are set and ordered, so a probe that
+      # needs it refuses rather than reading 1970.
+      def evidence_range(range)
+        from = range&.from&.seconds.to_i
+        till = range&.until&.seconds.to_i
+        return nil unless from.positive? && till >= from
+
+        {"from" => Time.at(from).utc.iso8601, "until" => Time.at(till).utc.iso8601}
+      end
+
+      # The model-visible surface, pinned into the durable payload so a replay renders the same frame: the
+      # granted probes the operator declared, and the granted stream tools when the evidence channel is open.
+      def tool_surface(wire_request)
+        probes = @probe_source ? @probe_source.episode_surface.to_h { |tool| [tool.fetch("name"), tool] } : {}
+        evidence = evidence_channel?(wire_request)
+        tool_catalog(wire_request).filter_map do |entry|
+          name = entry.fetch("name")
+          next probes.fetch(name) if probes.key?(name)
+          next unless evidence && EpisodeCapabilityHost.stream_tool?(name)
+
+          {"name" => name, "description" => entry.fetch("description", ""), "parameters" => entry.fetch("schema", {})}
         end
+      end
+
+      def tool_catalog(wire_request)
+        json = wire_request.tool_catalog_json.to_s
+        json.empty? ? [] : Array(Tamoz::Core.parse_json_strict(json))
+      end
+
+      def evidence_source_for(wire_request, snapshot)
+        evidence_channel?(wire_request) ? build_evidence_client(wire_request, snapshot) : :unavailable
+      end
+
+      def evidence_channel?(wire_request)
+        !wire_request.evidence_tools_endpoint.to_s.empty? && !wire_request.capability_token.to_s.empty?
       end
 
       def build_evidence_client(wire_request, snapshot)

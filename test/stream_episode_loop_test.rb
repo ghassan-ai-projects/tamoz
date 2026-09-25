@@ -104,7 +104,7 @@ class StreamEpisodeLoopTest < Minitest::Test
   def request_with_budget(composition, suffix, budget)
     wire = EpisodeComposition.wire_request(episode_id: "loop-#{suffix}")
     wire.budget = budget
-    wire.tool_catalog_json = Tamoz::Core.jcs(tool_catalog)
+    EpisodeComposition.grant_tools(wire, tool_catalog)
     wire
   end
 

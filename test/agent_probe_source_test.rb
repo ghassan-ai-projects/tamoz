@@ -178,7 +178,7 @@ class AgentProbeSourceTest < Minitest::Test
 
   def test_episode_scope_comes_from_the_snapshot_and_refusals_are_results
     probes = source
-    tools = probes.episode_tools(entity_id: 'motor-1', window:)
+    tools = probes.episode_tools(entity_id: 'motor-1', time_range: window)
     result = tools.fetch('probe_logs_search').call({ 'filter' => 'temp', 'limit' => 3 }, {})
 
     assert_equal({ 'json' => 'motor-1 overheated', 'truncated' => false, 'result_bytes' => 18 }, result)
@@ -187,7 +187,7 @@ class AgentProbeSourceTest < Minitest::Test
     refused = tools.fetch('probe_logs_search').call({ 'filter' => 'temp', 'limit' => 3, 'target' => 'motor-1' }, {})
 
     assert_equal 'argument_not_free', refused.fetch('error_code')
-    unknown = probes.episode_tools(entity_id: 'pump-9', window:)
+    unknown = probes.episode_tools(entity_id: 'pump-9', time_range: window)
                     .fetch('probe_logs_search').call({ 'filter' => 'temp', 'limit' => 3 }, {})
 
     assert_equal 'scope_unresolved', unknown.fetch('error_code')
@@ -196,12 +196,42 @@ class AgentProbeSourceTest < Minitest::Test
 
   def test_an_episode_probe_whose_call_does_not_succeed_returns_an_error_result
     %i[denied interrupt].each do |status|
-      result = source(status:).episode_tools(entity_id: 'motor-1', window:)
+      result = source(status:).episode_tools(entity_id: 'motor-1', time_range: window)
                               .fetch('probe_db_select').call({ 'query' => 'SELECT 1' }, {})
 
       assert result.fetch('is_error'), "#{status} is an error result"
       assert_equal 'probe_failed', result.fetch('error_code')
     end
+  end
+
+  def test_a_cancelled_or_late_episode_probe_ends_the_episode_instead_of_becoming_a_result
+    tool = source.episode_tools(entity_id: 'motor-1', time_range: window).fetch('probe_db_select')
+    token = Tamoz::CancellationToken.new
+    token.cancel!('superseded')
+
+    assert_raises(Tamoz::CancelledError) { tool.call({ 'query' => 'SELECT 1' }, { cancellation: token }) }
+    assert_raises(Tamoz::TimeoutError) { tool.call({ 'query' => 'SELECT 1' }, { deadline: 0.0 }) }
+    assert_empty @inner.calls
+  end
+
+  def test_calls_to_one_backing_server_never_overlap
+    probes = source
+    entered = Queue.new
+    overlapped = false
+    inner = @inner
+    inner.define_singleton_method(:execute) do |context, name, arguments|
+      overlapped ||= !entered.empty?
+      entered << :in
+      Thread.pass
+      sleep 0.01
+      entered.pop
+      AgentProbeSourceTest::Inner.instance_method(:execute).bind_call(self, context, name, arguments)
+    end
+    tools = probes.episode_tools(entity_id: 'motor-1', time_range: window)
+    Array.new(4) { Thread.new { tools.fetch('probe_db_select').call({ 'query' => 'SELECT 1' }, {}) } }.each(&:join)
+
+    refute overlapped
+    assert_equal 4, inner.calls.length
   end
 
   def test_a_probe_whose_backing_tool_the_server_does_not_offer_never_loads

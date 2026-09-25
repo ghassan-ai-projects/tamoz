@@ -181,15 +181,25 @@ sources:
    the summary only.
 9. **Local probes (Gap F).** `EpisodeCapabilityHost.new(implementations, probes:,
    granted:)`: `probes` are extra callables named `probe_*`; `granted` is the wire
-   catalog's name list; `execute` refuses a name that is not granted (I2).
+   catalog's name list; `execute` refuses a name that is not granted (I2). The
+   catalog bytes are checked against their digest and shape when the request is
+   admitted, before anything runs; an empty catalog grants nothing. Calls to one
+   backing MCP server are serialized (a stdio server answers one request at a time),
+   and a cancelled or late episode ends instead of turning the probe into a result.
+   The window comes from `evidence_time_range` only when both bounds are set and
+   ordered.
 10. **Idempotent (I5).** `EpisodeToolCall` journals with `safety: :idempotent`: a
     process crash mid-call re-reads on resume. An MCP ambiguous outcome is still a
     terminal `unknown` (then an `is_error` entry), and a probe that crashes the worker
     re-runs on every redelivery until agentic-stream stops redelivering.
 11. **Report back (Gap H).** The runner emits one `ToolLifecycle` event per dispatched
     tool call (stream and probe), with `execution_started: true` and the
-    request/result digests, before the decision. Tamoz's `tool_calls_used` counts the
-    same calls, so Go's two budget checks agree with it.
+    request/result digests, before the decision. `tool_calls_used` comes from the same
+    budget state, so Go's two budget checks agree. The events describe the checkpointed
+    result of the attempt that finished: a slot replayed from the journal on fence N+1
+    is reported again, and calls made by an attempt that failed before its checkpoint
+    are not reported. The artifact manifest does not yet carry the tool surface, so an
+    offline replay cannot rebuild a frame with tools.
 12. **Graph.** No new node or branch. Changed nodes (`validate`, `execute_tool`,
     `rebuild_frame`) bump their node `version:` so an old checkpoint fails loudly.
 13. **Worker.** `bin/tamoz-stream-worker --runtime-dir DIR` builds the MCP source and
@@ -232,6 +242,7 @@ sources:
 | G1 | Real descriptions and argument schemas for the stream tools in the tool catalog (`assembler.buildTools`). | Model quality on stream tools. Probes already get theirs from the Tamoz catalog. |
 | G2 | Implement `situations.related`, `history.prior_incidents`, `features.query` on EvidenceTools. | D2 "ask agentic-stream" beyond `evidence.get`. |
 | G3 | Record worker-hosted tool calls in the evidence ledger (budget accounting already exists). | Audit of probe calls on the Go side. |
+| G4 | Set `EpisodeRequest.evidence_time_range` (`worker_executor.go` never sets it today). | Until then every probe that uses `{window.*}` refuses with `scope_unresolved`; probes without a window work. |
 
 None blocks this build: a Go spec can grant `probe_*` today, and Go already budgets
 `ToolLifecycle` events.

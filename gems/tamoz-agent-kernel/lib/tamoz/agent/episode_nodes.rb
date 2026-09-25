@@ -404,7 +404,7 @@ module Tamoz
         budget_state = state.fetch(:budget_state, nil)
         first_slot = Array(state.fetch(:tool_results, [])).length
         results = state.fetch(:document).fetch("tool_requests").each_with_index.map do |request, index|
-          next undispatched_entry(request, "not_granted") if granted && !granted.include?(request.fetch("name"))
+          next undispatched_entry(request, "not_granted") unless granted.include?(request.fetch("name"))
           next undispatched_entry(request, "budget_spent") if budget.tool_calls_left(budget_state).zero?
 
           projection = dispatch_tool(context, state.fetch(:episode), request.merge("slot" => first_slot + index))
@@ -474,7 +474,7 @@ module Tamoz
           tool_name: request.fetch("name"), arguments: request.fetch("arguments")
         )
         enforce_successful_outcome!(result, subject: "tool")
-        result.projection.merge("purpose" => request.fetch("purpose"))
+        result.projection.merge("purpose" => request.fetch("purpose"), "arguments" => request.fetch("arguments"))
       end
 
       def undispatched_entry(request, code)
@@ -485,10 +485,9 @@ module Tamoz
         }
       end
 
-      # nil when the wire carries no catalog (a composition without one grants whatever its host binds).
       def granted_tool_names(wire)
         json = wire.fetch("tool_catalog_json", "").to_s
-        return nil if json.empty?
+        return [] if json.empty?
 
         Array(Tamoz::Core.parse_json_strict(json)).map { |entry| entry.fetch("name", nil) }
       end

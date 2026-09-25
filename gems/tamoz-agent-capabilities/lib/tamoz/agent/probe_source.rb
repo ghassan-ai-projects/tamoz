@@ -28,6 +28,8 @@ module Tamoz
         @catalog = catalog
         @clock = clock
         check_backing_tools!
+        # One stdio MCP server answers one request at a time; concurrent episodes would read each other's replies.
+        @locks = catalog.backing_servers.to_h { |server| [server, Mutex.new] }.freeze
         @implicit_slots = { 'target' => { 'free' => 'enum', 'values' => catalog.targets.keys },
                             'lookback_minutes' => { 'free' => 'integer', 'min' => 1,
                                                     'max' => ProbeCatalog::MAX_LOOKBACK_MINUTES } }.freeze
@@ -44,6 +46,7 @@ module Tamoz
       def name?(name) = @names.include?(String(name))
       def descriptor_for(name) = @descriptors.find { |descriptor| descriptor.id == String(name) }
       def probe?(name) = @catalog.probes.key?(String(name))
+      def probe_description(name) = @catalog.probe(name).description
 
       def descriptor_for!(name)
         descriptor_for(name) || raise(Tamoz::Agent::ToolError, "unknown tool #{String(name).inspect}")
@@ -86,7 +89,7 @@ module Tamoz
         return @source.execute(context, visible!(name), arguments) unless probe
 
         resolved = resolve(probe, session_free_arguments(probe, arguments), session_scope(probe, arguments))
-        bounded_outcome(probe, @source.execute(context, probe.backing_id, resolved))
+        bounded_outcome(probe, backing_call(context, probe, resolved))
       end
 
       def session_tools = tool_surface { |probe| probe.session_schema(@catalog.targets.keys) }
@@ -94,8 +97,8 @@ module Tamoz
 
       # Episode callables in the EpisodeCapabilityHost adapter shape. The target and window come from the verified
       # snapshot; a refusal or a failed call is a result the model sees, never an episode failure.
-      def episode_tools(entity_id:, window:)
-        scope = { 'target' => @catalog.targets[String(entity_id)], 'window' => window }
+      def episode_tools(entity_id:, time_range:)
+        scope = { 'target' => @catalog.targets[String(entity_id)], 'window' => time_range }
         @catalog.probes.values.to_h do |probe|
           [probe.name, ->(arguments, context) { episode_call(EpisodeCall.new(probe:, scope:, arguments:), context) }]
         end
@@ -138,7 +141,21 @@ module Tamoz
       def run_episode_probe(call, context)
         probe = call.probe
         free = free_arguments(probe, call.arguments, allowed: probe.free.keys)
-        @source.execute(context, probe.backing_id, resolve(probe, free, call.scope))
+        check_still_wanted!(context)
+        backing_call(context, probe, resolve(probe, free, call.scope))
+      end
+
+      def backing_call(context, probe, arguments)
+        @locks.fetch(probe.server).synchronize { @source.execute(context, probe.backing_id, arguments) }
+      end
+
+      # The episode host hands over its cancellation token and monotonic deadline; neither is a tool result.
+      def check_still_wanted!(context)
+        raise Tamoz::CancelledError, 'probe cancelled' if context[:cancellation]&.cancelled?
+
+        deadline = context[:deadline]
+        raise Tamoz::TimeoutError, 'probe deadline exceeded' if
+          deadline.is_a?(Numeric) && Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
       end
 
       def episode_result(observation)

@@ -34,7 +34,7 @@ module EpisodeComposition
     Tamoz::Core.parse_json_strict(catalog_json)
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil, probe_source: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
@@ -97,7 +97,8 @@ module EpisodeComposition
       durable_runner: app.durable_runner,
       worker:,
       artifact_store: artifact_store,
-      episode_tools: episode_tools
+      episode_tools: episode_tools,
+      probe_source:
     )
     {app:, runner:, adapter: checkpointer, directory:}
   end
@@ -159,6 +160,14 @@ module EpisodeComposition
       executor_name: "tamoz",
       dispatch_policy: :DISPATCH_POLICY_SHADOW
     )
+  end
+
+  # Grants a tool catalog the way agentic-stream does: the JSON bytes and their raw sha256.
+  def grant_tools(wire, catalog)
+    json = Tamoz::Core.jcs(catalog)
+    wire.tool_catalog_json = json
+    wire.tool_catalog_sha256 = Digest::SHA256.digest(json)
+    wire
   end
 
   # Runs one episode through the composed runner; returns [events, app].

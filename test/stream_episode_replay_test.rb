@@ -54,7 +54,7 @@ class StreamEpisodeReplayTest < Minitest::Test
 
   def wire_request(suffix, fence: 1)
     wire = EpisodeComposition.wire_request(episode_id: "replay-#{suffix}", fence:)
-    wire.tool_catalog_json = Tamoz::Core.jcs([{"name" => "evidence.get", "parameters" => {}}])
+    EpisodeComposition.grant_tools(wire, [{"name" => "evidence.get", "parameters" => {}}])
     wire
   end
 
