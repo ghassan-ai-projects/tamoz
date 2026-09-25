@@ -48,7 +48,7 @@ module Tamoz
           "situation_version" => snapshot.fetch("situation_version"),
           "primary_hypothesis" => "",
           "confidence" => 1.0,
-          "summary" => String(summary).byteslice(0, MAX_SUMMARY_BYTES),
+          "summary" => String(summary).byteslice(0, MAX_SUMMARY_BYTES).scrub(""),
           "facts_used" => [],
           "alternatives" => [],
           "intents" => intents,
@@ -102,7 +102,7 @@ module Tamoz
       end
 
       def bounded_outcome_text(key, limit)
-        String(@outcome.fetch(key, "")).byteslice(0, limit)
+        String(@outcome.fetch(key, "")).byteslice(0, limit).scrub("")
       end
 
       def bounded_outcome_entries(key, limit)

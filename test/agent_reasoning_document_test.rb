@@ -27,7 +27,8 @@ class AgentReasoningDocumentTest < Minitest::Test
   def tool_hash
     {
       "protocol" => Doc::PROTOCOL,
-      "tool_requests" => [{"name" => "evidence_get", "arguments" => {"metric" => "pressure"}}]
+      "tool_requests" => [{"name" => "evidence_get", "arguments" => {"metric" => "pressure"},
+                           "purpose" => "the pressure decides between the two leaks"}]
     }
   end
 
@@ -68,6 +69,25 @@ class AgentReasoningDocumentTest < Minitest::Test
     assert_equal "evidence_get", doc.tool_requests.first.name
     assert_nil doc.probabilities
     assert_nil doc.selected_code
+  end
+
+  def test_tool_request_requires_a_bounded_purpose # rubocop:disable Metrics/AbcSize
+    request = tool_hash.fetch("tool_requests").first
+    assert_rejected("purpose_missing", tool_hash.merge("tool_requests" => [request.except("purpose")]))
+    too_long = request.merge("purpose" => "x" * (Doc::MAX_PURPOSE_BYTES + 1))
+    assert_rejected("purpose_too_large", tool_hash.merge("tool_requests" => [too_long]))
+    assert_rejected("purpose_blank", tool_hash.merge("tool_requests" => [request.merge("purpose" => "  ")]))
+    assert_equal "the pressure decides between the two leaks", parse(tool_hash).tool_requests.first.purpose
+  end
+
+  def test_terminal_evidence_gaps_are_optional_bounded_and_forbidden_on_tool_turns # rubocop:disable Metrics/AbcSize
+    gap = {"datum" => "valve position", "why" => "it separates the two leaks"}
+    assert_equal [], parse(terminal_hash).evidence_gaps
+    assert_equal "valve position", parse(terminal_hash.merge("evidence_gaps" => [gap])).evidence_gaps.first.datum
+    assert_rejected("evidence_gaps_too_many", terminal_hash.merge("evidence_gaps" => [gap] * 9))
+    with_source = terminal_hash.merge("evidence_gaps" => [gap.merge("source" => "x")])
+    assert_rejected("unknown_key: evidence_gap.source", with_source)
+    assert_rejected("tool_turn_has_terminal_field: evidence_gaps", tool_hash.merge("evidence_gaps" => [gap]))
   end
 
   def test_evidence_refs_optional_defaults_empty

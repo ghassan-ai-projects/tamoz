@@ -20,13 +20,13 @@ proves nothing.
 | A3 | I3 — a model-supplied pinned or unknown argument is refused; an unresolved placeholder is a refusal, not a call | unit test, mutation: merge instead of refuse | PASS — `agent_probe_source_test` (pinned/unknown/missing refused; single-pass fill; enum fill); mutations (merge unknown keys, drop the missing check) fail |
 | A4 | I4 — free slots enforce type and bounds; results over `max_result_bytes` are cut and marked `truncated` | unit tests | PASS (probe side) — `test_free_slots_are_bounded`, `test_results_are_scrubbed…capped_within_the_declared_bound` |
 | A5 | I5 — episode tool calls replay from the journal; a crash between slot 1 and 2 of a three-request turn re-executes nothing already done; a crash *during* a slot re-runs that slot (idempotent) | graph test over the real checkpointer | OPEN |
-| A6 | I6 — tool results appear only in the user section, fenced and attributed | frame test | OPEN |
+| A6 | I6 — tool results appear only in the user section, fenced and attributed | frame test | PASS — `agent_episode_investigation_test#test_results_are_fenced_data…` (results only in the user section; the system section gets only the pinned surface and budget) |
 | A7 | I7 — a secret-shaped value in a probe result never reaches the frame, the journal or the report | unit test | PASS (probe side) — key bodies, tokens and structured content scrubbed via `Tamoz::Core.scrub_secrets`; mutation (header-only patterns) fails |
 | A8 | I8 — an episode citing an ungathered tool id is refused; a report citing an ungathered call id is refused | unit tests, mutation: drop the check | OPEN |
 | A9 | I9 — no mutating capability is reachable in an investigation turn; `report_findings` executes nothing | work-loop test | OPEN |
 | A10 | `sql_select` refuses writes and multi-statements (reusing `GovernedDatabaseSource`) | unit test | PASS — `test_free_slots_are_bounded` (DELETE and multi-statement refused); database servers accept only a `query` slot |
 | A11 | Gap K — a server that backs a probe exposes no raw tool on the capability surface | unit test | PASS — execute/validate/preview/maximum_effect_output_bytes/read_only? refuse hidden tools; integration test over the real MCP test server; mutation fails |
-| A12 | Error, refusal and `budget_spent` tool entries are not citable (episode) and failed probe calls are not citable (report) | unit tests | OPEN |
+| A12 | Error, refusal and `budget_spent` tool entries are not citable (episode) and failed probe calls are not citable (report) | unit tests | PASS (episode side) — error, `not_granted` and `budget_spent` entries get no evidence id; report side in WP4 |
 | A13 | Approval: a `probe_*` call is `allow` under `base` and `plan`; an unlisted MCP tool still asks; the verdict comes only from policy data | approval engine test | OPEN |
 
 ## B. Function — the capability works end to end (plumbing, scripted model)
@@ -39,11 +39,11 @@ intelligence.
 | B1 | Episode: a snapshot that cannot settle the diagnosis → tool request with `purpose` → probe result in the next frame → a decision citing `tool:0` | graph test through `EpisodeRunner` with a probe host | OPEN |
 | B2 | Episode: tools spent → FINAL directive → terminal `unknown` with `evidence_gaps`, not a failure | graph test | OPEN |
 | B2b | Episode: one model call left → FINAL directive; the same holds when the model budget runs out before the tool budget | graph test | OPEN |
-| B2c | Episode: a tool turn after the FINAL directive ends typed as budget-exhausted (the loop terminates) | graph test | OPEN |
+| B2c | Episode: a tool turn after the FINAL directive ends typed as budget-exhausted (the loop terminates) | graph test | PASS — `stream_episode_loop_test#test_gate5…` (tool turn on the last allowed call → BUDGET_EXHAUSTED, zero tool calls); mutation (drop the `validate` check) fails |
 | B2d | Episode: an MCP failure or SQL refusal inside a probe becomes an `is_error` entry and the episode still decides | graph test | OPEN |
-| B2e | Episode: the parser requires `purpose` and caps `evidence_gaps` at 8 | parser test | OPEN |
-| B3 | Episode: three requests in one document → three journaled slots, in order | graph test | OPEN |
-| B4 | Episode: no tool surface → frame bytes identical to before this change | frame digest pinned from HEAD before WP2 edits | OPEN |
+| B2e | Episode: the parser requires `purpose` and caps `evidence_gaps` at 8 | parser test | PASS — `agent_reasoning_document_test` (missing, oversize and blank `purpose` refused; `evidence_gaps` optional, capped at 8, forbidden on tool turns) |
+| B3 | Episode: three requests in one document → three journaled slots, in order | graph test | PASS (node level) — `test_every_request_runs_in_order…` (absolute slots after prior results; `not_granted` and `budget_spent` recorded, not dispatched); graph level in WP3 |
+| B4 | Episode: no tool surface → frame bytes identical to before this change | frame digest pinned from HEAD before WP2 edits | PASS — `test_an_episode_without_tools_keeps_the_frame_bytes…` pins the HEAD digest `ebe8e540…`. Deviation: an episode with tool results but no surface now renders `purpose`/`truncated`/`result`, so its frame differs from HEAD by design |
 | B4b | Episode: a wire catalog built the way Go's `buildTools` builds it (`evidence_get`, `probe_*`) yields a surface with both | host test | OPEN |
 | B4c | Episode: a same-config redelivery succeeds; a redelivery after the probe catalog changed is refused | runner test | OPEN |
 | B5 | Episode: every dispatched tool call emits one `ToolLifecycle` event with `execution_started`; `budget_spent` entries emit none and are not counted | stream test | OPEN |
@@ -79,7 +79,7 @@ intelligence.
 | # | Property | Check | Status |
 |---|---|---|---|
 | E1 | No new gem; `tamoz-stream` does not require capabilities code | `git diff --stat`, gemspecs | OPEN |
-| E2 | No new episode graph node or branch; changed nodes bump their node `version:` | diff of `episode_graph.rb` | OPEN |
+| E2 | No new episode graph node or branch; changed nodes bump their node `version:` | diff of `episode_graph.rb` | PASS — no node or branch added; `build_frame` 2, `validate` 3, `execute_tool` 2, `rebuild_frame` 2 |
 | E3 | No domain literal in Ruby (probe data only in operator config and test fixtures) | review | OPEN |
 | E4 | No compatibility shim, no v2/v3 tolerance code | review | OPEN |
 | E5 | Comments follow `AGENTS.md` (none by default, one or two lines of "why" at most) | review | OPEN |
@@ -100,3 +100,4 @@ intelligence.
 |---|---|---|---|
 | WP0 plan | 1 critical (probe calls hit the `local_execute` approval fallback), 4 high (Go/Tamoz stream-tool names never match; model budget runs out before the tool budget; repair-path reuse could loop; bar gaps), 7 medium, 7 low | All folded into PLAN §3 and README R5, R6, R10, R13; new bar items A12, A13, B2b–B2e, B4b, B4c, B6b; E2 and D5 corrected | this commit |
 | WP1 probes | 2 high (private-key body survived the scrub; a non-succeeded MCP outcome crashed an episode probe), 6 medium (empty targets, database-server argument drop, structured results lost, backing tool not checked against the catalog, test gaps, reek), 8 low | All fixed: `Tamoz::Core.scrub_secrets` (also used by the work loop and MCP payloads), non-success → `probe_failed` result, catalog/load checks, structured text, plain wrapper class (no delegation), cap includes the mark, `probes:catalog` digest key, probes-without-MCP refused; tests added and mutation-checked. Deferred to WP4: probe descriptions on the legacy planning surface | WP1 commit |
+| WP2 episode kernel | 2 high (cancellation/deadline swallowed into tool results once context is passed; an ungranted tool name failed the episode), 3 medium (multibyte summary cut; Hash#inspect text for evidence results; tests not discriminating), 6 low | Fixed: context passed to the host; evidence cancellation/deadline raise `Tamoz::CancelledError`/`TimeoutError` (never tool results); ungranted names → `not_granted` entries; `scrub` after summary slices; hash results journaled as JSON; FINAL directive under its own `budget_directive` key; `Tooling` value object; blank purpose refused; D-7 comment updated; tests mutation-checked | WP2 commit |

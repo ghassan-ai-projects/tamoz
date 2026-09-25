@@ -12,8 +12,8 @@ module Tamoz
     #
     #   - EffectDispatcher.run journals the call under a LOGICAL key
     #     (episode, stage: "tool", slot), so a replayed attempt reuses the
-    #     completed tool receipt and a crashed mid-call attempt is a typed
-    #     `unknown` — no duplicate execution, no blind retry.
+    #     completed tool receipt. The host is read-only by construction, so the
+    #     call is idempotent: a crash mid-call re-reads instead of stopping.
     #   - The request digest binds the canonical {tool_name, arguments}
     #     bytes; the result digest binds the raw result bytes.
     #   - Results (success AND refusal) are journaled as codec-safe
@@ -79,13 +79,13 @@ module Tamoz
         EffectDispatcher.run(
           context:,
           operation: OPERATION,
-          safety: :unsafe,
+          safety: :idempotent,
           call_index:,
           request:,
           actor: "tamoz.agent.episode.execute_tool",
           logical_key: logical
         ) do
-          execute_tool(tool_port, tool_name, arguments)
+          execute_tool(tool_port, call, context)
         end
       end
 
@@ -97,19 +97,26 @@ module Tamoz
         }
       end
 
-      def execute_tool(tool_port, tool_name, arguments)
-        result = tool_port.execute(tool_name, arguments)
-        build_effect_value(tool_name:, result:)
+      # A refused tool call is a result the model sees; cancellation and deadlines are not ToolErrors and still
+      # end the episode, leaving the attempt open for the idempotent re-read.
+      def execute_tool(tool_port, call, context)
+        tool_name = call.fetch(:tool_name)
+        build_effect_value(tool_name:, result: tool_port.execute(tool_name, call.fetch(:arguments), context:))
+      rescue Tamoz::Core::ToolError => e
+        build_effect_value(tool_name:, result: {"json" => e.message, "is_error" => true, "error_code" => "tool_error"})
       end
 
       def build_effect_value(tool_name:, result:)
+        json = result.fetch("json")
+        text = json.is_a?(String) ? json : Tamoz::Core.jcs(json)
         {
           "tool" => tool_name,
           "is_error" => result.fetch("is_error", false),
           "error_code" => result["error_code"],
-          "result_json" => result.fetch("json").to_s,
-          "result_sha256" => "sha256:#{Digest::SHA256.hexdigest(result.fetch('json').to_s)}",
-          "result_bytes" => result.fetch("json").to_s.bytesize
+          "truncated" => result.fetch("truncated", false),
+          "result_json" => text,
+          "result_sha256" => "sha256:#{Digest::SHA256.hexdigest(text)}",
+          "result_bytes" => text.bytesize
         }
       end
 

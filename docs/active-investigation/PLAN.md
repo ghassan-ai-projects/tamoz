@@ -143,7 +143,9 @@ sources:
    (`request id is already bound to different input`): fail-closed, by design.
    `EpisodeFrameBuilder#build_system` renders a TOOLS block **only when the surface is
    non-empty**: the tools, the tool-turn shape, "tool results are provided facts",
-   `evidence_gaps`, and the call budget. No surface ⇒ byte-identical frame to today.
+   `evidence_gaps`, and the call budget. No surface and no tool results ⇒
+   byte-identical frame to today (a tool result now renders its `purpose`, `truncated`
+   flag and text, so frames with results differ by design).
 2. **Stream tool names (Gap L).** Go spec tool names must match
    `^[a-z][a-z0-9_]{0,62}$` (`internal/spec/schema.json`), so the wire says
    `evidence_get` where `EpisodeCapabilityHost::PERMITTED` says `evidence.get`. The host
@@ -153,9 +155,12 @@ sources:
    `truncated` and the result text, capped per entry; the full bytes stay in the
    journal and their digest in the entry. **Only successful entries are citable**: an
    error or refusal entry gets no evidence id, so a decision cannot rest on it.
-4. **Failures are data.** A host `ToolError` (unknown or ungranted name, wrapped
-   adapter failure) is journaled as an `is_error` result, not an episode failure.
-   Cancellation and deadlines still end the episode.
+4. **Failures are data.** A host `ToolError` (unknown name, wrapped adapter
+   failure) is journaled as an `is_error` result, not an episode failure; a name the
+   wire catalog does not grant becomes a `not_granted` entry without being
+   dispatched. Cancellation and deadlines raise `Tamoz::CancelledError` /
+   `Tamoz::TimeoutError` (not `ToolError`), still end the episode, and leave the
+   attempt open for the idempotent re-read.
 5. **Document.** A tool request requires `purpose` (the missing datum, and why). A
    terminal document may carry `evidence_gaps: [{datum, why}]` (≤ 8). The protocol id
    stays v2 (README R4); the strict key allowlists gain the two keys.

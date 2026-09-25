@@ -17,11 +17,15 @@ class StreamEpisodeLoopTest < Minitest::Test
 
   # A deterministic evidence-tool implementation (fixture) for the loop tests.
   class StubEvidenceTool
+    attr_reader :calls
+
     def initialize(readings: {"dissolved_oxygen" => 1.1})
       @readings = readings
+      @calls = 0
     end
 
-    def execute(name, arguments)
+    def execute(name, arguments, context: nil)
+      @calls += 1
       if arguments.fetch("feature", "") == "dissolved_oxygen"
         value = @readings.fetch("dissolved_oxygen")
         {
@@ -64,7 +68,8 @@ class StreamEpisodeLoopTest < Minitest::Test
     Tamoz::Core.jcs(
       "protocol" => "tamoz.episode-diagnosis/v2",
       "tool_requests" => [
-        {"name" => "evidence.get", "arguments" => {"feature" => "dissolved_oxygen"}}
+        {"name" => "evidence.get", "arguments" => {"feature" => "dissolved_oxygen"},
+         "purpose" => "the dissolved oxygen reading decides the diagnosis"}
       ]
     )
   end
@@ -166,30 +171,32 @@ class StreamEpisodeLoopTest < Minitest::Test
     end
   end
 
-  def test_gate5_budget_exhaustion_mid_loop_is_a_typed_terminal
+  def test_gate5_a_tool_turn_on_the_last_allowed_call_is_a_typed_budget_terminal
     budget = Agenticstream::Runtime::V1::EpisodeBudget.new(max_model_calls: 1)
+    tool = StubEvidenceTool.new
     with_fixture_endpoint([tool_requesting_response, final_response]) do |endpoint|
-      composition = EpisodeComposition.build(endpoint: endpoint.base_url, tool_port: StubEvidenceTool.new)
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, tool_port: tool)
       _events, terminal, _state = run_episode(composition, request_with_budget(composition, "budget", budget))
       assert_equal :TERMINAL_STATUS_BUDGET_EXHAUSTED, terminal.status
-      assert_equal 1, endpoint.observed.length,
-                   "the budget check is PRE-DISPATCH: the second provider call was never made"
+      assert_equal 1, endpoint.observed.length, "no second provider call"
+      assert_equal 0, tool.calls, "the tool turn on the final call is refused before any tool runs"
       composition.fetch(:adapter).close
     end
   end
 
-  def test_unknown_tool_request_fails_closed
-    forged = Tamoz::Core.jcs(
+  def test_a_tool_the_catalog_does_not_grant_becomes_an_uncitable_result_and_the_episode_decides
+    invented = Tamoz::Core.jcs(
       "protocol" => "tamoz.episode-diagnosis/v2",
-      "primary_hypothesis" => "forge",
-      "diagnosis_probabilities" => [{"diagnosis_code" => "unknown", "probability" => 1.0}],
-      "evidence_refs" => [],
-      "tool_requests" => [{"name" => "not.in.catalog", "arguments" => {}}]
+      "tool_requests" => [{"name" => "not.in.catalog", "arguments" => {}, "purpose" => "try an invented tool"}]
     )
-    with_fixture_endpoint([forged]) do |endpoint|
-      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
-      _events, terminal, _state = run_episode(composition, request_with_budget(composition, "forge", nil))
-      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+    tool = StubEvidenceTool.new
+    with_fixture_endpoint([invented, final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, tool_port: tool)
+      _events, terminal, state = run_episode(composition, request_with_budget(composition, "forge", nil))
+      assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+      result = state.fetch(:tool_results).first
+      assert_equal "not_granted", result.fetch("error_code")
+      assert_equal 0, tool.calls
       composition.fetch(:adapter).close
     end
   end

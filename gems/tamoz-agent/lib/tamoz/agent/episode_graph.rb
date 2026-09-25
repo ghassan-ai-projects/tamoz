@@ -69,19 +69,19 @@ module Tamoz
           node(:recall, implementation_name: "tamoz.agent.episode.recall", version: "1") do |state, context|
             nodes.recall(state, context)
           end
-          node(:build_frame, implementation_name: "tamoz.agent.episode.build_frame", version: "1") do |state, context|
+          node(:build_frame, implementation_name: "tamoz.agent.episode.build_frame", version: "2") do |state, context|
             nodes.build_frame(state, context)
           end
           node(:reason, implementation_name: "tamoz.agent.episode.reason", version: "2") do |state, context|
             nodes.reason(state, context)
           end
-          node(:validate, implementation_name: "tamoz.agent.episode.validate", version: "2") do |state, context|
+          node(:validate, implementation_name: "tamoz.agent.episode.validate", version: "3") do |state, context|
             nodes.validate(state, context)
           end
-          node(:execute_tool, implementation_name: "tamoz.agent.episode.execute_tool", version: "1") do |state, context|
+          node(:execute_tool, implementation_name: "tamoz.agent.episode.execute_tool", version: "2") do |state, context|
             nodes.execute_tool(state, context)
           end
-          node(:rebuild_frame, implementation_name: "tamoz.agent.episode.rebuild_frame", version: "1") do |state, context|
+          node(:rebuild_frame, implementation_name: "tamoz.agent.episode.rebuild_frame", version: "2") do |state, context|
             nodes.rebuild_frame(state, context)
           end
           node(:repair, implementation_name: "tamoz.agent.episode.repair", version: "1") do |state, context|

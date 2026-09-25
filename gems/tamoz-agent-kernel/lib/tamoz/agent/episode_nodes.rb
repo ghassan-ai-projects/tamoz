@@ -29,6 +29,10 @@ module Tamoz
       MAX_COMMANDS = 64
       MAX_INTENTS = 16
       RISK_RANK = {"R0" => 0, "R1" => 1, "R2" => 2, "R3" => 3, "R4" => 4}.freeze
+      UNDISPATCHED = {
+        "not_granted" => "not run: this tool is not available in this episode",
+        "budget_spent" => "not run: the tool budget for this episode is spent"
+      }.freeze
 
       def initialize(profile:, frame_builder_factory:, model_call_factory:, decision_builder:, tool_call: nil, skills_source: {}, situation_recaller: nil, recall_caller: nil)
         @profile = profile
@@ -307,7 +311,7 @@ module Tamoz
           wire.fetch("intent_catalog_sha256")
         )
         skills = verified_skills(wire)
-        frame = assemble_frame(state, skills:, memory: memory_entries(state))
+        frame = assemble_frame(state, skills:, memory: memory_entries(state), **tool_frame(state))
         {"frame" => frame_projection(frame), "skill_set_digest" => skills.digest}
       end
 
@@ -372,6 +376,10 @@ module Tamoz
       def validate(state, _context)
         document = validated_document(state)
         next_node = next_node_for_document(document)
+        if next_node == "execute_tool" && budget_controller(state).spent?(state.fetch(:budget_state, nil))
+          raise StreamBudgetExceededError, "the model asked for tools on its final call"
+        end
+
         {
           "document" => document_projection(document),
           "next_node" => next_node
@@ -386,38 +394,24 @@ module Tamoz
         end
       end
 
-      # P2: the ONLY tool-executing node. Validates the model's tool request
-      # against the wire tool catalog, then executes it as a journaled unsafe
-      # effect (logical key, slot = tool_results.length). Success AND refusal
-      # results are journaled and appended.
+      # P2: the ONLY tool-executing node. Runs every request in order, each a
+      # journaled slot, up to the tool budget. A request for a tool the wire
+      # catalog does not grant, or past the budget, is recorded without being
+      # dispatched: the model sees it, nothing counts it, nothing may cite it.
       def execute_tool(state, context)
-        document = state.fetch(:document)
-        request = document.fetch("tool_requests").first
-        tool_name = request.fetch("name")
-        arguments = request.fetch("arguments") || {}
-        validate_tool_request!(
-          state.fetch(:wire).fetch("tool_catalog_json", "").to_s, tool_name, arguments
-        )
-
-        episode = state.fetch(:episode)
+        granted = granted_tool_names(state.fetch(:wire))
         budget = budget_controller(state)
-        budget.check_tool_call!(state.fetch(:budget_state, nil))
-        slot = Array(state.fetch(:tool_results, [])).length
-        result = @tool_call.call(
-          context:,
-          episode_id: episode.fetch("episode_id"),
-          slot:,
-          tool_name:,
-          arguments:
-        )
-        enforce_successful_outcome!(result, subject: "tool")
+        budget_state = state.fetch(:budget_state, nil)
+        first_slot = Array(state.fetch(:tool_results, [])).length
+        results = state.fetch(:document).fetch("tool_requests").each_with_index.map do |request, index|
+          next undispatched_entry(request, "not_granted") if granted && !granted.include?(request.fetch("name"))
+          next undispatched_entry(request, "budget_spent") if budget.tool_calls_left(budget_state).zero?
 
-        {
-          "tool_results" => [result.projection],
-          "budget_state" => budget.reconcile_tool(
-            state.fetch(:budget_state, nil), result.projection
-          )
-        }
+          projection = dispatch_tool(context, state.fetch(:episode), request.merge("slot" => first_slot + index))
+          budget_state = budget.reconcile_tool(budget_state, projection)
+          projection
+        end
+        {"tool_results" => results, "budget_state" => budget_state}
       end
 
       # P2: deterministic — rebuilds the frame with the attributed tool
@@ -426,10 +420,12 @@ module Tamoz
       # logical key is deterministic.
       def rebuild_frame(state, _context)
         frame = assemble_frame(
-          state, skills: verified_skills(state.fetch(:wire)),
+          state,
+          skills: verified_skills(state.fetch(:wire)),
           memory: memory_entries(state),
           tool_results: Array(state.fetch(:tool_results, [])),
-          repair_directive: state[:repair_directive]
+          repair_directive: state[:repair_directive],
+          **tool_frame(state)
         )
         {"frame" => frame_projection(frame)}
       end
@@ -471,6 +467,40 @@ module Tamoz
       end
 
       private
+
+      def dispatch_tool(context, episode, request)
+        result = @tool_call.call(
+          context:, episode_id: episode.fetch("episode_id"), slot: request.fetch("slot"),
+          tool_name: request.fetch("name"), arguments: request.fetch("arguments")
+        )
+        enforce_successful_outcome!(result, subject: "tool")
+        result.projection.merge("purpose" => request.fetch("purpose"))
+      end
+
+      def undispatched_entry(request, code)
+        message = UNDISPATCHED.fetch(code)
+        {
+          "tool" => request.fetch("name"), "purpose" => request.fetch("purpose"), "is_error" => true,
+          "error_code" => code, "result_json" => message, "result_bytes" => message.bytesize, "dispatched" => false
+        }
+      end
+
+      # nil when the wire carries no catalog (a composition without one grants whatever its host binds).
+      def granted_tool_names(wire)
+        json = wire.fetch("tool_catalog_json", "").to_s
+        return nil if json.empty?
+
+        Array(Tamoz::Core.parse_json_strict(json)).map { |entry| entry.fetch("name", nil) }
+      end
+
+      def tool_frame(state)
+        tools = Array(state.fetch(:wire)["tool_surface"])
+        return {} if tools.empty?
+
+        budget = budget_controller(state)
+        {tooling: EpisodeFrameBuilder::Tooling.new(tools:, budget: budget.tool_limit,
+                                                   final: budget.final_call?(state.fetch(:budget_state, nil)))}
+      end
 
       def recall_identity(snapshot, tenant)
         {
@@ -597,21 +627,6 @@ module Tamoz
         end
       end
 
-      # Fail closed: the requested tool must be named in the wire's tool
-      # catalog and the arguments must be a bounded mapping.
-      def validate_tool_request!(tool_catalog_json, tool_name, arguments)
-        unless tool_catalog_json.empty?
-          parsed = Tamoz::Core.parse_json_strict(tool_catalog_json)
-          names = Array(parsed).map { |entry| entry.fetch("name", nil) }
-          unless names.include?(tool_name)
-            raise ProtocolError, "episode_tool/not_in_catalog: #{tool_name}"
-          end
-        end
-        unless arguments.is_a?(Hash)
-          raise ProtocolError, "episode_tool/arguments_not_mapping"
-        end
-      end
-
       def endpoint_for(role)
         settings = role.normalized_settings || {}
         ROLE_ENDPOINT_KEYS.each do |key|
@@ -688,8 +703,9 @@ module Tamoz
             {"type" => i.type, "parameter_preset" => i.parameter_preset, "parameters" => i.parameters}
           end,
           "tool_requests" => Array(document.tool_requests).map do |t|
-            {"name" => t.name, "arguments" => t.arguments}
-          end
+            {"name" => t.name, "arguments" => t.arguments, "purpose" => t.purpose}
+          end,
+          "evidence_gaps" => Array(document.evidence_gaps).map { |gap| {"datum" => gap.datum, "why" => gap.why} }
         }
       end
 
