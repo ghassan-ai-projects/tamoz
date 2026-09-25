@@ -44,3 +44,11 @@ harness that scores an agent.
   but sized in characters (history lines, reply parts); every ASCII scenario passed, and the
   owner's bot died after a few long replies containing a dash and emoji. A soak that runs a long
   conversation with multi-byte replies (`long_conversation`) found both in one run.
+- **Ground a success in what the evidence said, not in the fact that something was cited.** The first
+  active-investigation grader counted "correct cause + cites a non-error tool result" as success; a blind
+  prober (useless filter, guessed cause, cited the empty reply) scored 0% fabrication, and the oracle still
+  passed with a server that returned nothing. Give each cell a decisive-evidence marker as data and require a
+  cited result that contains it; mutate the server to return nothing and watch the oracle fail.
+- **Repeats of one input are not samples.** At temperature 0, "2 repeats x 4 seeds" of 6 cells is 6 samples,
+  not 48; a Wilson interval over 48 overstates certainty about eightfold. Make seeds change the input, and put
+  the headline over distinct cells.

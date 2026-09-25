@@ -1,0 +1,102 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Measurement plan 16 against a REAL model: the investigation corpus through the real episode graph, the real
+# probe layer and the fixture MCP server. A runner, never part of CI; the one place this eval calls a real provider.
+# Only its output says anything about the model. It refuses to spend anything until the scripted controls show
+# the grader discriminates.
+#
+#   export OPENROUTER_API_KEY=... LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+#   ruby script/investigation_real_run [REPEATS] [SEEDS] [WORKERS] > result.json
+#
+# A seed changes the log itself (which distractor lines appear) and the pond id; a repeat re-asks the same input.
+# Runs of one cell are not independent: the report's cell-level rates use the number of distinct cells as n.
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path('../test', __dir__))
+$stdout.sync = true
+
+require 'json'
+require 'time'
+require 'tamoz/agent'
+require 'tamoz/sqlite'
+require 'tamoz/stream/episode_worker'
+require 'support/investigation_control_gate'
+
+# Runs every cell REPEATS x SEEDS times under a real provider and prints the graded report.
+module InvestigationRealRun
+  module_function
+
+  PROVIDER = ENV.fetch('TAMOZ_PROVIDER', 'openrouter')
+  MODEL = ENV.fetch('TAMOZ_MODEL', 'z-ai/glm-5.3-flash')
+
+  def profile_builder
+    lambda do |root:, model:, **|
+      { 'profile' => { 'schema_version' => 1, 'profile_id' => 'tamoz-real', 'profile_version' => '1.0',
+                       'canonical_root' => root },
+        'roots' => { 'workspace' => root }, 'tools' => { 'allowed' => %w[read_file list_directory] },
+        'policy' => { 'allow_changes' => false, 'default_check_safety' => 'read_only', 'graph_version' => '1',
+                      'behavior_version' => '1.0', 'tool_catalog_digest' => "sha256:#{'0' * 64}" },
+        'model_roles' => { 'fast' => { 'provider' => PROVIDER, 'model' => model,
+                                       'normalized_settings' => { 'temperature' => '0',
+                                                                  'response_format' => 'json_object' } } } }
+    end
+  end
+
+  def run(repeats, seeds, workers)
+    preflight!
+    warn "REAL run: provider=#{PROVIDER} model=#{MODEL} repeats=#{repeats} seeds=#{seeds} workers=#{workers}"
+    jobs = InvestigationEval.cells.product((0...seeds).to_a, (0...repeats).to_a)
+    results, reads = InvestigationEval.with_fixture(seeds: (0...seeds).to_a) do |fixture|
+      [run_jobs(jobs, fixture, workers), fixture.server_calls]
+    end
+    report = report(results, repeats, seeds)
+    dispatched = report.dig('summary', 'dispatched_calls')
+    puts JSON.pretty_generate(report.merge('server_calls' => reads, 'reads_match_dispatched' => reads == dispatched))
+  end
+
+  def preflight!
+    abort 'commit the tree first: the report names the commit that produced it' unless
+      `git -C #{InvestigationEval::ROOT} status --porcelain`.strip.empty?
+    failures = InvestigationControlGate.control_failures(InvestigationControlGate.control_summaries)
+    abort "controls do not discriminate; nothing spent:\n#{failures.join("\n")}" unless failures.empty?
+  end
+
+  def run_jobs(jobs, fixture, workers)
+    queue = Queue.new
+    jobs.each { |job| queue << job }
+    Array.new(workers) do
+      Thread.new do
+        results = []
+        while (job = queue.pop(true) rescue nil) # rubocop:disable Style/RescueModifier
+          results << run_job(*job, fixture)
+        end
+        results
+      end
+    end.flat_map(&:value)
+  end
+
+  # One job's failure is recorded as a failed run, never lost with the rest; each result is logged as it lands.
+  def run_job(cell, seed, repeat, fixture)
+    composition = EpisodeComposition.build(endpoint: 'unused', model: MODEL, profile_builder:,
+                                           probe_source: fixture.source)
+    result = InvestigationEval.run_cell(cell, seed, composition, "real-#{cell.fetch('id')}-s#{seed}-r#{repeat}")
+  rescue StandardError => e
+    result = InvestigationGrader::CellResult.new(cell_id: cell.fetch('id'), kind: cell.fetch('kind'), seed:,
+                                                 outcome: 'failed', selected: nil, dispatched: 0, aimed_calls: 0,
+                                                 ungranted: 0, refusal: "#{e.class.name}: #{e.message[0, 200]}")
+  ensure
+    warn JSON.generate(result.to_h.merge(repeat:)) if result
+  end
+
+  def report(results, repeats, seeds)
+    { 'label' => 'real-model', 'provider' => PROVIDER, 'model_requested' => MODEL,
+      'sampling' => { 'temperature' => '0' },
+      'repeats' => repeats, 'seeds' => seeds, 'finished_at' => Time.now.utc.iso8601,
+      'commit' => `git -C #{InvestigationEval::ROOT} rev-parse HEAD`.strip,
+      'corpus_digest' => InvestigationEval.corpus_digest, 'summary' => InvestigationGrader.summarize(results),
+      'runs' => results.map(&:to_h) }
+  end
+end
+
+InvestigationRealRun.run(Integer(ARGV.fetch(0, '2')), Integer(ARGV.fetch(1, '4')), Integer(ARGV.fetch(2, '6')))

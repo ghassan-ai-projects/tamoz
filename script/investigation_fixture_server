@@ -1,0 +1,66 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Deterministic MCP stdio server for the active-investigation eval: one read-only `query` tool over the pond logs
+# the corpus JSON describes. A stream is an opaque pond id derived from (cell, seed); the seed picks the distractor
+# lines, so each seed is a different log with the same decisive line. Every call is appended to the call log named
+# by argv, so the eval can prove how many reads happened. Fixture data only.
+#
+#   ruby script/investigation_fixture_server CORPUS.json CALLS.log
+
+require 'digest'
+require 'json'
+require 'mcp'
+
+CORPUS = JSON.parse(File.read(ARGV.fetch(0)))
+CALLS = ARGV.fetch(1)
+SERVER = CORPUS.fetch('server')
+CELLS = CORPUS.fetch('cells').to_h { |cell| [cell.fetch('id'), cell] }
+MAX_SEEDS = 100
+
+def pond_id(cell_id, seed) = "pond-#{Digest::SHA256.hexdigest("#{cell_id}~#{seed}")[0, 8]}"
+
+STREAMS = CELLS.keys.product((0...MAX_SEEDS).to_a).to_h { |id, seed| [pond_id(id, seed), [id, seed]] }
+
+def text_response(text, error: false) = MCP::Tool::Response.new([{ type: 'text', text: }], error:)
+
+def log_for(stream)
+  cell_id, seed = STREAMS[stream.to_s]
+  return nil unless cell_id
+
+  cell = CELLS.fetch(cell_id)
+  crash = cell['without_crash_lines'] ? [] : SERVER.fetch('crash_lines')
+  lines = cell.fetch('lines') + distractors(cell, seed) + crash
+  lines.sort_by { |line| [clock_day(line), line] }
+end
+
+# In-range readings, never of the families the cell excludes (by default its own cause's), so no line contradicts it.
+def distractors(cell, seed)
+  excluded = cell.fetch('exclude_families') { [CORPUS.fetch('cause_families')[cell.fetch('truth')]] }
+  pool = SERVER.fetch('distractors').reject { |entry| excluded.include?(entry.fetch('family')) }
+  random = Random.new(Digest::SHA256.hexdigest("#{cell.fetch('id')}~#{seed}").to_i(16))
+  pool.sample([SERVER.fetch('distractors_per_log'), pool.length].min, random:).map { |entry| entry.fetch('line') }
+end
+
+# The log covers the day before an early-morning crash: afternoon and evening lines come first.
+def clock_day(line) = Integer(line[0, 2], 10) >= 12 ? 0 : 1
+
+Query = MCP::Tool.define(
+  name: 'query', description: 'Read-only search of one log stream.',
+  input_schema: { type: 'object', properties: { 'selector' => { type: 'string' }, 'filter' => { type: 'string' } },
+                  required: %w[selector filter] }
+) do |selector: nil, filter: nil, **|
+  File.write(CALLS, "#{JSON.generate({ 'selector' => selector, 'filter' => filter })}\n", mode: 'a')
+  lines = log_for(selector)
+  next text_response("unknown stream #{selector}", error: true) unless lines
+
+  terms = filter.to_s.downcase.split
+  next text_response(lines.last(SERVER.fetch('recent_lines')).join("\n")) if terms.empty?
+
+  matched = lines.select { |line| terms.any? { |term| line.downcase.include?(term) } }
+  next text_response(matched.first(SERVER.fetch('max_matches')).join("\n")) unless matched.empty?
+
+  text_response("no line matches #{filter.inspect}")
+end
+
+MCP::Server::Transports::StdioTransport.new(MCP::Server.new(name: 'investigation-fixture', tools: [Query])).open
