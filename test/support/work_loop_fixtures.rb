@@ -98,7 +98,8 @@ module WorkLoopFixtures
     end
   end
 
-  def with_work_workspace(files: {})
+  # effect_attempt_ttl: real seconds between preparing an effect and starting it; only a crash test wants it short.
+  def with_work_workspace(files: {}, effect_attempt_ttl: 5.0)
     Dir.mktmpdir('tamoz-work') do |directory|
       root = File.join(directory, 'workspace')
       FileUtils.mkdir_p(root)
@@ -107,7 +108,7 @@ module WorkLoopFixtures
         File.write(File.join(root, path), text)
       end
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'tamoz.sqlite3'),
-                                           limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 0.2))
+                                           limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl:))
       yield File.realpath(root), adapter
     ensure
       adapter&.close

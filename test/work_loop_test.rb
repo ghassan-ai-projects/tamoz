@@ -265,7 +265,7 @@ class WorkLoopEffectCrashTest < Minitest::Test
   include WorkLoopFixtures
 
   def test_a_crash_after_a_patch_started_reconciles_and_never_applies_twice
-    with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }) do |root, adapter|
+    with_work_workspace(files: { 'lib/value.rb' => "VALUE = 1\n" }, effect_attempt_ttl: 0.2) do |root, adapter|
       patch = patch_call(root, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')
       first = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
                                                     { calls: [patch] }],

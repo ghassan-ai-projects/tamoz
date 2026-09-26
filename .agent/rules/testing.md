@@ -61,3 +61,8 @@
 - **Stop a gRPC server from a thread, never from inside the trap.** `server.stop` takes a mutex, which Ruby
   forbids in trap context: the stream worker raised `ThreadError`, aborted with SIGABRT, and never ran its
   `ensure`. `trap("TERM") { Thread.new { server.stop } }`.
+- **Only the crashed owner gets a short lease.** Crash tests shorten the lease so the dead owner's claim
+  expires after a short sleep, but several gave the *recovering* runtime the same 0.1–0.2 s lease (and the
+  work-loop fixture gave every effect 0.2 s to go from prepared to started). On a loaded CI runner the
+  recovery outlived its own lease and failed with `LeaseLostError`, on `main` as well as on branches. Give the
+  recovering owner, and any test that does not wait for expiry, a normal lease (5 s).

@@ -82,7 +82,7 @@ class SQLiteCrashRecoveryTest < Minitest::Test
         sleep 0.12
         adapter = Tamoz::SQLite::Adapter.new(
           path:,
-          limits: Tamoz::SQLite::Limits.new(lease_ttl: 0.1)
+          limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0)
         )
         app = definition.compile(checkpointer: adapter)
         request = app.durable_runner.fetch(
@@ -122,7 +122,7 @@ class SQLiteCrashRecoveryTest < Minitest::Test
 
       adapter = Tamoz::SQLite::Adapter.new(
         path:,
-        limits: Tamoz::SQLite::Limits.new(lease_ttl: 0.1)
+        limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0)
       )
       app = marker_definition(marker).compile(checkpointer: adapter)
       recovered = app.durable_runner.recover(

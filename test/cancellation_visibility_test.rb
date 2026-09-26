@@ -337,7 +337,7 @@ class CancellationVisibilityTest < Minitest::Test
       second = Tamoz::Agent::WorkerRuntime.open(
         directory,
         model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
-        lease_ttl: 0.2
+        lease_ttl: 5.0
       )
       begin
         worker = Tamoz::Agent::Worker.new(
