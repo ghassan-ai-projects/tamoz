@@ -56,6 +56,8 @@ module InvestigationRealRun
   end
 
   def preflight!
+    key = Tamoz::Agent::Providers::ENV_KEYS.fetch(PROVIDER.to_sym)
+    abort "#{key} is not set: every episode would fail before reaching the model" if ENV[key].to_s.strip.empty?
     abort 'commit the tree first: the report names the commit that produced it' unless
       `git -C #{InvestigationEval::ROOT} status --porcelain`.strip.empty?
     failures = InvestigationControlGate.control_failures(InvestigationControlGate.control_summaries)

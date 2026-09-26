@@ -100,7 +100,7 @@ module Tamoz
 
       private
 
-      def used(state, key) = (state || ZERO).fetch(key, 0).to_i
+      def used(state, key) = state.to_h.fetch(key, 0).to_i
 
       def add_available_usage(base, usage)
         return unless usage && usage.available

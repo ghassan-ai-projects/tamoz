@@ -24,6 +24,7 @@ module InvestigationGrader
       @corpus = corpus
       @cell = cell
       @seed = seed
+      @terminal = terminal
       @produced = terminal&.status == :TERMINAL_STATUS_PRODUCED
       @state = state
       @document = @produced ? state.fetch(:document, {}) : {}
@@ -33,7 +34,7 @@ module InvestigationGrader
     def result
       CellResult.new(cell_id: @cell.fetch('id'), kind: @cell.fetch('kind'), seed: @seed, outcome:, selected:,
                      dispatched: calls.length, call_errors:, aimed_calls:, ungranted:,
-                     refusal: @produced ? nil : @state[:repair_directive])
+                     refusal: @produced ? nil : failure)
     end
 
     private
@@ -59,6 +60,11 @@ module InvestigationGrader
       return 'symptom_only' if symptom?
 
       answered_calls.empty? ? 'abstained_without_probing' : 'abstained_after_probing'
+    end
+
+    def failure
+      code = @terminal&.reason_code.to_s
+      @state[:repair_directive] || "terminal/#{code.empty? ? @terminal&.status : code}"
     end
 
     def resolvable? = @cell.fetch('kind') == 'resolvable'

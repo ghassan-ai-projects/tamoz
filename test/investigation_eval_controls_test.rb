@@ -33,6 +33,14 @@ class InvestigationEvalControlsTest < Minitest::Test
     assert_equal 1, InvestigationGrader.expected_reads(summary)
   end
 
+  def test_a_failed_episode_records_why_it_failed
+    terminal = Struct.new(:status, :reason_code).new(:TERMINAL_STATUS_FAILED, 'model_call_failed')
+    run = InvestigationGrader::Cell.new(InvestigationEval.corpus, InvestigationEval.cells.first, 0, terminal, {}).result
+
+    assert_equal 'failed', run.outcome
+    assert_equal({ 'terminal/model_call_failed' => 1 }, InvestigationGrader.summarize([run]).fetch('refusal_reasons'))
+  end
+
   def test_the_interval_is_a_wilson_interval
     assert_equal [0.4902, 0.9433], InvestigationGrader.rate(8, 10).fetch('interval')
     assert_nil InvestigationGrader.rate(0, 0).fetch('value')

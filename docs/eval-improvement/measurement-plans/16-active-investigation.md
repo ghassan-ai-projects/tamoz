@@ -115,3 +115,10 @@ that as no answer, but the corpus prompt never said so. Fabrication is not ~0, s
 One sentence added to the corpus prompt: the alarm code is what is being explained, not a cause; put most
 probability on the cause a tool result shows, or on `unknown`. Run 2 uses the same 29 cells, so it is a
 development-set number after one change, not a held-out result.
+
+## Run 2 — invalid, not counted (2026-09-26)
+
+Started at `de60b2e0` with the clarified prompt, but without `OPENROUTER_API_KEY` in the environment: all 232
+episodes failed before any model call (0 probe calls), and the report recorded no reason. It says nothing about
+the model or the prompt change. The run now refuses to start without the provider's key, and a failed episode
+records its terminal reason (`terminal/<reason_code>`). The prompt change is still unmeasured.

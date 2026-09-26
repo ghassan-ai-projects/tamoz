@@ -6,6 +6,8 @@ module Tamoz
     class FindingsReport
       CONFIDENCES = %w[low medium high].freeze
       MAX_TEXT = 2000
+      SECTIONS = { 'findings' => [1..20, %w[statement evidence]], 'gaps' => [0..20, %w[datum why]],
+                   'proposals' => [0..10, %w[action rationale evidence]] }.freeze
 
       attr_reader :document
 
@@ -15,11 +17,8 @@ module Tamoz
 
         new({ 'summary' => text!(arguments['summary'], 'summary'),
               'hypothesis' => text!(arguments['hypothesis'], 'hypothesis'),
-              'confidence' => confidence!(arguments['confidence']),
-              'findings' => entries!(arguments['findings'], 'findings', 1..20, %w[statement evidence], gathered),
-              'gaps' => entries!(arguments['gaps'], 'gaps', 0..20, %w[datum why], gathered),
-              'proposals' => entries!(arguments['proposals'], 'proposals', 0..10, %w[action rationale evidence],
-                                      gathered) }, gathered)
+              'confidence' => confidence!(arguments['confidence']) }
+              .merge(SECTIONS.keys.to_h { |name| [name, entries!(arguments[name], name, gathered)] }), gathered)
       end
 
       def self.text!(value, name)
@@ -35,15 +34,17 @@ module Tamoz
         raise ReportError, "confidence must be one of #{CONFIDENCES.join(', ')}"
       end
 
-      def self.entries!(value, name, count, fields, gathered)
+      def self.entries!(value, name, gathered)
+        count = SECTIONS.fetch(name).first
         unless value.is_a?(Array) && count.cover?(value.length)
           raise ReportError, "#{name} must be a list of #{count.min}..#{count.max} entries"
         end
 
-        value.map { |entry| entry!(entry, name, fields, gathered) }
+        value.map { |entry| entry!(entry, name, gathered) }
       end
 
-      def self.entry!(entry, name, fields, gathered)
+      def self.entry!(entry, name, gathered)
+        fields = SECTIONS.fetch(name).last
         raise ReportError, "each of #{name} must be an object with #{fields.join(', ')}" unless
           entry.is_a?(Hash) && (entry.keys - fields).empty?
 

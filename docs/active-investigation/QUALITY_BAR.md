@@ -22,7 +22,7 @@ proves nothing.
 | A5 | I5 — episode tool calls replay from the journal; a crash between slot 1 and 2 of a three-request turn re-executes nothing already done; a crash *during* a slot re-runs that slot (idempotent) | graph test over the real checkpointer | PASS — `stream_episode_investigation_test#test_a_crash_between_slots…` (slot 0 replayed, interrupted slot 1 re-read, slot 2 once). Stand-in: a raised `Tamoz::TimeoutError` leaves the attempt open; a same-fence redelivery after a real process death is not covered |
 | A6 | I6 — tool results appear only in the user section, fenced and attributed | frame test | PASS — `agent_episode_investigation_test#test_results_are_fenced_data…` (results only in the user section; the system section gets only the pinned surface and budget) |
 | A7 | I7 — a secret-shaped value in a probe result never reaches the frame, the journal or the report | unit test | PASS (probe side) — key bodies, tokens and structured content scrubbed via `Tamoz::Core.scrub_secrets`; mutation (header-only patterns) fails |
-| A8 | I8 — an episode citing an ungathered tool id is refused; a report citing an ungathered call id is refused | unit tests, mutation: drop the check | OPEN |
+| A8 | I8 — an episode citing an ungathered tool id is refused; a report citing an ungathered call id is refused | unit tests, mutation: drop the check | PASS — episode: `test_citing_a_failed_probe_is_refused`, and the forger control is refused at `ungrounded_evidence_refs` on all 29 cells; report: `test_a_report_citing_an_ungathered_call_goes_back_to_the_model` fails when the check is dropped (mutation) |
 | A9 | I9 — no mutating capability is reachable in an investigation turn; `report_findings` executes nothing | work-loop test | PASS — `tamoz investigate` offers no mutating tool (`agent_cli_investigate_test`), refuses `--allow-changes`/`--profile`; a turn that may change files is never offered `report_findings` (`test_a_turn_that_may_change_files_is_not_offered_the_report`) |
 | A10 | `sql_select` refuses writes and multi-statements (reusing `GovernedDatabaseSource`) | unit test | PASS — `test_free_slots_are_bounded` (DELETE and multi-statement refused); database servers accept only a `query` slot |
 | A11 | Gap K — a server that backs a probe exposes no raw tool on the capability surface | unit test | PASS — execute/validate/preview/maximum_effect_output_bytes/read_only? refuse hidden tools; integration test over the real MCP test server; mutation fails |
@@ -68,31 +68,31 @@ intelligence.
 
 | # | Gate | Check | Status |
 |---|---|---|---|
-| D1 | `rake ci` green | command output | OPEN |
-| D2 | `rake ci_full` green in both locales (WP3 touches MCP) | command output | OPEN |
-| D3 | RuboCop: no new offense in any touched file | `bundle exec rubocop <files>` vs `git show HEAD:<file>` | OPEN |
-| D4 | enola: `diff_snapshot` against the WP0 baseline shows no new cycle, layer violation or unintended coupling | enola output | OPEN |
-| D5 | Reek: `rake quality:reek` is already red on HEAD (stale baseline, 60+ files; proven before this branch). Graded instead: new and changed production files carry no `BooleanParameter`, `ControlParameter` or `LongParameterList` smell, and their count is in line with sibling files | `reek <files>` | OPEN |
+| D1 | `rake ci` green | command output | PASS — part of `ci_full` below: `test_fast` 2655 runs, 0 failures (4 skips), both locales |
+| D2 | `rake ci_full` green in both locales (WP3 touches MCP) | command output | PASS for every test, NOT RUN for one check — both locales: `test_fast` 2655 and `test_slow` 258 runs, 0 failures. `stream:proto:check` cannot execute on this machine (grpc-tools ships an x86_64 `protoc`, no Rosetta: `EBADARCH`); the branch changes no `.proto` or generated file |
+| D3 | RuboCop: no new offense in any touched file | `bundle exec rubocop <files>` vs `git show HEAD:<file>` | PASS — 65 changed Ruby/script files: 12 offenses, every one present with the same count in the file on `main` (`session_effects`, `situation_request`, `generate_requirements_manifest`, `agent_cli_test`) |
+| D4 | enola: `diff_snapshot` against the WP0 baseline shows no new cycle, layer violation or unintended coupling | enola output | PASS — `diff_snapshot` against the WP0 baseline: 0 new findings, no cycle or layer violation; only fan-in counts on `Tamoz::Core` helpers grew (new callers of `jcs`/`digest`/`deep_freeze`) |
+| D5 | Reek: `rake quality:reek` is already red on HEAD (stale baseline, 60+ files; proven before this branch). Graded instead: new and changed production files carry no `BooleanParameter`, `ControlParameter` or `LongParameterList` smell, and their count is in line with sibling files | `reek <files>` | PASS (graded as written) — against `main`, 7 targeted smells differ: 3 removed in this audit (`ReceiptBudgetController#used` ControlParameter, `FindingsReport.entries!`/`entry!` LongParameterList, via a `SECTIONS` table); remaining: `EpisodeRunner#execute_turn` (4 params) new, and `EpisodeFrameBuilder#build`, `EpisodeRunner#initialize`, `WorkGate#result` each one parameter longer. Each file already carries 3–15 of the same smell, so the count is in line with siblings |
 
 ## E. Simplicity and standards
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| E1 | No new gem; `tamoz-stream` does not require capabilities code | `git diff --stat`, gemspecs | OPEN |
+| E1 | No new gem; `tamoz-stream` does not require capabilities code | `git diff --stat`, gemspecs | PASS — no gemspec or Gemfile change; `tamoz-stream` names `ProbeSource` only in a comment (the source is injected, never required) |
 | E2 | No new episode graph node or branch; changed nodes bump their node `version:` | diff of `episode_graph.rb` | PASS — no node or branch added; `build_frame` 2, `validate` 3, `execute_tool` 2, `rebuild_frame` 2 |
-| E3 | No domain literal in Ruby (probe data only in operator config and test fixtures) | review | OPEN |
-| E4 | No compatibility shim, no v2/v3 tolerance code | review | OPEN |
-| E5 | Comments follow `AGENTS.md` (none by default, one or two lines of "why" at most) | review | OPEN |
-| E6 | Every package reviewed by a fresh subagent; every critical and high finding fixed before its commit | review log below | OPEN |
-| E7 | New files mode 644 (scripts 755) | `git ls-files -s` | OPEN |
+| E3 | No domain literal in Ruby (probe data only in operator config and test fixtures) | review | PASS — no domain word in added Ruby under `gems/` or `bin/`; `probe_pond_log` appears only in the approval policy's YAML simulations (data); corpus, prompt, controls and server data live in `test/fixtures/investigation/aquaculture.json` |
+| E4 | No compatibility shim, no v2/v3 tolerance code | review | PASS — per-WP reviews found none; no legacy-row or old-shape branch in the diff |
+| E5 | Comments follow `AGENTS.md` (none by default, one or two lines of "why" at most) | review | PASS — per-WP reviews checked comment density; new comments are one-line "why"s |
+| E6 | Every package reviewed by a fresh subagent; every critical and high finding fixed before its commit | review log below | PASS — every package and the run-1 follow-up reviewed by a fresh subagent; all critical/high findings fixed before their commits (log below) |
+| E7 | New files mode 644 (scripts 755) | `git ls-files -s` | PASS — 25 new files 100644, the 2 scripts 100755 |
 
 ## F. Honesty and docs
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| F1 | Reports distinguish plumbing tests from real-model results; nothing scripted is described as intelligence | review of docs and final report | OPEN |
-| F2 | PLAN.md and README.md match what was built (deviations recorded) | review | OPEN |
-| F3 | Lessons learned are recorded in `AGENTS.md` or `.agent/rules/` in the change that taught them | review | OPEN |
+| F1 | Reports distinguish plumbing tests from real-model results; nothing scripted is described as intelligence | review of docs and final report | PASS — plan 16, this bar and the final report label the scripted controls as plumbing and run 1 as the only real-model result; run 2 recorded as invalid, not as a result |
+| F2 | PLAN.md and README.md match what was built (deviations recorded) | review | PASS — PLAN.md/README.md deviations recorded per WP (B4 frame bytes, B6 narrowed, G4 time range, R13 policy entry pending owner review) |
+| F3 | Lessons learned are recorded in `AGENTS.md` or `.agent/rules/` in the change that taught them | review | PASS — `.agent/rules/evaluation.md` and `testing.md` carry the lessons of WP5 and run 1 |
 
 ## Review log
 
@@ -105,3 +105,4 @@ intelligence.
 | WP4 session + CLI | 2 high (prompt text hardcoded in Ruby and new prompts unpinned: red gate; `report_findings` could end a turn that changed files as satisfied), 1 medium (`investigate` not held read-only), test gaps, 8 low | Fixed: labels moved to a pinned prompt file; the report is offered only on read-only turns and only as the last call of a step; `investigate` refuses `--allow-changes` and `--profile`; approval wildcard tests; header pinned from HEAD; chat surface test; comment placement; clearer messages | WP4 commit |
 | WP5 eval | Round 1: 1 critical (success never checked what the probe returned), 5 high (oracle passed on an empty server; forger gate unasserted; precision vacuous; repeats counted as samples; keyword ceiling corpus). Round 2: 1 critical (the default prompt told the model to cite only facts), 3 high (unresolvable passable blind; causes after the crash; contradicting distractors). Round 3: 1 contradiction (`level-drop`), 2 medium | All fixed; grading rules and known limits recorded in plan 16 before the run; lessons in `.agent/rules/evaluation.md` | WP5 commit |
 | Run 1 follow-up | 0 critical/high; 3 medium (a `probe_failed` can fail before the send, so the refusal explanation is not the only one; the `probe_failed` split was untested; C5 text named a run that did not exist yet), 2 low (stale control count and read wording) | All fixed: per-run `call_errors` tally, grader unit test for the split, wording corrected; prompt sentence judged a fair task clarification, run 2 labelled development-set | this commit |
+| Run 2 + final audit | Run 2 invalid (no provider key; every episode failed before the model, reason unrecorded) | Preflight refuses a missing key; failed episodes record `terminal/<reason_code>`, unit-tested; run 2 recorded as invalid in plan 16. Audit removed 3 new Reek smells | final commit |
