@@ -381,6 +381,18 @@ class ApprovalPolicyDocumentTest < Minitest::Test
     end
   end
 
+  def test_the_longest_wildcard_prefix_wins_whatever_the_order
+    tiers = { 'probe_*' => { 'tier' => 'read', 'verb' => 'read' },
+              'probe_admin_*' => { 'tier' => 'local_execute', 'verb' => 'execute' } }
+    levels = { 'read' => { 'default' => 'allow' }, 'local_execute' => { 'default' => 'ask' } }
+    write_policy_yaml('tool_tiers' => tiers, 'tiers' => levels) do |path|
+      document = Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
+
+      assert_equal :local_execute, document.tier_for('probe_admin_dump', :bounded).fetch(:name)
+      assert_equal :read, document.tier_for('probe_pond_log', :bounded).fetch(:name)
+    end
+  end
+
   private
 
   def write_policy_yaml(overrides = {}, &)

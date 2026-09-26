@@ -50,12 +50,11 @@ module Tamoz
               "profile #{profile_name.inspect} could not be applied to #{base_path}: #{error.class}: #{error.message}"
       end
 
-      # A key ending in `*` classifies every tool whose name starts with the rest of the key.
+      # A key ending in `*` classifies every tool whose name starts with the rest of the key; the longest prefix wins.
       def tool_entry(tool)
         name = tool.to_s
-        tool_tiers[name.to_sym] || tool_tiers.find do |key, _entry|
-          key.end_with?("*") && name.start_with?(key.to_s.delete_suffix("*"))
-        end&.last
+        wildcards = tool_tiers.select { |key, _| key.end_with?("*") && name.start_with?(key.to_s.delete_suffix("*")) }
+        tool_tiers[name.to_sym] || wildcards.max_by { |key, _| key.length }&.last
       end
 
       # The structural rule has one home (ADR §7): an unclassified tool falls

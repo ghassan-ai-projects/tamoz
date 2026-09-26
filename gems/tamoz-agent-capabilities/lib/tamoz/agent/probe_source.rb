@@ -48,6 +48,11 @@ module Tamoz
       def probe?(name) = @catalog.probes.key?(String(name))
       def probe_description(name) = @catalog.probe(name).description
 
+      # A planning-surface entry for a probe: its operator-authored description, never server text.
+      def self.planning_entry(source, name)
+        [name, source.probe_description(name)] if source.respond_to?(:probe?) && source.probe?(name)
+      end
+
       def descriptor_for!(name)
         descriptor_for(name) || raise(Tamoz::Agent::ToolError, "unknown tool #{String(name).inspect}")
       end
@@ -138,11 +143,14 @@ module Tamoz
         refusal_result('probe_failed', e.message)
       end
 
+      # Checked once the server is ours: a call that queued past its deadline or was cancelled never reads.
       def run_episode_probe(call, context)
         probe = call.probe
-        free = free_arguments(probe, call.arguments, allowed: probe.free.keys)
-        check_still_wanted!(context)
-        backing_call(context, probe, resolve(probe, free, call.scope))
+        resolved = resolve(probe, free_arguments(probe, call.arguments, allowed: probe.free.keys), call.scope)
+        @locks.fetch(probe.server).synchronize do
+          check_still_wanted!(context)
+          @source.execute(context, probe.backing_id, resolved)
+        end
       end
 
       def backing_call(context, probe, arguments)
