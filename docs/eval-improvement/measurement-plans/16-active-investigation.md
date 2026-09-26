@@ -116,9 +116,40 @@ One sentence added to the corpus prompt: the alarm code is what is being explain
 probability on the cause a tool result shows, or on `unknown`. Run 2 uses the same 29 cells, so it is a
 development-set number after one change, not a held-out result.
 
-## Run 2 — invalid, not counted (2026-09-26)
+## Run 2a — invalid, not counted (2026-09-26)
 
-Started at `de60b2e0` with the clarified prompt, but without `OPENROUTER_API_KEY` in the environment: all 232
-episodes failed before any model call (0 probe calls), and the report recorded no reason. It says nothing about
-the model or the prompt change. The run now refuses to start without the provider's key, and a failed episode
-records its terminal reason (`terminal/<reason_code>`). The prompt change is still unmeasured.
+Started at `de60b2e0` with the clarified prompt, but the key was never exported (`.env` writes `KEY = value`, and
+the export expected `KEY=value`): all 232 episodes failed before any model call, and the report recorded no reason.
+It says nothing about the model. The run now refuses to start without the provider's key, and a failed episode
+records its terminal reason (`terminal/<reason_code>`).
+
+## Run 2 — real model, after the prompt change (2026-09-26, development set)
+
+Same model, sampling, cells, seeds and repeats as run 1, at commit `5cdbc2ea`; the only input change is the prompt
+sentence above. Same 29 cells, so this is a development-set number, not a held-out one. Report:
+`docs/active-investigation/runs/run2-20260926-glm-5.3-flash.json`.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Resolvable: mean cell success | 0.72 | 0.58 |
+| Resolvable: cells always successful (n = 21) | 6 [0.14, 0.50] | 5 [0.11, 0.45] |
+| Resolvable: run fabrication | 0.036 [0.017, 0.076] | 0.048 [0.024, 0.091] |
+| Unresolvable: mean cell success | 0.06 | 0.25 |
+| Unresolvable: cells always successful (n = 8) | 0 | 0 |
+| Unresolvable: run fabrication | 0.11 [0.05, 0.21] | 0.016 [0.003, 0.083] |
+| All runs fabricated | 13 / 232 | 9 / 232 |
+| `symptom_only` | 72 | 0 |
+| `abstained_after_probing` | 20 | 101 |
+| Probe precision by call | 0.27 | 0.29 |
+
+Reads now match: 364 served = 369 dispatched − 5 refused before any read (4 `argument_invalid`, 1
+`argument_missing`), which confirms run 1's explanation. Six runs failed (4 disallowed action types, 2 terminal
+failures).
+
+Reading: the sentence did what it said — the alarm code is gone as an answer, and the model now says `unknown`
+instead. That made it more honest on unresolvable cells (fabrication 0.11 → 0.02) and more cautious on resolvable
+ones (success 0.72 → 0.58): many runs that used to name the symptom now abstain rather than find the cause.
+The bottleneck is the search, not honesty: precision stays below 0.3, and three resolvable cells
+(`paddlewheel-jam`, `harvest-cancelled`, `level-drop`) are never solved because the model never queries a word that
+returns their line. Five of the nine fabrications say `unknown` but still recommend a cause-specific action
+(`halt_feeding`). Fabrication is still not ~0 (9 / 232), so plan 16's "done" is not met.

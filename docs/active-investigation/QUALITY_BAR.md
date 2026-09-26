@@ -62,7 +62,7 @@ intelligence.
 | C2 | Corpus has resolvable cells (one probe settles it) and unresolvable cells (correct = abstain after investigating), authored as data | fixture files | PASS — `test/fixtures/investigation/aquaculture.json`: 21 resolvable (one with a prompt injection) and 8 unresolvable cells, evidence lines as data, in-range distractors that never contradict a cell, its own prompt; codes checked against the catalog |
 | C3 | Controls discriminate offline: `null` fails the resolvable cells; `adversary` (fabricates the datum, or cites an ungathered tool) is caught; `oracle` passes | eval test (`InvestigationControlGate`: oracle, null, fabricator, blind prober, unaimed query, forger, actor; server reads = dispatched calls) | PASS — `InvestigationControlGate` (12 controls: oracle, null, fabricator, blind, blind-abstainer, unaimed, catch-all, injection-follower, unsupported-action, forger at `ungrounded_evidence_refs`, actor, malformed); every rule mutation-checked; part of `benchmark:controls` |
 | C4 | Grader reports investigation success rate, fabrication rate and probe precision, each with an interval | eval test | PASS — resolvable/unresolvable blocks with run-level and cell-level (distinct-cell n) Wilson intervals, aimed success, precision, outcome buckets; rules fixed in plan 16 before any counted run |
-| C5 | One real-model run (`script/investigation_real_run`, `repeat>=2, seeds>=4`) against the fixture MCP server, reported with its n and interval, labelled as a real-model result | run artifact | PASS — run 1 (232 episodes, GLM 5.3 Flash) recorded with distinct-cell n and intervals in plan 16 and `runs/run1-…json`. Plan 16's "done" (fabrication ~0) is not met |
+| C5 | One real-model run (`script/investigation_real_run`, `repeat>=2, seeds>=4`) against the fixture MCP server, reported with its n and interval, labelled as a real-model result | run artifact | PASS — run 1 (232 episodes, GLM 5.3 Flash) recorded with distinct-cell n and intervals in plan 16 and `runs/run1-…json`; run 2 (same cells, after one prompt sentence, development set) beside it in `runs/run2-…json`. Plan 16's "done" (fabrication ~0) is not met |
 
 ## D. Gates
 
@@ -90,7 +90,7 @@ intelligence.
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| F1 | Reports distinguish plumbing tests from real-model results; nothing scripted is described as intelligence | review of docs and final report | PASS — plan 16, this bar and the final report label the scripted controls as plumbing and run 1 as the only real-model result; run 2 recorded as invalid, not as a result |
+| F1 | Reports distinguish plumbing tests from real-model results; nothing scripted is described as intelligence | review of docs and final report | PASS — plan 16, this bar and the final report label the scripted controls as plumbing and run 1 as the only real-model result; run 2a recorded as invalid, run 2 labelled a development-set number |
 | F2 | PLAN.md and README.md match what was built (deviations recorded) | review | PASS — PLAN.md/README.md deviations recorded per WP (B4 frame bytes, B6 narrowed, G4 time range, R13 policy entry pending owner review) |
 | F3 | Lessons learned are recorded in `AGENTS.md` or `.agent/rules/` in the change that taught them | review | PASS — `.agent/rules/evaluation.md` and `testing.md` carry the lessons of WP5 and run 1 |
 
