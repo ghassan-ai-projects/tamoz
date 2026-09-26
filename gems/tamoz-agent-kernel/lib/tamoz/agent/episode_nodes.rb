@@ -566,6 +566,7 @@ module Tamoz
           state.fetch(:wire).fetch("intent_catalog_sha256")
         )
         validate_recommended_intent_types!(document, state, intent_catalog)
+        refuse_action_without_diagnosis!(document, intent_catalog)
         document
       end
 
@@ -686,6 +687,22 @@ module Tamoz
                 "reasoning_document/intent_type_not_allowed: '#{intent.type}' is not an " \
                 "allowed intent type; use exactly one of: #{valid_types.join(", ")}"
         end
+      end
+
+      # An unknown cause allows only what needs no cause: a watch or another R0 intent.
+      def refuse_action_without_diagnosis!(document, catalog)
+        return unless document.selected_code == DiagnosisCatalog::UNKNOWN
+
+        action = document.recommended_intents.map(&:type).find { |type| !causeless?(type, catalog) }
+        return unless action
+
+        raise ProtocolError,
+              "reasoning_document/action_without_diagnosis: '#{action}' acts on a cause the evidence has not " \
+              "established; propose only #{Tamoz::Core::INTENT_WATCH_TYPE}, another R0 intent, or no action"
+      end
+
+      def causeless?(type, catalog)
+        type == Tamoz::Core::INTENT_WATCH_TYPE || catalog.risk_for(type) == "R0"
       end
 
       def document_projection(document)

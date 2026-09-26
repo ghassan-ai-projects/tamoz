@@ -67,9 +67,10 @@ class StreamEpisodeInvestigationTest < Minitest::Test
     )
   end
 
-  def decision(selected: 'equipment_failure', refs: ['tool:0'], gaps: nil)
-    document = AquacultureDomain.document(selected:, hypothesis: 'aerator tripped')
+  def decision(selected: 'equipment_failure', refs: ['tool:0'], gaps: nil, action: true, intent: nil)
+    document = AquacultureDomain.document(selected:, hypothesis: 'aerator tripped', intent:)
     document['evidence_refs'] = refs
+    document.delete('recommended_intents') unless action
     document['evidence_gaps'] = gaps if gaps
     Tamoz::Core.jcs(document)
   end
@@ -97,7 +98,7 @@ class StreamEpisodeInvestigationTest < Minitest::Test
 
   def test_a_spent_tool_budget_gets_the_final_directive_and_an_honest_abstain
     gaps = [{ 'datum' => 'aerator-2 current draw', 'why' => 'separates a trip from a sensor fault' }]
-    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['tool:0'], gaps:)])
+    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['tool:0'], gaps:, action: false)])
     _events, terminal, state = run_episode(request('spent', budget: V1::EpisodeBudget.new(max_tool_calls: 1)))
 
     assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
@@ -135,7 +136,7 @@ class StreamEpisodeInvestigationTest < Minitest::Test
     assert_nil runner.send(:evidence_range, nil)
     assert_nil runner.send(:evidence_range, V1::EvidenceTimeRange.new(until: stamp.call(1_786_003_600)))
     assert_nil runner.send(:evidence_range, V1::EvidenceTimeRange.new(from: stamp.call(9), until: stamp.call(5)))
-    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['fact:pond_id'])])
+    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['fact:pond_id'], action: false)])
     wire = request('no-window')
     wire.evidence_time_range = nil
     _events, terminal, state = run_episode(wire)
@@ -143,6 +144,38 @@ class StreamEpisodeInvestigationTest < Minitest::Test
     assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
     assert_equal 'scope_unresolved', state.fetch(:tool_results).first.fetch('error_code')
     assert_empty @server.calls
+  end
+
+  def test_an_unknown_answer_that_still_proposes_an_action_is_sent_back_once
+    compose([decision(selected: 'unknown', refs: ['fact:pond_id'], action: true),
+             decision(selected: 'unknown', refs: ['fact:pond_id'], action: false)])
+    _events, terminal, state = run_episode(request('unknown-action'))
+
+    assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+    assert_includes state.fetch(:repair_directive), 'reasoning_document/action_without_diagnosis'
+    assert_empty state.fetch(:document).fetch('recommended_intents')
+  end
+
+  def test_an_unknown_answer_may_still_install_a_watch
+    compose([decision(selected: 'unknown', refs: ['fact:pond_id'], intent: { type: 'install_watch_condition' })])
+    _events, terminal, state = run_episode(request('unknown-watch'))
+
+    assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+    assert_nil state[:repair_directive]
+  end
+
+  def test_an_unknown_answer_that_keeps_its_action_after_repair_fails
+    compose(Array.new(2) { decision(selected: 'unknown', refs: ['fact:pond_id'], action: true) })
+    _events, terminal, = run_episode(request('unknown-action-twice'))
+
+    assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+  end
+
+  def test_the_tool_protocol_asks_for_another_query_before_concluding_unknown
+    compose([decision])
+    _events, _terminal, state = run_episode(request('protocol'))
+
+    assert_includes state.fetch(:frame).fetch('system'), 'is not evidence that there is none'
   end
 
   def test_the_model_budget_running_out_first_also_gets_the_final_directive
@@ -154,7 +187,7 @@ class StreamEpisodeInvestigationTest < Minitest::Test
   end
 
   def test_a_failed_probe_is_an_error_entry_and_the_episode_still_decides
-    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['fact:pond_id'])],
+    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['fact:pond_id'], action: false)],
             answers: [Tamoz::Agent::ToolError])
     _events, terminal, state = run_episode(request('failed'))
 
@@ -197,7 +230,7 @@ class StreamEpisodeInvestigationTest < Minitest::Test
   end
 
   def test_a_probe_the_wire_catalog_does_not_grant_is_never_run
-    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['fact:pond_id'])])
+    compose([tool_turn('aerator'), decision(selected: 'unknown', refs: ['fact:pond_id'], action: false)])
     _events, terminal, state = run_episode(request('ungranted', catalog: [{ 'name' => 'evidence_get' }]))
 
     assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status

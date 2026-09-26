@@ -94,6 +94,21 @@ intelligence.
 | F2 | PLAN.md and README.md match what was built (deviations recorded) | review | PASS — PLAN.md/README.md deviations recorded per WP (B4 frame bytes, B6 narrowed, G4 time range, R13 policy entry pending owner review) |
 | F3 | Lessons learned are recorded in `AGENTS.md` or `.agent/rules/` in the change that taught them | review | PASS — `.agent/rules/evaluation.md` and `testing.md` carry the lessons of WP5 and run 1 |
 
+## G. Step 1 after run 2 — fewer made-up answers, better search (set 2026-09-26, before the change)
+
+Run 2 showed two agent gaps: 5 of 9 fabrications answered `unknown` yet recommended a cause-specific action, and
+52 of 101 `unknown` answers used 1 of 3 allowed tool calls. Run 3 uses the same 29 cells, so its numbers are a
+development-set result; G3–G5 are graded against run 2 and say nothing held out.
+
+| # | Property | Check | Status |
+|---|---|---|---|
+| G1 | An episode that selects `unknown` and recommends an intent above R0 is sent back for one repair, then fails typed; a watch, another R0 intent, or no action passes | graph test; mutation (drop the check) fails | PASS — `validate` sends it back (`reasoning_document/action_without_diagnosis`, a message that does not hint at switching to a cause) and a second offence fails typed; `test_an_unknown_answer_may_still_install_a_watch` passes. Mutations: dropping the check fails 2 tests, dropping the R0 exemption fails 1. `validate` 3→4. Narrowed after review: a blanket rule also refused cause-agnostic R0 intents (thermal-lab `request_evidence`). It still refuses R1 `start_aerator` under `unknown`: the catalog has no field saying which intents need a cause, and adding one changes a Go-mirrored digest (owner decision) |
+| G2 | The tool protocol tells the model a result without the cause is not evidence there is none, and to try a different query while calls remain; no domain word | frame test | PASS — one generic sentence in `TOOL_PROTOCOL` ("different or broader terms (synonyms, related names)"; a first draft named the fault/equipment/events, which are corpus search words, and was replaced after review); `test_the_tool_protocol_asks_for_another_query_before_concluding_unknown`. `build_frame` 2→3, `rebuild_frame` 2→3; the no-tools frame digest is unchanged |
+| G3 | Run 3 fabrication ≤ 2 / 232 runs, and none of them `unknown` + action | run report | OPEN |
+| G4 | Run 3 resolvable mean cell success ≥ run 2 (0.58); unresolvable fabrication ≤ run 2 (1 / 64) | run report | OPEN |
+| G5 | Run 3 `unknown` answers use more of the budget than run 2 (share on one call < 52 / 101) | run report | OPEN |
+| G6 | Gates: controls gate green (expectations updated only where the graph now refuses), touched tests green, RuboCop no new offense, full gate before the commit that closes G | commands | OPEN |
+
 ## Review log
 
 | Package | Reviewer findings (critical/high) | Resolution | Commit |
@@ -106,3 +121,4 @@ intelligence.
 | WP5 eval | Round 1: 1 critical (success never checked what the probe returned), 5 high (oracle passed on an empty server; forger gate unasserted; precision vacuous; repeats counted as samples; keyword ceiling corpus). Round 2: 1 critical (the default prompt told the model to cite only facts), 3 high (unresolvable passable blind; causes after the crash; contradicting distractors). Round 3: 1 contradiction (`level-drop`), 2 medium | All fixed; grading rules and known limits recorded in plan 16 before the run; lessons in `.agent/rules/evaluation.md` | WP5 commit |
 | Run 1 follow-up | 0 critical/high; 3 medium (a `probe_failed` can fail before the send, so the refusal explanation is not the only one; the `probe_failed` split was untested; C5 text named a run that did not exist yet), 2 low (stale control count and read wording) | All fixed: per-run `call_errors` tally, grader unit test for the split, wording corrected; prompt sentence judged a fair task clarification, run 2 labelled development-set | this commit |
 | Run 2 + final audit | Run 2 invalid (no provider key; every episode failed before the model, reason unrecorded) | Preflight refuses a missing key; failed episodes record `terminal/<reason_code>`, unit-tested; run 2 recorded as invalid in plan 16. Audit removed 3 new Reek smells | final commit |
+| Step 1 (G1, G2) | 1 high (a blanket `unknown` → no-action rule also refuses cause-agnostic R0 intents; product policy), 2 medium (frame sentence named corpus search words; repair message hinted at moving probability onto a cause), 2 low (no test that a watch passes; hidden test default), 1 nit | Narrowed to intents above R0; neutral frame wording; neutral repair message; watch test and explicit call sites added; the R1 cause-agnostic case (`start_aerator`) is reported to the owner, not solved | step 1 commit |

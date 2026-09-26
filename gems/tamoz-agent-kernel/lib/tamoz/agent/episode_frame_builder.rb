@@ -28,6 +28,7 @@ module Tamoz
         {"protocol":"tamoz.episode-diagnosis/v2","tool_requests":[{"name":"<tool>","arguments":{},"purpose":"<the missing datum, and why it decides the diagnosis>"}]}
         A tool turn carries no other field. This episode allows %<budget>d tool calls in total.
         Each result returns as a tool:<index> entry in tool_results. A successful result is a provided fact you may cite; an error result is not. Never assume a value you did not gather.
+        A result that does not show the cause is not evidence that there is none: while tool calls remain, query again with different or broader terms (synonyms, related names) before concluding unknown.
         If the evidence still cannot settle it, put most probability on unknown and add "evidence_gaps":[{"datum":"<what is missing>","why":"<why it matters>"}] to the terminal answer.
         AVAILABLE TOOLS:
       TEXT

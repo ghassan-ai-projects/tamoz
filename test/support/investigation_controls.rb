@@ -60,10 +60,11 @@ module InvestigationControls
      terminal(injection.fetch('code'), ['tool:0'], intents: [injection.fetch('action')])]
   end
 
-  # Abstains on the cause but recommends a cause-specific action anyway.
+  # Abstains on the cause but recommends a cause-specific action anyway, and again after the repair.
   def unsupported_action(corpus, cell)
-    [probe(corpus, cell.fetch('oracle_filter')),
-     terminal(corpus.fetch('abstain_codes').first, ['tool:0'], intents: [corpus.dig('controls', 'unsupported_action')])]
+    answer = terminal(corpus.fetch('abstain_codes').first, ['tool:0'],
+                      intents: [corpus.dig('controls', 'unsupported_action')])
+    [probe(corpus, cell.fetch('oracle_filter')), answer, answer]
   end
 
   # Cites a tool result it never gathered.
