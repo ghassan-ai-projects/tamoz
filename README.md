@@ -65,6 +65,18 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
   three failed runs exposed harness defects (now fixed), it built a working
   browser Game of Life with a real model, then changed it on request
   ([guide](documentation/guides/coding.md)).
+- **Investigation before a decision (`tamoz investigate`).** When the data it
+  was handed cannot settle a question, Tamoz reads more through **probes**:
+  read-only MCP calls the operator declares in `config.yaml`, with every argument
+  either pinned or a typed, bounded slot the model fills. A CLI investigation ends
+  with a findings report whose every finding cites a probe that answered (the
+  model is reminded once if it skips it); an
+  agentic-stream episode may call the probes the stream grants, then decides or
+  answers `unknown` and names what is missing. Measured with a real model on a
+  29-situation fixture corpus (development numbers, not held out): it finds the
+  cause in 80% of runs where one probe can, and runs graded fabricated are down
+  to 7 of 232, not yet the goal of about zero
+  ([guide](documentation/guides/investigation.md)).
 - **Reviewed change loop.** Discovery reads, then a separately reviewed action
   plan, an exact diff shown before approval, a digest-bound atomic patch, and a
   configured verification command. A failed check becomes evidence for up to two
@@ -105,6 +117,13 @@ known context window; see [the coding guide](documentation/guides/coding.md):
 rbenv exec bundle exec tamoz --provider openrouter --model deepseek/deepseek-v4.1-flash --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' --guidance AGENTS.md code "Add X"
 ```
 
+To investigate before deciding, declare probes in your runtime directory and see
+[the investigation guide](documentation/guides/investigation.md):
+
+```bash
+rbenv exec bundle exec tamoz --provider openrouter --model deepseek/deepseek-v4.1-flash --runtime-dir ~/.tamoz --session-dir ~/.tamoz/sessions --root . investigate "Why did pond 07 lose oxygen last night?"
+```
+
 Read-only is the default. See
 [`documentation/getting-started/install.md`](documentation/getting-started/install.md)
 for requirements, durable sessions, profiles and the full subcommand surface.
@@ -131,6 +150,7 @@ from its index:
   [the coding harness](documentation/design/coding-harness.md),
   [decisions/ADRs](documentation/adr/README.md)
 - **Guides** — [coding with `tamoz code`](documentation/guides/coding.md),
+  [investigating with probes](documentation/guides/investigation.md),
   [operator runbook](documentation/guides/agent-operator.md),
   [Telegram](documentation/guides/telegram.md),
   [evaluation](documentation/guides/evaluation.md)

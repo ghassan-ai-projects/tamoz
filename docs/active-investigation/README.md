@@ -1,7 +1,7 @@
 # Active investigation — give Tamoz the ability to analyse before it decides
 
-Status: **in build (revision 2)** · Plan date: 2026-09-23 · Revised: 2026-09-25 ·
-Branch: `add-investigation-ability`
+Status: **built; real-model goal not met** · Plan date: 2026-09-23 · Revised: 2026-09-25 ·
+Last update: 2026-09-26 · Branch: `add-investigation-ability` (PR ghassan-ai-projects/tamoz#56)
 
 When Tamoz is asked to decide something, whether by agentic-stream over gRPC, the
 `tamoz` CLI, or a chat message, it should be able to **go and look**. It asks
@@ -14,6 +14,33 @@ missing. Today it decides only from the snapshot it was handed.
 |---|---|
 | [PLAN.md](PLAN.md) | The design and the work: current state (verified against the code on 2026-09-25), the design, the work packages, the agentic-stream follow-ups, and the evaluation. |
 | [QUALITY_BAR.md](QUALITY_BAR.md) | The bar the build must meet, how each item is checked, and the live status of every item. The build loops until every item passes. |
+
+## Where things stand (2026-09-26)
+
+- **Built and tested:** probes (`sources.probes`), the episode tool loop, the stream
+  worker's `--runtime-dir`, `tamoz investigate` / `tamoz probes`, the
+  `report_findings` report, the `probe_*` policy entry, and the plan-16 eval with 12
+  scripted controls. How to use it: [the investigation guide](../../documentation/guides/investigation.md).
+- **Real-model results** (development numbers, same 29 situations each run; plan 16 has
+  the full tables):
+
+  | | Run 1 | Run 2 | Run 3 |
+  |---|---|---|---|
+  | Cause-findable: mean success | 0.72 | 0.58 | 0.80 |
+  | Unknowable: mean success | 0.06 | 0.25 | 0.44 |
+  | Graded fabricated, incl. followed injection (of 232) | 13 | 9 | 7 |
+
+  Run 2 added one prompt sentence (the alarm code is not a cause). Run 3 added two
+  agent changes: an `unknown` answer may not act above R0, and the model is told to
+  query again before concluding `unknown`.
+- **Not done:** fabricated answers are not near zero (plan 16's "done"); there is no
+  held-out result; the agentic-stream follow-ups G1–G4 are open (G4:
+  `evidence_time_range` is never sent, so window probes refuse in episodes).
+- **Owner decisions pending:** R13 (the `probe_*` policy entry), and whether
+  `unknown` should also block cause-agnostic R1 actions such as `start_aerator`
+  (the intent catalog would need a field, which changes a Go-mirrored digest).
+- **Bar:** every item in [QUALITY_BAR.md](QUALITY_BAR.md) has a status; G3 (at most 2
+  fabricated answers in run 3) fails.
 
 This plan is the product build that
 [measurement plan 16](../eval-improvement/measurement-plans/16-active-investigation.md)

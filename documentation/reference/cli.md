@@ -56,6 +56,8 @@ Work you are watching, against a session directory.
 |---|---|---|
 | `ask` | Start a new turn on a thread | `TASK` (positional) |
 | `code` | Start a coding turn in the durable tool-calling work loop; needs `--allow-changes` or a profile, and a known context window (profile role `normalized_settings.context_window`, `TAMOZ_CONTEXT_WINDOW`, or the route's recorded window). See [the coding guide](../guides/coding.md) | `TASK` (positional) |
+| `investigate` | Start a read-only investigation turn in the work loop: the operator's probes (`sources.probes`), then a findings report whose every finding cites a probe that answered; proposals are not executed; refuses `--allow-changes`. See [the investigation guide](../guides/investigation.md) | `TASK` (positional), `--json` |
+| `probes` | Validate and list the operator's probe catalog without starting any MCP server | `--json` |
 | `resume` | Answer the approvals or questions a paused thread is waiting on | `THREAD`, `--answer ANSWER`, `--approval-profile NAME`, `--recover` |
 | `continue` | Drive a paused thread forward without new input | `THREAD` |
 | `list` | Show every thread in the session directory | |
