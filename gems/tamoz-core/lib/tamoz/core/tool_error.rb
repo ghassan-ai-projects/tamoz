@@ -13,7 +13,8 @@ module Tamoz
     # The base class is terminal by construction: a raise site that has not been
     # classified propagates and ends the session. Only `ToolArgumentError` is ever
     # converted into evidence, and only through `repairable?` — never by matching on
-    # message text.
+    # message text. The one exception is an episode's read-only tool host, where any
+    # refusal becomes a tool result the model sees (`EpisodeToolCall`).
     #
     # Every `ToolError` message is built from Tamoz literals plus Tamoz-computed
     # metadata (digests, counts, limits) or a workspace-relative path or argument name

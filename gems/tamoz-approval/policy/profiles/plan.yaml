@@ -17,3 +17,7 @@ profile:
         tool: "mcp:unknown:anything"
         verb: unknown
       expect: deny
+    - request:
+        tool: probe_pond_log
+        verb: read
+      expect: allow

@@ -1,0 +1,8 @@
+{
+  "summary": "Summary",
+  "hypothesis": "Hypothesis (%<confidence>s confidence)",
+  "findings": "Findings",
+  "gaps": "Still unknown",
+  "proposals": "Proposed next actions (not executed; ask for one to run it through approval)",
+  "source": "from %<probes>s"
+}

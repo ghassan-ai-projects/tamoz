@@ -33,6 +33,9 @@ module Tamoz
         features.query evidence.get situations.related
         history.prior_incidents knowledge.search forecast.run
       ].freeze
+      # agentic-stream spec tool names match ^[a-z][a-z0-9_]{0,62}$, so the wire says evidence_get.
+      WIRE_NAMES = PERMITTED.to_h { |name| [name.tr(".", "_"), name] }.freeze
+      PROBE_NAME = /\Aprobe_[a-z0-9_]{1,58}\z/
 
       # The context attributes an episode tool may see. Everything else on a
       # Tamoz::Context (effects, store, emitter, graph_runtime, interrupts)
@@ -48,14 +51,18 @@ module Tamoz
       # the hard ceiling and the episode's wire budget (max_tool_result_bytes),
       # so a small budget is enforced HERE, not merely declared — the host
       # bounds results, not just the client.
-      def initialize(implementations, max_result_bytes: MAX_RESULT_BYTES)
+      # probes: operator probe callables (probe_*). granted: the wire catalog's names; nothing else executes.
+      def initialize(implementations, max_result_bytes: MAX_RESULT_BYTES, probes: {}, granted: nil)
         require_implementation_map!(implementations)
         require_positive_cap!(max_result_bytes)
         require_exact_surface!(implementations)
         @max_result_bytes = max_result_bytes
-        @surface = build_surface(implementations).freeze
+        @surface = build_surface(implementations).merge(build_probes(probes)).freeze
+        @granted = granted&.map(&:to_s)&.freeze
         freeze
       end
+
+      def self.stream_tool?(name) = PERMITTED.include?(name) || WIRE_NAMES.key?(name)
 
       attr_reader :surface
 
@@ -67,9 +74,9 @@ module Tamoz
         PERMITTED.include?(name)
       end
 
-      # The model-visible episode surface: each tool names itself, its bounds,
-      # and nothing else. The surface is fixed — an injected instruction cannot
-      # discover a tool outside the allowlist.
+      # The stream allowlist: each tool names itself, its bounds, and nothing
+      # else. It is fixed — an injected instruction cannot discover a tool
+      # outside it.
       def descriptors
         PERMITTED.map do |id|
           {
@@ -138,6 +145,16 @@ module Tamoz
         end
       end
 
+      def build_probes(probes)
+        probes.to_h do |name, implementation|
+          unless PROBE_NAME.match?(name.to_s)
+            raise Tamoz::ConfigurationError, "episode probe #{name.to_s.inspect} must be named probe_*"
+          end
+
+          [name.to_s, require_callable!(name, implementation)]
+        end
+      end
+
       def require_callable!(id, implementation)
         return implementation if implementation.respond_to?(:call)
 
@@ -146,7 +163,13 @@ module Tamoz
       end
 
       def implementation_for(name)
-        implementation = @surface[name]
+        name = name.to_s
+        if @granted && !@granted.include?(name)
+          raise Tamoz::Core::ToolError,
+                "tool #{name.byteslice(0, MAX_NAME_BYTES).inspect} is not granted for this episode"
+        end
+
+        implementation = @surface[WIRE_NAMES.fetch(name, name)]
         return implementation if implementation
 
         raise Tamoz::Core::ToolError,

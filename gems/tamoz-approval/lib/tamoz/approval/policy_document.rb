@@ -50,12 +50,20 @@ module Tamoz
               "profile #{profile_name.inspect} could not be applied to #{base_path}: #{error.class}: #{error.message}"
       end
 
+      # A key ending in `*` classifies every tool whose name starts with the rest of the key.
+      def tool_entry(tool)
+        name = tool.to_s
+        tool_tiers[name.to_sym] || tool_tiers.find do |key, _entry|
+          key.end_with?("*") && name.start_with?(key.to_s.delete_suffix("*"))
+        end&.last
+      end
+
       # The structural rule has one home (ADR §7): an unclassified tool falls
       # to the fallback tier no matter what its descriptor claims; a
       # classified :read_only tool lands in tier read even over contradicting
       # data.
       def tier_for(tool, effect_class)
-        entry = tool_tiers[tool]
+        entry = tool_entry(tool)
         name = if entry.nil?
                  fallback_tier[:tier]
                elsif effect_class.to_sym == :read_only
@@ -67,7 +75,7 @@ module Tamoz
       end
 
       def verb_for(tool, effect_class)
-        entry = tool_tiers[tool]
+        entry = tool_entry(tool)
         return fallback_tier[:verb] if entry.nil?
         return :read if effect_class.to_sym == :read_only
 
@@ -208,6 +216,10 @@ module Tamoz
 
       def validate_tool_tiers!
         @tool_tiers.each do |tool, entry|
+          if tool.to_s.include?("*") && !tool.to_s.match?(/\A[^*]+\*\z/)
+            raise InvalidPolicyError, "tool_tiers #{tool} may use * only as a final prefix wildcard"
+          end
+
           tier = entry[:tier]
           raise InvalidPolicyError, "tool_tiers #{tool} references unknown tier #{tier}" unless @tiers.key?(tier)
 

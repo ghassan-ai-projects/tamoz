@@ -30,6 +30,9 @@ module Tamoz
       MAX_RECOMMENDED_INTENTS = 8
       MAX_TOOL_REQUESTS = 8
       MAX_PRESET_BYTES = 128
+      MAX_PURPOSE_BYTES = 1024
+      MAX_EVIDENCE_GAPS = 8
+      MAX_GAP_FIELD_BYTES = 512
       # P1: the distribution check rejects pathological outputs (sum 0.5 or
       # 1.5), not quantization noise — real providers at temperature 0 drift
       # up to ~5% on small code sets (measured: gemma4 sum 1.05 on a 6-code
@@ -41,19 +44,22 @@ module Tamoz
 
       TOP_LEVEL_KEYS = %w[
         protocol primary_hypothesis diagnosis_probabilities evidence_refs
-        tool_requests recommended_intents
+        tool_requests recommended_intents evidence_gaps
       ].freeze
-      TERMINAL_KEYS = %w[primary_hypothesis diagnosis_probabilities evidence_refs recommended_intents].freeze
+      TERMINAL_KEYS = %w[
+        primary_hypothesis diagnosis_probabilities evidence_refs recommended_intents evidence_gaps
+      ].freeze
 
       Probability = Data.define(:code, :probability)
       RecommendedIntent = Data.define(:type, :parameter_preset, :parameters)
-      ToolRequest = Data.define(:name, :arguments)
+      ToolRequest = Data.define(:name, :arguments, :purpose)
+      EvidenceGap = Data.define(:datum, :why)
 
       # A parsed turn. `kind` is :terminal or :tool; the other branch's fields are
       # nil. selected_code/raw_confidence are Tamoz-derived, not model-asserted.
       Document = Data.define(
         :kind, :primary_hypothesis, :probabilities, :selected_code,
-        :raw_confidence, :evidence_refs, :recommended_intents, :tool_requests
+        :raw_confidence, :evidence_refs, :recommended_intents, :tool_requests, :evidence_gaps
       ) do
         def terminal? = kind == :terminal
         def tool_turn? = kind == :tool
@@ -107,7 +113,8 @@ module Tamoz
           Document.new(
             kind: :tool, primary_hypothesis: nil, probabilities: nil,
             selected_code: nil, raw_confidence: nil, evidence_refs: nil,
-            recommended_intents: nil, tool_requests: requests.map { |r| parse_tool_request(r) }
+            recommended_intents: nil, tool_requests: requests.map { |r| parse_tool_request(r) },
+            evidence_gaps: nil
           )
         end
 
@@ -121,7 +128,8 @@ module Tamoz
             selected_code: selected.code, raw_confidence: selected.probability,
             evidence_refs: parse_evidence_refs(root),
             recommended_intents: parse_recommended_intents(root),
-            tool_requests: nil
+            tool_requests: nil,
+            evidence_gaps: parse_evidence_gaps(root)
           )
         end
 
@@ -201,12 +209,27 @@ module Tamoz
         def parse_tool_request(request)
           raise ProtocolError, "reasoning_document/tool_request_not_object" unless request.is_a?(Hash)
 
-          reject_unknown_keys(request, %w[name arguments], "tool_request")
+          reject_unknown_keys(request, %w[name arguments purpose], "tool_request")
           name = fetch_bounded_string(request, "name", MAX_CODE_BYTES)
           arguments = request.fetch("arguments", {})
           raise ProtocolError, "reasoning_document/tool_arguments_not_object: #{name}" unless arguments.is_a?(Hash)
 
-          ToolRequest.new(name: name, arguments: arguments)
+          purpose = fetch_bounded_string(request, "purpose", MAX_PURPOSE_BYTES)
+          raise ProtocolError, "reasoning_document/purpose_blank: #{name}" if purpose.strip.empty?
+
+          ToolRequest.new(name: name, arguments: arguments, purpose: purpose)
+        end
+
+        def parse_evidence_gaps(root)
+          return [] unless root.key?("evidence_gaps")
+
+          fetch_array(root, "evidence_gaps", MAX_EVIDENCE_GAPS).map do |gap|
+            raise ProtocolError, "reasoning_document/evidence_gap_not_object" unless gap.is_a?(Hash)
+
+            reject_unknown_keys(gap, %w[datum why], "evidence_gap")
+            EvidenceGap.new(datum: fetch_bounded_string(gap, "datum", MAX_GAP_FIELD_BYTES),
+                            why: fetch_bounded_string(gap, "why", MAX_GAP_FIELD_BYTES))
+          end
         end
 
         def fetch_probability(entry)

@@ -44,13 +44,19 @@ module Tamoz
         {
           primary_hypothesis: String(document.fetch("primary_hypothesis", "")),
           confidence: document.fetch("raw_confidence", 0.0),
-          summary: "selected #{document.fetch("selected_code", "unknown")} " \
-                   "at confidence #{document.fetch("raw_confidence", 0.0)}",
+          summary: summary(document),
           facts_used: Array(document.fetch("evidence_refs")).map { |ref| {"evidence" => ref} },
           alternatives: [],
           recommended_intents: Array(document.fetch("recommended_intents", [])),
           evidence_ids: Array(document.fetch("evidence_refs"))
         }
+      end
+
+      def summary(document)
+        text = "selected #{document.fetch("selected_code", "unknown")} " \
+               "at confidence #{document.fetch("raw_confidence", 0.0)}"
+        gaps = Array(document["evidence_gaps"]).map { |gap| gap.fetch("datum") }
+        gaps.empty? ? text : "#{text}; missing: #{gaps.join("; ")}"
       end
 
       # The minimal envelope view the DecisionBuilder reads — the episode

@@ -42,7 +42,7 @@ module Tamoz
 
       # Sources a runtime may enable. Closed set: an operator can turn on what
       # Tamoz ships, and nothing else. There is no plugin path by construction.
-      KNOWN_SOURCES = %w[skills memory mcp websearch].freeze
+      KNOWN_SOURCES = %w[skills memory mcp websearch probes].freeze
 
       attr_reader :path, :config
 

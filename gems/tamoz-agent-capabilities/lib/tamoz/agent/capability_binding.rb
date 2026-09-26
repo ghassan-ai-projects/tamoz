@@ -147,7 +147,7 @@ module Tamoz
       end
 
       def remote_planning_surface(allowed)
-        allowed.filter_map { |name| mcp_entry(@mcp, name) if @mcp }.to_h.freeze
+        allowed.filter_map { |name| probe_entry(@mcp, name) || mcp_entry(@mcp, name) if @mcp }.to_h.freeze
       end
 
       private
@@ -172,6 +172,11 @@ module Tamoz
         read_only_names = toolbox.read_only_names
         descriptors = names.map { |name| build_toolbox_descriptor(name, source_id, read_only_names) }
         Capability::Source.new(source_id:, descriptors:)
+      end
+
+      # A probe's description is operator-authored, not server text.
+      def probe_entry(source, name)
+        [name, source.probe_description(name)] if source.respond_to?(:probe?) && source.probe?(name)
       end
 
       def mcp_entry(source, name)

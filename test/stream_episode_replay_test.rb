@@ -17,7 +17,7 @@ class StreamEpisodeReplayTest < Minitest::Test
   Stream = Tamoz::Stream
 
   class StubEvidenceTool
-    def execute(name, arguments)
+    def execute(name, arguments, context: nil)
       {
         "json" => JSON.generate({"feature" => "dissolved_oxygen", "value" => 1.1}),
         "is_error" => false
@@ -32,7 +32,8 @@ class StreamEpisodeReplayTest < Minitest::Test
       responses: [
         Tamoz::Core.jcs(
           "protocol" => "tamoz.episode-diagnosis/v2",
-          "tool_requests" => [{"name" => "evidence.get", "arguments" => {"feature" => "dissolved_oxygen"}}]
+          "tool_requests" => [{"name" => "evidence.get", "arguments" => {"feature" => "dissolved_oxygen"},
+                               "purpose" => "the dissolved oxygen reading decides the diagnosis"}]
         ),
         Tamoz::Core.jcs(
           AquacultureDomain.document(selected: "low_dissolved_oxygen", hypothesis: "oxygen crash")
@@ -53,7 +54,7 @@ class StreamEpisodeReplayTest < Minitest::Test
 
   def wire_request(suffix, fence: 1)
     wire = EpisodeComposition.wire_request(episode_id: "replay-#{suffix}", fence:)
-    wire.tool_catalog_json = Tamoz::Core.jcs([{"name" => "evidence.get", "parameters" => {}}])
+    EpisodeComposition.grant_tools(wire, [{"name" => "evidence.get", "parameters" => {}}])
     wire
   end
 
@@ -183,7 +184,10 @@ class StreamEpisodeReplayTest < Minitest::Test
       "request_digest" => "sha256:#{Digest::SHA256.hexdigest(request_bytes)}",
       "result_sha256" => "sha256:#{Digest::SHA256.hexdigest(json)}",
       "is_error" => false,
+      "truncated" => false,
+      "result_json" => json,
       "result_bytes" => json.bytesize,
+      "purpose" => "the dissolved oxygen reading decides the diagnosis",
       "slot" => 0,
       "effect_key" => "seeded"
     }

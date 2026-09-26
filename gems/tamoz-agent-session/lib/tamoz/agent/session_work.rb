@@ -106,6 +106,7 @@ module Tamoz
         update = { work_entries: [entry], work_step_count: state.fetch(:work_step_count) + 1, work_overflowed: false }
                  .merge(measurement(state, messages, projection))
         return cut_off(state, entry, update) if calls.empty? && projection.fetch('finish_reason') == 'length'
+        return remind_report(state, entry, update) if calls.empty? && report_due?(state)
         return finish(state, projection.fetch('content'), update) if calls.empty?
 
         pending = Harness::ToolCalls.parse(calls, allowed: @work.header.tool_names).map { |parsed| pending_call(parsed) }
@@ -117,6 +118,19 @@ module Tamoz
         arguments = Tamoz::Core.jcs(parsed.arguments)
         { 'id' => parsed.id, 'name' => parsed.name, 'error' => parsed.error,
           'arguments_ref' => ContextEngine::Surface.retain(@work.store, arguments) }
+      end
+
+      # A turn that gathered probe evidence owes a findings report; it is reminded once, then may answer freely.
+      def report_due?(state)
+        entries = state.fetch(:work_entries)
+        @work.reports? && !@work.gathered(entries).empty? &&
+          entries.none? { |entry| entry['source'] == 'report_reminder' }
+      end
+
+      def remind_report(state, entry, update)
+        note = @work.entry(state.fetch(:work_entries) + [entry], 'system_update',
+                           Harness::PromptPack.fetch('report_reminder'), source: 'report_reminder')
+        update.merge(work_entries: [entry, note], next_node: 'work_step')
       end
 
       def cut_off(state, entry, update)

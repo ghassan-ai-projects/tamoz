@@ -84,8 +84,12 @@ module Tamoz
 
         parsed = verify!(result, call_id:)
         build_result_hash(result, parsed)
-      rescue EvidenceError
+      rescue EvidenceError, Tamoz::CancelledError, Tamoz::TimeoutError
         raise
+      rescue GRPC::DeadlineExceeded
+        raise Tamoz::TimeoutError, "evidence call deadline exceeded"
+      rescue GRPC::Cancelled
+        raise Tamoz::CancelledError, "evidence call cancelled"
       rescue StandardError => error
         # A transport failure (unreachable host, deadline, proto error) is a
         # typed evidence failure, never a bare GRPC class leaking into the
@@ -102,9 +106,8 @@ module Tamoz
         if endpoint.nil? || endpoint.empty?
           raise EvidenceError, "evidence channel requires an endpoint"
         end
-        if capability_token.nil? || capability_token.empty?
-          raise EvidenceError, "evidence channel requires a capability token"
-        end
+        return unless capability_token.nil? || capability_token.empty?
+        raise EvidenceError, "evidence channel requires a capability token"
       end
 
       def require_positive_fence!(fence)
@@ -133,7 +136,10 @@ module Tamoz
 
       def bounded_tool_name!(tool_name)
         name = String(tool_name)
-        raise EvidenceError, "evidence tool name must be bounded and non-empty" if name.empty? || name.bytesize > MAX_ID_BYTES
+        if name.empty? || name.bytesize > MAX_ID_BYTES
+          raise EvidenceError,
+                "evidence tool name must be bounded and non-empty"
+        end
 
         name
       end
@@ -322,7 +328,7 @@ module Tamoz
 
         remaining = monotonic_deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
         if remaining <= 0
-          raise EvidenceClient::EvidenceError, "evidence call deadline exceeded"
+          raise Tamoz::TimeoutError, "evidence call deadline exceeded"
         end
 
         Time.now + remaining
@@ -331,8 +337,7 @@ module Tamoz
       def check_cancellation!(cancellation)
         return unless cancellation
 
-        raise EvidenceClient::EvidenceError, "evidence call cancelled" if
-          cancellation.cancelled?
+        raise Tamoz::CancelledError, "evidence call cancelled" if cancellation.cancelled?
       end
     end
 

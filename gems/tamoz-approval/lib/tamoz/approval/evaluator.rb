@@ -92,7 +92,7 @@ module Tamoz
       end
 
       def tool_scopes_for(request, tier)
-        entry = @document.tool_tiers[request.tool]
+        entry = @document.tool_entry(request.tool)
         # An unclassified tool takes its scopes from fallback_tier itself —
         # the field the loader validates — never from the tier map, or a
         # document could hand :session to tools it never classified.
@@ -138,7 +138,7 @@ module Tamoz
       end
 
       def key_argv(request)
-        entry = @document.tool_tiers[request.tool]
+        entry = @document.tool_entry(request.tool)
         positions = entry&.fetch(:key_argv, nil)
         return nil unless positions
 

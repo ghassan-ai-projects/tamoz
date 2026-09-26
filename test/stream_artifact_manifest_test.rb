@@ -85,7 +85,7 @@ class StreamArtifactManifestTest < Minitest::Test
       )
     )
 
-    tool_catalog = JSON.generate({"tools" => ["evidence.get"]})
+    tool_catalog = JSON.generate([{"name" => "evidence.get"}])
     tool_digest = "sha256:#{Digest::SHA256.hexdigest(tool_catalog)}"
     schema = JSON.generate({"$schema" => "x"})
     schema_digest = "sha256:#{Digest::SHA256.hexdigest(schema)}"

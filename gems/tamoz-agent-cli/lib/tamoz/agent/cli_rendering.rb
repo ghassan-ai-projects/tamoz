@@ -51,6 +51,12 @@ module Tamoz
     # things the operator chose: which thread, how much transcript, and whether
     # they asked for JSON.
     module CLIRendering
+      TERMINAL_NOTES = {
+        'direct_response' => 'Response provided; no task completion was claimed.',
+        'reported' => "\nFindings report: every finding cites a probe result from this turn. " \
+                      'Proposals were not executed.'
+      }.freeze
+
       private
 
       def render_final_view(view, options:)
@@ -94,8 +100,8 @@ module Tamoz
         answer = verification.fetch('answer', '')
         @out.puts answer unless answer.empty?
         reason = view.terminal&.fetch('reason', nil)
-        if reason == 'direct_response'
-          @out.puts 'Response provided; no task completion was claimed.'
+        if TERMINAL_NOTES.key?(reason)
+          @out.puts TERMINAL_NOTES.fetch(reason)
         elsif verification.fetch('satisfied', false)
           render_satisfied_verification(view)
         else
@@ -142,12 +148,14 @@ module Tamoz
       end
 
       def projection_fields(view)
-        {
+        fields = {
           'progress' => TerminalProgress.summarize(view),
           'terminal' => view.terminal,
           'status_projection' => SessionStatusProjection.document(view),
           'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
         }
+        report = view.state&.dig(:verification, 'report')
+        report ? fields.merge('report' => report) : fields
       end
 
       def build_show_document(view, thread_id:, transcript:)

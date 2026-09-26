@@ -353,6 +353,34 @@ class ApprovalPolicyDocumentTest < Minitest::Test
     FileUtils.remove_entry(dir) if dir
   end
 
+  def test_a_trailing_wildcard_classifies_probes_and_nothing_else
+    document = Approval::PolicyDocument.load_profile(base_path, 'plan', evidence_symbols: evidence_symbols)
+
+    assert_equal :read, document.tier_for('probe_pond_log', :bounded).fetch(:name)
+    assert_equal :read, document.tier_for('read_file', :read_only).fetch(:name)
+    %w[mcp:srv/probe_pond_log probe probeX].each do |tool|
+      assert_equal :local_execute, document.tier_for(tool, :read_only).fetch(:name), tool
+    end
+  end
+
+  def test_an_exact_key_wins_over_a_wildcard_and_a_wildcard_must_be_trailing
+    tiers = { 'probe_*' => { 'tier' => 'read', 'verb' => 'read' },
+              'probe_admin' => { 'tier' => 'local_execute', 'verb' => 'execute' } }
+    levels = { 'read' => { 'default' => 'allow' }, 'local_execute' => { 'default' => 'ask' } }
+    write_policy_yaml('tool_tiers' => tiers, 'tiers' => levels) do |path|
+      document = Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
+
+      assert_equal :local_execute, document.tier_for('probe_admin', :bounded).fetch(:name)
+    end
+    %w[* pro*be_x].each do |key|
+      write_policy_yaml('tool_tiers' => { key => { 'tier' => 'read', 'verb' => 'read' } }) do |path|
+        assert_raises(Approval::InvalidPolicyError) do
+          Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
+        end
+      end
+    end
+  end
+
   private
 
   def write_policy_yaml(overrides = {}, &)
