@@ -76,6 +76,12 @@ module InvestigationControls
     [tool_turn(action), terminal(corpus.fetch('abstain_codes').first, [corpus.dig('controls', 'cite_fact')])]
   end
 
+  # Sends a filter longer than the probe allows, then abstains: dispatched, refused, never read.
+  def malformed(corpus, _cell)
+    [probe(corpus, 'x' * (corpus.dig('probe', 'arguments', 'filter', 'max_bytes') + 1)),
+     terminal(corpus.fetch('abstain_codes').first, [corpus.dig('controls', 'cite_fact')])]
+  end
+
   def probe(corpus, filter)
     tool_turn({ 'name' => corpus.dig('probe', 'name'), 'arguments' => { 'filter' => filter },
                 'purpose' => corpus.dig('controls', 'purpose') })

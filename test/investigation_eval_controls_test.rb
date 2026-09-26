@@ -19,6 +19,20 @@ class InvestigationEvalControlsTest < Minitest::Test
     assert_raises(ArgumentError) { InvestigationEval.check_codes(corpus) }
   end
 
+  def test_a_server_error_counts_as_a_read_and_a_refused_argument_does_not
+    terminal = Struct.new(:status).new(:TERMINAL_STATUS_PRODUCED)
+    results = [{ 'is_error' => true, 'error_code' => 'probe_failed' },
+               { 'is_error' => true, 'error_code' => 'argument_invalid' },
+               { 'is_error' => true, 'error_code' => 'budget_spent', 'dispatched' => false }]
+    cell = InvestigationEval.cells.first
+    run = InvestigationGrader::Cell.new(InvestigationEval.corpus, cell, 0, terminal,
+                                        { document: {}, tool_results: results }).result
+    summary = InvestigationGrader.summarize([run])
+
+    assert_equal 2, summary.fetch('dispatched_calls')
+    assert_equal 1, InvestigationGrader.expected_reads(summary)
+  end
+
   def test_the_interval_is_a_wilson_interval
     assert_equal [0.4902, 0.9433], InvestigationGrader.rate(8, 10).fetch('interval')
     assert_nil InvestigationGrader.rate(0, 0).fetch('value')

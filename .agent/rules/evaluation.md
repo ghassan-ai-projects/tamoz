@@ -52,3 +52,10 @@ harness that scores an agent.
 - **Repeats of one input are not samples.** At temperature 0, "2 repeats x 4 seeds" of 6 cells is 6 samples,
   not 48; a Wilson interval over 48 overstates certainty about eightfold. Make seeds change the input, and put
   the headline over distinct cells.
+- **Tell the model every rule the grader applies to its answer.** The investigation grader scores the alarm code
+  (`low_dissolved_oxygen`) as "no answer", but the corpus prompt only said "most probable cause"; in the first
+  real run that bucket was 72 of 232 episodes, the largest failure. A rule the prompt never states measures the
+  prompt, not the model. Fixing it after a run makes the next run a development-set number — say so.
+- **A read-count check counts only calls that could reach the server.** "Reads = dispatched calls" failed in a
+  real run (475 for 477) because calls refused for bad arguments are dispatched but never read. Record each
+  call's error code in the report, so a mismatch names its cause instead of leaving a guess.

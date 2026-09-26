@@ -51,8 +51,8 @@ module InvestigationRealRun
       [run_jobs(jobs, fixture, workers), fixture.server_calls]
     end
     report = report(results, repeats, seeds)
-    dispatched = report.dig('summary', 'dispatched_calls')
-    puts JSON.pretty_generate(report.merge('server_calls' => reads, 'reads_match_dispatched' => reads == dispatched))
+    expected = InvestigationGrader.expected_reads(report.fetch('summary'))
+    puts JSON.pretty_generate(report.merge('server_calls' => reads, 'reads_match_asked' => reads == expected))
   end
 
   def preflight!
@@ -83,8 +83,9 @@ module InvestigationRealRun
     result = InvestigationEval.run_cell(cell, seed, composition, "real-#{cell.fetch('id')}-s#{seed}-r#{repeat}")
   rescue StandardError => e
     result = InvestigationGrader::CellResult.new(cell_id: cell.fetch('id'), kind: cell.fetch('kind'), seed:,
-                                                 outcome: 'failed', selected: nil, dispatched: 0, aimed_calls: 0,
-                                                 ungranted: 0, refusal: "#{e.class.name}: #{e.message[0, 200]}")
+                                                 outcome: 'failed', selected: nil, dispatched: 0, call_errors: [],
+                                                 aimed_calls: 0, ungranted: 0,
+                                                 refusal: "#{e.class.name}: #{e.message[0, 200]}")
   ensure
     warn JSON.generate(result.to_h.merge(repeat:)) if result
   end
