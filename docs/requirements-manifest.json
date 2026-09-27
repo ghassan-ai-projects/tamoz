@@ -6192,6 +6192,21 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-investigate",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz investigate",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero",
+      "supporting_tests": [
+        "test/agent_cli_investigate_test.rb#test_investigate_refuses_anything_but_a_read_only_turn"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-list",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6212,6 +6227,19 @@
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-probes",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz probes",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

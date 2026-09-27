@@ -101,7 +101,7 @@ class StreamEpisodeEndToEndTest < Minitest::Test
       EpisodeComposition.prompt_sha256(request.prompt)
     )
     request.tool_catalog_sha256 = raw_digest(
-      raw_sha256(JSON.generate({"tools" => ["compressor.read"]}))
+      raw_sha256(JSON.generate([{"name" => "compressor.read"}]))
     )
     request.decision_schema_sha256 = raw_digest(
       raw_sha256(JSON.generate({"type" => "object"}))
@@ -111,7 +111,7 @@ class StreamEpisodeEndToEndTest < Minitest::Test
         "situation-runtime/objective/v1\n", {"text" => "diagnose the pond"}
       )
     )
-    request.tool_catalog_json = JSON.generate({"tools" => ["compressor.read"]})
+    request.tool_catalog_json = JSON.generate([{"name" => "compressor.read"}])
     request.decision_schema_json = JSON.generate({"type" => "object"})
     request.objective = "diagnose the pond"
     request
@@ -194,15 +194,15 @@ class StreamEpisodeEndToEndTest < Minitest::Test
       Tamoz::Core.normalize_digest(manifest.prompt_sha256),
       "the manifest names the prompt under its own digest"
     )
-    assert_equal "sha256:#{Digest::SHA256.hexdigest(JSON.generate({"tools" => ["compressor.read"]}))}",
+    assert_equal "sha256:#{Digest::SHA256.hexdigest(JSON.generate([{"name" => "compressor.read"}]))}",
                  Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
 
     store = self.class.rpc.fetch(:artifact_store)
     # P3: retention is keyed on the VERIFIED content digest (sha256 of the
     # exact bytes — the durable store's rehash-on-admission rule). The
     # manifest's DOMAIN digests stay the wire identity.
-    assert_equal JSON.generate({"tools" => ["compressor.read"]}),
-                 store.resolve(raw_sha256(JSON.generate({"tools" => ["compressor.read"]}))).fetch("bytes")
+    assert_equal JSON.generate([{"name" => "compressor.read"}]),
+                 store.resolve(raw_sha256(JSON.generate([{"name" => "compressor.read"}]))).fetch("bytes")
     assert_equal JSON.generate({"type" => "object"}),
                  store.resolve(raw_sha256(JSON.generate({"type" => "object"}))).fetch("bytes")
     assert_equal "diagnose the pond",

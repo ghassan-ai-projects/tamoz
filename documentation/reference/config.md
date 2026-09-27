@@ -48,7 +48,7 @@ others. Keep it private (`0700` directory, `0600` files).
 ### `config.yaml` (schema 2)
 
 `config.yaml` carries the workspace root, `sources:` (skills, memory, MCP,
-websearch), `budgets:` and `channels:`. A schema 1 directory loads unchanged as
+websearch, probes), `budgets:` and `channels:`. A schema 1 directory loads unchanged as
 "no channels"; migrate explicitly with a backup and atomic rename:
 
 ```bash
@@ -78,6 +78,17 @@ sources:
     enabled: true
     command: /opt/websearch/adapter
     env_allowlist: [PATH, HOME]
+  probes:                 # read-only calls to a tool in an MCP server's read_only_tools
+    enabled: true
+    targets:
+      notebook-a: {folder: "team-a"}
+    probes:
+      - name: probe_notes_search
+        description: Search the team's notes. The query is plain words.
+        backing: {server: notes, tool: search_notes}
+        arguments:
+          folder: "{target.folder}"               # pinned
+          query: {free: string, max_bytes: 128}   # the model fills this
 budgets:
   model_calls: 40
   wall_clock_seconds: 900
@@ -97,6 +108,13 @@ channels:
       mode: deny_only
       prompt_ttl_s: 900
 ```
+
+`sources.probes` declares the probes an investigation may call: each names its
+backing MCP tool and gives every argument as a pinned value or a typed free slot
+(`string`, `integer`, `enum`, `sql_select`). `{target.<field>}` and
+`{window.from}`/`{window.until}` placeholders are filled by Tamoz, never by the
+model. The full rules, `tamoz probes`, and `tamoz investigate` are in
+[the investigation guide](../guides/investigation.md).
 
 ## Trusted profiles
 

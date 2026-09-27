@@ -44,7 +44,7 @@ class AgentModeSwitchKillMatrixTest < Minitest::Test
       second_runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
         model_factory: ->(profile:) { edit_model },
-        lease_ttl: 0.2
+        lease_ttl: 5.0
       )
       second_worker = Tamoz::Agent::Worker.new(
         runtime: second_runtime,

@@ -43,6 +43,7 @@ AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 # byte-identical output) rather than probing behaviour, so the everyday lane
 # skips them and `ci_full` still runs every one.
 SLOW_TESTS = %w[
+  test/investigation_eval_controls_test.rb
   test/benchmark_comms_b0_test.rb
   test/benchmark_comms_controls_test.rb
   test/benchmark_holdout_test.rb
@@ -701,6 +702,7 @@ namespace :benchmark do
     test/benchmark_comms_controls_test.rb
     test/openclaw_mission_controls_test.rb
     test/thermal_tournament_controls_test.rb
+    test/investigation_eval_controls_test.rb
   ].freeze
 
   desc "Prove the benchmark graders discriminate — offline control suites (no model calls)"

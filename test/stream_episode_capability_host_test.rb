@@ -183,4 +183,26 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
     assert status.success?, "isolated episode host load failed: #{error}"
     assert_equal PERMITTED.join(","), output.strip
   end
+
+  def test_go_spelled_stream_names_reach_the_dotted_implementation
+    host = Host.new(implementations)
+
+    assert_equal({"evidence.get" => "ok"}, host.execute("evidence_get", {}))
+    assert_equal({"history.prior_incidents" => "ok"}, host.execute("history_prior_incidents", {}))
+    assert Host.stream_tool?("evidence_get")
+    refute Host.stream_tool?("probe_pond_log")
+  end
+
+  def test_probes_bind_only_under_probe_names_and_nothing_ungranted_executes
+    probe = ->(_arguments, _context) { {"json" => "log"} }
+    host = Host.new(implementations, probes: {"probe_pond_log" => probe}, granted: %w[probe_pond_log evidence_get])
+
+    assert_equal({"json" => "log"}, host.execute("probe_pond_log", {}))
+    assert_equal({"evidence.get" => "ok"}, host.execute("evidence_get", {}))
+    error = assert_raises(Tamoz::Core::ToolError) { host.execute("knowledge.search", {}) }
+    assert_match(/not granted/, error.message)
+    assert_raises(Tamoz::ConfigurationError) { Host.new(implementations, probes: {"read_file" => probe}) }
+    ungranted = Host.new(implementations, probes: {"probe_pond_log" => probe}, granted: %w[evidence_get])
+    assert_raises(Tamoz::Core::ToolError) { ungranted.execute("probe_pond_log", {}) }
+  end
 end

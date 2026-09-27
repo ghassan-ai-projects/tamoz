@@ -147,7 +147,9 @@ module Tamoz
       end
 
       def remote_planning_surface(allowed)
-        allowed.filter_map { |name| mcp_entry(@mcp, name) if @mcp }.to_h.freeze
+        return {}.freeze unless @mcp
+
+        allowed.filter_map { |name| ProbeSource.planning_entry(@mcp, name) || mcp_entry(@mcp, name) }.to_h.freeze
       end
 
       private

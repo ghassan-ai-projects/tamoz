@@ -40,7 +40,7 @@ class AgentCLITest < Minitest::Test
 
     assert_equal 0, status
     assert_includes out.string, "Usage: tamoz [global-options] [subcommand] [options] [ARGS]"
-    assert_includes out.string, "Interactive:  ask, resume, continue, list, show, follow-up, redirect,"
+    assert_includes out.string, "Interactive:  ask, code, investigate, resume, continue, list, show,"
     assert_includes out.string, "--profile PROFILE"
     assert_includes out.string, "--check NAME=COMMAND"
     assert_includes out.string, "--non-interactive"

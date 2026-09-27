@@ -80,7 +80,17 @@ module Tamoz
         append(entries, 'user', scrub(task), pinned: true)
       end
 
-      def scrub(text) = Tamoz::Core::SECRET_VALUE_PATTERNS.reduce(text) { |value, pattern| value.gsub(pattern, '[REDACTED]') }
+      def scrub(text) = Tamoz::Core.scrub_secrets(text)
+
+      def reports? = header.tool_names.include?(Harness::PromptPack.report_tool.name)
+
+      def probe?(name) = @configuration.mcp.respond_to?(:probe?) && @configuration.mcp.probe?(name)
+
+      # {tool_call_id => probe name} for this turn's probe calls that answered.
+      def gathered(entries)
+        entries.select { |entry| entry['kind'] == 'tool_result' && entry['source'] == 'probe' }
+               .to_h { |entry| [entry.fetch('tool_call_id'), entry.fetch('name')] }
+      end
 
       private
 
@@ -91,7 +101,21 @@ module Tamoz
           next unless allowed.include?(name)
 
           ContextEngine::ToolSchema.new(name:, description: toolbox.descriptions.fetch(name), parameters:)
+        end + probe_schemas(allowed)
+      end
+
+      # The operator's probes, and report_findings to finish with on a read-only turn; none when no probe is admitted.
+      def probe_schemas(allowed)
+        source = @configuration.mcp
+        return [] unless source.respond_to?(:session_tools)
+
+        probes = source.session_tools.select { |tool| allowed.include?(tool.fetch('name')) }.map do |tool|
+          ContextEngine::ToolSchema.new(name: tool.fetch('name'), description: tool.fetch('description'),
+                                        parameters: tool.fetch('parameters'))
         end
+        return probes if probes.empty? || allowed.intersect?(MUTATING_TOOLS)
+
+        probes + [Harness::PromptPack.report_tool]
       end
 
       def model_name = @configuration.model.respond_to?(:model) ? String(@configuration.model.model) : 'model'

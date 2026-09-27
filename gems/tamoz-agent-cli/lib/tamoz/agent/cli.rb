@@ -20,6 +20,7 @@ module Tamoz
       # own file; it is the same CLI object, split only so neither half becomes
       # unreadable.
       include CLIWorkerCommands
+      include CLIProbeCommands
       include CLIImprovementCommands
       include CLIScheduleCommands
       include CLIProfileCommands
@@ -36,6 +37,8 @@ module Tamoz
       SUBCOMMAND_HANDLERS = {
         "ask" => :cmd_ask,
         "code" => :cmd_code,
+        "investigate" => :cmd_investigate,
+        "probes" => :cmd_probes,
         "resume" => :cmd_resume,
         "continue" => :cmd_continue,
         "list" => :cmd_list,

@@ -7,5 +7,8 @@ module Tamoz
 
     # An update_plan call the harness refuses; the message goes back to the model.
     class PlanError < Error; end
+
+    # A report_findings call the harness refuses; the message goes back to the model.
+    class ReportError < Error; end
   end
 end

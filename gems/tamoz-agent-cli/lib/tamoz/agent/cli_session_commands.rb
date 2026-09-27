@@ -53,6 +53,14 @@ module Tamoz
         cmd_ask(options.merge(work_routing: true), argv)
       end
 
+      # A read-only work turn under the plan approval profile: the operator's probes, then a findings report.
+      def cmd_investigate(options, argv)
+        raise OptionParser::InvalidArgument, 'tamoz investigate is read-only; drop --allow-changes' if
+          options[:allow_changes]
+
+        cmd_ask(options.merge(work_routing: true, approval_profile: 'plan'), argv)
+      end
+
       # A work thread's surface, guidance and persona are pinned at its first turn, so a follow-up,
       # resume or continue builds the same header and body without repeating the flags.
       def work_harness(options, thread_id)

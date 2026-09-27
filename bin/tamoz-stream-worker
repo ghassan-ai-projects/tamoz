@@ -62,6 +62,9 @@ parser = OptionParser.new do |opts|
     options[:skills_source] = value
   end
 end
+parser.on("--runtime-dir PATH", "Operator runtime directory whose sources.probes the episodes may use") do |value|
+  options[:runtime_dir] = value
+end
 parser.parse!(ARGV)
 
 unless options[:profile] && options[:database] && options[:tenant]
@@ -125,12 +128,29 @@ worker = Tamoz::Stream::EpisodeWorker.new(
   worker_version: options[:worker_version],
   lane_config:
 )
+# The operator's MCP servers, narrowed to its read-only probes; only probe_* names reach an episode.
+mcp_source = nil
+if options[:runtime_dir]
+  begin
+    directory = Tamoz::Agent::RuntimeDirectory.resolve(path: options[:runtime_dir])
+    mcp_source = Tamoz::Agent::McpSourceBuilder.new(directory).build
+  rescue Tamoz::Error => e
+    warn "tamoz-stream-worker: #{e.message}"
+    exit 2
+  end
+  unless mcp_source.is_a?(Tamoz::Agent::ProbeSource)
+    mcp_source&.close
+    warn "tamoz-stream-worker: --runtime-dir #{options[:runtime_dir]} enables no sources.probes"
+    exit 2
+  end
+end
 runner = Tamoz::Stream::EpisodeRunner.new(
   durable_runner: app.durable_runner,
   worker:,
   verification_store: checkpointer.bind_verification_store,
   artifact_store: Tamoz::Stream::ArtifactStore.new,
-  configured_tenant: options.fetch(:tenant)
+  configured_tenant: options.fetch(:tenant),
+  probe_source: mcp_source
 )
 worker.bind_runner(runner)
 
@@ -139,6 +159,11 @@ server = Tamoz::Stream::WorkerServer.new(
   socket: options[:socket],
   port: options[:port]
 )
-trap("TERM") { server.stop }
-trap("INT") { server.stop }
-server.run
+# grpc's stop takes a mutex, which a trap handler may not; stopping from a thread lets run return and
+# the MCP supervisors close.
+%w[TERM INT].each { |signal| trap(signal) { Thread.new { server.stop } } }
+begin
+  server.run
+ensure
+  mcp_source&.close
+end

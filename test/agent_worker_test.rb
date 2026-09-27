@@ -335,7 +335,7 @@ class AgentWorkerTest < Minitest::Test
       second_runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
         model_factory: ->(profile:) { AdaptiveCompactionModel.new },
-        lease_ttl: 0.2,
+        lease_ttl: 5.0,
         routing: :adaptive
       )
       second_worker = Tamoz::Agent::Worker.new(

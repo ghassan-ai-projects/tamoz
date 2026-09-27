@@ -21,6 +21,7 @@ the source, tests, and the curated documentation before acting on them.
 | Reviews and corrections | `reviews/`, `reviews/codebase-review-2026-08/` |
 | Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `GAUNTLET_PROGRESS.md`; latency evidence is in `documentation/operations/ux-latency-investigation/` |
 | Canonical benchmark contracts | `documentation/benchmark/` (migrated because scripts and tests consume these protocols and scenario indices) |
+| Active investigation build | `active-investigation/` (plan, quality bar, real-model run reports in `runs/`); the eval spec is `eval-improvement/measurement-plans/16-active-investigation.md`; usage is in `documentation/guides/investigation.md` |
 | Gem-boundary audits | `gem-boundary-audit-2026-08-25/` |
 | Gem-boundary implementation | `gem-boundary-implementation-2026-08-26/` |
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |

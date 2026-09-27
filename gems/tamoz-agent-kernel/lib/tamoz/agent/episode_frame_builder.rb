@@ -22,8 +22,24 @@ module Tamoz
       FRAME_DOMAIN = "tamoz.agent.episode_frame.v1\n"
       MAX_FACT_BYTES = 4096
       MAX_FACTS = 64
+      MAX_TOOL_RESULT_BYTES = 16 * 1024
+      TOOL_PROTOCOL = <<~TEXT.chomp
+        TOOLS: when the given facts cannot settle the diagnosis, return a tool turn instead of a verdict:
+        {"protocol":"tamoz.episode-diagnosis/v2","tool_requests":[{"name":"<tool>","arguments":{},"purpose":"<the missing datum, and why it decides the diagnosis>"}]}
+        A tool turn carries no other field. This episode allows %<budget>d tool calls in total.
+        Each result returns as a tool:<index> entry in tool_results. A successful result is a provided fact you may cite; an error result is not. Never assume a value you did not gather.
+        A result that does not show the cause is not evidence that there is none: while tool calls remain, query again with different or broader terms (synonyms, related names) before concluding unknown.
+        If the evidence still cannot settle it, put most probability on unknown and add "evidence_gaps":[{"datum":"<what is missing>","why":"<why it matters>"}] to the terminal answer.
+        AVAILABLE TOOLS:
+      TEXT
+      FINAL_DIRECTIVE = "FINAL CALL: no further tool call or model call is available. Return a terminal " \
+                        "answer from the evidence gathered; if it cannot settle the diagnosis, put most " \
+                        "probability on unknown and list the evidence_gaps."
 
       Frame = Data.define(:system, :user, :facts, :evidence_ids, :digest, :catalog)
+      # The episode's model-visible tools ({name, description, parameters}), its tool-call budget, and whether
+      # the next reason call is the last one the budget allows.
+      Tooling = Data.define(:tools, :budget, :final)
 
       # catalog: a DiagnosisCatalog (already wire-verified). prompt_sha256 is
       # optional — when present the prompt bytes must match it or the frame
@@ -45,12 +61,15 @@ module Tamoz
         actual
       end
 
+      # tooling: nil leaves the system section byte-identical to a tool-less episode.
       def build(snapshot:, prompt:, prompt_version: nil, prompt_sha256: nil,
-                skills: [], memory: [], tool_results: [], repair_directive: nil)
+                skills: [], memory: [], tool_results: [], repair_directive: nil, tooling: nil)
         verify_prompt!(prompt, prompt_version, prompt_sha256)
         facts = build_facts(snapshot)
-        system = build_system(prompt)
-        user = build_user(facts, skills, memory, tool_results, repair_directive)
+        system = build_system(prompt, tooling)
+        sections = build_user(facts, skills, memory, tool_results, repair_directive)
+        sections["budget_directive"] = FINAL_DIRECTIVE if tooling&.final
+        user = Tamoz::Core.jcs(sections)
         canonical = {"system" => system, "user" => user, "catalog" => @catalog.canonical}
         evidence_ids = build_evidence_ids(facts, skills, memory, tool_results)
         Frame.new(
@@ -96,7 +115,7 @@ module Tamoz
         entries
       end
 
-      def build_system(prompt)
+      def build_system(prompt, tooling)
         lines = [String(prompt)]
         lines << "OBJECTIVE: #{@objective}" unless @objective.empty?
         lines << "DIAGNOSIS CODES (output exactly these codes in " \
@@ -110,7 +129,15 @@ module Tamoz
                  "skill:<name> — all only for entries given in the user message."
         lines << "OUTPUT: strict JSON object matching the " \
                  "tamoz.episode-diagnosis/v2 protocol; no prose around it."
+        lines.concat(tool_lines(tooling)) if tooling
         lines.join("\n")
+      end
+
+      def tool_lines(tooling)
+        [format(TOOL_PROTOCOL, budget: tooling.budget)] + tooling.tools.map do |tool|
+          "- #{tool.fetch("name")}: #{tool.fetch("description")} " \
+            "ARGUMENTS: #{Tamoz::Core.jcs(tool.fetch("parameters"))}"
+        end
       end
 
       # The untrusted section: every entry is fenced + attributed — skills,
@@ -126,7 +153,7 @@ module Tamoz
         user["memory"] = memory_entries unless memory_entries.empty?
         user["tool_results"] = tools unless tools.empty?
         user["repair_directive"] = repair_directive if repair_directive
-        Tamoz::Core.jcs(user)
+        user
       end
 
       def build_situation_entries(facts)
@@ -156,15 +183,25 @@ module Tamoz
 
       def build_tool_entries(tool_results)
         Array(tool_results).map.with_index do |result, index|
+          text, cut = bounded_result(result.fetch("result_json", "").to_s)
           {
             "id" => "tool:#{index}",
             "name" => result.fetch("tool"),
+            "purpose" => result["purpose"],
             "request_sha256" => result["request_digest"],
             "result_sha256" => result["result_sha256"],
             "is_error" => result.fetch("is_error", false),
-            "result_bytes" => result.fetch("result_bytes", 0)
-          }
+            "truncated" => result.fetch("truncated", false) || cut,
+            "result_bytes" => result.fetch("result_bytes", 0),
+            "result" => text
+          }.compact
         end
+      end
+
+      def bounded_result(text)
+        return [text, false] if text.bytesize <= MAX_TOOL_RESULT_BYTES
+
+        [text.byteslice(0, MAX_TOOL_RESULT_BYTES).scrub(""), true]
       end
 
       def build_evidence_ids(facts, skills, memory, tool_results)
@@ -172,8 +209,14 @@ module Tamoz
           facts.map { |entry| "fact:#{entry.fetch("id")}" } +
           Array(skills).map { |entry| "skill:#{entry.name}" } +
           Array(memory).map { |entry| "memory:#{entry.fetch("digest")}" } +
-          Array(tool_results).each_index.map { |index| "tool:#{index}" }
+          citable_tool_ids(tool_results)
         )
+      end
+
+      def citable_tool_ids(tool_results)
+        Array(tool_results).each_with_index.filter_map do |result, index|
+          "tool:#{index}" unless result.fetch("is_error", false)
+        end
       end
     end
   end

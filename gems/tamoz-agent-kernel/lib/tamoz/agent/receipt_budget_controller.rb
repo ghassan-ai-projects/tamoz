@@ -2,6 +2,7 @@
 
 require "tamoz/core"
 require "tamoz/agent/errors"
+require "tamoz/agent/reasoning_document"
 
 module Tamoz
   module Agent
@@ -48,16 +49,30 @@ module Tamoz
         end
       end
 
-      # The CHECK before a tool execution.
-      def check_tool_call!(state)
-        max = @budget["max_tool_calls"]
-        return if max.nil? || max.to_i <= 0
+      # Tool calls this episode may still dispatch. An unset wire limit is one document's worth.
+      def tool_calls_left(state)
+        [tool_limit - used(state, "tool_calls_used"), 0].max
+      end
 
-        used = (state || ZERO).fetch("tool_calls_used", 0).to_i
-        if used + 1 > max.to_i
-          raise StreamBudgetExceededError,
-                "tool call budget exhausted at #{used} calls (max #{max})"
-        end
+      # True when the next reason call is the last either budget allows: it must decide.
+      def final_call?(state)
+        return true if tool_calls_left(state).zero?
+
+        max = @budget["max_model_calls"].to_i
+        max.positive? && used(state, "model_calls_used") + 1 >= max
+      end
+
+      # True when the call just made was the last either budget allows.
+      def spent?(state)
+        return true if tool_calls_left(state).zero?
+
+        max = @budget["max_model_calls"].to_i
+        max.positive? && used(state, "model_calls_used") >= max
+      end
+
+      def tool_limit
+        max = @budget["max_tool_calls"].to_i
+        max.positive? ? max : ReasoningDocument::MAX_TOOL_REQUESTS
       end
 
       # Reconcile a model receipt: the state advances by one call + the
@@ -84,6 +99,8 @@ module Tamoz
       end
 
       private
+
+      def used(state, key) = state.to_h.fetch(key, 0).to_i
 
       def add_available_usage(base, usage)
         return unless usage && usage.available

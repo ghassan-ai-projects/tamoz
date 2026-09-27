@@ -314,7 +314,7 @@ module Tamoz
             "configured_check_passed" => BOOLEAN,
             "terminal_reason" => STRING
           },
-          optional: {}
+          optional: {"report" => HASH}
         },
         "terminal" => {
           required: {

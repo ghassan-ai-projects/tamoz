@@ -33,6 +33,10 @@ tool_tiers:
     tier: local_execute
     verb: execute
     grant_scopes: [once]
+  # Operator-declared probes (runtime sources.probes): read-only MCP calls whose scope the operator pinned.
+  "probe_*":
+    tier: read
+    verb: read
 
 fallback_tier:
   tier: local_execute
@@ -99,3 +103,7 @@ simulations:
       tool: "mcp:unknown:anything"
       verb: unknown
     expect: ask
+  - request:
+      tool: probe_pond_log
+      verb: read
+    expect: allow

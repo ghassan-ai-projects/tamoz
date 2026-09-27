@@ -14,6 +14,8 @@ require_relative "agent/capability_binding"
 require_relative "agent/mcp_capability_source"
 require_relative "agent/governed_browser_source"
 require_relative "agent/governed_database_source"
+require_relative "agent/probe_catalog"
+require_relative "agent/probe_source"
 require_relative "agent/mcp_source_builder"
 
 module Tamoz

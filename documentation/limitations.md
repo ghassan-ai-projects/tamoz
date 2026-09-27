@@ -183,6 +183,23 @@ a measurement:
   model calls, tool calls, wall time and the context window. There is no spend
   cap.
 
+## Investigation has development results only, and the stream side is incomplete
+
+Probes and `tamoz investigate` (see [guides/investigation.md](guides/investigation.md))
+pass their offline suite and three real-model runs on a 29-situation fixture
+corpus. That is a development measurement, not a guarantee:
+
+- **No held-out result.** Run 2 followed a prompt change made after seeing run 1,
+  and run 3 two agent changes made after seeing run 2, all on the same situations.
+- **Fabricated answers are not near zero.** The latest run was graded fabricated
+  in 7 of 232 episodes (a cause, or a cause-specific action, no probe result
+  supports), one of them following an instruction planted in a log.
+- **agentic-stream does not send `evidence_time_range` yet**, so a probe that uses
+  a time window refuses inside an episode. Other stream follow-ups are open
+  (`docs/active-investigation/PLAN.md`, G1–G4).
+- **An `unknown` answer cannot act above R0**, even where the action does not
+  depend on the cause; the intent catalog cannot yet say which actions do.
+
 ## Retired and absent capability areas
 
 ### The P14 streaming-input engine is retired

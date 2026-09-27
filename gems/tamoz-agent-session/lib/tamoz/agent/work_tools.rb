@@ -4,7 +4,8 @@ require 'json'
 
 module Tamoz
   module Agent
-    # The two harness tools that never touch the workspace: update_plan (reviewed once per scope) and recall_output.
+    # The harness tools that never touch the workspace: update_plan (reviewed once per scope), recall_output,
+    # and report_findings.
     # rubocop:disable Metrics/AbcSize -- one plan transition per call.
     class WorkTools
       MAX_PLAN_REVIEWS = 3
@@ -41,6 +42,25 @@ module Tamoz
         Outcome.new(text:, update: {})
       rescue ContextEngine::Error, TypeError => e
         Outcome.new(text: "Error: #{e.message}", update: {})
+      end
+
+      # A grounded report ends the turn: its rendering is the answer; the proposals are not executed. It must be the
+      # step's last call, or the calls after it would never answer.
+      def report_findings(state, call)
+        unless state.fetch(:work_cursor) == state.fetch(:work_pending).length - 1
+          return Outcome.new(text: 'Error: call report_findings alone, as the last call of its step.', update: {})
+        end
+
+        report = Harness::FindingsReport.parse(call.arguments, gathered: @work.gathered(state.fetch(:work_entries)))
+        verification = SessionRecords.build(
+          'verification', answer: report.render, satisfied: true, configured_check_passed: false,
+                          evidence: ['a findings report whose every finding cites a probe call that answered'],
+                          terminal_reason: 'reported', report: report.document
+        )
+        Outcome.new(text: 'Report accepted.',
+                    update: { verification:, terminal_reason: 'reported', next_node: 'terminal' })
+      rescue Harness::ReportError => e
+        Outcome.new(text: "Report not accepted: #{e.message}", update: {})
       end
 
       private

@@ -82,6 +82,7 @@ module Tamoz
           harness_result(state, call, @tools.update_plan(state, context, tool_call(call),
                                                          iteration: state.fetch(:work_step_count)))
         when 'recall_output' then harness_result(state, call, @tools.recall_output(tool_call(call)))
+        when 'report_findings' then harness_result(state, call, @tools.report_findings(state, tool_call(call)))
         else toolbox_gate(state, context, call, cursor)
         end
       end
@@ -242,7 +243,8 @@ module Tamoz
                else
                  "Error: #{@services.evidence.tool_error_message(outcome)}"
                end
-        result(state, call, text, summary: summary(name, outcome))
+        source = 'probe' if outcome.status == :succeeded && @work.probe?(name)
+        result(state, call, text, summary: summary(name, outcome), source:)
           .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil,
                                               **observation_update(state, name, call, outcome))
       end
@@ -312,10 +314,11 @@ module Tamoz
                                           step_id: intent.fetch('step_id'), operation: intent.fetch('operation'))
       end
 
-      def result(state, call, text, summary: nil)
+      # source 'probe' marks a probe result a findings report may cite.
+      def result(state, call, text, summary: nil, source: nil)
         spilled = spilled_result(call.fetch('name'), text, summary: summary || call.fetch('name'))
         entry = @work.entry(state.fetch(:work_entries), 'tool_result', spilled.text,
-                            tool_call_id: call.fetch('id'), name: call.fetch('name'), spilled: spilled.spilled)
+                            tool_call_id: call.fetch('id'), name: call.fetch('name'), spilled: spilled.spilled, source:)
         { work_entries: [entry], work_cursor: state.fetch(:work_cursor) + 1, next_node: 'work_gate' }
       end
 

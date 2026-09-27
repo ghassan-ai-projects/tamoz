@@ -304,11 +304,7 @@ module Tamoz
         sanitize_remote_text(text.byteslice(0, 512) || '')
       end
 
-      def sanitize_remote_text(text)
-        Tamoz::Core::SECRET_VALUE_PATTERNS.reduce(String(text)) do |sanitized, pattern|
-          sanitized.gsub(pattern, '[REDACTED]')
-        end
-      end
+      def sanitize_remote_text(text) = Tamoz::Core.scrub_secrets(text)
 
       def check_payload(result)
         {
@@ -387,7 +383,7 @@ module Tamoz
         source = @configuration.mcp
         return {} unless source
 
-        allowed.filter_map { |name| mcp_entry(source, name) }.to_h.freeze
+        allowed.filter_map { |name| ProbeSource.planning_entry(source, name) || mcp_entry(source, name) }.to_h.freeze
       end
 
       def prompt_safe(value)
