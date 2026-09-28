@@ -35,7 +35,7 @@ module Tamoz
         :valid_from, :valid_until, :review_at, :supersession_key,
         :contradiction_set_id, :base_quality, :last_evaluated_at, :use_counts,
         :created_by, :compatibility, :transition, :rejection_reason,
-        :created_at_ms
+        :created_at_ms, :subject_key
       )
         FORMAT_VERSION = 1
         LAYERS = %i[experience knowledge wisdom].freeze
@@ -77,7 +77,8 @@ module Tamoz
           compatibility: {},
           transition: nil,
           rejection_reason: nil,
-          created_at_ms: 0
+          created_at_ms: 0,
+          subject_key: nil
         )
           super(
             format_version:,
@@ -108,7 +109,8 @@ module Tamoz
             compatibility: Tamoz::Core.deep_freeze(validate_compatibility(compatibility)),
             transition: transition && Tamoz::Core.deep_freeze(validate_transition(transition)),
             rejection_reason: rejection_reason,
-            created_at_ms: created_at_ms
+            created_at_ms: created_at_ms,
+            subject_key: subject_key && validate_id(subject_key, "subject_key")
           )
         end
 
@@ -163,7 +165,8 @@ module Tamoz
             "compatibility" => compatibility,
             "transition" => transition,
             "rejection_reason" => rejection_reason,
-            "created_at_ms" => created_at_ms
+            "created_at_ms" => created_at_ms,
+            "subject_key" => subject_key
           }
         end
 
@@ -211,7 +214,8 @@ module Tamoz
             compatibility: hash.fetch("compatibility"),
             transition: hash["transition"],
             rejection_reason: hash["rejection_reason"],
-            created_at_ms: hash.fetch("created_at_ms")
+            created_at_ms: hash.fetch("created_at_ms"),
+            subject_key: hash["subject_key"]
           )
         end
 
@@ -225,7 +229,7 @@ module Tamoz
             valid_from:, valid_until:, review_at:, supersession_key:,
             contradiction_set_id:, base_quality:, last_evaluated_at:, use_counts:,
             created_by:, compatibility:, transition:, rejection_reason:,
-            created_at_ms:
+            created_at_ms:, subject_key:
           }
         end
 

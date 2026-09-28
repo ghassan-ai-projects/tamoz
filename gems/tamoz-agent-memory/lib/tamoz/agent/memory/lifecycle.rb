@@ -84,6 +84,7 @@ module Tamoz
             transition: transition(deleting_actor, reason, authority:, prior_version: record.record_version,
                                    evidence: {"expiry" => expired?(record)})
           )
+          fts_rows = @engine.repository.fts_row_count(@engine.namespace, memory_id)
           begin
             append_version(deleted, expected_version: current.entry.version)
           rescue Tamoz::StoreConflictError => error
@@ -93,8 +94,22 @@ module Tamoz
               receipt: deletion_receipt(memory_id, now:, removed: {}, retained: {}, pending: ["store_cas_conflict"])
             )
           end
-          sinks = deletion_sinks(memory_id)
-          deletion_receipt(memory_id, now:, removed: sinks.fetch(:removed), retained: sinks.fetch(:retained), pending: sinks.fetch(:pending))
+          quarantined = quarantine_derived(memory_id)
+          deletion_receipt(
+            memory_id, now:,
+            removed: {"from_recall" => 1, "fts_rows" => fts_rows},
+            retained: {"version_rows" => current.entry.version + 1, "index_rows" => index_row_count(memory_id)},
+            pending: []
+          ).merge("quarantined_derived" => quarantined).freeze
+        end
+
+        # Expiry and retention in one bounded pass: records past `valid_until`
+        # are tombstoned by the system, then tombstones past the retention
+        # boundary are purged. Returns the purge receipt.
+        def sweep(now: nil)
+          now_ms = (now || @engine.clock.call).to_i * 1000
+          expired_ids(now_ms).each { |memory_id| delete(memory_id:, actor: "system", reason: "expired", now:) }
+          @engine.repository.purge_expired(now_ms:)
         end
 
         # Hard-purge orchestration (C6): the tamoz-agent maintenance pass over
@@ -179,42 +194,69 @@ module Tamoz
           }
         end
 
-        # Invariant-54 shape: what was removed, what was retained (protected
-        # artifacts, backups under their own retention), what is pending, and
-        # the purge time.
+        # What the tombstone did, in counts that match the tables: the record
+        # left recall and its full-text row is gone; its version and index rows
+        # stay until `purge` after the retention boundary.
         def deletion_receipt(memory_id, now:, removed:, retained:, pending:)
           {
             "memory_deletion_receipt" => 1,
             "memory_id" => memory_id,
             "namespace" => @engine.namespace,
             "removed" => removed,
-            "retained" => retained,
+            "retained_until_purge" => retained,
             "pending" => pending,
             "deleted_at_ms" => (now || Time.now).to_i * 1000
           }.freeze
         end
 
-        # Every reachable sink under policy: the primary record, the index rows,
-        # derived consolidations that cite this record as a source, prompt
-        # caches, and sync queues. Protected artifacts stay under their own
-        # rules; backups fall under their own retention (named pending).
-        def deletion_sinks(memory_id)
-          index_rows = index_row_count(memory_id)
-          derived = derived_references(memory_id)
-          {
-            removed: {
-              "primary_record" => 1,
-              "index_rows" => index_rows,
-              "derived_consolidations" => derived,
-              "prompt_caches" => 0,
-              "sync_queues" => 0
-            },
-            retained: {
-              "protected_artifacts" => 0,
-              "backups" => 0
-            },
-            pending: []
-          }
+        # Knowledge consolidated from a deleted record loses its evidence; it
+        # leaves recall until someone re-establishes it.
+        def quarantine_derived(memory_id)
+          cited = "memory:#{memory_id}@"
+          derived = active_knowledge.select do |record|
+            record.source_refs.any? { |ref| ref.fetch("identity").to_s.start_with?(cited) }
+          end
+          derived.map do |record|
+            quarantine(memory_id: record.memory_id, actor: "system", reason: "source #{memory_id} was deleted")
+            record.memory_id
+          end
+        end
+
+        def active_knowledge
+          rows = nil
+          @engine.store.open_transaction(label: "memory.active_knowledge") do |tx|
+            rows = tx.rows(
+              "memory.active_knowledge",
+              <<~SQL,
+                SELECT i.memory_id FROM tamoz_memory_index i
+                JOIN tamoz_store_heads h
+                  ON h.namespace = i.store_namespace AND h.key = i.layer || '/' || i.memory_id
+                 AND h.current_version = i.record_version AND h.deleted = 0
+                WHERE i.store_namespace = ? AND i.layer = 'knowledge' AND i.state IN ('active', 'consolidated')
+              SQL
+              [@engine.namespace]
+            )
+          end
+          rows.filter_map { |(id)| @engine.store.get(@engine.namespace, "knowledge/#{id}")&.value }
+        end
+
+        def expired_ids(now_ms)
+          rows = nil
+          @engine.store.open_transaction(label: "memory.expired") do |tx|
+            rows = tx.rows(
+              "memory.expired",
+              <<~SQL,
+                SELECT i.memory_id FROM tamoz_memory_index i
+                JOIN tamoz_store_heads h
+                  ON h.namespace = i.store_namespace AND h.key = i.layer || '/' || i.memory_id
+                 AND h.current_version = i.record_version AND h.deleted = 0
+                WHERE i.store_namespace = ? AND i.state IN ('active', 'consolidated')
+                  AND i.valid_until_ms IS NOT NULL AND i.valid_until_ms < ?
+              SQL
+              [@engine.namespace, now_ms]
+            )
+          end
+          rows.map(&:first)
         end
 
         def index_row_count(memory_id)
@@ -227,22 +269,6 @@ module Tamoz
                 WHERE store_namespace = ? AND memory_id = ?
               SQL
               [@engine.namespace, memory_id]
-            )
-          end
-          count
-        end
-
-        def derived_references(memory_id)
-          count = 0
-          @engine.store.open_transaction(label: "memory.derived") do |tx|
-            count = tx.scalar(
-              "memory.derived",
-              <<~SQL,
-                SELECT COUNT(*) FROM tamoz_store_versions v
-                WHERE v.namespace = ? AND v.deleted = 0
-                  AND CAST(v.payload AS TEXT) LIKE ?
-              SQL
-              [@engine.namespace, "%#{memory_id}%"]
             )
           end
           count

@@ -563,12 +563,12 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_deletion_emits_receipt_and_propagates_to_index
-    # P11-17: tombstone-delete covers the primary record and index and emits an
-    # invariant-54-shape receipt; nothing zombies back into active recall.
+    # P11-17: tombstone-delete takes the record out of recall and its full-text
+    # row with it; version and index rows are named as kept until purge.
     result = admit_episode(statement: "Delete-me policy note")
     receipt = @engine.lifecycle.delete(memory_id: result.record.memory_id, actor: "alice", reason: "test")
-    assert_equal 1, receipt.fetch("removed").fetch("primary_record")
-    assert_operator receipt.fetch("removed").fetch("index_rows"), :>=, 1
+    assert_equal({"from_recall" => 1, "fts_rows" => 1}, receipt.fetch("removed"))
+    assert_operator receipt.fetch("retained_until_purge").fetch("index_rows"), :>=, 1
     assert_equal result.record.memory_id, receipt.fetch("memory_id")
 
     gone = @engine.retrieval.recall(caller:, query: {terms: ["delete"]})
@@ -772,7 +772,7 @@ class MemoryEngineTest < Minitest::Test
 
     receipt = @engine.lifecycle.delete(memory_id:, actor: "alice")
     assert receipt.is_a?(Hash)
-    assert receipt.key?("removed") && receipt.key?("retained") && receipt.key?("pending")
+    assert receipt.key?("removed") && receipt.key?("retained_until_purge") && receipt.key?("pending")
 
     # Recall excludes the deleted record immediately.
     recalled = @engine.retrieval.recall(caller:, query: {terms: ["purge"]})
