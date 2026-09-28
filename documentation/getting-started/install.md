@@ -148,6 +148,7 @@ The interactive subcommands drive one thread while you watch it.
 | `code` | Start a coding turn in the tool-calling work loop (needs `--allow-changes` or a profile, and a route with a known context window; see [the coding guide](../guides/coding.md)) |
 | `investigate` | Start a read-only investigation turn: the operator's probes (`sources.probes`), then a findings report whose every finding cites a probe that answered; proposals are not executed |
 | `probes` | Validate and list the operator's probe catalog without starting any MCP server |
+| `memory` | List, show, forget, or consolidate what durable memory holds for this workspace (needs `sources.memory` in the runtime config) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on |
 | `continue` | Drive a paused thread forward without new input |
 | `list` | Show every thread in the session directory |
