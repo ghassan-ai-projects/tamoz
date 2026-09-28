@@ -120,10 +120,13 @@ module Tamoz
         lines = records.map do |record|
           date = Time.at(record.valid_from || (record.created_at_ms / 1000)).utc.strftime('%Y-%m-%d')
           "[#{record.memory_id} v#{record.record_version} #{record.layer} #{record.klass}#{key_text(record)} " \
-            "#{record.epistemic_kind} #{date}] \"#{record.statement}\""
+            "#{record.epistemic_kind} #{date}] \"#{contained(record.statement)}\""
         end
         "<memory note=\"#{Harness::PromptPack.fetch('memory_note')}\">\n#{lines.join("\n")}\n</memory>"
       end
+
+      # A remembered statement stays inside the data block whatever it contains.
+      def contained(text) = text.gsub(%r{<\s*/?\s*memory}i) { |tag| tag.sub('<', '&lt;') }
 
       def key_text(record) = record.subject_key ? " key=#{record.subject_key}" : ''
 

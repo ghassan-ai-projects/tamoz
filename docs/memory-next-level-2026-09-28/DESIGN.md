@@ -108,7 +108,7 @@ the superstep) changes nothing twice. That is why the memory tools need no effec
 
 | When | What | Where | Bound |
 |---|---|---|---|
-| Work-turn intake | **Knowledge brief**: all active `preference` / `constraint` records in scope, then task-relevant Knowledge by FTS on the task text; deduplicated | one pinned `memory` entry after project guidance, before the transcript | ≤ 8 records, ≤ 1,024 tokens; overflow drops the lowest-ranked and traces the drop |
+| Work-turn intake | **Knowledge brief**: up to half the slots for the newest `preference` / `constraint` records in scope, then task-relevant Knowledge ranked by FTS relevance, then the remaining profile records; deduplicated | one pinned `memory` entry after project guidance, before the transcript | ≤ 8 records, ≤ 1,024 tokens; overflow drops the lowest-ranked and traces the drop |
 | Plan-route action/repair phases | the same brief (F1 fixed: Knowledge only) | the planning context's `memory` key | same |
 | Mid-turn | nothing automatic | — | the model pulls with `recall_memory` |
 | Thread's first intake after a promotion | Wisdom behaviour snapshot | header section (exists) | `MAX_BEHAVIOR_SNAPSHOT_BYTES` |

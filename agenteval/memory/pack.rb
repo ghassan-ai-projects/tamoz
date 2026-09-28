@@ -134,9 +134,10 @@ module Agenteval
       selected = scenarios ? SCENARIOS.select { |scenario| scenarios.include?(scenario.id) } : SCENARIOS
       raise ArgumentError, "no scenario matches #{scenarios.inspect}" if selected.empty?
 
-      verdicts = arms.flat_map do |arm|
-        selected.flat_map do |scenario|
-          (1..repeat).map do |trial|
+      # Arms alternate trial by trial, so provider drift over a long run hits both equally.
+      verdicts = selected.flat_map do |scenario|
+        (1..repeat).flat_map do |trial|
+          arms.map do |arm|
             keep = keep_root && File.join(keep_root, "#{scenario.id}-#{arm}-#{trial}")
             verdict = SessionChain.trial(scenario, arm:, trial:, keep:, &tamoz_agent(scenario, arm, budget:))
             File.open(partial, "a") { |file| file.puts(JSON.generate(verdict.to_h)) } if partial
@@ -163,7 +164,7 @@ module Agenteval
     def summary(verdicts)
       by_scenario = verdicts.group_by(&:scenario)
       sessions = verdicts.flat_map(&:sessions)
-      tokens = sessions.filter_map { |session| session["memory_tokens_injected"] }.sort
+      tokens = sessions.map { |session| session["memory_tokens_injected"].to_i }.select(&:positive?).sort
       {
         "scenarios_solved_every_trial" => by_scenario.count { |_id, trials| trials.all?(&:solved) },
         "scenarios" => by_scenario.length,
@@ -175,6 +176,7 @@ module Agenteval
         "memory_tool_calls" => sessions.each_with_object(Hash.new(0)) do |session, counts|
           Hash(session["tools"]).slice("recall_memory", "remember", "forget").each { |name, n| counts[name] += n }
         end,
+        "sessions_with_brief" => tokens.length,
         "memory_tokens_injected_p50_p95" => [percentile(tokens, 0.5), percentile(tokens, 0.95)]
       }
     end

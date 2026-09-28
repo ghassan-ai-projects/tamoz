@@ -108,6 +108,14 @@ class AgentCliMemoryTest < Minitest::Test
       assert_equal 0, status, err
       knowledge = JSON.parse(consolidated).fetch('results').first.fetch('knowledge')
 
+      engine, adapter = memory_engine_at(session_dir, clock: -> { Time.now })
+      elsewhere = owner_fact(engine, 'another project keeps its fixtures in spec/data', user: 'alice',
+                                                                                        project: 'ws:elsewhere')
+      adapter.close
+      refused, = memory_cli(runtime, session_dir, 'forget', elsewhere.memory_id)
+
+      assert_equal 1, refused
+
       status, = memory_cli(runtime, session_dir, 'forget', ids.first)
 
       assert_equal 0, status

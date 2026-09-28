@@ -84,3 +84,16 @@ precision@5 **0.92**, scope/sensitivity/lifecycle/layer violations **0**, budget
 - RuboCop: no new offense in any linted file I changed (`agenteval/**` is excluded by config).
 - enola `diff_snapshot`: no cycle, no layer violation; two dead-method notes are false
   positives (`cmd_memory` is dispatched through the subcommand table; `integrity_check` is untouched).
+
+## Multi-lens review of PR #57
+
+| Lens | Finding | Outcome |
+|---|---|---|
+| Security | a stored statement containing `</memory>` could close the data block and put text outside it | fixed: the tag is escaped when rendered; test `test_e2_a_statement_cannot_close_the_memory_block` |
+| Security | `tamoz memory forget <id>` deleted any record by id, unlike `show` | fixed: only records of this owner and project; test in `agent_cli_memory_test.rb` |
+| Eval validity | arms ran back to back (all memory-on, then all memory-off), so provider drift could favour one arm | fixed: arms alternate trial by trial |
+| Eval reporting | the injected-token p50/p95 counted first sessions (always 0) | fixed: over sessions that received a brief, with their count |
+| Docs | DESIGN §5 described the brief as "all profile records first"; the code gives the profile half the slots | fixed |
+| Durability | the intake brief and memory tools are plain reads/writes inside a node, not journaled effects | no change: intake commits its entries before any model call reads them, and memory writes are idempotent, so a replay changes nothing |
+| Correctness | could `work_changes` / `work_checks` leak into the next turn's episode? | no: probed; each turn starts from fresh state |
+| Performance | `Lifecycle#quarantine_derived` loads all active Knowledge on every delete; `sweep` runs after each episode | accepted for now: stores are small; revisit when a store has thousands of Knowledge records |

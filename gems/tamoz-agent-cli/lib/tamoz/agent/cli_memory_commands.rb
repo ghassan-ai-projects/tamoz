@@ -70,7 +70,7 @@ module Tamoz
         case action
         when 'list' then list_memory(target, argv.join(' '))
         when 'show' then show_memory(target, argv.fetch(0))
-        when 'forget' then forget_memory(target.engine, argv.fetch(0))
+        when 'forget' then forget_memory(target, argv.fetch(0))
         when 'consolidate' then consolidate_memory(target, options)
         else
           @err.puts 'usage: tamoz memory list [QUERY] | show ID | forget ID | consolidate'
@@ -98,10 +98,12 @@ module Tamoz
       end
 
       # The operator is the authority here; the user-quote rule is for the model's tools.
-      def forget_memory(engine, id)
-        @out.puts JSON.pretty_generate(engine.lifecycle.delete(memory_id: id, actor: 'operator',
-                                                               reason: 'operator forget'))
-        0
+      def forget_memory(target, id)
+        return 1.tap { @err.puts "tamoz: no remembered item #{id} in this project" } unless
+          %w[knowledge experience].any? { |layer| target.record(layer, id) }
+
+        receipt = target.engine.lifecycle.delete(memory_id: id, actor: 'operator', reason: 'operator forget')
+        0.tap { @out.puts JSON.pretty_generate(receipt) }
       end
 
       # W3: groups of related Experience (at least two distinct sessions) become Knowledge
