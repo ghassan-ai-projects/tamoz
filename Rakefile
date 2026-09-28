@@ -549,6 +549,21 @@ namespace :agenteval do
   desc "Controls + corpus validation — the gate that must pass before any paid run"
   task prove: %i[test controls validate]
 
+  namespace :memory do
+    desc "Prove the memory-pack graders discriminate — offline controls and authoring rules (no model calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "memory", "prove"
+    end
+
+    desc "Run the multi-session memory pack, memory on vs off (real model; AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
+    task run: :prove do
+      utf8_env!
+      out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "memory-#{Time.now.utc.strftime("%Y%m%d")}.json"))
+      sh agenteval_ruby, BIN, "memory", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
+         "--budget", ENV.fetch("AGENTEVAL_BUDGET", "300"), "--out", out
+    end
+  end
+
   desc "Run the corpus against the agent and write a dated report (needs DEEPSEEK_API_KEY)"
   task run: :prove do
     utf8_env!
