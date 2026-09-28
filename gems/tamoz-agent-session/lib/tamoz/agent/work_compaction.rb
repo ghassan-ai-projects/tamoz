@@ -68,7 +68,8 @@ module Tamoz
         checkpoint = ContextEngine::Compaction.checkpoint_entry(summary, selection:, entries:, store: @work.store)
         checkpointed = with_plan_reread(state, entries + [checkpoint])
         combine(replacement_update(pruned, 'prune'), replacement_update(checkpointed - entries, 'compaction'))
-          .merge(work_compactions: state.fetch(:work_compactions) + 1, work_series: declared(state))
+          .merge(work_compactions: state.fetch(:work_compactions) + 1, work_series: declared(state),
+                 work_checkpoint: summary)
       rescue ContextEngine::InvalidSummaryError, SummaryUnavailable => e
         combine(replacement_update(pruned, 'prune'),
                 { work_trace: [{ 'event' => 'compaction_fallback', 'reason' => e.message }] })
@@ -91,7 +92,8 @@ module Tamoz
           call.value.fetch('content'), source_bytes: selection.source_bytes(@work.resolve),
                                        required_strings: ContextEngine::Compaction.required_strings(
                                          selection, tools: WorkContext::MUTATING_TOOLS, resolve: @work.resolve
-                                       )
+                                       ),
+                                       previous: state[:work_checkpoint]
         )
       end
 
