@@ -5,17 +5,39 @@ require 'json'
 module Tamoz
   module Agent
     # The harness tools that never touch the workspace: update_plan (reviewed once per scope), recall_output,
-    # and report_findings.
+    # report_findings, and the memory tools.
     # rubocop:disable Metrics/AbcSize -- one plan transition per call.
     class WorkTools
       MAX_PLAN_REVIEWS = 3
+      # Answered here without the approval gate: none touches the workspace.
+      DIRECT = (%w[recall_output report_findings] + WorkMemory::TOOLS).freeze
 
       # The model-visible result of a harness tool and the state it changes.
       Outcome = Data.define(:text, :update)
 
-      def initialize(services:, work:)
+      def initialize(services:, work:, memory:)
         @services = services
         @work = work
+        @memory = memory
+      end
+
+      def direct(state, context, call)
+        case call.name
+        when 'recall_output' then recall_output(call)
+        when 'report_findings' then report_findings(state, call)
+        else memory_tool(state, context, call)
+        end
+      end
+
+      def memory_tool(state, context, call)
+        return Outcome.new(text: "Error: unknown tool #{call.name.inspect}", update: {}) unless @memory.enabled?
+
+        text = case call.name
+               when 'recall_memory' then @memory.recall(call.arguments)
+               when 'remember' then @memory.remember(state, context, call.arguments)
+               else @memory.forget(state, context, call.arguments)
+               end
+        Outcome.new(text:, update: {})
       end
 
       def update_plan(state, context, call, iteration:)

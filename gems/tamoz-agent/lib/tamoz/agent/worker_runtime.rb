@@ -757,7 +757,9 @@ module Tamoz
           profile_id,
           allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
           mcp: nil,
-          resolved_profile:
+          resolved_profile:,
+          # A child's task is written by the parent model, so it can never stand in for the user.
+          memory: nil
         )
       end
 
@@ -1067,12 +1069,12 @@ module Tamoz
         )
       end
 
-      def build_session(profile_id, allowed_tools: nil, mcp: mcp_source, resolved_profile: nil)
+      def build_session(profile_id, allowed_tools: nil, mcp: mcp_source, resolved_profile: nil, memory: memory_engine)
         resolved = resolved_profile || profile(profile_id)
         toolbox = session_toolbox(resolved, allowed_tools:)
         session_key = bind_approval_session(profile_id)
 
-        engine = memory_engine
+        engine = memory
         Session.new(
           approval_engine: @approval_engine,
           approval_session_id: session_key,

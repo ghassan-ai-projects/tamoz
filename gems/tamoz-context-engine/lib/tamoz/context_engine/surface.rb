@@ -7,7 +7,7 @@ module Tamoz
   module ContextEngine
     # The append-only log messages are derived from; a replacement entry shadows a range and renders in its place.
     module Surface
-      KINDS = %w[runtime guidance user assistant tool_result system_update checkpoint].freeze
+      KINDS = %w[runtime guidance memory user assistant tool_result system_update checkpoint].freeze
       FIELDS = %w[tool_call_id name replaces pinned spilled source].freeze
 
       module_function

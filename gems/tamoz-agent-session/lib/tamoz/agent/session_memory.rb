@@ -89,6 +89,7 @@ module Tamoz
           episode: episode_record(state, verification),
           owner: memory_owner
         )
+        @configuration.memory.lifecycle.sweep
       rescue StandardError
         nil
       end
@@ -97,35 +98,65 @@ module Tamoz
         @configuration.memory_owner || 'session'
       end
 
+      COMPLETED = %w[completed completed_without_check check_passed done verified_no_changes reported].freeze
+      EPISODE_BYTES = 1_536
+      TASK_BYTES = 300
+
       private
 
-      def completed?(state)
-        %w[completed completed_without_check check_passed].include?(state.fetch(:terminal_reason))
-      end
+      def completed?(state) = COMPLETED.include?(state.fetch(:terminal_reason))
 
       def episode_record(state, verification)
         session = state.fetch(:session)
         {
           session_id: session.fetch('session_id'),
           task: state.fetch(:task),
-          plan_digest: state[:accepted_plan] ? state.fetch(:accepted_plan).fetch('plan_digest') : 'sha256:none',
+          plan_digest: plan_digest(state),
           completed_at: Time.now.to_i,
           scopes: episode_scopes(session),
           sensitivity: :internal,
-          decisions: state.fetch(:plan_versions, []).last(3).map { |record| record.fetch('plan_id') },
-          corrections: [],
-          observed_outcome: {
-            'outcome' => verification.fetch('answer'),
-            'confidence' => 0.9
-          }
+          statement: episode_statement(state, verification),
+          observed_outcome: { 'outcome' => state.fetch(:terminal_reason) }
         }
       end
+
+      # What happened, from the turn's own records: never the answer prose.
+      def episode_statement(state, verification)
+        parts = ["Task: #{clip(state.fetch(:task), TASK_BYTES)}",
+                 "Outcome: #{state.fetch(:terminal_reason)} - #{Array(verification['evidence']).first}"]
+        parts += turn_parts(state) + plan_parts(state.dig(:work_plan, 'document') || {})
+        clip(parts.join(' | '), EPISODE_BYTES)
+      end
+
+      def turn_parts(state)
+        changes = Array(state[:work_changes]).uniq
+        checks = Array(state[:work_checks]).to_h { |check| [check.fetch('name'), check.fetch('passed')] }
+        parts = []
+        parts << "Files changed: #{changes.join(', ')}" if changes.any?
+        parts << "Checks: #{checks.map { |name, passed| "#{name} #{passed ? 'passed' : 'failed'}" }.join(', ')}" if
+          checks.any?
+        parts
+      end
+
+      def plan_parts(plan)
+        parts = plan['goal'] ? ["Plan goal: #{plan['goal']}"] : []
+        { 'decisions' => 'Decisions', 'ruled_out' => 'Ruled out' }.each do |field, label|
+          parts << "#{label}: #{plan[field].join('; ')}" if Array(plan[field]).any?
+        end
+        parts
+      end
+
+      def plan_digest(state)
+        state.dig(:work_plan, 'digest') || state[:accepted_plan]&.fetch('plan_digest') || 'sha256:none'
+      end
+
+      def clip(text, bytes) = Tamoz::Core.scrub_secrets(text.to_s.gsub(/\s+/, ' ').strip).byteslice(0, bytes).scrub('')
 
       def episode_scopes(session)
         {
           'tenant' => @configuration.memory.tenant,
           'user' => memory_owner,
-          'project' => 'session',
+          'project' => Tamoz::Agent::Memory::Surface.project_scope(@configuration.toolbox.root),
           'session' => session.fetch('session_id')
         }
       end
