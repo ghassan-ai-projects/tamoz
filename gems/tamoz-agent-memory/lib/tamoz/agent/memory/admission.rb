@@ -54,7 +54,7 @@ module Tamoz
         # taking a parallel keyword list.
         OwnerRequest = Data.define(
           :statement, :owner, :authority, :layer, :klass,
-          :scopes, :sensitivity, :epistemic_kind, :now
+          :scopes, :sensitivity, :epistemic_kind, :now, :memory_id, :subject_key, :source_ref
         )
 
         def initialize(engine)
@@ -103,10 +103,11 @@ module Tamoz
         def admit_owner_request(statement:, owner:, authority:, layer: :knowledge,
                                 klass: :preference, scopes:, sensitivity: :internal,
                                 epistemic_kind: :reported,
-                                contradiction_check: nil, now: nil)
+                                contradiction_check: nil, now: nil,
+                                memory_id: nil, subject_key: nil, source_ref: nil)
           request = OwnerRequest.new(
             statement:, owner:, authority:, layer:, klass:,
-            scopes:, sensitivity:, epistemic_kind:, now:
+            scopes:, sensitivity:, epistemic_kind:, now:, memory_id:, subject_key:, source_ref:
           )
           negatives = owner_request_negatives(request)
           unless negatives.empty?
@@ -186,14 +187,15 @@ module Tamoz
           statement = request.statement
           observed_at = (request.now || Time.now).to_i
           MemoryRecord.new(
-            memory_id: MemoryRecordDigest.identity(statement),
+            memory_id: request.memory_id || MemoryRecordDigest.identity(statement),
+            subject_key: request.subject_key,
             record_version: 1,
             layer: request.layer,
             klass: request.klass == :constraint ? :constraint : :preference,
             state: :active,
             statement:,
             epistemic_kind: request.epistemic_kind,
-            source_refs: [{
+            source_refs: [request.source_ref || {
               "identity" => "owner-request",
               "digest" => Digest::SHA256.hexdigest(statement),
               "observed_at" => observed_at
@@ -329,8 +331,9 @@ module Tamoz
           # recalled content.
           statement = episode[:statement] ||
                       build_statement(task, observed, episode, kind)
+          completed_at = episode.fetch(:completed_at, @engine.clock.call.to_i)
           MemoryRecord.new(
-            memory_id: MemoryRecordDigest.identity(statement),
+            memory_id: MemoryRecordDigest.identity("#{episode.fetch(:session_id)}\n#{statement}"),
             record_version: 1,
             layer: :experience,
             klass: :episode,
@@ -345,13 +348,19 @@ module Tamoz
             disclosure_policy: "default",
             confidence: observed.fetch("confidence", 0.8),
             confidence_method: "observed_outcome",
-            valid_from: episode.fetch(:completed_at, Time.now.to_i),
-            valid_until: episode[:valid_until],
+            valid_from: completed_at,
+            valid_until: episode[:valid_until] || reported_expiry(kind, completed_at),
             created_by: {"surface" => "episode_admission", "session_id" => episode.fetch(:session_id)},
             compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
             transition: transition(actor || owner, "episode admission", evidence: {"session_id" => episode.fetch(:session_id)}),
             created_at_ms: @engine.now_ms
           )
+        end
+
+        # Self-reported Experience ages out; Experience tied to an independently
+        # reconciled outcome stays until something deletes it.
+        def reported_expiry(kind, completed_at)
+          kind == :reported ? completed_at + MemoryLimits.fetch(:experience_retention_seconds) : nil
         end
 
         # Canonicalize the outcome to string keys ONCE: production episodes are

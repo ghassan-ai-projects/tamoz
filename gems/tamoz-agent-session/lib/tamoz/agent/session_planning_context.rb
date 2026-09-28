@@ -406,7 +406,7 @@ module Tamoz
       def memory_caller
         @configuration.memory.caller(
           user: memory_owner,
-          project: 'session',
+          project: Tamoz::Agent::Memory::Surface.project_scope(@configuration.toolbox.root),
           sensitivity: :internal,
           compatibility: {
             'graph_version' => '1',
@@ -574,11 +574,7 @@ module Tamoz
         return unless @configuration.memory && ACTION_PHASES.include?(phase)
         return unless (state[:session] && state[:session]['memory_epoch']).is_a?(Hash)
 
-        recall = @configuration.memory.retrieval.recall(
-          caller: memory_caller,
-          query: { terms: [state.fetch(:task)] },
-          automatic: true
-        )
+        recall = @configuration.memory.retrieval.brief(caller: memory_caller, task: state.fetch(:task))
         context['memory'] = memory_records(recall) unless recall.records.empty?
       end
 

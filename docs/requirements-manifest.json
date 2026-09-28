@@ -6220,6 +6220,21 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-memory",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz memory",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates",
+      "supporting_tests": [
+        "test/agent_cli_memory_test.rb#test_e5_threads_in_one_session_directory_share_memory_only_when_enabled"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-observe",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7526,6 +7541,22 @@
       "supporting_tests": [
         "test/sqlite_effect_journal_test.rb#test_effect_census_preserves_request_association_separately_from_effect_identity",
         "test/experience_harness_test.rb#test_request_status_is_request_local_for_two_delivery_outcomes"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-23",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_23",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head",
+      "supporting_tests": [
+        "test/memory_spec_test.rb#test_b5_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
+        "test/memory_retrieval_corpus_test.rb#test_b2_the_real_retriever_meets_recall_and_precision_with_zero_violations"
       ],
       "classification": "direct",
       "rationale": null,

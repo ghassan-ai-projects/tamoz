@@ -136,11 +136,7 @@ module Tamoz
         # hard-zero signal (P11-25/C8).
         def scan(query)
           terms = vocabulary_terms(query)
-          recall = @engine.retrieval.recall(
-            caller: retrieval_caller,
-            query: {terms:},
-            automatic: true
-          )
+          recall = @engine.retrieval.recall(caller: retrieval_caller, query: {terms:})
           {
             "matched_ids" => recall.records.map(&:memory_id),
             "matched_restricted_ids" => recall.matched_restricted_ids

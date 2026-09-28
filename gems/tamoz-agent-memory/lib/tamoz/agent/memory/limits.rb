@@ -17,7 +17,8 @@ module Tamoz
         retrieval_token_budget: 1_024,
         max_injected_knowledge: 8,
         max_lexical_hits: 200,
-        retention_default_seconds: 86_400.0
+        retention_default_seconds: 86_400.0,
+        experience_retention_seconds: 90 * 86_400
       }.freeze
 
       # P11 §3 (C5): the retrieval-eligible state set. Never superseded,

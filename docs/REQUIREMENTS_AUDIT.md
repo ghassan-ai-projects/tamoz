@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 563 | 292 | 15 | **no** |
+| 565 | 297 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 533 |
+| pass | 535 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -478,6 +478,7 @@ generating run.
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-investigate` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
+| `CLI-memory` | cli_command | yes | pass | `test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates` |
 | `CLI-observe` | cli_command | yes | pass | `test/observability_cli_test.rb#test_observe_commands_read_the_local_journal` |
 | `CLI-probes` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server` |
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
@@ -563,6 +564,7 @@ generating run.
 | `MIG-20` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
 | `MIG-21` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows` |
 | `MIG-22` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22` |
+| `MIG-23` | migration | yes | pass | `test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |

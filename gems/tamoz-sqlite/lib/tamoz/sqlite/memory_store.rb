@@ -30,7 +30,17 @@ module Tamoz
     class MemoryStore
       MEMORY_NAMESPACE_PREFIX = "tamoz.memory."
       SENSITIVITY_ORDER = %w[public internal sensitive].freeze
+      ELIGIBLE_STATES = %w[active consolidated].freeze
       MAX_LIMIT = 100_000
+      MAX_MATCH_TOKENS = 32
+      PREFIX_MIN_LENGTH = 4
+      SUFFIXES = %w[ations ation ments ment ings ing edly ed es s ly].freeze
+      # Function words carry no retrieval signal; a query made only of them abstains.
+      STOP_WORDS = %w[
+        a about an and any are as at be been but by can could did do does for from had has have how i if in into
+        is it its me my no not of on or our should so than that the their them then there these they this those
+        to up us was we were what when where which who why will with would you your
+      ].freeze
 
       # One immutable index row per Store version of a memory record.
       IndexRow = Data.define(
@@ -162,6 +172,7 @@ module Tamoz
             SQL
             index_row_binds(index)
           )
+          replace_fts_row(tx, index)
         end
         entry
       rescue CheckpointCorruptionError => error
@@ -224,7 +235,10 @@ module Tamoz
         # boundary recall either way.
         situation_filter, situation_binds =
           situation_boundary(caller_values)
-        matches_sql, match_binds = match_clause(terms, layer, klass)
+        expression = self.class.match_expression(terms)
+        return SearchResult.new if !terms.empty? && expression.nil?
+
+        matches_sql, match_binds = candidate_match_clause(expression, layer, klass)
         rows = nil
         store.open_transaction(label: "memory.search") do |tx|
           rows = tx.rows(
@@ -234,16 +248,17 @@ module Tamoz
                      i.scopes_tenant, i.scopes_user, i.scopes_project,
                      i.sensitivity, i.valid_until_ms, i.compatibility_graph,
                      i.compatibility_behavior, i.searchable,
-                     i.scopes_situation_type, i.scopes_entity_type, i.scopes_entity_id
+                     i.scopes_situation_type, i.scopes_entity_type, i.scopes_entity_id,
+                     #{expression ? "bm25(tamoz_memory_fts)" : "0.0"}
               #{authorized_scan_body("i.sensitivity IN (#{sensitivity_placeholders(allowed_sensitivities)})",
-                                     situation_filter, matches_sql)}
-              ORDER BY i.layer, i.memory_id, i.record_version DESC
+                                     situation_filter, matches_sql, full_text: !expression.nil?)}
+              ORDER BY #{"bm25(tamoz_memory_fts)," if expression} i.layer, i.memory_id, i.record_version DESC
               LIMIT ?
             SQL
             [*binds, *situation_binds, *match_binds, normalized_limit]
           )
         end
-        candidates = rows.map { |row| index_row_from_row(row).to_h }.freeze
+        candidates = rows.map { |row| index_row_from_row(row).to_h.merge("relevance" => -row.fetch(16).to_f) }.freeze
 
         restricted = if terms.empty? && layer.nil? && klass.nil?
                        []
@@ -360,6 +375,11 @@ module Tamoz
             [store_namespace, memory_id]
           )
           index_rows = tx.changes
+          tx.execute(
+            "memory.purge.fts",
+            "DELETE FROM tamoz_memory_fts WHERE store_namespace = ? AND memory_id = ?",
+            [store_namespace, memory_id]
+          )
           receipt = build_receipt(
             store_namespace, memory_id, now_ms,
             removed: {"records" => 1, "version_rows" => version_rows, "index_rows" => index_rows},
@@ -390,7 +410,63 @@ module Tamoz
         }.freeze
       end
 
+      # The FTS5 query for a list of search terms: lower-cased word tokens, stop words and
+      # single characters dropped, each quoted (so no token is FTS syntax) and OR-ed.
+      # nil when nothing is left: such a query abstains instead of matching everything.
+      def self.match_tokens(terms)
+        Array(terms).flat_map { |term| term.to_s.downcase.scan(/[[:alnum:]]+/) }
+                    .reject { |token| token.length < 2 || STOP_WORDS.include?(token) }
+                    .uniq.first(MAX_MATCH_TOKENS)
+      end
+
+      def self.match_expression(terms)
+        tokens = match_tokens(terms)
+        return nil if tokens.empty?
+
+        tokens.map { |token| query_token(token) }.join(" OR ")
+      end
+
+      # A word of four or more letters matches every word sharing its stem as a prefix
+      # (failing → fail*, deployment ← deploy*); shorter words match exactly.
+      def self.query_token(token)
+        return %("#{token}") if token.length < PREFIX_MIN_LENGTH
+
+        suffix = SUFFIXES.find { |ending| token.end_with?(ending) && token.length - ending.length >= PREFIX_MIN_LENGTH }
+        %("#{suffix ? token.delete_suffix(suffix) : token}"*)
+      end
+
+      # Rows this memory identity holds in the full-text index.
+      def fts_row_count(store_namespace, memory_id)
+        count = 0
+        store.open_transaction(label: "memory.fts_count") do |tx|
+          count = tx.scalar(
+            "memory.fts_count",
+            "SELECT COUNT(*) FROM tamoz_memory_fts WHERE store_namespace = ? AND memory_id = ?",
+            [store_namespace, memory_id]
+          )
+        end
+        count
+      end
+
       private
+
+      # The full-text row follows the head: removed on every append, re-added only for an
+      # eligible record whose statement is searchable (never a sensitive one).
+      def replace_fts_row(transaction, index)
+        transaction.execute(
+          "memory.fts.delete",
+          "DELETE FROM tamoz_memory_fts WHERE store_namespace = ? AND memory_id = ?",
+          [index.store_namespace, index.memory_id]
+        )
+        return unless index.searchable && index.statement_search && index.sensitivity != "sensitive" &&
+                      ELIGIBLE_STATES.include?(index.state)
+
+        transaction.execute(
+          "memory.fts.insert",
+          "INSERT INTO tamoz_memory_fts(store_namespace, memory_id, statement) VALUES (?, ?, ?)",
+          [index.store_namespace, index.memory_id, index.statement_search]
+        )
+      end
 
       # Head-eligible rows that matched the searchable dimensions but carry
       # sensitivity `sensitive` — the hard-zero signal that the filter path
@@ -400,14 +476,21 @@ module Tamoz
       # set (otherwise it becomes an existence oracle for the far side).
       # INVARIANT 30 (existence-oracle guard): the caller-authority filter — head
       # eligibility, namespace, eligible-state set, tenant/user/project scope,
-      # compatibility, validity, situation boundary and match terms — is
-      # single-sourced here so #search and #scan_matched_restricted cannot drift.
-      # They differ ONLY in the sensitivity predicate passed in; any other
-      # divergence would let the restricted existence signal leak rows the caller
-      # could not otherwise see. Binds (in placeholder order): namespace, tenant,
-      # user, project, [sensitivity binds, if the clause carries any], graph,
-      # behavior, validity, *situation_binds, *match_binds.
-      def authorized_scan_body(sensitivity_clause, situation_filter, matches_sql)
+      # compatibility, validity, situation boundary — is single-sourced here so
+      # #search and #scan_matched_restricted cannot drift. They differ in the
+      # sensitivity predicate and in how terms match (full text for candidates,
+      # metadata for the sensitive-only signal), never in authority. Binds (in
+      # placeholder order): namespace, tenant, user, project, [sensitivity binds,
+      # if the clause carries any], graph, behavior, validity, *situation_binds,
+      # *match_binds.
+      def authorized_scan_body(sensitivity_clause, situation_filter, matches_sql, full_text: false)
+        fts_join = if full_text
+                     <<~SQL
+                       JOIN tamoz_memory_fts
+                         ON tamoz_memory_fts.store_namespace = i.store_namespace
+                        AND tamoz_memory_fts.memory_id = i.memory_id
+                     SQL
+                   end
         <<~SQL
           FROM tamoz_memory_index i
           JOIN tamoz_store_heads h
@@ -415,11 +498,12 @@ module Tamoz
            AND h.key = i.layer || '/' || i.memory_id
            AND h.current_version = i.record_version
            AND h.deleted = 0
+          #{fts_join}
           WHERE i.store_namespace = ?
             AND i.state IN ('active', 'consolidated')
             AND i.scopes_tenant = ?
             AND i.scopes_user = ?
-            AND i.scopes_project = ?
+            AND i.scopes_project IN (?, '*')
             AND #{sensitivity_clause}
             AND i.compatibility_graph = ?
             AND i.compatibility_behavior = ?
@@ -430,7 +514,7 @@ module Tamoz
       end
 
       def scan_matched_restricted(namespace, caller_values, terms, layer, klass, now_ms)
-        matches_sql, match_binds = match_clause(terms, layer, klass)
+        matches_sql, match_binds = restricted_match_clause(terms, layer, klass)
         situation_filter, situation_binds =
           situation_boundary(caller_values)
         rows = nil
@@ -674,14 +758,32 @@ module Tamoz
         Array.new(allowed.length, "?").join(", ")
       end
 
-      # Exact/prefix matching on the indexed searchable columns only: a term
-      # prefix-matches `statement_search` at a WORD BOUNDARY (`term%` at the
-      # start or after a space), and prefix-matches `layer`/`class` the same
-      # way; a layer/class filter is an exact equality. No full-statement
-      # substring, no semantic/vector search (probe P11-09 honest-searchable
-      # claim). Term values are escaped so LIKE metacharacters in a term are
-      # literal.
-      def match_clause(terms, layer, klass)
+      # Candidates match by full text (FTS5 words, OR-ed, stems by prefix) plus exact layer
+      # and class filters. No semantic or vector search.
+      def candidate_match_clause(expression, layer, klass)
+        clauses = []
+        binds = []
+        if expression
+          clauses << "tamoz_memory_fts MATCH ?"
+          binds << expression
+        end
+        if layer
+          clauses << "i.layer = ?"
+          binds << layer
+        end
+        if klass
+          clauses << "i.class = ?"
+          binds << klass
+        end
+        return ["", []] if clauses.empty?
+
+        ["AND #{clauses.join(" AND ")}", binds]
+      end
+
+      # The restricted existence signal matches sensitive rows on their metadata only
+      # (their statements are never searchable): a term prefix-matches `layer`/`class`, or
+      # a `statement_search` a caller wrote directly. Term values are LIKE-escaped.
+      def restricted_match_clause(terms, layer, klass)
         clauses = []
         binds = []
         terms.each do |term|
