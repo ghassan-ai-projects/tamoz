@@ -56,7 +56,7 @@ precision@5 **0.92**, scope/sensitivity/lifecycle/layer violations **0**, budget
 
 - C1: the `reported` and `cancelled_by_user` endings are not driven by the test (five of seven
   endings are).
-- MP1 did not measure memory in the first run (see RESULTS: repo notes + `create_file` failures).
+- MP1 was redesigned after the first run and re-run: memory-on 3/3, memory-off 0/3 (RESULTS).
 
 ## R1–R5 review: what changed
 

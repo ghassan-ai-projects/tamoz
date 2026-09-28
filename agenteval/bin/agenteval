@@ -65,19 +65,20 @@ module Agenteval
       problems.each { |problem| @err.puts("memory pack: #{problem}") }
       return (problems.empty? ? 0 : 1) if action == "prove"
       return 1 unless problems.empty?
-      return 64.tap { @err.puts("usage: agenteval memory prove | run [--arms a,b] [--repeat N] [--out PATH]") } unless action == "run"
+      return 64.tap { @err.puts("usage: agenteval memory prove | run [--scenarios MP1,..] [--arms a,b] [--repeat N] [--out PATH]") } unless action == "run"
 
-      options = { arms: SessionChain::ARMS, repeat: 2, budget: 300, out: nil }
+      options = { arms: SessionChain::ARMS, repeat: 2, budget: 300, out: nil, scenarios: nil }
       OptionParser.new do |parser|
         parser.on("--arms LIST") { |value| options[:arms] = value.split(",") }
         parser.on("--repeat N", Integer) { |value| options[:repeat] = value }
         parser.on("--budget N", Integer) { |value| options[:budget] = value }
         parser.on("--out PATH") { |value| options[:out] = value }
+        parser.on("--scenarios LIST") { |value| options[:scenarios] = value.split(",") }
       end.parse!(argv)
       partial = options[:out] && "#{options[:out]}.partial.jsonl"
       keep_root = options[:out] && File.join(Agenteval::ROOT, "sessions", "memory", File.basename(options[:out], ".json"))
       report = MemoryPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget],
-                              partial:, keep_root:)
+                              partial:, keep_root:, scenarios: options[:scenarios])
       File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
       @out.puts(JSON.pretty_generate(report.fetch("arms")))
       0

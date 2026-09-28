@@ -52,6 +52,30 @@ class AgentevalMemoryPackTest < Minitest::Test
     assert_equal %w[MP5], tripped.map(&:id)
   end
 
+  def test_f2_mp1_fails_when_the_rule_is_kept_in_the_repo_instead_of_memory
+    mp1 = PACK::SCENARIOS.find { |scenario| scenario.id == 'MP1' }
+    edits = [{ 'AGENTS.md' => "Tests live in qa/ and are named probe_<name>.rb.\n" },
+             { 'qa/probe_slugify.rb' => PACK::CHECK_SLUG }]
+    verdict = Agenteval::SessionChain.trial(mp1, arm: 'control') do |chain, _session, index|
+      chain.workspace.agent_wrote(edits.fetch(index))
+      {}
+    end
+
+    refute verdict.solved
+    assert_match(/written into the repo: AGENTS.md/, verdict.detail)
+  end
+
+  def test_f2_mp1_fails_when_session_one_leaves_an_example_probe
+    mp1 = PACK::SCENARIOS.find { |scenario| scenario.id == 'MP1' }
+    edits = [{ 'qa/probe_example.rb' => "exit 0\n" }, { 'qa/probe_slugify.rb' => PACK::CHECK_SLUG }]
+    verdict = Agenteval::SessionChain.trial(mp1, arm: 'control') do |chain, _session, index|
+      chain.workspace.agent_wrote(edits.fetch(index))
+      {}
+    end
+
+    assert_match(/written into the repo: qa\/probe_example.rb/, verdict.detail)
+  end
+
   def test_f4_no_last_prompt_carries_the_fact_it_tests
     assert_empty PACK.validate
   end

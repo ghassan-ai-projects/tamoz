@@ -127,12 +127,15 @@ module Agenteval
 
     # Each finished trial is appended to `partial` at once, so an interrupted paid run keeps
     # what it paid for; each chain is kept under `keep_root` for reading afterwards.
-    def run(arms:, repeat:, budget:, partial: nil, keep_root: nil)
+    def run(arms:, repeat:, budget:, partial: nil, keep_root: nil, scenarios: nil)
       unknown = arms - SessionChain::ARMS
       raise ArgumentError, "unknown arms #{unknown.inspect}; one of #{SessionChain::ARMS.inspect}" unless unknown.empty?
 
+      selected = scenarios ? SCENARIOS.select { |scenario| scenarios.include?(scenario.id) } : SCENARIOS
+      raise ArgumentError, "no scenario matches #{scenarios.inspect}" if selected.empty?
+
       verdicts = arms.flat_map do |arm|
-        SCENARIOS.flat_map do |scenario|
+        selected.flat_map do |scenario|
           (1..repeat).map do |trial|
             keep = keep_root && File.join(keep_root, "#{scenario.id}-#{arm}-#{trial}")
             verdict = SessionChain.trial(scenario, arm:, trial:, keep:, &tamoz_agent(scenario, arm, budget:))
@@ -151,7 +154,7 @@ module Agenteval
         "evidence" => "Trials are real-model results. The graders were proven offline by `agenteval memory prove` " \
                       "(controls: #{CONTROLS.keys.join(', ')}); no control result is a model result.",
         "limits" => ["memory-off has no memory store, so its storage gate cannot trip; its zero is by construction",
-                     "#{SCENARIOS.length} scenarios: every arm difference is a finding, not a significance claim"],
+                     "#{verdicts.map(&:scenario).uniq.length} scenarios: every arm difference is a finding, not a significance claim"],
         "arms" => arms.to_h { |arm| [arm, summary(verdicts.select { |verdict| verdict.arm == arm })] },
         "trials" => verdicts.map(&:to_h)
       }
