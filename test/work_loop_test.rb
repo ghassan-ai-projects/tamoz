@@ -218,6 +218,30 @@ class WorkLoopPressureTest < Minitest::Test
     end
   end
 
+  def test_a_summary_call_that_fails_falls_back_to_the_pruned_surface
+    with_work_workspace(files: BIG) do |root, adapter|
+      failing = ->(_) { raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: 503) }
+      model = ScriptedConversationModel.new(turns: [{ calls: [plan_call] }] + reads(9) + [{ content: 'Read.' }],
+                                            window: 6000, summary: failing)
+      session = work_session(model:, root:, adapter:, harness: { context_policy: { max_inline_bytes: 4096 } })
+      outcome = session.start('Read the big file', thread: 'work', request_id: 'work-1')
+
+      assert_equal :completed, outcome.status
+      assert(outcome.state.fetch(:work_trace).any? { |record| record['event'] == 'compaction_fallback' })
+    end
+  end
+
+  def test_a_compaction_keeps_its_replacement_event_beside_its_request
+    with_work_workspace(files: BIG) do |root, adapter|
+      outcome, = run_pressure(root, adapter, [{ calls: [plan_call] }] + reads(9) + [{ content: 'Read.' }],
+                              window: 6000)
+      trace = outcome.state.fetch(:work_trace)
+
+      assert(trace.any? { |record| record['event'] == 'replacement' && record['reason'] == 'compaction' })
+      assert(trace.any? { |record| record['event'] == 'request' && record['stage'] == 'work_compact' })
+    end
+  end
+
   def test_a_context_window_rejection_reduces_once_and_retries
     with_work_workspace(files: BIG) do |root, adapter|
       outcome, model = run_pressure(root, adapter, [{ calls: [plan_call] }] + reads(3) + [{ content: 'Read.' }],

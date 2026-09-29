@@ -13,7 +13,6 @@ class ObservabilityCatalogTest < Minitest::Test
       tamoz.agent.model.finish tamoz.agent.model.ambiguous
       tamoz.agent.tool.prepare tamoz.agent.tool.finish
       tamoz.agent.compatibility.failure
-      tamoz.agent.subagent.started tamoz.agent.subagent.finished
       tamoz.worker.started tamoz.worker.stopped tamoz.worker.error
       tamoz.worker.request.completed tamoz.worker.request.failed tamoz.worker.request.blocked
       tamoz.worker.request.paused

@@ -68,9 +68,10 @@ module Tamoz
         summary = validate_summary(call, state, selection)
         checkpoint = ContextEngine::Compaction.checkpoint_entry(summary, selection:, entries:, store: @work.store)
         checkpointed = with_plan_reread(state, entries + [checkpoint])
-        combine(replacement_update(pruned, 'prune'), replacement_update(checkpointed - entries, 'compaction'))
+        combine(combine(replacement_update(pruned, 'prune'), replacement_update(checkpointed - entries, 'compaction')),
+                { work_trace: [request_trace(call)] })
           .merge(work_compactions: state.fetch(:work_compactions) + 1, work_series: declared(state),
-                 work_checkpoint: summary, work_trace: [request_trace(call)])
+                 work_checkpoint: summary)
       rescue ContextEngine::InvalidSummaryError, SummaryUnavailable => e
         events = [{ 'event' => 'compaction_fallback', 'reason' => e.message }]
         events << request_trace(call) if call
@@ -103,7 +104,7 @@ module Tamoz
       end
 
       def request_trace(call)
-        usage = call.value.is_a?(Hash) && ContextEngine::Usage.from_provider(call.value['usage'])
+        usage = call.value.is_a?(Hash) ? ContextEngine::Usage.from_provider(call.value['usage']) : nil
         { 'event' => 'request', 'stage' => 'work_compact', 'usage' => usage&.to_h }
       end
 

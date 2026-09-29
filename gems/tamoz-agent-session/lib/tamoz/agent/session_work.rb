@@ -90,7 +90,9 @@ module Tamoz
       end
 
       def attempt_trace(state, call)
-        { 'event' => 'request', 'step' => state.fetch(:work_step_count), 'status' => call.status.to_s, 'usage' => nil }
+        usage = ContextEngine::Usage.from_provider(call.value['usage'])&.to_h if call.status == :succeeded
+        status = call.status.to_s
+        { 'event' => 'request', 'step' => state.fetch(:work_step_count), 'status' => status, 'usage' => usage }
       end
 
       def now_ms = (Time.now.to_f * 1000).to_i

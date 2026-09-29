@@ -118,11 +118,8 @@ module Tamoz
       end
 
       def review_trace(call)
-        usage = call.value.is_a?(Hash) && call.value['usage']
-        if usage
-          usage = { 'prompt_tokens' => usage.fetch('input_tokens'),
-                    'output_tokens' => usage.fetch('output_tokens') }
-        end
+        raw = call.value.is_a?(Hash) ? call.value['usage'] : nil
+        usage = raw && { 'prompt_tokens' => raw.fetch('input_tokens'), 'output_tokens' => raw.fetch('output_tokens') }
         { 'event' => 'request', 'stage' => 'work_plan_review', 'usage' => usage }
       end
 

@@ -22,8 +22,8 @@ module Tamoz
       def parent_usage(parent)
         {
           'model_calls' => parent.length,
-          'prompt_tokens' => parent.sum { |event| event.fetch('usage', {}).to_h.fetch('prompt_tokens', 0) },
-          'completion_tokens' => parent.sum { |event| event.fetch('usage', {}).to_h.fetch('output_tokens', 0) }
+          'prompt_tokens' => parent.sum { |event| event['usage'].to_h.fetch('prompt_tokens', 0) },
+          'completion_tokens' => parent.sum { |event| event['usage'].to_h.fetch('output_tokens', 0) }
         }
       end
     end

@@ -552,6 +552,21 @@ class SubagentSpecTest < Minitest::Test
     end
   end
 
+  def test_e2_a_failed_plan_review_leaves_usage_absent_and_the_summary_readable
+    parent = [{ calls: [plan_call(paths: %w[lib], checks: [])] }, { calls: [delegate_call] }, { content: 'Done.' }]
+    model = SubagentFixtures::ScriptedTeam.new(parent:, child: HAPPY_CHILD)
+    model.define_singleton_method(:generate) { |**| raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: 503) }
+    with_work_workspace(files: EXPLORE_FILES) do |root, adapter|
+      outcome = subagent_session(model:, root:, adapter:).start(TASK, thread: 'work', request_id: 'work-1')
+      requests = outcome.state.fetch(:work_trace).select { |event| event['event'] == 'request' }
+
+      assert(requests.all? { |event| event['usage'].nil? || event['usage'].is_a?(Hash) })
+      usage = Tamoz::Agent::TurnUsage.summarize(outcome.state.fetch(:work_trace))
+
+      assert_equal model.child_requests.length, usage.dig('children', 'model_calls')
+    end
+  end
+
   def test_e2_plan_review_is_counted_in_parent_usage
     parent = [{ calls: [plan_call(paths: %w[lib], checks: [])] },
               { calls: [delegate_call] }, { content: 'The two files use different rounding.' }]

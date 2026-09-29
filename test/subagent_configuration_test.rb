@@ -20,6 +20,25 @@ class SubagentConfigurationTest < Minitest::Test
     assert_match(/unknown subagent role/, error.message)
   end
 
+  # rubocop:disable Metrics/AbcSize, Minitest/MultipleAssertions -- one pinned-thread lifecycle
+  def test_the_cli_refuses_subagents_it_would_ignore
+    Dir.mktmpdir('tamoz-subagent-cli') do |sessions|
+      cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+      options = { session_dir: sessions, root: sessions }
+
+      assert_raises(OptionParser::InvalidArgument) { cli.send(:work_harness, options.merge(subagents: %w[explore]), 't1') }
+      assert_equal %w[explore], cli.send(:work_harness, options.merge(work_routing: true, subagents: %w[explore]), 't2')
+                                   .fetch(:subagents)
+      assert_equal %w[explore], cli.send(:work_harness, options.merge(work_routing: true), 't2').fetch(:subagents)
+      assert_raises(OptionParser::InvalidArgument) { cli.send(:work_harness, options.merge(subagents: %w[explore]), 't3') }
+      cli.send(:work_harness, options.merge(work_routing: true), 't4')
+      assert_raises(OptionParser::InvalidArgument) do
+        cli.send(:work_harness, options.merge(work_routing: true, subagents: %w[explore]), 't4')
+      end
+    end
+  end
+  # rubocop:enable Metrics/AbcSize, Minitest/MultipleAssertions
+
   def test_runtime_directory_validates_and_loads_roles
     with_directory do |runtime, document, config|
       directory = Tamoz::Agent::RuntimeDirectory.new(runtime)
