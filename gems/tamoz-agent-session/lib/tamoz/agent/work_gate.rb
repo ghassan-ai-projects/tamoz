@@ -24,6 +24,9 @@ module Tamoz
         return round_complete(state) if cursor >= pending.length
 
         call = with_arguments(pending.fetch(cursor))
+        # A call refused while parsing carries placeholder arguments and ran nothing: it is not a repeat.
+        return result(state, call, "Error: #{call.fetch('error')}") if call['error']
+
         signature = Harness::LoopPolicy.signature(call.fetch('name'), call.fetch('arguments'),
                                                   epoch: state.fetch(:work_mutation_count))
         verdict, count = @work.settings.loop_policy.repeat(state.fetch(:work_signatures), signature)
@@ -76,8 +79,6 @@ module Tamoz
       end
 
       def route(state, context, call, cursor)
-        return result(state, call, "Error: #{call.fetch('error')}") if call['error']
-
         case call.fetch('name')
         when 'delegate' then harness_result(state, call, @tools.delegate(state, context, tool_call(call)))
         when 'update_plan'

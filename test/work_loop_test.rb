@@ -97,6 +97,19 @@ class WorkLoopTest < Minitest::Test
     end
   end
 
+  def test_calls_refused_for_exceeding_the_step_limit_are_not_counted_as_repeats
+    files = (0...16).to_h { |index| ["lib/f#{index}.rb", "F#{index} = 1\n"] }
+    with_work_workspace(files:) do |root, adapter|
+      reads = { calls: (0...16).map { |index| read_call("lib/f#{index}.rb") } }
+      outcome, model = run_turns(root, adapter, [reads, { content: 'Read.' }])
+
+      refused = tool_results(model).count { |text| text.include?('too many tool calls in one step') }
+
+      assert_equal 8, refused
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+    end
+  end
+
   def test_a_long_turn_ends_on_its_loop_budget_not_the_graph_step_limit
     previous = Tamoz.configuration.recursion_limit
     Tamoz.configure { |config| config.recursion_limit = 10 }
