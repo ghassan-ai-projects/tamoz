@@ -89,12 +89,13 @@ class SQLiteCheckpointTest < Minitest::Test
         ttl: 0.1
       )
       sleep 0.12
+      # Only the stale owner must expire; a 0.1 s lease for the new owner expired under CI load.
       current = adapter.__send__(
         :acquire_lease,
         thread_id:,
         namespace:,
         owner_id: "owner.current",
-        ttl: 0.1
+        ttl: 30.0
       )
 
       assert_operator current.fence, :>, stale.fence
