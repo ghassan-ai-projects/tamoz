@@ -34,6 +34,8 @@ module Tamoz
       MAX_LIMIT = 100_000
       MAX_MATCH_TOKENS = 32
       PREFIX_MIN_LENGTH = 4
+      FULL_TEXT_SQL = "SELECT memory_id, bm25(tamoz_memory_fts) AS score FROM tamoz_memory_fts " \
+                      "WHERE tamoz_memory_fts MATCH ? AND store_namespace = ?"
       SUFFIXES = %w[ations ation ments ment ings ing edly ed es s ly].freeze
       # Function words carry no retrieval signal; a query made only of them abstains.
       STOP_WORDS = %w[
@@ -238,24 +240,27 @@ module Tamoz
         expression = self.class.match_expression(terms)
         return SearchResult.new if !terms.empty? && expression.nil?
 
-        matches_sql, match_binds = candidate_match_clause(expression, layer, klass)
+        matches_sql, match_binds = candidate_match_clause(layer, klass)
+        # The full-text match runs once, materialized, and the index joins to it; left to the
+        # planner, MATCH ran once per candidate row (26 s at 10,000 records).
+        full_text = expression ? "WITH fts AS MATERIALIZED (#{FULL_TEXT_SQL}) " : ""
         rows = nil
         store.open_transaction(label: "memory.search") do |tx|
           rows = tx.rows(
             "memory.search",
             <<~SQL,
-              SELECT i.memory_id, i.record_version, i.layer, i.class, i.state,
+              #{full_text}SELECT i.memory_id, i.record_version, i.layer, i.class, i.state,
                      i.scopes_tenant, i.scopes_user, i.scopes_project,
                      i.sensitivity, i.valid_until_ms, i.compatibility_graph,
                      i.compatibility_behavior, i.searchable,
                      i.scopes_situation_type, i.scopes_entity_type, i.scopes_entity_id,
-                     #{expression ? "bm25(tamoz_memory_fts)" : "0.0"}
+                     #{expression ? "fts.score" : "0.0"}
               #{authorized_scan_body("i.sensitivity IN (#{sensitivity_placeholders(allowed_sensitivities)})",
                                      situation_filter, matches_sql, full_text: !expression.nil?)}
-              ORDER BY #{"bm25(tamoz_memory_fts)," if expression} i.layer, i.memory_id, i.record_version DESC
+              ORDER BY #{"fts.score," if expression} i.layer, i.memory_id, i.record_version DESC
               LIMIT ?
             SQL
-            [*binds, *situation_binds, *match_binds, normalized_limit]
+            [*(expression ? [expression, namespace] : []), *binds, *situation_binds, *match_binds, normalized_limit]
           )
         end
         candidates = rows.map { |row| index_row_from_row(row).to_h.merge("relevance" => -row.fetch(16).to_f) }.freeze
@@ -484,13 +489,7 @@ module Tamoz
       # if the clause carries any], graph, behavior, validity, *situation_binds,
       # *match_binds.
       def authorized_scan_body(sensitivity_clause, situation_filter, matches_sql, full_text: false)
-        fts_join = if full_text
-                     <<~SQL
-                       JOIN tamoz_memory_fts
-                         ON tamoz_memory_fts.store_namespace = i.store_namespace
-                        AND tamoz_memory_fts.memory_id = i.memory_id
-                     SQL
-                   end
+        fts_join = "JOIN fts ON fts.memory_id = i.memory_id" if full_text
         <<~SQL
           FROM tamoz_memory_index i
           JOIN tamoz_store_heads h
@@ -760,13 +759,9 @@ module Tamoz
 
       # Candidates match by full text (FTS5 words, OR-ed, stems by prefix) plus exact layer
       # and class filters. No semantic or vector search.
-      def candidate_match_clause(expression, layer, klass)
+      def candidate_match_clause(layer, klass)
         clauses = []
         binds = []
-        if expression
-          clauses << "tamoz_memory_fts MATCH ?"
-          binds << expression
-        end
         if layer
           clauses << "i.layer = ?"
           binds << layer

@@ -97,3 +97,20 @@ precision@5 **0.92**, scope/sensitivity/lifecycle/layer violations **0**, budget
 | Durability | the intake brief and memory tools are plain reads/writes inside a node, not journaled effects | no change: intake commits its entries before any model call reads them, and memory writes are idempotent, so a replay changes nothing |
 | Correctness | could `work_changes` / `work_checks` leak into the next turn's episode? | no: probed; each turn starts from fresh state |
 | Performance | `Lifecycle#quarantine_derived` loads all active Knowledge on every delete; `sweep` runs after each episode | accepted for now: stores are small; revisit when a store has thousands of Knowledge records |
+
+## Scale check (2,000 Knowledge + 8,000 Experience records, one SQLite file, 28 MB)
+
+`probes/bench_scale.rb`, this machine:
+
+| Operation | Before | After materializing the full-text match |
+|---|---|---|
+| search (SQL) | 26,216 ms | 21 ms |
+| `recall` | 25,875 ms | 61 ms |
+| `brief` (start of every turn) | 3,658 ms | 102 ms |
+| `delete` (with derived-record check) | 419 ms | 392 ms |
+| `sweep` | 48 ms | 29 ms |
+| append | 1.3 ms/record | same |
+
+Open: `delete` still loads every active Knowledge record to find what was derived from the
+deleted one, so it grows with the Knowledge count, and `sweep` pays it once per expired
+record. The fix is a lineage index (source id → derived id) written in the append transaction.

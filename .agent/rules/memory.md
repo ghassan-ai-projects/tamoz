@@ -13,3 +13,7 @@
   model. Quotes are whole clauses, `forget` must name its target, children get no memory.
 - **Tool writes outside the effect journal must be idempotent.** A superstep can replay; the
   same `remember` returns the existing record and a repeated `forget` reports `already`.
+- **Materialize an FTS5 match before joining it.** Joined directly to `tamoz_memory_index`,
+  SQLite ran `MATCH` once per candidate row: 26 s per search at 10,000 records. A
+  `WITH fts AS MATERIALIZED (...)` runs it once: 21 ms. Re-check with
+  `docs/memory-next-level-2026-09-28/probes/bench_scale.rb` after touching the search SQL.
