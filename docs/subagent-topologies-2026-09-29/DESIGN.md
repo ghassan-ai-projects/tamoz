@@ -52,10 +52,10 @@ Every `broad` scenario must defeat a single search. That is checked, not hoped (
 
 | Id | Shape | The work |
 |---|---|---|
-| HA1 chain | `chain` | a wrong total; the cause is reached only by following reads through config indirection (keys built at runtime, aliases); the needle file shares no distinctive token with the prompt or the failing output |
-| HA2 survey | `survey` | list which of ~40 handlers mutate their argument: each file must be read and understood; no regex separates them |
-| HA3 big survey | `survey` | the same over files whose total size is several times the parent's window at 32K — a solo parent must compact |
-| HA4 review | `change` | implement a small change whose obvious edit breaks a second, untested caller; a fresh-context read of the change finds it |
+| HA1 chain | `chain` | a wrong total; the cause is reached by following invoice → engine → loader → deploy file → alias table → zone, among 60 distractor modules; four decoy zones carry the same wrong value; the needle shares no distinctive word with the prompt or the failing output |
+| HA2 survey | `survey` | list which of 36 handlers mutate their argument; each handler's effect is in its own code (aliases, `to_h` identity, block parameters, same-file helpers, a snapshot copy beside a real change, a mutating call on a fresh hash), so every plausible search-only policy gets the set wrong; the key is proven by executing each handler |
+| HA3 big survey | `survey` | the same over 40 handlers padded with unrelated methods (helpers at the bottom), about 78K tokens: a solo parent at 32K must compact; four children each stay near 20K |
+| HA4 review | `change` | implement a small change whose obvious edit breaks an untested caller two hops away (through a label helper), among 60 distractor modules; a fresh-context read of the change and its callers finds it |
 | HA5 narrow | `narrow` | one obvious place |
 | HA6 trivial | `trivial` | a one-line fix |
 

@@ -26,6 +26,13 @@ module Agenteval
       def finished = trace.select { |event| event["event"] == "subagent_finished" }
       def text(entry) = entry["text_ref"] ? texts.fetch(entry["text_ref"], "") : ""
 
+      # Each started child's trace event paired with its final state, matched on the child's execution id.
+      def child_runs
+        by_execution = children.to_h { |child| [child["work_execution_id"], child] }
+        trace.select { |event| event["event"] == "subagent_started" }
+             .filter_map { |event| (child = by_execution[event["execution_id"]]) && [event, child] }
+      end
+
       def child_reads
         children.flat_map { |child| Hash(child["work_observations"]).select { |_, seen| seen["read"] }.keys }.uniq
       end

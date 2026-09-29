@@ -55,6 +55,7 @@ SLOW_TESTS = %w[
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
   test/agenteval_subagent_pack_test.rb
+  test/agenteval_topology_pack_test.rb
   test/sqlite_convergence_probe_test.rb
   test/mcp_supervisor_test.rb
   test/sqlite_scenario_driver_test.rb
@@ -563,6 +564,13 @@ namespace :agenteval do
       out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "memory-#{Time.now.utc.strftime("%Y%m%d")}.json"))
       sh agenteval_ruby, BIN, "memory", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
          "--budget", ENV.fetch("AGENTEVAL_BUDGET", "300"), "--out", out
+    end
+  end
+
+  namespace :topologies do
+    desc "Prove the topology-pack graders discriminate and the hard tasks defeat a single search (no model calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "topologies", "prove"
     end
   end
 

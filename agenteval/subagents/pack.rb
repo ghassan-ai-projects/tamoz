@@ -131,7 +131,7 @@ module Agenteval
       problems.concat(rows.select { |row| row["detail"].to_s.start_with?("harness error") }.map { |row| "#{name}: #{row['detail']}" })
     end
 
-    def tamoz_agent(scenario, arm, budget:, window:)
+    def tamoz_agent(scenario, arm, budget:, window:, roles: %w[explore], observe: method(:observed))
       tamoz_root = ENV.fetch("AGENTEVAL_TAMOZ_ROOT", File.expand_path("..", Agenteval::ROOT))
       env = { "LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8" }.merge(TamozCode.environment(tamoz_root, window))
       lambda do |chain, session, _index|
@@ -139,12 +139,12 @@ module Agenteval
         workspace = chain.workspace
         argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", workspace.dir, "--session-dir", chain.session_dir,
                 "--session", thread, "--allow-changes", "--check", "test=#{Shellwords.join(CHECK)}"]
-        argv += ["--subagents", "explore"] if arm == "subagents-on"
+        argv += ["--subagents", roles.join(",")] if arm == "subagents-on"
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         output, status = MemoryPack.capture(env, argv + ["code", session.prompt], workspace.dir, budget)
         store = File.join(chain.session_dir, "#{thread}.sqlite3")
         record = File.exist?(store) ? Record.read(store) : Record.new(parent: {}, children: [], journal: [], texts: {})
-        observed(record, scenario).merge("exit_code" => status, "answer_tail" => output.to_s.lines.last(3).join.strip[0, 300],
+        observe.call(record, scenario).merge("exit_code" => status, "answer_tail" => output.to_s.lines.last(3).join.strip[0, 300],
                                          "duration_ms" => ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round)
       end
     end

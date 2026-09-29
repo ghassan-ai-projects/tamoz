@@ -9,8 +9,8 @@ Rows marked **real** are real-model results and can only be *met* or recorded as
 | # | Bar | Evidence |
 |---|---|---|
 | H1 | For every `chain` scenario, no token of 5+ characters in the prompt or the failing check's output (besides stop words and the language's keywords) appears in the needle file. | pack validator |
-| H2 | A `grep_agent` control (answers from `search_text`-style regex hits only, no reading) fails every `chain` and `survey` scenario and still solves `narrow` and `trivial`. | `rake agenteval:topologies:prove` |
-| H3 | HA3's files total at least 4× 32K tokens (bytes / 4), and a solo reference path that reads every file exceeds the 32K window's compaction threshold. | pack validator |
+| H2 | A `grep_agent` control fails every `chain`, `survey` and `change` scenario and solves `narrow` and `trivial`, where its edits are derived from real search hits. On a survey it leaves the best of five search-only policies scored against the key, so it fails only if all five do. Every survey key is proven by executing each handler. | `rake agenteval:topologies:prove` |
+| H3 | HA3's files total more than 2× 32K tokens (bytes / 4), so a solo parent that reads them all passes the 32K window's compaction threshold while a fan-out of four children each stays under it. | pack validator |
 | H4 | Controls discriminate: `null` solves nothing; `solo_oracle` solves all, delegating nowhere; `oracle` solves all, fanning out on `survey`, reviewing on `change`; each adversary (`writer_child`, `leaky_child`, `over_delegator`, `re_reader`, `fanout_flooder`, `rubber_stamp_review`) trips its own gate and no other. | same |
 | H5 | Graders read the durable record only; `Record.read` over a real fan-out and a real review session yields the children, their reads, and the review's handed paths. | `test/agenteval_topology_pack_test.rb` |
 
