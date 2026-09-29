@@ -11,9 +11,22 @@
 #   curl -s https://api.deepseek.com/models       -H "Authorization: Bearer $DEEPSEEK_API_KEY"
 #   curl -s https://openrouter.ai/api/v1/models
 #
+# `max_concurrent_requests` is optional and operator-pinned: how many requests Tamoz sends this route at
+# once (subagent batches). A route without it runs one at a time.
+#
 # A route that is absent here and has no profile-role `context_window` refuses rather than
 # guessing — see ModelClientFactory#configured_context_window.
 routes:
+  "zai/glm-5.3-flash":
+    context_window: 1000000
+    max_output_tokens: 131072
+    max_concurrent_requests: 4
+    source: https://docs.z.ai/guides/llm/glm-5.3
+    checked: "2026-09-30"
+    note: "GLM-5.3-Flash, listed by https://api.z.ai/api/paas/v4/models. The docs give the window as
+      1M and the output as 128K; 1,000,000 is the lower reading. Z.ai publishes no concurrency limit
+      (it adjusts with load), so 4 is an operator pin. A GLM Coding Plan key is served only at
+      https://api.z.ai/api/coding/paas/v4: set ZAI_API_BASE to it."
   "deepseek/deepseek-flash":
     context_window: 1048576
     max_output_tokens: 393216

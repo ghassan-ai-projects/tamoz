@@ -29,13 +29,27 @@ class ModelWindowsTest < Minitest::Test
   def test_the_transport_receives_the_window_the_provider_reports_for_the_route
     {
       %w[deepseek deepseek-flash] => ['DEEPSEEK_API_KEY', 1_048_576],
-      %w[openrouter deepseek/deepseek-v4.1-flash] => ['OPENROUTER_API_KEY', 1_048_576]
+      %w[openrouter deepseek/deepseek-v4.1-flash] => ['OPENROUTER_API_KEY', 1_048_576],
+      %w[zai glm-5.3-flash] => ['ZAI_API_KEY', 1_000_000]
     }.each do |(provider, model), (credential, window)|
       assert_equal window, MW.window(provider:, model:), "recorded window for #{provider}/#{model}"
 
       transport = FACTORY.build(provider:, model:, profile_role: nil, environment: { credential => 'k' })
 
       assert_equal window, transport.context_window, "#{provider}/#{model} transport window"
+    end
+  end
+
+  def test_a_route_carries_its_pinned_concurrency_and_an_unpinned_one_runs_one_at_a_time
+    assert_equal 4, MW.max_concurrent_requests(provider: 'zai', model: 'glm-5.3-flash')
+    assert_equal 1, MW.max_concurrent_requests(provider: 'deepseek', model: 'deepseek-flash')
+    assert_equal 1, MW.max_concurrent_requests(provider: 'deepseek', model: 'not-a-model')
+    MW.routes.each do |key, entry|
+      value = entry['max_concurrent_requests']
+      next if value.nil?
+
+      assert_kind_of Integer, value, "route #{key}"
+      assert_operator value, :>, 0, "route #{key}"
     end
   end
 

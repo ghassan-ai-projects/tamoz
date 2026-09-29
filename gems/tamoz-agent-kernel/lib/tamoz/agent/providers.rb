@@ -16,7 +16,8 @@ module Tamoz
         openai: "OPENAI_API_KEY",
         openrouter: "OPENROUTER_API_KEY",
         perplexity: "PERPLEXITY_API_KEY",
-        xai: "XAI_API_KEY"
+        xai: "XAI_API_KEY",
+        zai: "ZAI_API_KEY"
       }.freeze
     end
   end

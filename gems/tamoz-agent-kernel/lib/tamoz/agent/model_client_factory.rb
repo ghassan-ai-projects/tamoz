@@ -17,6 +17,7 @@ module Tamoz
         "xai" => {default_base: "https://api.x.ai/v1", protocol: "openai-compatible", kind: "direct"},
         "perplexity" => {default_base: "https://api.perplexity.ai/v1", protocol: "openai-compatible", kind: "direct"},
         "mistral" => {default_base: "https://api.mistral.ai/v1", protocol: "openai-compatible", kind: "direct"},
+        'zai' => { default_base: 'https://api.z.ai/api/paas/v4', protocol: 'openai-compatible', kind: 'direct' },
         "anthropic" => {default_base: nil, protocol: "native-rejected", kind: "rejected"},
         "gemini" => {default_base: nil, protocol: "native-rejected", kind: "rejected"}
       }.transform_values(&:freeze).freeze
