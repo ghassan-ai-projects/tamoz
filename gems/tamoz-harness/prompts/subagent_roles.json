@@ -1,7 +1,7 @@
 {
   "max_per_turn": 4,
   "max_fanout": 4,
-  "nudge_reads": 12,
+  "nudge_reads": 6,
   "nudge_window": 0.5,
   "explore": {
     "summary": "Search and read the workspace, then report what was found with file:line references.",

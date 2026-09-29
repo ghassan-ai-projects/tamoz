@@ -11,8 +11,8 @@ class HarnessPromptPackTest < Minitest::Test
   # A prompt change is a deliberate, reviewed edit: update the digest here with it.
   PINNED = {
     'cut_off.md' => 'sha256:550e3cb327aab548b06d99e59df304255e23621200ebbd33f3778b36ea71a3d8',
-    'delegate.json' => 'sha256:ce54e76cf8d86c06749cd156ec109a50dfacf0af09c8d5dbe3aa827ca0a492c0',
-    'delegate_nudge.md' => 'sha256:0b046203733c69fe8820a407a0e5f391d8cfaf9621c8ee6d1c1dd3660f7a16d5',
+    'delegate.json' => 'sha256:11389242eecfc43519818d5b04890bfd5dd61babdbcbd5345ca9161ccf2ed13f',
+    'delegate_nudge.md' => 'sha256:2d6185a234510de66e9fc4a7cfeae31059dfd66b5496e6e4b7d19d90829023a6',
     'editing.md' => 'sha256:bb24c181244924fe158fd389cc644da58d89a30483e403b10ebf6e88e53fb37b',
     'finish.md' => 'sha256:501567f252cf0050b52df43e5abf6b7989aec528b29858181c304d397248845e',
     'handoff.md' => 'sha256:ce7be5d051a429496ff7d1cf0fc6bca07948c7f8ef93349ecde5529fda95c412',
@@ -34,7 +34,7 @@ class HarnessPromptPackTest < Minitest::Test
     'report_reminder.md' => 'sha256:2383d9f37addb8fff00eb407d5f0b1ba1972e66b83a9c86049df200cac1f82e4',
     'subagent_explore.md' => 'sha256:8845a850a98628b66a34992b2a0110c06a121611e1a63c19f0d08d0fd56416bd',
     'subagent_review.md' => 'sha256:f5c829333ba8e9d9633f505bdfd1ac21fc54633fc6cad11648baceaf55b231e4',
-    'subagent_roles.json' => 'sha256:e10bf52a239d1d45666afa5337a273c17bdb46dfe7b9d34f598840ce06261ecd',
+    'subagent_roles.json' => 'sha256:c310390b0810d954b02b03024e2d6c0f6e4fa9bf3a5b2b4e3b46656fc92b2040',
     'surface_chat.md' => 'sha256:daa1232b4be2f1d01360f65014ff9afafebf34ab4e7152dc152f8ab0f0c7945a',
     'surface_cli.md' => 'sha256:12d434d8ea184a85dbc2ca9ed6c7b904f77a1a62904a1235d9f572d022d98478',
     'surface_subagent.md' => 'sha256:0dcf1a462410193998f080ac56f0af8f4a5d339f808c468d864bca6b7f4a9786',

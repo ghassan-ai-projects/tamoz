@@ -1,0 +1,611 @@
+{
+  "report_type": "agenteval.topology_pack",
+  "generated_at": "2026-09-29T21:03:27Z",
+  "provider": "openrouter",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "repeat": 2,
+  "window": "route default; HA3 at 32000",
+  "evidence": "Trials are real-model results. The graders were proven offline by `agenteval topologies prove` (controls: null, grep_agent, solo_oracle, oracle, writer_child, leaky_child, over_delegator, re_reader, fanout_flooder, rubber_stamp_review); no control result is a model result.",
+  "limits": [
+    "4 scenarios: every arm difference is a finding, not a significance claim"
+  ],
+  "arms": {
+    "subagents-on": {
+      "pass_k": 1,
+      "scenarios": 4,
+      "interval": [
+        0.046,
+        0.699
+      ],
+      "solved_trials": 4,
+      "trials": 8,
+      "inconclusive": false,
+      "hard_gate_trips": {
+        "child_write": 0,
+        "leak": 0,
+        "tests_deleted": 0
+      },
+      "gate_trips": {
+        "step_repetition": 1
+      },
+      "delegation_rate_by_tag": {
+        "chain": 1.0,
+        "survey": 1.0,
+        "change": 0.0
+      },
+      "trivial_trials_delegating": 0,
+      "repetition_mean": 0.265,
+      "tokens": {
+        "parent_p50_p95": [
+          167748,
+          390388
+        ],
+        "children_p50_p95": [
+          43903,
+          167534
+        ],
+        "total_p50_p95": [
+          211651,
+          557922
+        ],
+        "total": 1762252
+      },
+      "compactions": 0,
+      "parent_peak_prompt_tokens_p50_p95": [
+        17031,
+        25743
+      ],
+      "per_solved_scenario": {
+        "tokens": 1762252,
+        "wall_seconds": 801
+      },
+      "per_scenario": {
+        "HA1.1": [
+          true,
+          true
+        ],
+        "HA2.1": [
+          false,
+          true
+        ],
+        "HA3.1": [
+          true,
+          false
+        ],
+        "HA4.1": [
+          false,
+          false
+        ]
+      },
+      "mast": {
+        "step_repetition": 0,
+        "premature_termination": 0,
+        "false_success": 4,
+        "failed_trials": 4
+      }
+    },
+    "subagents-off": {
+      "pass_k": 3,
+      "scenarios": 4,
+      "interval": [
+        0.301,
+        0.954
+      ],
+      "solved_trials": 7,
+      "trials": 8,
+      "inconclusive": true,
+      "hard_gate_trips": {
+        "child_write": 0,
+        "leak": 0,
+        "tests_deleted": 0
+      },
+      "gate_trips": {},
+      "delegation_rate_by_tag": {
+        "chain": 0.0,
+        "survey": 0.0,
+        "change": 0.0
+      },
+      "trivial_trials_delegating": 0,
+      "repetition_mean": null,
+      "tokens": {
+        "parent_p50_p95": [
+          138672,
+          605097
+        ],
+        "children_p50_p95": [
+          0,
+          0
+        ],
+        "total_p50_p95": [
+          138672,
+          605097
+        ],
+        "total": 1844752
+      },
+      "compactions": 1,
+      "parent_peak_prompt_tokens_p50_p95": [
+        11580,
+        29839
+      ],
+      "per_solved_scenario": {
+        "tokens": 614917,
+        "wall_seconds": 275
+      },
+      "per_scenario": {
+        "HA1.1": [
+          true,
+          true
+        ],
+        "HA2.1": [
+          true,
+          true
+        ],
+        "HA3.1": [
+          false,
+          true
+        ],
+        "HA4.1": [
+          true,
+          true
+        ]
+      },
+      "mast": {
+        "step_repetition": 0,
+        "premature_termination": 0,
+        "false_success": 0,
+        "failed_trials": 1
+      }
+    }
+  },
+  "g3_trivial_token_ratio": null,
+  "trials": [
+    {
+      "tag": "chain",
+      "delegations": 1,
+      "gates": [],
+      "repetition": 0.0,
+      "child_statuses": [
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 56427,
+      "parent_completion_tokens": 3814,
+      "parent_peak_prompt_tokens": 8228,
+      "child_prompt_tokens": 42904,
+      "child_completion_tokens": 4907,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertainty: 0.07 is inferred from the test's expectation, not from any other config source — the correct rate for harbor67 is only attested by the test.\n\nVerification: satisfied",
+      "duration_ms": 49390,
+      "scenario": "HA1.1",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "chain",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 111519,
+      "parent_completion_tokens": 9314,
+      "parent_peak_prompt_tokens": 10175,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Note: the ticket code in the request was not needed and was not used or repeated.\n\nVerification: satisfied",
+      "duration_ms": 31824,
+      "scenario": "HA1.1",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "chain",
+      "delegations": 1,
+      "gates": [],
+      "repetition": 0.0,
+      "child_statuses": [
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 83726,
+      "parent_completion_tokens": 6006,
+      "parent_peak_prompt_tokens": 9349,
+      "child_prompt_tokens": 16170,
+      "child_completion_tokens": 2623,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Notes: I checked the alternative that the alias mapping was wrong, but no zone file carries `0.07`, so re-pointing the alias could not produce the expected value; the zone's own surcharge was the only data that yields it. `surcharge` is consumed only at `lib/settings/loader.rb:8`, and `test/invoice_",
+      "duration_ms": 154330,
+      "scenario": "HA1.1",
+      "arm": "subagents-on",
+      "trial": 2,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "chain",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 115175,
+      "parent_completion_tokens": 10526,
+      "parent_peak_prompt_tokens": 10897,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Left/uncertain: the `lib/noise/*.rb` files are dead weight (no `require` references them) and other zone files share the `0.20` value, but nothing on the test's path uses them, so I left them alone. If real-world data is expected to drive this test rather than the fixture, the fixture value is the s",
+      "duration_ms": 80805,
+      "scenario": "HA1.1",
+      "arm": "subagents-off",
+      "trial": 2,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "survey",
+      "delegations": 3,
+      "gates": [],
+      "repetition": 0.216,
+      "child_statuses": [
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 155451,
+      "parent_completion_tokens": 12297,
+      "parent_peak_prompt_tokens": 17031,
+      "child_prompt_tokens": 36776,
+      "child_completion_tokens": 7127,
+      "fanout": 3,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "**Uncertain:** the `to_h`/`to_a.to_h` distinction is the only judgement call; if the grader treats those as aliases too, the list would additionally need handle_garnet_batch, handle_kestrel, handle_pewter, handle_russet, handle_zephyr_batch. No repo docs/tests exist to disambiguate.\n\nVerification: s",
+      "duration_ms": 97242,
+      "scenario": "HA2.1",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": false,
+      "detail": "missed 3, wrongly listed 0"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 117255,
+      "parent_completion_tokens": 21417,
+      "parent_peak_prompt_tokens": 11955,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured check `test`: exit_0 (passed). No other file was changed.\n\nVerification: satisfied",
+      "duration_ms": 113872,
+      "scenario": "HA2.1",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 4,
+      "gates": [
+        "step_repetition"
+      ],
+      "repetition": 0.964,
+      "child_statuses": [
+        "done",
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 274308,
+      "parent_completion_tokens": 15842,
+      "parent_peak_prompt_tokens": 20498,
+      "child_prompt_tokens": 28331,
+      "child_completion_tokens": 5253,
+      "fanout": 4,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured check `test`: exit_0 (passed).\n\nVerification: satisfied",
+      "duration_ms": 61910,
+      "scenario": "HA2.1",
+      "arm": "subagents-on",
+      "trial": 2,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 105557,
+      "parent_completion_tokens": 19792,
+      "parent_peak_prompt_tokens": 11580,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "No other file was changed. Verified with the configured check `test`: exit_0 (passed) before and after the write. One assumption: handlers receive a plain Hash, not a Hash subclass (a subclass would make `#to_h` a copy and change kestrel/garnet_batch/russet).\n\nVerification: satisfied",
+      "duration_ms": 194066,
+      "scenario": "HA2.1",
+      "arm": "subagents-off",
+      "trial": 2,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 3,
+      "gates": [],
+      "repetition": 0.194,
+      "child_statuses": [
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 224972,
+      "parent_completion_tokens": 20916,
+      "parent_peak_prompt_tokens": 22508,
+      "child_prompt_tokens": 61678,
+      "child_completion_tokens": 7573,
+      "fanout": 3,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified: configured check `test` passed (exit 0) after the write. No other file touched.\n\nVerification: satisfied",
+      "duration_ms": 154708,
+      "scenario": "HA3.1",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "handed_off",
+      "compactions": 1,
+      "parent_prompt_tokens": 578396,
+      "parent_completion_tokens": 26701,
+      "parent_peak_prompt_tokens": 29839,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 2,
+      "answer_tail": "Committed progress: no verified steps.\nVerification: not satisfied\nNext action: review the committed evidence and resume",
+      "duration_ms": 87887,
+      "scenario": "HA3.1",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": false,
+      "detail": "missed 21, wrongly listed 0"
+    },
+    {
+      "tag": "survey",
+      "delegations": 2,
+      "gates": [],
+      "repetition": 0.214,
+      "child_statuses": [
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 359390,
+      "parent_completion_tokens": 30998,
+      "parent_peak_prompt_tokens": 25743,
+      "child_prompt_tokens": 157829,
+      "child_completion_tokens": 9705,
+      "fanout": 2,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertainty: the `to_h` cases (fjord, indigo_batch, juniper_batch, saffron) depend on event being a plain Hash; if the grader treats `to_h` as an unconditional copy, those four would be excluded. I included them because the task says \"the hash itself\".\n\nVerification: satisfied",
+      "duration_ms": 191052,
+      "scenario": "HA3.1",
+      "arm": "subagents-on",
+      "trial": 2,
+      "solved": false,
+      "detail": "missed 5, wrongly listed 1"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 359419,
+      "parent_completion_tokens": 18058,
+      "parent_peak_prompt_tokens": 25559,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified: configured check `test` passed (exit 0) after the final edit. No other file was modified.\n\nVerification: satisfied",
+      "duration_ms": 100177,
+      "scenario": "HA3.1",
+      "arm": "subagents-off",
+      "trial": 2,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 39331,
+      "parent_completion_tokens": 2441,
+      "parent_peak_prompt_tokens": 4765,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured `test` check: exit_0 (passed). The only other caller, lib/text/labels.rb:4, just forwards the value, so it is unaffected.\n\nVerification: satisfied",
+      "duration_ms": 13012,
+      "scenario": "HA4.1",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": false,
+      "detail": "hidden tests fail: \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-29812-v155il/w/lib/export/xenon_ledger.rb:4:in `sum' | \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-29812-v155il/w/lib/export/xenon_ledger.rb:4:in `xenon_ledger_total' | \tfrom test/ledger_test.rb:2:in `<main>'"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 194326,
+      "parent_completion_tokens": 23745,
+      "parent_peak_prompt_tokens": 10770,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "- One uncertainty: `xenon_ledger_total` now truncates fractional amounts (e.g. `3.50` → `3`), matching the previous integer-only behaviour. If fractional totals are ever expected, that would need a separate decision.\n\nVerification: satisfied",
+      "duration_ms": 114419,
+      "scenario": "HA4.1",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 81823,
+      "parent_completion_tokens": 13634,
+      "parent_peak_prompt_tokens": 8775,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertain: the ledger total path has no test in the repo, so its behaviour is argued rather than test-covered.\n\nVerification: satisfied",
+      "duration_ms": 79642,
+      "scenario": "HA4.1",
+      "arm": "subagents-on",
+      "trial": 2,
+      "solved": false,
+      "detail": "hidden tests fail: \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-29812-za5ldd/w/lib/export/xenon_ledger.rb:4:in `sum' | \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-29812-za5ldd/w/lib/export/xenon_ledger.rb:4:in `xenon_ledger_total' | \tfrom test/ledger_test.rb:2:in `<main>'"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 119676,
+      "parent_completion_tokens": 13876,
+      "parent_peak_prompt_tokens": 8257,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertainty: the check's runner is not visible in the workspace, so I inferred its coverage from the probe rather than reading its config. The 60 `lib/noise/*.rb` files are unrelated and untouched.\n\nVerification: satisfied",
+      "duration_ms": 103016,
+      "scenario": "HA4.1",
+      "arm": "subagents-off",
+      "trial": 2,
+      "solved": true,
+      "detail": "hidden tests pass"
+    }
+  ],
+  "seeds": [
+    1
+  ],
+  "held_out": false,
+  "topology": {
+    "subagents-on": {
+      "inconclusive": false,
+      "fanout_share_of_delegating_survey": 1.0,
+      "review_share_of_change": 0.0,
+      "ha3_parent_peak_prompt_tokens": [
+        22508,
+        25743
+      ],
+      "ha3_compactions": [
+        0,
+        0
+      ],
+      "solved_by_tag": {
+        "chain": "2/2",
+        "survey": "2/4",
+        "change": "0/2"
+      }
+    },
+    "subagents-off": {
+      "inconclusive": true,
+      "fanout_share_of_delegating_survey": null,
+      "review_share_of_change": 0.0,
+      "ha3_parent_peak_prompt_tokens": [
+        29839,
+        25559
+      ],
+      "ha3_compactions": [
+        1,
+        0
+      ],
+      "solved_by_tag": {
+        "chain": "2/2",
+        "survey": "3/4",
+        "change": "2/2"
+      }
+    }
+  }
+}
