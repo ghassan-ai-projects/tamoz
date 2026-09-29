@@ -96,7 +96,7 @@ module Tamoz
       # re-pins (P8 §5.4 / P17 correction 5).
       EGRESS_KEYS = %w[
         allowlisted_hosts schemes deny_private_ranges max_request_bytes
-        max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs
+        max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs page_reads
       ].freeze
       EGRESS_CIRCUIT_KEYS = %w[threshold scope_type budget_breach].freeze
       EGRESS_SCOPE_TYPE = "egress"

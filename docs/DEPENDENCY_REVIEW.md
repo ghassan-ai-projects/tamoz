@@ -24,6 +24,8 @@ until this file is regenerated.
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
 | `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
 | `net-http` | 0.9.1 | Ruby, BSD-2-Clause | yes | tamoz-agent-kernel ~> 0.5 | https://github.com/ruby/net-http |
+| `nokogiri` | 1.19.4 | MIT | yes | tamoz-mcp-websearch ~> 1.18 | https://nokogiri.org |
+| `racc` | 1.8.1 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/racc |
 | `rake` | 13.4.2 | MIT | transitive |  | https://github.com/ruby/rake |
 | `regexp_parser` | 2.12.0 | MIT | transitive |  | https://github.com/ammar/regexp_parser |
 | `simpleidn` | 0.2.3 | MIT | transitive |  | https://github.com/mmriis/simpleidn |
@@ -60,7 +62,6 @@ arriving silently.
 | `parallel` | 2.1.0 | MIT |
 | `parser` | 3.3.11.1 | MIT |
 | `prism` | 1.9.0 | MIT |
-| `racc` | 1.8.1 | Ruby, BSD-2-Clause |
 | `rainbow` | 3.1.1 | MIT |
 | `reek` | 6.5.0 | MIT |
 | `rexml` | 3.4.4 | BSD-2-Clause |

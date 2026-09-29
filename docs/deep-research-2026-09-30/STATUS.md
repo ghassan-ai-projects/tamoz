@@ -10,8 +10,12 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | A6 | met | `test/research_boundary_test.rb` (a planted `Tamoz::Research::Ledger` reference in `tamoz-agent-session` fails it; inner classes are also `private_constant`), `test/dependency_isolation_test.rb#test_research_loads_only_core` |
 | P1–P5 | pending | — |
 | B1–B4 | pending | — |
-| S1–S4 | pending | — |
-| C1–C7 | pending | — |
+| S1 | partly met | the adapter reads only a URL its own searches returned (`test/websearch_provider_test.rb`); the model-side ref (S2-3) comes in R4 |
+| S2 | met | public reach needs `deny_private_ranges` and the declared `page_reads: public`; private, tunnelled-IPv6 and IP-literal targets refused on every hop; provider headers dropped on a host change; streamed 2 MiB bound without compression (`test/websearch_reader_test.rb`, `test/websearch_adapter_test.rb`) |
+| S3–S4 | pending | — |
+| C1–C5 | pending | — |
+| C6 | met | a page is fetched once per adapter process (`test/websearch_provider_test.rb#test_a_page_is_fetched_once_and_cut_to_the_output_budget`) |
+| C7 | pending | — |
 | I1–I3 | pending | — |
 | T1–T3 | pending | — |
 | R1–R6 | pending (real-model) | — |
@@ -34,6 +38,7 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | DESIGN §2.1 | The checkpoint uses the existing `clarify` interrupt; nothing in the approval policy | It is the research protocol, not an approval verdict, and `clarify` already works on both surfaces |
 | DESIGN §7 | A child marks a claim `primary` and reports `conflicting`/`not_found`; the lead does not mark statuses. `answered` = a primary claim or claims from two hosts; `unanswerable` needs a child that searched at least 3 times | Deterministic from the ledger, one less lead tool; the lead still decides the next wave |
 | DESIGN §10 | Sources list shows the published date; the read date lives in `sources.jsonl` | The report has no clock; the session stamps the folder |
+| DESIGN §5 | Page reads need an explicit `page_reads: public` in the egress declaration (also accepted by the profile validator) | The review found that a provider name alone would widen egress without the pinned declaration saying so |
 | EVAL §3 | The single arm is one `research` child per wave, not the lead researching itself | One code path; the arms still differ exactly in parallel fan-out |
 
 ## Rounds
@@ -42,4 +47,5 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 |---|---|---|
 | R0 | `32567071` | docs, enola baseline, seam checks |
 | R1 | `353f9996` | `zai` provider, GLM route, `max_concurrent_requests`; reviewed |
-| R3 | (this commit) | `tamoz-research` gem: budgets, plan, waves, web refs, sources with the excerpt check, ledger and stop rule, report, run folder; 29 facade tests; reviewed, 15 review findings fixed |
+| R3 | `1f5023a4` | `tamoz-research` gem: budgets, plan, waves, web refs, sources with the excerpt check, ledger and stop rule, report, run folder; 29 facade tests; reviewed, 15 review findings fixed |
+| R2 | (this commit) | Brave search and direct page reads as named adapters; `http` provider removed; egress public reach; `nokogiri` extraction; reviewed, 10 findings fixed (2 security: cross-host provider header, unbounded body) |

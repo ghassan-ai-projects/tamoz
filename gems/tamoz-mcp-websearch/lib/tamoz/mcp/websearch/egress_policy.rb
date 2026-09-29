@@ -22,6 +22,11 @@ module Tamoz
       # (invariant 35: a self-report is not policy).
       class EgressPolicy
         SCHEMES = ["https"].freeze
+        PAGE_READS = %w[none public].freeze
+        # IPv6 blocks that embed or tunnel to an IPv4 address, or are reserved: NAT64, 6to4, Teredo, the deprecated
+        # site-local block, discard-only and documentation. A public name's AAAA record must not reach them.
+        REFUSED_IPV6 = %w[64:ff9b::/96 64:ff9b:1::/48 2002::/16 2001::/32 fec0::/10 100::/64 2001:db8::/32]
+                       .map { |block| IPAddr.new(block) }.freeze
         SCOPE_TYPE = "egress"
         MAX_REQUEST_BYTES = 8192
         MAX_RESPONSE_BYTES = 64 * 1024
@@ -45,7 +50,7 @@ module Tamoz
 
         attr_reader :allowlisted_hosts, :schemes, :deny_private_ranges,
                     :max_request_bytes, :max_response_bytes, :connect_timeout_s,
-                    :redirect_max_hops, :circuit, :credential_refs
+                    :redirect_max_hops, :circuit, :credential_refs, :page_reads
 
         # Fail-closed construction from the operator-supplied declaration (the
         # same shape Tamoz validates in the profile). Raises the typed
@@ -63,6 +68,7 @@ module Tamoz
           @redirect_max_hops = bounded_integer!(declaration["redirect_max_hops"], "redirect_max_hops", MIN_REDIRECT_HOPS, MAX_REDIRECT_HOPS)
           @circuit = validate_circuit!(declaration["circuit"]).freeze
           @credential_refs = validate_credential_refs!(declaration["credential_refs"]).freeze
+          @page_reads = page_reads_from(declaration.fetch("page_reads", "none"))
           freeze
         end
 
@@ -140,12 +146,20 @@ module Tamoz
 
           known = %w[
             allowlisted_hosts schemes deny_private_ranges max_request_bytes
-            max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs
+            max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs page_reads
           ]
           unknown = declaration.keys - known
           return if unknown.empty?
 
           raise ValidationError, "websearch egress declaration has unknown fields #{unknown.sort.inspect}"
+        end
+
+        # "public" is the operator's opt-in to page reads that reach any public host (the research reader); "none",
+        # the default, keeps every connection to the allowlist.
+        def page_reads_from(value)
+          return value if PAGE_READS.include?(value)
+
+          raise ValidationError, "egress.page_reads must be one of #{PAGE_READS.inspect}"
         end
 
         def validate_schemes!(schemes)
@@ -259,7 +273,7 @@ module Tamoz
         def refused_private_ipv6?(ip)
           # ff00::/8 (multicast) and ::/128 (unspecified) — IPAddr has no
           # predicates for either, so the leading hextet is checked directly.
-          ip.to_s.start_with?("ff") || ip.to_s == "::"
+          ip.to_s.start_with?("ff") || ip.to_s == "::" || REFUSED_IPV6.any? { |block| block.include?(ip) }
         end
 
         def validate_circuit!(circuit)

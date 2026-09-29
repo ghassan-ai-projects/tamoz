@@ -1,6 +1,6 @@
 {
   "benchmark_protocol_version": "1.1.0",
-  "protocol_sha256": "36df3068c34c3e68a4c83727f6a8f935bbc18a4dc53804307ae72ccd286c81a7",
+  "protocol_sha256": "f9da0a9be77eec5a7ebb329a93efbec0fb078b3a314d10c0e914d49772f88824",
   "cutoff": "2026-09-01T00:00:00Z",
   "opaque_ids": true,
   "cases": [

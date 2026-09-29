@@ -9,6 +9,10 @@ require_relative "websearch/version"
 require_relative "websearch/egress_policy"
 require_relative "websearch/egress_client"
 require_relative "websearch/egress_circuit"
+require_relative "websearch/page_text"
+require_relative "websearch/page_reader"
+require_relative "websearch/brave_search"
+require_relative "websearch/fixture_web"
 
 module Tamoz
   module Mcp

@@ -216,7 +216,7 @@ class PackagingTest < Minitest::Test
       assert Pathname.new(result.fetch("feature")).realpath.to_s.start_with?(Pathname.new(environment.fetch("GEM_HOME")).realpath.to_s)
       assert_equal false, result.fetch("agent_loaded")
       assert_equal false, result.fetch("evals_loaded")
-      assert_equal %w[tamoz-core tamoz-mcp], result.fetch("dependencies")
+      assert_equal %w[nokogiri tamoz-core tamoz-mcp], result.fetch("dependencies")
       assert_empty stderr
     end
   end
@@ -421,6 +421,7 @@ class PackagingTest < Minitest::Test
     with_hermetic_websearch_install("websearch-operator") do |environment|
       script = <<~'RUBY'
         require "json"
+        require "tmpdir"
         load ENV.fetch("TAMOZ_OPERATOR_SCRIPT")
         policy = {
           "allowlisted_hosts" => ["api.search.example"],
@@ -434,15 +435,17 @@ class PackagingTest < Minitest::Test
           "credential_refs" => []
         }
         ENV["TAMOZ_WEBSEARCH_EGRESS"] = JSON.generate(policy)
-        ENV.delete("TAMOZ_SEARCH_API_TOKEN")
+        ENV.delete("TAMOZ_BRAVE_API_KEY")
         refused = WebsearchAdapter.search_response("answer", 1)
         raise "grant gate did not refuse" unless refused.error? && refused.content.first.fetch(:text).include?("operator grant")
+        web = File.join(Dir.mktmpdir, "web.json")
+        File.write(web, JSON.generate("pages" => [{"url" => "https://answers.example/42", "text" => "The answer is 42."}]))
         ENV["TAMOZ_WEBSEARCH_GRANT"] = "1"
-        ENV["TAMOZ_WEBSEARCH_PROVIDER"] = JSON.generate("provider" => "fixture")
+        ENV["TAMOZ_WEBSEARCH_PROVIDER"] = JSON.generate("search" => "fixture", "reader" => "fixture", "web" => web)
         served = WebsearchAdapter.search_response("answer", 1)
         raise "fixture provider was not served" if served.error?
         raise "fixture result was not returned" unless served.content.first.fetch(:text).include?("42")
-        puts JSON.generate("fixture" => true, "network" => false, "credential" => ENV.key?("TAMOZ_SEARCH_API_TOKEN"))
+        puts JSON.generate("fixture" => true, "network" => false, "credential" => ENV.key?("TAMOZ_BRAVE_API_KEY"))
       RUBY
       stdout, stderr, status = Open3.capture3(
         environment.merge("TAMOZ_OPERATOR_SCRIPT" => ROOT.join("script", "websearch_adapter").to_s),
@@ -989,7 +992,7 @@ class PackagingTest < Minitest::Test
   def with_hermetic_websearch_install(label, tamoz_names: %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch])
     external_names = %w[
       mcp json_schemer bigdecimal hana regexp_parser simpleidn zeitwerk
-      faraday faraday-net_http net-http
+      faraday faraday-net_http net-http nokogiri racc
     ]
 
     Dir.mktmpdir("tamoz-hermetic-#{label}") do |directory|

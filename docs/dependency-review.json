@@ -217,6 +217,31 @@
       "exception": null
     },
     {
+      "name": "nokogiri",
+      "version": "1.19.4",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://nokogiri.org",
+      "required_by": [
+        "tamoz-mcp-websearch ~> 1.18"
+      ],
+      "direct": true,
+      "exception": null
+    },
+    {
+      "name": "racc",
+      "version": "1.8.1",
+      "licenses": [
+        "Ruby",
+        "BSD-2-Clause"
+      ],
+      "homepage": "https://github.com/ruby/racc",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
       "name": "rake",
       "version": "13.4.2",
       "licenses": [
@@ -485,18 +510,6 @@
         "MIT"
       ],
       "homepage": "https://github.com/ruby/prism",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "racc",
-      "version": "1.8.1",
-      "licenses": [
-        "Ruby",
-        "BSD-2-Clause"
-      ],
-      "homepage": "https://github.com/ruby/racc",
       "required_by": [],
       "direct": false,
       "exception": null

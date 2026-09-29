@@ -35,7 +35,7 @@ class WebsearchEgressTest < Minitest::Test
       "connect_timeout_s" => 10,
       "redirect_max_hops" => 3,
       "circuit" => {"threshold" => 3, "scope_type" => "egress", "budget_breach" => true},
-      "credential_refs" => ["TAMOZ_SEARCH_API_TOKEN"]
+      "credential_refs" => ["TAMOZ_BRAVE_API_KEY"]
     }
   end
 

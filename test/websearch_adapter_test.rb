@@ -213,12 +213,14 @@ class WebsearchAdapterTest < Minitest::Test
     client = client_with(egress, connector: connector)
     client.fetch(
       "https://api.search.example/start",
-      headers: {"Authorization" => "Bearer sekrit", "Cookie" => "session=abc", "X-Custom" => "kept"}
+      headers: {"Authorization" => "Bearer sekrit", "Cookie" => "session=abc", "X-Subscription-Token" => "t",
+                "Accept" => "application/json"}
     )
     assert seen[0][1].key?("Authorization"), "the first host gets the credential header"
     refute seen[1][1].key?("Authorization"), "the second host must not inherit Authorization"
     refute seen[1][1].key?("Cookie"), "the second host must not inherit Cookie"
-    assert_equal "kept", seen[1][1]["X-Custom"], "non-credential headers are preserved"
+    refute seen[1][1].key?("X-Subscription-Token"), "a provider's own credential header must not follow either"
+    assert_equal "application/json", seen[1][1]["Accept"], "the content-negotiation headers are kept"
   end
 
   # W2 / P17-A1: a redirect Location pointing at a metadata address through an
