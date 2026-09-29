@@ -16,7 +16,7 @@ changes; `SubagentSpec::MET` in `test/support/subagent_spec.rb` is the record.
 | B7 | pending | expected header without `delegate` differs (subagents ignored) | same |
 | B7 (disabled half) | **met** | header digests pinned at the parent commit | same |
 | E2 | pending | `Tamoz::Agent::TurnUsage does not exist` | same |
-| B9 | pending | `subagent_roles.json` does not exist | `test/harness_prompt_pack_test.rb` |
+| B9 | **met** (R1) | was: `subagent_roles.json` does not exist | `test/harness_prompt_pack_test.rb` |
 | C2 C3 | pending | `Crash expected but nothing was raised` / `the child never ran.` | `test/subagent_durability_test.rb` |
 | C1 | pending | `the process was meant to die of SIGKILL` (the child never runs, so the script exits 0) | `test/subagent_kill_test.rb` (slow lane) |
 
@@ -39,7 +39,9 @@ changes; `SubagentSpec::MET` in `test/support/subagent_spec.rb` is the record.
 `rake ci` runs design, ADR, syntax and the sharded suite (all green), then aborts at `stream:proto:check`: the only
 macOS `protoc` in `grpc-tools` is x86_64 and this host is arm64 (`Bad CPU type in executable`), so it fails at
 `0cd6a0ab` too and no change here touches a `.proto`. Each round runs the rest by hand: `rake test_fast`,
-`rake quality:architecture` (enola check), `rubocop` on changed files, `rake docs:check`.
+`rake quality:architecture` (enola check), `rubocop` and `reek` on changed files (zero offenses; reek no worse than
+HEAD), `rake docs:check`. The repo-wide `rubocop` gate is red at `0cd6a0ab` as well (4,624 offenses, all under
+`test/`; unchanged by this work), so per-file parity is what each round proves.
 
 ## Deviations from DESIGN.md (each simplifies or reconciles; recorded so the owner can veto)
 
@@ -62,5 +64,6 @@ macOS `protoc` in `grpc-tools` is x86_64 and this host is arm64 (`Bad CPU type i
 
 | Round | State |
 |---|---|
-| R0 | done |
-| R1–R8 | not started |
+| R0 | done (`2feccdbe`) |
+| R1 | done: roles data and loader, `:subagent` surface, `delegate` schema; B9 met, A5 pinned; enola: no new cycle, layer or gem edge |
+| R2–R8 | not started |

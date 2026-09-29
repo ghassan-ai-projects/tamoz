@@ -6,7 +6,7 @@ module Tamoz
     # rubocop:disable Metrics/AbcSize -- the opening surface is one ordered assembly.
     class WorkContext
       MUTATING_TOOLS = %w[apply_patch create_file].freeze
-      SURFACES = %i[cli chat].freeze
+      SURFACES = Harness::PromptPack::SURFACES.keys.freeze
 
       # Operator settings for the work route; all of it is trusted configuration.
       Settings = Data.define(:surface, :persona, :preferences, :guidance_files, :guidance_bytes, :context_policy,

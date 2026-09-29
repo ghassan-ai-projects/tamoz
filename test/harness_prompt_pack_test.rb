@@ -11,6 +11,7 @@ class HarnessPromptPackTest < Minitest::Test
   # A prompt change is a deliberate, reviewed edit: update the digest here with it.
   PINNED = {
     'cut_off.md' => 'sha256:550e3cb327aab548b06d99e59df304255e23621200ebbd33f3778b36ea71a3d8',
+    'delegate.json' => 'sha256:237f0df2877db4910ec8e6eaa4a791e7b77b9de325f048b8519a3efabab6b5f2',
     'editing.md' => 'sha256:bb24c181244924fe158fd389cc644da58d89a30483e403b10ebf6e88e53fb37b',
     'finish.md' => 'sha256:501567f252cf0050b52df43e5abf6b7989aec528b29858181c304d397248845e',
     'handoff.md' => 'sha256:ce7be5d051a429496ff7d1cf0fc6bca07948c7f8ef93349ecde5529fda95c412',
@@ -30,8 +31,11 @@ class HarnessPromptPackTest < Minitest::Test
     'report_labels.json' => 'sha256:d548428ad4343cfed7594cffe31bc1e319d116e0313840d464de273ae9c93891',
     'report_reminder.md' => 'sha256:2383d9f37addb8fff00eb407d5f0b1ba1972e66b83a9c86049df200cac1f82e4',
     'repeat_reminder.md' => 'sha256:73edd19fe59abbe9bd8622a27029f967327845b2dca40e31577830a64fd9189d',
+    'subagent_explore.md' => 'sha256:8845a850a98628b66a34992b2a0110c06a121611e1a63c19f0d08d0fd56416bd',
+    'subagent_roles.json' => 'sha256:0515a7b7a6ff791cc0f4d28375aded5ea9298d01a3bfa2f0ebcdbea75f69a1f4',
     'surface_chat.md' => 'sha256:daa1232b4be2f1d01360f65014ff9afafebf34ab4e7152dc152f8ab0f0c7945a',
     'surface_cli.md' => 'sha256:12d434d8ea184a85dbc2ca9ed6c7b904f77a1a62904a1235d9f572d022d98478',
+    'surface_subagent.md' => 'sha256:0dcf1a462410193998f080ac56f0af8f4a5d339f808c468d864bca6b7f4a9786',
     'tools.md' => 'sha256:ae6e51411f1e99b55468f7314aaad66ec648734a98b330a3e56fbbef09778e08'
   }.freeze
 
@@ -65,6 +69,80 @@ class HarnessPromptPackTest < Minitest::Test
     assert_raises(H::Error) { H::PromptPack.sections(surface: :email) }
     assert_raises(H::Error) { H::Persona.render('verbosity' => 'loud') }
     assert_raises(H::Error) { H::Persona.render('mood' => 'happy') }
+  end
+
+  def explore_header(tools: [])
+    H::Header.build(tools:, model: 'm', surface: :subagent, persona: H::PromptPack.fetch('subagent_explore'))
+  end
+
+  def test_the_subagent_surface_keeps_identity_and_tool_rules_only
+    assert_equal %w[identity tools surface], H::PromptPack.sections(surface: :subagent).map(&:name)
+    assert_equal %w[identity operating tools editing finish surface],
+                 H::PromptPack.sections(surface: :cli).map(&:name)
+  end
+
+  def test_a_subagent_prompt_speaks_to_a_reader_that_is_an_agent_and_never_mentions_changing_files
+    system = explore_header.system
+
+    assert_includes system, 'Your reader is the agent that started you'
+    assert_includes system, 'Your role: explore'
+    %w[update_plan apply_patch run_check].each { |name| refute_includes system, name }
+  end
+
+  def test_a_subagent_header_offers_recall_output_and_never_update_plan
+    read = Tamoz::ContextEngine::ToolSchema.new(name: 'read_file', description: 'Read.',
+                                                parameters: { 'type' => 'object' })
+
+    assert_equal %w[read_file recall_output], explore_header(tools: [read]).tool_names
+    %i[cli chat].each do |surface|
+      assert_equal %w[recall_output update_plan], H::PromptPack.harness_tools(surface:).map(&:name).sort
+    end
+  end
+
+  def test_the_delegate_tool_names_only_the_roles_it_is_given_and_what_each_is_for
+    explore = H::SubagentRoles.shipped.fetch('explore')
+    role = H::PromptPack.delegate_tool(roles: [explore]).parameters.dig('properties', 'role')
+
+    assert_equal %w[explore], role.fetch('enum')
+    assert_includes role.fetch('description'), explore.summary
+    assert_empty H::PromptPack.delegate_tool(roles: []).parameters.dig('properties', 'role', 'enum')
+  end
+
+  def test_the_delegate_tool_asks_for_a_role_and_a_brief
+    tool = H::PromptPack.delegate_tool(roles: [H::SubagentRoles.shipped.fetch('explore')])
+
+    assert_equal 'delegate', tool.name
+    assert_equal %w[role brief], tool.parameters.fetch('required')
+    assert_includes tool.description, 'when to stop'
+  end
+
+  def test_the_shipped_roles_load_with_their_tools_as_data
+    roles = H::SubagentRoles.shipped
+
+    assert_equal %w[explore], roles.names
+    assert_includes roles.fetch('explore').tools, 'probe_*'
+    assert_equal 4, roles.max_per_turn
+  end
+
+  def roles_document(**changes)
+    shipped = JSON.parse(File.read(ROLES_PATH))
+    JSON.generate(shipped.merge(changes.transform_keys(&:to_s)))
+  end
+
+  def role_with(**changes) = JSON.parse(File.read(ROLES_PATH)).fetch('explore').merge(changes.transform_keys(&:to_s))
+
+  def test_a_malformed_role_file_is_refused
+    [
+      roles_document(max_per_turn: 0), roles_document(explore: role_with(x: 1)),
+      roles_document(explore: role_with(prompt: 'missing.md')),
+      roles_document(explore: role_with(loop_policy: { max_model_calls: 0 })),
+      roles_document(explore: role_with(tools: [])), roles_document(Explore: role_with), '{', '[]',
+      JSON.generate(max_per_turn: 4)
+    ].each { |text| assert_raises(H::Error) { H::SubagentRoles.parse(text) } }
+  end
+
+  def test_an_unknown_role_is_refused
+    assert_raises(H::Error) { H::SubagentRoles.shipped.fetch('review') }
   end
 
   ROLES_PATH = ROOT.join('gems/tamoz-harness/prompts/subagent_roles.json')
