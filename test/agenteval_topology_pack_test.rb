@@ -93,7 +93,8 @@ class AgentevalTopologyPackTest < Minitest::Test
          { calls: [fanout_call([marked_brief('H5-A'), marked_brief('H5-B')])] },
          { calls: [['delegate', { 'role' => 'review', 'brief' => 'H5-R: check the change.' }]] }, { content: 'Done.' }]
       end
-      children = { 'H5-A' => answer('H5-A'), 'H5-B' => answer('H5-B'),
+      children = { 'H5-A' => answer('H5-A'),
+                   'H5-B' => [{ calls: [read_call('lib/export/csv.rb')] }, { content: 'H5-B csv rounds half-up.' }],
                    'H5-R' => [{ calls: [read_call('lib/a.rb')] }, { content: 'No defects found.' }] }
       topology_run(parent:, children:) do |_outcome, _model, _root, adapter|
         runs = Agenteval::SubagentPack::Record.read(adapter.path).child_runs

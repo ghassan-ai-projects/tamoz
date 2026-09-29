@@ -23,6 +23,7 @@ require_relative "subagent_report"
 require_relative "work_delegation"
 require_relative "subagent_apps"
 require_relative "work_compaction"
+require_relative "work_nudge"
 require_relative "work_gate"
 require_relative "session_work"
 

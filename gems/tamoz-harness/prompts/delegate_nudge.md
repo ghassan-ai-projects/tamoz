@@ -1,0 +1,1 @@
+You have read a lot in this turn without delegating. If what is left is more reading you will not edit, delegate it: one brief, or briefs for independent parts that run at once, and keep only the answers in your context. If you are close to done, carry on.

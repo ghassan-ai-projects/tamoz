@@ -218,7 +218,7 @@ class SubagentTopologyTest < Minitest::Test
     spec_row('N2') do
       nudge
       big = EXPLORE_FILES.merge('lib/big.rb' => big_file)
-      parent = read_lines(3) + [{ content: 'Read.' }]
+      parent = read_lines(5) + [{ content: 'Read.' }]
       with_work_workspace(files: big) do |root, adapter|
         model = TopologyTeam.new(parent:, children: {}, window: 12_000)
         subagent_session(model:, root:, adapter:, harness: { context_policy: { max_inline_bytes: 4096 } })
@@ -226,6 +226,19 @@ class SubagentTopologyTest < Minitest::Test
         last = JSON.parse(model.parent_requests.last).fetch('messages')
 
         assert_equal(1, last.count { |message| message['content'].to_s.include?(nudge) })
+      end
+    end
+  end
+
+  def test_n2_a_large_opening_alone_never_triggers_the_note
+    spec_row('N2') do
+      task = "Answer yes. #{'context ' * 1500}"
+      with_work_workspace(files: EXPLORE_FILES) do |root, adapter|
+        model = TopologyTeam.new(parent: [{ content: 'yes' }], children: {}, window: 12_000)
+        subagent_session(model:, root:, adapter:).start(task, thread: 'work', request_id: 'work-1')
+
+        assert_equal 1, model.requests.length
+        refute_includes model.requests.first, nudge
       end
     end
   end

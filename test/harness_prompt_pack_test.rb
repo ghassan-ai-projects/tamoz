@@ -1,17 +1,18 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
-require_relative 'support/subagent_spec'
+require_relative 'support/topology_spec'
 
 class HarnessPromptPackTest < Minitest::Test
-  include SubagentSpec
+  include TopologySpec
 
   H = Tamoz::Harness
 
   # A prompt change is a deliberate, reviewed edit: update the digest here with it.
   PINNED = {
     'cut_off.md' => 'sha256:550e3cb327aab548b06d99e59df304255e23621200ebbd33f3778b36ea71a3d8',
-    'delegate.json' => 'sha256:d2f35022fb903d882dc91ab6f737c823093ec20a12d2b965ed68d413b821bd2c',
+    'delegate.json' => 'sha256:ce54e76cf8d86c06749cd156ec109a50dfacf0af09c8d5dbe3aa827ca0a492c0',
+    'delegate_nudge.md' => 'sha256:0b046203733c69fe8820a407a0e5f391d8cfaf9621c8ee6d1c1dd3660f7a16d5',
     'editing.md' => 'sha256:bb24c181244924fe158fd389cc644da58d89a30483e403b10ebf6e88e53fb37b',
     'finish.md' => 'sha256:501567f252cf0050b52df43e5abf6b7989aec528b29858181c304d397248845e',
     'handoff.md' => 'sha256:ce7be5d051a429496ff7d1cf0fc6bca07948c7f8ef93349ecde5529fda95c412',
@@ -32,7 +33,8 @@ class HarnessPromptPackTest < Minitest::Test
     'report_labels.json' => 'sha256:d548428ad4343cfed7594cffe31bc1e319d116e0313840d464de273ae9c93891',
     'report_reminder.md' => 'sha256:2383d9f37addb8fff00eb407d5f0b1ba1972e66b83a9c86049df200cac1f82e4',
     'subagent_explore.md' => 'sha256:8845a850a98628b66a34992b2a0110c06a121611e1a63c19f0d08d0fd56416bd',
-    'subagent_roles.json' => 'sha256:a729fc8208dbd999d5abfa82c489404577d1dad9c4bb0a3544c4a6300e3d99fb',
+    'subagent_review.md' => 'sha256:f5c829333ba8e9d9633f505bdfd1ac21fc54633fc6cad11648baceaf55b231e4',
+    'subagent_roles.json' => 'sha256:e10bf52a239d1d45666afa5337a273c17bdb46dfe7b9d34f598840ce06261ecd',
     'surface_chat.md' => 'sha256:daa1232b4be2f1d01360f65014ff9afafebf34ab4e7152dc152f8ab0f0c7945a',
     'surface_cli.md' => 'sha256:12d434d8ea184a85dbc2ca9ed6c7b904f77a1a62904a1235d9f572d022d98478',
     'surface_subagent.md' => 'sha256:0dcf1a462410193998f080ac56f0af8f4a5d339f808c468d864bca6b7f4a9786',
@@ -120,9 +122,9 @@ class HarnessPromptPackTest < Minitest::Test
   def test_the_shipped_roles_load_with_their_tools_as_data
     roles = H::SubagentRoles.shipped
 
-    assert_equal %w[explore], roles.names
+    assert_equal [%w[explore review], 4], [roles.names, roles.max_per_turn]
+    assert_empty roles.fetch('review').tools - Tamoz::Tools::ToolCatalog::READ_DESCRIPTIONS.keys
     assert_includes roles.fetch('explore').tools, 'probe_*'
-    assert_equal 4, roles.max_per_turn
   end
 
   def roles_document(**changes)
@@ -142,8 +144,26 @@ class HarnessPromptPackTest < Minitest::Test
     ].each { |text| assert_raises(H::Error) { H::SubagentRoles.parse(text) } }
   end
 
+  def test_n4_the_delegation_note_and_its_thresholds_are_data
+    spec_row('N4') do
+      roles = H::SubagentRoles.shipped
+      shipped = JSON.parse(File.read(ROLES_PATH))
+
+      assert_equal shipped.values_at('nudge_reads', 'nudge_window'), [roles.nudge_reads, roles.nudge_window]
+      assert_includes H::PromptPack.digests, 'delegate_nudge.md'
+      assert_raises(H::Error) { H::SubagentRoles.parse(roles_document(nudge_window: 1.5)) }
+    end
+  end
+
+  def test_v3_only_a_role_flagged_in_data_is_handed_the_changes
+    roles = H::SubagentRoles.shipped
+
+    assert_equal [true, false], [roles.fetch('review').reviews_changes?, roles.fetch('explore').reviews_changes?]
+    assert_raises(H::Error) { H::SubagentRoles.parse(roles_document(explore: role_with(reviews_changes: 'yes'))) }
+  end
+
   def test_an_unknown_role_is_refused
-    assert_raises(H::Error) { H::SubagentRoles.shipped.fetch('review') }
+    assert_raises(H::Error) { H::SubagentRoles.shipped.fetch('writer') }
   end
 
   ROLES_PATH = ROOT.join('gems/tamoz-harness/prompts/subagent_roles.json')

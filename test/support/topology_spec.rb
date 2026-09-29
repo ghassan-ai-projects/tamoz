@@ -8,7 +8,7 @@ require_relative 'subagent_spec'
 module TopologySpec
   include SubagentSpec
 
-  MET = %w[P1 P2 P3 P4 P5 P6 P7].freeze
+  MET = %w[B9 H5 N1 N2 N3 N4 P1 P2 P3 P4 P5 P6 P7 V1 V2 V3].freeze
   PENDING = Hash.new { |hash, key| hash[key] = [] }
 
   Minitest.after_run do
@@ -82,11 +82,11 @@ module TopologySpec
     [{ calls: [read_call('lib/billing/total.rb')] }, { content: text }]
   end
 
-  def topology_run(parent:, children:, files: EXPLORE_FILES, **session_options)
+  def topology_run(parent:, children:, files: EXPLORE_FILES, subagents: %w[explore review], **session_options)
     with_work_workspace(files:) do |root, adapter|
       script = ->(value) { value.respond_to?(:call) ? value.call(root) : value }
       model = TopologyTeam.new(parent: script.call(parent), children: script.call(children))
-      outcome = subagent_session(model:, root:, adapter:, **session_options)
+      outcome = subagent_session(model:, root:, adapter:, subagents:, **session_options)
                 .start(TASK, thread: 'work', request_id: 'work-1')
       yield outcome, model, root, adapter
     end

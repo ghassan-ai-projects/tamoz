@@ -16,6 +16,7 @@ module Tamoz
         tools = WorkTools.new(services:, work: @work, memory: @memory)
         @gate = WorkGate.new(services:, work: @work, tools:)
         @compaction = WorkCompaction.new(services:, work: @work)
+        @nudge = WorkNudge.new(work: @work)
       end
 
       # Each turn is a fresh execution: it opens a new surface seeded from the conversation transcript (or the
@@ -40,6 +41,9 @@ module Tamoz
 
         exhausted = state[:work_exhausted] || budget_reason(state)
         return handoff(state, exhausted) if exhausted
+
+        note = @nudge.entry(state)
+        return { work_entries: [note], next_node: 'work_step' } if note
 
         messages = @work.messages(state.fetch(:work_entries))
         call = @services.effects.converse(context, stage: :work_step, messages:, tools: @work.header.tools,

@@ -12,6 +12,11 @@ module Tamoz
     class WorkDelegation
       MAX_BRIEF_BYTES = 4096
       ANSWER_BYTES = 4096
+      NO_CHANGE = 'a review reads a change, and there is no change in this turn yet'
+
+      # What one admitted call will run: the briefs as the children get them, the fan-out's batch id, the changed paths
+      # a review is handed, and each answer's byte budget.
+      Plan = Data.define(:briefs, :batch, :changed, :budget)
 
       def initialize(services:, work:)
         @services = services
@@ -19,14 +24,12 @@ module Tamoz
       end
 
       def call(state, context, call)
-        child, briefs, refusal = admitted(state, call.arguments)
+        child, plan, refusal = admitted(state, call.arguments, call.id)
         return WorkTools::Outcome.new(text: "Error: #{refusal}", update: {}) if refusal
 
-        reports, duration_ms = run(child, briefs, context)
-        budget = ANSWER_BYTES / briefs.length
-        batch = briefs.length > 1 ? call.id : nil
-        WorkTools::Outcome.new(text: text(reports, budget),
-                               update: { work_trace: events(reports, briefs, batch, duration_ms, budget) })
+        reports, duration_ms = run(child, plan.briefs, context)
+        trace = events(reports, plan, duration_ms)
+        WorkTools::Outcome.new(text: text(reports, plan.budget), update: { work_trace: trace })
       end
 
       private
@@ -46,23 +49,38 @@ module Tamoz
         reports.length == 1 ? sections.first : (["Fan-out: #{reports.length} subagents"] + sections).join("\n\n")
       end
 
-      def events(reports, briefs, batch, duration_ms, budget)
-        reports.zip(briefs).flat_map do |report, brief|
+      def events(reports, plan, duration_ms)
+        reports.zip(plan.briefs).flat_map do |report, brief|
           started = { 'event' => 'subagent_started', 'role' => report.role,
                       'brief_digest' => "sha256:#{Digest::SHA256.hexdigest(brief)}",
-                      'execution_id' => report.output.fetch(:work_execution_id), 'batch' => batch }.compact
-          [started, report.finished_event(duration_ms, budget)]
+                      'execution_id' => report.output.fetch(:work_execution_id), 'batch' => plan.batch,
+                      'changed' => plan.changed }.compact
+          [started, report.finished_event(duration_ms, plan.budget)]
         end
       end
 
-      def admitted(state, arguments)
+      def admitted(state, arguments, call_id)
         apps = @services.configuration.subagent_apps
         child = apps[arguments['role']]
         return [nil, nil, "unknown subagent role; one of #{apps.keys.join(', ')}"] unless child
 
         briefs, refusal = briefs_of(arguments)
-        refusal ||= briefs.filter_map { |brief| invalid_brief(brief) }.first || over_cap(state, briefs.length)
-        [child, briefs, refusal]
+        refusal ||= brief_problem(state, briefs)
+        changed = changed_paths(child, state)
+        refusal ||= NO_CHANGE if changed&.empty?
+        [child, refusal ? nil : plan(briefs, changed, call_id), refusal]
+      end
+
+      # A reviewing role is handed what the parent changed, from the turn's record; other roles are handed nothing.
+      def changed_paths(child, state) = (Array(state[:work_changes]).uniq if child.role.reviews_changes?)
+
+      def brief_problem(state, briefs)
+        briefs.filter_map { |brief| invalid_brief(brief) }.first || over_cap(state, briefs.length)
+      end
+
+      def plan(briefs, changed, call_id)
+        briefs = briefs.map { |brief| "#{brief}\n\nFiles changed in this turn: #{changed.join(', ')}" } if changed
+        Plan.new(briefs:, batch: briefs.length > 1 ? call_id : nil, changed:, budget: ANSWER_BYTES / briefs.length)
       end
 
       def briefs_of(arguments)
