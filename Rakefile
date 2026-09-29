@@ -572,6 +572,16 @@ namespace :agenteval do
     task :prove do
       sh agenteval_ruby, BIN, "topologies", "prove"
     end
+
+    desc "Run the hard topology pack, subagents on vs off (real model; AGENTEVAL_SEEDS, AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
+    task run: :prove do
+      utf8_env!
+      real_run_ready!
+      out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "topologies-#{Time.now.utc.strftime("%Y%m%d")}.json"))
+      seeds = ENV["AGENTEVAL_SEEDS"] ? ["--seeds", ENV["AGENTEVAL_SEEDS"]] : []
+      sh agenteval_ruby, BIN, "topologies", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
+         *seeds, "--budget", ENV.fetch("AGENTEVAL_BUDGET", "900"), "--out", out
+    end
   end
 
   namespace :subagents do
