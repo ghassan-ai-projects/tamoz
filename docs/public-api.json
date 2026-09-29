@@ -461,6 +461,11 @@
       "Tamoz::Harness::PromptPack": {},
       "Tamoz::Harness::ToolCalls": {},
       "Tamoz::Harness::VERSION": {}
+    },
+    "tamoz-research": {
+      "Tamoz::Research": {},
+      "Tamoz::Research::Error": {},
+      "Tamoz::Research::VERSION": {}
     }
   },
   "generated_at": "2026-08-04T23:12:56Z"

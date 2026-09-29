@@ -40,6 +40,18 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
+  # tamoz-research is the rules of a research run: it must load no agent, graph, store, MCP or HTTP code, or
+  # the session could not call it without dragging those into every caller.
+  def test_research_loads_only_core
+    features = loaded_features_after("tamoz/research")
+
+    assert_includes features, "tamoz/research.rb"
+    refute(
+      features.any? { |path| path.match?(%r{tamoz/(?:graph|sqlite|agent|evals|mcp|harness|tools)|ruby_llm}) },
+      features.inspect
+    )
+  end
+
   def test_core_loads_only_its_declared_runtime_boundary
     features = loaded_features_after("tamoz/core")
 

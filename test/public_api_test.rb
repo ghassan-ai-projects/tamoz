@@ -68,6 +68,11 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Harness::ToolCalls" => {},
           "Tamoz::Harness::VERSION" => {}
         },
+        "tamoz-research" => {
+          "Tamoz::Research" => {},
+          "Tamoz::Research::Error" => {},
+          "Tamoz::Research::VERSION" => {}
+        },
         "tamoz-agent-healing" => {
           "Tamoz::Agent::Healing::Remediation" => {},
           "Tamoz::Agent::Healing::VERSION" => {}

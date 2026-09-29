@@ -69,6 +69,7 @@ named example task in a clean subprocess.
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core`, `tamoz-cancellation` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header, append-only surface, spill, pruner, compaction, cache accounting | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets, finish contract | `tamoz-context-engine`, `tamoz-core` |
+| `tamoz-research` | The rules of a deep-research run: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-agent-kernel` | The deliberation substrate: records, receipts, plan/review/execute/verify engine, effect seam, request routes and projections | `tamoz-core`, `tamoz-tools` |

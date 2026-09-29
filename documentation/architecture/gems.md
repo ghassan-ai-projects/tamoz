@@ -19,6 +19,7 @@ flowchart BT
     T["tamoz-tools<br/>toolbox · skills compiler · capability host"]
     CE["tamoz-context-engine<br/>header · surface · spill · pruner · compaction"]
     H["tamoz-harness<br/>prompt pack · plan · loop budgets · finish"]
+    RS["tamoz-research<br/>research rules · ledger · report"]
     M["tamoz-mcp<br/>governed MCP"]
     MW["tamoz-mcp-websearch<br/>governed websearch egress"]
     C["tamoz-comms<br/>channel contract"]
@@ -45,6 +46,7 @@ flowchart BT
     CE --> CORE
     H --> CE
     H --> CORE
+    RS --> CORE
     M --> CORE
     M --> CAN
     MW --> M
@@ -101,6 +103,7 @@ Two edges deserve emphasis:
 | `tamoz-tools` | Workspace toolbox, the skills compiler, and the sealed capability host | `tamoz-core` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header and request series, append-only surface, spill, pruner, compaction, token meter, cache accounting, trace | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: digest-pinned prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets and repeat guard, finish contract, handoff | `tamoz-context-engine`, `tamoz-core` |
+| `tamoz-research` | The rules of a deep-research run behind one facade: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder. Pure: no I/O | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host over the official Ruby SDK | `tamoz-core`, `tamoz-cancellation`, `mcp ~> 1.1` |
 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter; preserves `Tamoz::Mcp::Websearch` | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-comms` | Channel contract gem: values, identity/admission policy, rendering, the `Transport` seam, and the structural `CommsStore` contract. Never opens a socket | `tamoz-core` |

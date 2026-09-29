@@ -26,6 +26,7 @@
     "tamoz-mcp-websearch",
     "tamoz-observability",
     "tamoz-otel",
+    "tamoz-research",
     "tamoz-scheduler",
     "tamoz-sqlite",
     "tamoz-stream",
