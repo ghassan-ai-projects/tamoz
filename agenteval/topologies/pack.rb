@@ -184,10 +184,11 @@ module Agenteval
       spec = scenario.controls.fetch(:spec)
       scenario.files.fetch("a").filter_map do |path, code|
         name = path[%r{\Alib/handlers/(\w+)\.rb\z}, 1]
-        next unless name
+        next if name.nil? || name == "support"
 
         namespace = Module.new
-        namespace.module_eval(code, path)
+        namespace.module_eval(scenario.files.fetch("a").fetch("lib/handlers/support.rb", ""), "support.rb")
+        namespace.module_eval(code.gsub(/^require_relative .*\n/, ""), path)
         event = { id: 1, draft: true }
         before = Marshal.load(Marshal.dump(event))
         namespace.const_get(:Handlers).public_send("handle_#{name}", event)

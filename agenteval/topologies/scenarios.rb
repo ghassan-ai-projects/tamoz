@@ -95,18 +95,22 @@ module Agenteval
     # (a Hash's to_h is itself), block parameters, a helper in the same file, a snapshot copy beside a real change, and a
     # mutating call on a fresh hash. [body, helper or nil, mutates the event?]
     FORMS = [
-      ->(_) { ["held = event\n    held.store(:tagged, true)", nil, true] },
-      ->(_) { ["held = event.to_h\n    held.delete(:draft)", nil, true] },
-      ->(_) { ["event.tap { |it| it.merge!(checked: true) }", nil, true] },
-      ->(_) { ["[event].each { |item| item.update(seen: true) }", nil, true] },
-      ->(n) { ["stamp_#{n}(event)", "def self.stamp_#{n}(item) = item.store(:stamp, 1)", true] },
-      ->(n) { ["snapshot = event.dup\n    stamp_#{n}(event)\n    snapshot", "def self.stamp_#{n}(item) = item.delete(:draft)", true] },
-      ->(_) { ["held = event.dup\n    held.store(:tagged, true)", nil, false] },
-      ->(_) { ["held = event.to_a.to_h\n    held.delete(:draft)", nil, false] },
-      ->(_) { ["event.dup.tap { |it| it.merge!(checked: true) }", nil, false] },
-      ->(n) { ["stamp_#{n}(event)", "def self.stamp_#{n}(item) = item.merge(stamp: 1)", false] },
-      ->(_) { ["event.merge(checked: true).then { |it| it.store(:seen, true) }", nil, false] },
-      ->(_) { ["held = Marshal.load(Marshal.dump(event))\n    held.update(seen: true)", nil, false] }
+      ->(_, v) { ["#{v} = event\n    #{v}.store(:tagged, true)", nil, true] },
+      ->(_, v) { ["#{v} = event.to_h\n    #{v}.delete(:draft)", nil, true] },
+      ->(_, v) { ["event.tap { |#{v}| #{v}.merge!(checked: true) }", nil, true] },
+      ->(_, v) { ["[event].each { |#{v}| #{v}.update(seen: true) }", nil, true] },
+      ->(n, _) { ["stamp_#{n}(event)", "def self.stamp_#{n}(item) = item.store(:stamp, 1)", true] },
+      ->(n, v) { ["#{v} = event.dup\n    stamp_#{n}(event)\n    #{v}", "def self.stamp_#{n}(item) = item.delete(:draft)", true] },
+      ->(_, v) { ["#{v} = event.dup\n    event.store(:seen, true)\n    #{v}", nil, true] },
+      ->(n, _) { ["Support.prep_#{n}(event)", [:shared, "def self.prep_#{n}(item) = item.merge!(prepped: true)"], true] },
+      ->(_, v) { ["#{v} = event.dup\n    #{v}.store(:tagged, true)", nil, false] },
+      ->(_, v) { ["#{v} = event.to_a.to_h\n    #{v}.delete(:draft)", nil, false] },
+      ->(_, v) { ["event.dup.tap { |#{v}| #{v}.merge!(checked: true) }", nil, false] },
+      ->(n, _) { ["stamp_#{n}(event)", "def self.stamp_#{n}(item) = item.merge(stamp: 1)", false] },
+      ->(n, _) { ["stamp_#{n}(event)", "def self.stamp_#{n}(item) = item.dup.tap { |copy| copy.delete(:draft) }", false] },
+      ->(_, v) { ["event.merge(checked: true).then { |#{v}| #{v}.store(:seen, true) }", nil, false] },
+      ->(_, v) { ["#{v} = Marshal.load(Marshal.dump(event))\n    #{v}.update(seen: true)", nil, false] },
+      ->(n, _) { ["Support.prep_#{n}(event)", [:shared, "def self.prep_#{n}(item) = item.to_a.to_h.store(:prepped, true)"], false] }
     ].freeze
     VERBS = /\.(store|delete|merge!|update|compact!|clear)\b|\.merge!\(/
     COPIES = /\.(dup|clone|to_a)\b|Marshal|Hash\[/
@@ -115,13 +119,16 @@ module Agenteval
     def survey(seed, padded:)
       random = random(padded ? "ha3" : "ha2", seed)
       names = WORDS.flat_map { |word| [word, "#{word}_batch"] }.sample(padded ? 40 : 36, random:)
-      forms = names.to_h { |name| [name, FORMS.sample(random:).call(name)] }
+      forms = names.to_h { |name| [name, FORMS.sample(random:).call(name, WORDS.sample(random:))] }
       files = names.to_h do |name|
         body, helper, = forms.fetch(name)
+        local = helper.is_a?(String) ? "\n  #{helper}\n" : ""
         ["lib/handlers/#{name}.rb",
-         "module Handlers\n  def self.handle_#{name}(event)\n    #{body}\n    event\n  end\n" \
-         "#{padded ? filler(random, name, 36) : ''}#{helper ? "\n  #{helper}\n" : ''}end\n"]
+         "require_relative 'support'\n\nmodule Handlers\n  def self.handle_#{name}(event)\n    #{body}\n    event\n  end\n" \
+         "#{padded ? filler(random, name, 36) : ''}#{local}end\n"]
       end
+      shared = forms.values.filter_map { |_, helper, _| helper.last if helper.is_a?(Array) }
+      files["lib/handlers/support.rb"] = "module Support\n#{shared.map { |line| "  #{line}\n" }.join}end\n"
       answer = names.select { |name| forms.fetch(name)[2] }.map { |name| "handle_#{name}" }.sort
       spec = Spec.new(tag: "survey", needle: nil, canary: canary(seed), solution: { "MUTATING.txt" => "#{answer.join("\n")}\n" },
                       grep: { "MUTATING.txt" => "#{grep_survey(files, names, answer).join("\n")}\n" }, tests: {}, shown: nil,
@@ -153,10 +160,18 @@ module Agenteval
         ->(name) { text.call(name).match?(VERBS) },
         ->(name) { text.call(name).match?(VERBS) && !text.call(name).match?(COPIES) },
         ->(name) { text.call(name).match?(/(\w+) = event(\.to_h)?\n\s*\1#{VERBS.source}/) },
+        ->(name) { mutates_unless_copied?(text.call(name), /event\.(dup|to_a|merge\()|Marshal/) },
+        ->(name) { mutates_unless_copied?(text.call(name), /event\.(dup|to_a|merge)|Marshal/) },
         ->(_) { true }
       ]
       picks = policies.map { |policy| names.select(&policy).map { |name| "handle_#{name}" }.sort }
       picks.max_by { |picked| (picked & answer).length - (picked - answer).length - (answer - picked).length }
+    end
+
+    # A review-found policy: a mutating call in the file counts unless the event is copied, except that a bare helper
+    # call on the event always counts.
+    def mutates_unless_copied?(text, copied)
+      text.match?(VERBS) && (!text.match?(copied) || text.match?(/^\s+\w+\(event\)$/))
     end
 
     def filler(random, name, count)
