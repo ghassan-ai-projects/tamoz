@@ -41,6 +41,11 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 - **Do not cover rare cases.** If a scenario cannot happen by construction (or only
   in a case that has never occurred), do not write code for it. Fix it when it
   actually shows up, not preemptively.
+- **Gem boundaries are absolute; nothing leaks.** Another gem uses a gem only through its
+  published facade (named in that gem's README) — never its store namespaces, table names,
+  key layouts, repository rows, record internals, or a private rule re-implemented on the
+  caller's side. If the facade lacks what you need, add it to the owning gem; do not reach
+  past it. Guard a boundary with a test that fails on a leak (`test/memory_boundary_test.rb`).
 - **Understand before you build; extend, don't reinvent.** Before writing new
   machinery, map how Tamoz already does the thing — with enola
   (`explore`/`traverse`/`impact_analysis`) and by reading the real path end to end.
