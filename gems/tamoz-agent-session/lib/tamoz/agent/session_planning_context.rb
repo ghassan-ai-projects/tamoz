@@ -403,22 +403,6 @@ module Tamoz
 
       private
 
-      def memory_caller
-        @configuration.memory.caller(
-          user: memory_owner,
-          project: 'session',
-          sensitivity: :internal,
-          compatibility: {
-            'graph_version' => '1',
-            'behavior_version' => @memory.behavior_version(nil)
-          }
-        )
-      end
-
-      def memory_owner
-        @configuration.memory_owner || 'session'
-      end
-
       # rubocop:disable Metrics/AbcSize -- this is the single allowlisted durable envelope
       # rubocop:disable Metrics/MethodLength -- this is the single allowlisted durable envelope.
       def authoritative_context(state, phase)
@@ -574,11 +558,7 @@ module Tamoz
         return unless @configuration.memory && ACTION_PHASES.include?(phase)
         return unless (state[:session] && state[:session]['memory_epoch']).is_a?(Hash)
 
-        recall = @configuration.memory.retrieval.recall(
-          caller: memory_caller,
-          query: { terms: [state.fetch(:task)] },
-          automatic: true
-        )
+        recall = @configuration.memory_access.brief(state.fetch(:task))
         context['memory'] = memory_records(recall) unless recall.records.empty?
       end
 

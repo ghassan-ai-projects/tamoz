@@ -11,7 +11,9 @@ module Tamoz
       def initialize(services:)
         @services = services
         @work = WorkContext.new(configuration: services.configuration)
-        tools = WorkTools.new(services:, work: @work)
+        @memory = WorkMemory.new(configuration: services.configuration,
+                                 transcript: ->(context) { services.planning_context.conversation_transcript(context) })
+        tools = WorkTools.new(services:, work: @work, memory: @memory)
         @gate = WorkGate.new(services:, work: @work, tools:)
         @compaction = WorkCompaction.new(services:, work: @work)
       end
@@ -23,13 +25,13 @@ module Tamoz
 
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
-        transcript = @services.planning_context.conversation_transcript(context)
-        entries = @work.opening(task: base.fetch(:task), transcript:,
-                                previous_answer: previous_answer(previous, transcript),
-                                updates: directive_updates(previous))
+        brief = @memory.brief(base.fetch(:task))
+        entries = opening(base, context, previous, brief)
         base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
-                   work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan])
+                   work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
+                   work_checkpoint: previous[:work_checkpoint],
+                   work_trace: [brief.event].compact)
       end
 
       def step(state, context)
@@ -59,6 +61,13 @@ module Tamoz
       end
 
       private
+
+      def opening(base, context, previous, brief)
+        transcript = @services.planning_context.conversation_transcript(context)
+        @work.opening(task: base.fetch(:task), transcript:, previous_answer: previous_answer(previous, transcript),
+                      updates: directive_updates(previous),
+                      carried: { memory: brief.text, checkpoint: previous[:work_checkpoint] })
+      end
 
       def stopped?(context) = Tamoz::Cancellation::Stops.requested?(context.thread_id)
 

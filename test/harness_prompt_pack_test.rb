@@ -17,6 +17,8 @@ class HarnessPromptPackTest < Minitest::Test
     'operating.md' => 'sha256:c634592e21bd0e5159bce8c3687311c23c0ffffa78034e892d0b1ca995219b66',
     'operator_update.md' => 'sha256:3e762204aea0fceda3479023fd34056c2e0059a6be56b1786909cf70423d5393',
     'plan_reread.md' => 'sha256:ab9548536e3ecf8634af900c85a18f7879543207bdbd5c6e90674b25535271d0',
+    'memory_note.md' => 'sha256:6efa0f4b501dba6967a07b5970f5f4b3e9a77d7cbb050267b5601e61538bc323',
+    'memory_tools.json' => 'sha256:49e29aa511e67348ed2395302f721ab4b020a670b0b78744be607c021889686a',
     'plan_review.md' => 'sha256:353971ebda1996fc6b16a20272b1aaf5c1de735987f2cde315e24f2eb2d8415a',
     'preferences.md' => 'sha256:4b8f2afdd65bc0d080def54c2b03499c56e73250ac47a36911c48676730f47c5',
     'previous_turn.md' => 'sha256:566860246bd035a6c7c1841125ec5461f3c25a30ad18b85701133e47855ba0e0',

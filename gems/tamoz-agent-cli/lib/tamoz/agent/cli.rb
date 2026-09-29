@@ -21,6 +21,7 @@ module Tamoz
       # unreadable.
       include CLIWorkerCommands
       include CLIProbeCommands
+      include CLIMemoryCommands
       include CLIImprovementCommands
       include CLIScheduleCommands
       include CLIProfileCommands
@@ -39,6 +40,7 @@ module Tamoz
         "code" => :cmd_code,
         "investigate" => :cmd_investigate,
         "probes" => :cmd_probes,
+        "memory" => :cmd_memory,
         "resume" => :cmd_resume,
         "continue" => :cmd_continue,
         "list" => :cmd_list,
@@ -596,18 +598,22 @@ module Tamoz
           limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
         )
         mcp = nil
+        memory = nil
         begin
           mcp = build_mcp_source(options, profile:) unless read_only
+          memory = open_memory(options, session_dir) unless read_only
           # Interactive default gates mutations behind a confirm: the
           # operator opts into autonomy by naming a looser profile.
           @approval_engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')
           @approval_engine.bind_session('interactive')
-          session = build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:)
+          session = build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:,
+                                          memory:)
           install_signal_handlers do
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
           end
         ensure
           mcp&.close
+          memory&.first&.close
           adapter.close unless read_only
         end
       end
@@ -625,8 +631,11 @@ module Tamoz
       # folded into the session record at intake via the extra constructor
       # parameters — the same shared resolution function build_model used, so the
       # record never disagrees with the run.
-      def build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:)
+      def build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:, memory: nil)
+        engine, owner, = memory
         Tamoz::Agent::Session.new(
+          memory: engine,
+          memory_owner: owner,
           model:,
           toolbox:,
           checkpointer: adapter,

@@ -60,7 +60,11 @@ module Tamoz
         )
       end
 
-      def validate!(summary, source_bytes:, required_strings: [])
+      CARRIED_SECTIONS = ['Decisions', 'Exact Strings'].freeze
+
+      # `previous` is the checkpoint this summary merges: its decisions and exact strings may
+      # move (a decision to Ruled Out) but may not disappear.
+      def validate!(summary, source_bytes:, required_strings: [], previous: nil)
         unless summary.is_a?(String) && !summary.strip.empty?
           raise InvalidSummaryError,
                 'summary must be a non-empty String'
@@ -69,7 +73,19 @@ module Tamoz
 
         refuse_missing!('sections', SECTIONS.reject { |section| section?(summary, section) })
         refuse_missing!('exact strings', required_strings.uniq.reject { |value| summary.include?(value) })
+        refuse_missing!('carried bullets', carried_bullets(previous).reject { |bullet| summary.include?(bullet) })
         summary
+      end
+
+      def carried_bullets(previous)
+        return [] unless previous
+
+        previous.split(/^##\s+/).flat_map do |section|
+          title, body = section.split("\n", 2)
+          next [] unless CARRIED_SECTIONS.include?(title.to_s.strip)
+
+          body.to_s.scan(/^\s*-\s+(.+?)\s*$/).flatten.reject { |bullet| bullet == '(none)' }
+        end
       end
 
       def section?(summary, section) = summary.match?(/^##\s+#{Regexp.escape(section)}\s*$/i)
@@ -100,7 +116,7 @@ module Tamoz
         end
         [index, visible.length - 1].min
       end
-      private_class_method :section?, :refuse_missing!, :path_argument, :retained_cut, :next_pinned
+      private_class_method :section?, :refuse_missing!, :path_argument, :retained_cut, :next_pinned, :carried_bullets
     end
   end
 end

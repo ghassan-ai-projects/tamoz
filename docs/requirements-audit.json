@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-09-25T10:44:34Z",
-  "manifest_requirements": 563,
-  "named_cases_run": 292,
+  "generated_at": "2026-09-28T18:03:31Z",
+  "manifest_requirements": 565,
+  "named_cases_run": 297,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 15,
-    "pass": 533
+    "pass": 535
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -7060,6 +7060,23 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-memory",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz memory",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates",
+      "supporting_tests": [
+        "test/agent_cli_memory_test.rb#test_e5_threads_in_one_session_directory_share_memory_only_when_enabled"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-observe",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -8542,6 +8559,24 @@
       "owner_signature": null
     },
     {
+      "id": "MIG-23",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_23",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head",
+      "supporting_tests": [
+        "test/memory_spec_test.rb#test_b5_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
+        "test/memory_retrieval_corpus_test.rb#test_b2_the_real_retriever_meets_recall_and_precision_with_zero_violations"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "MIG-3",
       "category": "migration",
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
@@ -8877,7 +8912,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

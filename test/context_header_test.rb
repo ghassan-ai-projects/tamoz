@@ -8,7 +8,7 @@ class ContextHeaderTest < Minitest::Test
 
   PINNED_PROMPTS = {
     'checkpoint_preamble' => 'sha256:8b1d52ea087c50a9dbdaf9ef368a88480d8c5c6556c1a4256d1ecafe60fe5605',
-    'compaction_instruction' => 'sha256:19e28d08beca2dd028f19d93e342a006dced014e9b58df040e49eb3db98281b1'
+    'compaction_instruction' => 'sha256:cced39d40d68dde3b1073b6b81b65d5cdef32f95526f21de88c82e42289549e7'
   }.freeze
 
   def test_sections_and_tools_render_in_a_fixed_order_regardless_of_registration_order

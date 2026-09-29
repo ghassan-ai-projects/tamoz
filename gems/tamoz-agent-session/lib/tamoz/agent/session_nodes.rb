@@ -17,6 +17,7 @@ require_relative "session_routing"
 require_relative "session_adaptive"
 require_relative "work_context"
 require_relative "work_observations"
+require_relative "work_memory"
 require_relative "work_tools"
 require_relative "work_compaction"
 require_relative "work_gate"
@@ -57,7 +58,10 @@ module Tamoz
         :graph_version,
         :harness,
         :previous_turn_reader
-      )
+      ) do
+        # This session's owner and workspace in durable memory; nil when memory is off.
+        def memory_access = memory&.access(owner: memory_owner || 'session', workspace: toolbox.root)
+      end
 
       # Immutable collaborator graph for the durable session façade.
       NodeServices = Data.define(

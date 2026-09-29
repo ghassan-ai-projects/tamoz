@@ -81,8 +81,7 @@ module Tamoz
         when 'update_plan'
           harness_result(state, call, @tools.update_plan(state, context, tool_call(call),
                                                          iteration: state.fetch(:work_step_count)))
-        when 'recall_output' then harness_result(state, call, @tools.recall_output(tool_call(call)))
-        when 'report_findings' then harness_result(state, call, @tools.report_findings(state, tool_call(call)))
+        when *WorkTools::DIRECT then harness_result(state, call, @tools.direct(state, context, tool_call(call)))
         else toolbox_gate(state, context, call, cursor)
         end
       end
@@ -246,7 +245,8 @@ module Tamoz
         source = 'probe' if outcome.status == :succeeded && @work.probe?(name)
         result(state, call, text, summary: summary(name, outcome), source:)
           .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil,
-                                              **observation_update(state, name, call, outcome))
+                                              **observation_update(state, name, call, outcome),
+                                              **WorkMemory.turn_facts(name, call.fetch('arguments'), outcome))
       end
 
       # The one seam outside this class that maintains the ledger: a read, a creation, or a

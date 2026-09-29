@@ -23,6 +23,25 @@ module Tamoz
           @limits = engine.limits
         end
 
+        # A Knowledge candidate over Experience records, citing each as
+        # `memory:<id>@<version>` so a later deletion of a source can find what
+        # was derived from it.
+        def candidate_from(experiences:, owner:, scopes:)
+          sources = experiences.sort_by(&:memory_id)
+          statement = sources.map(&:statement).join(" | ").byteslice(0, @limits.fetch(:max_statement_bytes)).scrub("")
+          MemoryRecord.new(
+            memory_id: MemoryRecordDigest.identity("candidate\n#{sources.map(&:memory_id).join("\n")}"),
+            layer: :knowledge, klass: :procedure, state: :candidate, statement:, epistemic_kind: :inferred,
+            source_refs: sources.map do |record|
+              {"identity" => "memory:#{record.memory_id}@#{record.record_version}", "digest" => record.digest,
+               "observed_at" => record.valid_from}
+            end,
+            owner:, scopes:, sensitivity: :internal, confidence: 0.8, confidence_method: "recurrence",
+            transition: {"actor" => owner.to_s, "reason" => "consolidation candidate"},
+            created_at_ms: sources.map(&:created_at_ms).max
+          )
+        end
+
         def consolidate(candidates:, model:, owner:, scopes:, context:, trace: nil)
           unless candidates.length.between?(1, @limits.fetch(:max_consolidation_candidates))
             raise MemoryConsolidationError,

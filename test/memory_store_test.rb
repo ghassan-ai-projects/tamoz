@@ -450,26 +450,34 @@ class MemoryStoreTest < Minitest::Test
     assert_equal ["mine"], result.candidate_ids
   end
 
-  def test_honest_searchable_claim_prefix_and_exact_only
-    # P11-09: prefix and exact matches on the indexed columns work; a
-    # full-statement substring NOT present in the indexed columns and a
-    # semantic-style query do not match; searchable? honestly reports.
+  def test_migration_23_full_text_row_follows_the_head
+    admit(memory_id: "m1", statement_search: "deployment rollout")
+    fts = -> { @repo.fts_row_count(NAMESPACE, "m1") }
+    assert_equal 1, fts.call
+
+    @repo.append(record: {"memory_id" => "m1"}, index: index_row(record_version: 2, state: "superseded"),
+                 expected_version: 1, sensitive: false)
+    assert_equal 0, fts.call
+    @repo.append(record: {"memory_id" => "m1"}, index: index_row(record_version: 3, statement_search: "canary"),
+                 expected_version: 2, sensitive: false)
+    assert_equal 1, fts.call
+    assert_equal ["m1"], @repo.search(caller: CALLER, query: {terms: ["canary"]}).candidate_ids
+    assert_empty @repo.search(caller: CALLER, query: {terms: ["rollout"]}).candidate_ids
+  end
+
+  def test_full_text_search_matches_statement_words_only
+    # Full text over the statement: any word, stems by prefix (deploy finds
+    # deployment), ranked by bm25; metadata names never match, stop words alone
+    # abstain, and a record without a searchable statement is never a hit.
     admit(memory_id: "prefix", statement_search: "deployment rollout")
     admit(memory_id: "layer-hit", layer: "knowledge", statement_search: nil, searchable: false)
     admit(memory_id: "class-hit", klass: "canary-procedure", statement_search: "unrelated")
 
-    exact = @repo.search(caller: CALLER, query: {terms: ["deployment"]})
-    assert_equal ["prefix"], exact.candidate_ids
-
-    layer = @repo.search(caller: CALLER, query: {terms: ["knowledge"]})
-    assert_equal ["layer-hit"], layer.candidate_ids
-
-    klass = @repo.search(caller: CALLER, query: {terms: ["canary"]})
-    assert_equal ["class-hit"], klass.candidate_ids
-
-    # The term "procedure AND rollout" is not a substring of any indexed value.
-    none = @repo.search(caller: CALLER, query: {terms: ["procedure rollout"]})
-    assert_empty none.candidate_ids
+    assert_equal ["prefix"], @repo.search(caller: CALLER, query: {terms: ["deploy"]}).candidate_ids
+    assert_equal ["prefix"], @repo.search(caller: CALLER, query: {terms: ["procedure rollout"]}).candidate_ids
+    assert_empty @repo.search(caller: CALLER, query: {terms: ["knowledge"]}).candidate_ids
+    assert_empty @repo.search(caller: CALLER, query: {terms: ["canary"]}).candidate_ids
+    assert_empty @repo.search(caller: CALLER, query: {terms: ["the and of"]}).candidate_ids
 
     # The record's searchable flag reports exactly the content-search surface.
     row = @repo.index_row(NAMESPACE, "layer-hit", 1)

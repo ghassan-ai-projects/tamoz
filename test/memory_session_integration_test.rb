@@ -96,7 +96,7 @@ class MemorySessionIntegrationTest < Minitest::Test
       # Turn-boundary memory write: the completed episode became an Experience
       # record (deterministic admission gate (a), no model call).
       recalled = engine.retrieval.recall(
-        caller: engine.caller(user: "alice", project: "session"),
+        caller: engine.caller(user: "alice", project: Memory::Surface.project_scope(root)),
         query: {terms: ["note"]}
       )
       assert_equal 1, recalled.records.length

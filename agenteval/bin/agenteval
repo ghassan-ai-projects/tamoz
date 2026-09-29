@@ -26,6 +26,7 @@ module Agenteval
       when "list" then cmd_list(argv)
       when "preview" then cmd_preview(argv)
       when "compare" then cmd_compare(argv)
+      when "memory" then cmd_memory(argv)
       else
         @err.puts(usage)
         64
@@ -53,6 +54,34 @@ module Agenteval
           --budget N            per-attempt wall-clock seconds (default: 300)
           --out PATH            write the JSON report here
       TEXT
+    end
+
+    # The multi-session memory pack: `memory prove` runs the offline controls and the
+    # authoring validator; `memory run` drives real tamoz sessions and needs prove first.
+    def cmd_memory(argv)
+      require_relative "../memory/pack"
+      action = argv.shift
+      problems = MemoryPack.prove
+      problems.each { |problem| @err.puts("memory pack: #{problem}") }
+      return (problems.empty? ? 0 : 1) if action == "prove"
+      return 1 unless problems.empty?
+      return 64.tap { @err.puts("usage: agenteval memory prove | run [--scenarios MP1,..] [--arms a,b] [--repeat N] [--out PATH]") } unless action == "run"
+
+      options = { arms: SessionChain::ARMS, repeat: 2, budget: 300, out: nil, scenarios: nil }
+      OptionParser.new do |parser|
+        parser.on("--arms LIST") { |value| options[:arms] = value.split(",") }
+        parser.on("--repeat N", Integer) { |value| options[:repeat] = value }
+        parser.on("--budget N", Integer) { |value| options[:budget] = value }
+        parser.on("--out PATH") { |value| options[:out] = value }
+        parser.on("--scenarios LIST") { |value| options[:scenarios] = value.split(",") }
+      end.parse!(argv)
+      partial = options[:out] && "#{options[:out]}.partial.jsonl"
+      keep_root = options[:out] && File.join(Agenteval::ROOT, "sessions", "memory", File.basename(options[:out], ".json"))
+      report = MemoryPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget],
+                              partial:, keep_root:, scenarios: options[:scenarios])
+      File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
+      @out.puts(JSON.pretty_generate(report.fetch("arms")))
+      0
     end
 
     def cmd_list(_argv)

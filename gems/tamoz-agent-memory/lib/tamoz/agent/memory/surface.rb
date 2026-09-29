@@ -26,6 +26,13 @@ module Tamoz
           )
         end
 
+        # The project scope of a workspace: stable for one canonical root, opaque
+        # outside it. "*" is reserved for user-wide records.
+        def project_scope(root)
+          canonical = File.exist?(root.to_s) ? File.realpath(root.to_s) : File.expand_path(root.to_s)
+          "ws:#{Digest::SHA256.hexdigest(canonical)[0, 16]}"
+        end
+
         def memory_namespace(tenant)
           "tamoz.memory.#{SafeText.normalize(
             tenant, name: "memory tenant", max_bytes: 256,
@@ -52,6 +59,13 @@ module Tamoz
       class Engine
         attr_reader :tenant, :adapter, :store, :repository, :limits, :clock
 
+        # An engine over its own SQLite file (a CLI session directory's memory); `close` closes it.
+        def self.open(path:, tenant:, lease_ttl:)
+          adapter = Tamoz::SQLite::Adapter.new(path:, state_codec: Surface.codec,
+                                               limits: Tamoz::SQLite::Limits.new(lease_ttl:))
+          new(tenant:, adapter:)
+        end
+
         def initialize(tenant:, adapter:, protection: nil, limits: MemoryLimits, clock: -> { Time.now })
           @tenant = SafeText.normalize(
             tenant, name: "memory tenant", max_bytes: 256,
@@ -66,6 +80,7 @@ module Tamoz
           @admission = Admission.new(self)
           @retrieval = Retrieval.new(self)
           @lifecycle = Lifecycle.new(self)
+          @knowledge = Knowledge.new(self)
           @consolidation = Consolidation.new(self)
           @transitions = TransitionRegistry.new(self)
           @wisdom = Wisdom.new(self)
@@ -83,9 +98,15 @@ module Tamoz
         def admission = @admission
         def retrieval = @retrieval
         def lifecycle = @lifecycle
+        def knowledge = @knowledge
         def consolidation = @consolidation
         def transitions = @transitions
         def wisdom = @wisdom
+
+        def access(owner:, workspace:) = Access.new(self, owner:, workspace:)
+
+        # Only for an engine made by `open`; a shared adapter belongs to whoever opened it.
+        def close = @adapter.closed? || @adapter.close
 
         # The retrieval caller for this tenant/session.
         def caller(user:, project:, sensitivity: :internal, compatibility: {})
@@ -128,10 +149,7 @@ module Tamoz
           text = record.statement.to_s.strip
           return nil if text.empty?
 
-          # The bounded searchable projection: the first 512 bytes of the
-          # statement, whitespace-collapsed. Exact/prefix matching only.
-          collapsed = text.gsub(/\s+/, " ").strip[0, 512]
-          collapsed
+          text.gsub(/\s+/, " ")
         end
       end
     end

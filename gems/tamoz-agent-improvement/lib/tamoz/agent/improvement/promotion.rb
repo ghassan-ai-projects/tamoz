@@ -302,26 +302,17 @@ module Tamoz
         # forever would make the "one reversible behavior candidate" contract
         # irreversible — a rolled-back candidate is not a live one.
         def assert_one_live_heuristic!
-          rows = @engine.store.each(Memory::BehaviorTransition::TRANSITIONS_NAMESPACE, limit: 64).to_a
-          rolled_back = rows.filter_map do |entry|
-            value = entry.value
-            next unless value.is_a?(Hash) && value["kind"] == KIND.to_s
+          rows = @registry.rows(kind: KIND)
+          rolled_back = rows.map { |row| String(row["candidate_id"]) }
+                            .select { |candidate| candidate.start_with?("rollback.") }
+                            .map { |candidate| candidate.delete_prefix("rollback.") }
+          live = rows.count do |row|
+            candidate = String(row["candidate_id"])
+            # A rollback row is the undoing of a heuristic, not a second one; a rolled-back
+            # candidate is no longer live, so a follow-up round may promote the next one.
+            next false if candidate.start_with?("rollback.") || rolled_back.include?(candidate)
 
-            candidate = String(value["candidate_id"])
-            next unless candidate.start_with?("rollback.")
-
-            candidate.delete_prefix("rollback.")
-          end
-          live = rows.count do |entry|
-            value = entry.value
-            next false unless value.is_a?(Hash) && value["kind"] == KIND.to_s
-            # A rollback row is the undoing of a heuristic, not a second one.
-            next false if String(value["candidate_id"]).start_with?("rollback.")
-            # A rolled-back candidate is no longer live, so a follow-up round
-            # may promote the next candidate after the first has telemetry.
-            next false if rolled_back.include?(String(value["candidate_id"]))
-
-            %w[recorded claimed activated].include?(value["status"])
+            %w[recorded claimed activated].include?(row["status"])
           end
           return if live < ONE_LIVE_HEURISTIC
 

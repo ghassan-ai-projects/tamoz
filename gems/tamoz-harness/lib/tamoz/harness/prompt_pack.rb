@@ -44,6 +44,15 @@ module Tamoz
         )
       end
 
+      # Offered only when the operator enabled memory.
+      def memory_tools
+        @memory_tools ||= JSON.parse(File.read(File.join(DIRECTORY, 'memory_tools.json'), encoding: Encoding::UTF_8))
+                              .map do |tool|
+          ContextEngine::ToolSchema.new(name: tool.fetch('name'), description: tool.fetch('description'),
+                                        parameters: tool.fetch('parameters'))
+        end.freeze
+      end
+
       # Offered only when the turn has probes to cite.
       def report_tool
         @report_tool ||= JSON.parse(File.read(File.join(DIRECTORY, 'report_findings.json'), encoding: Encoding::UTF_8))

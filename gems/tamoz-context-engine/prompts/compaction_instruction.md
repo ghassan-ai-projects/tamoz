@@ -27,4 +27,4 @@ Rules:
 - Mark anything not verified by a tool result as "unverified". Do not turn a hypothesis into a fact.
 - Capture user instructions and corrections faithfully.
 - Do not mention this request. Do not call any tool.
-- If a <compacted-summary> block is already present, merge it: keep what is still true, drop what is stale.
+- If a <compacted-summary> block is already present, merge it: keep what is still true, drop what is stale. Carry each of its Decisions and Exact Strings bullets forward verbatim; a decision that no longer holds moves, verbatim, to Ruled Out with the reason.

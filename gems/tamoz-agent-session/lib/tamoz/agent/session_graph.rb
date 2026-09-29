@@ -163,13 +163,13 @@ module Tamoz
           builder.state :terminal
         end
 
-        WORK_APPEND_CHANNELS = %i[work_entries work_signatures work_trace].freeze
+        WORK_APPEND_CHANNELS = %i[work_entries work_signatures work_trace work_changes work_checks].freeze
         WORK_SCALAR_CHANNELS = {
           work_pending: nil, work_cursor: 0, work_prepared: nil, work_plan: nil, work_plan_reviews: 0,
           work_step_count: 0, work_series: nil, work_compactions: 0, work_resets: 0, work_mutated: false,
           work_verified: false, work_checked: false, work_boundary: false, work_overflowed: false,
           work_force_reduce: false, work_exhausted: nil, work_started_ms: 0, work_mutation_count: 0,
-          work_turn: nil, work_reminders: [], work_observations: nil
+          work_turn: nil, work_reminders: [], work_observations: nil, work_checkpoint: nil
         }.freeze
 
         def work_channels(builder)

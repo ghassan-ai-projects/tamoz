@@ -66,11 +66,17 @@ module Tamoz
                                            calibration: ContextEngine::TokenMeter::Calibration.from_h(calibration))
       end
 
-      def opening(task:, transcript:, previous_answer:, updates:)
+      # `carried`: the memory brief and the thread checkpoint, pinned after project guidance.
+      def opening(task:, transcript:, previous_answer:, updates:, carried: {})
         transcript = transcript[0...-1] if transcript.last == { 'role' => 'user', 'text' => task }
         entries = append([], 'runtime', runtime_text, pinned: true)
         entries = append(entries, 'guidance', scrub(guidance.text), pinned: true, source: guidance.sources.join(' ')) if
           guidance
+        entries = append(entries, 'memory', scrub(carried[:memory]), pinned: true) if carried[:memory]
+        if carried[:checkpoint]
+          entries = append(entries, 'checkpoint', thread_checkpoint(carried[:checkpoint]), pinned: true,
+                                                                                           source: 'thread')
+        end
         entries = append(entries, 'user', scrub(transcript_text(transcript)), pinned: true) unless transcript.empty?
         if previous_answer
           carried = format(Harness::PromptPack.fetch('previous_turn'), answer: previous_answer)
@@ -81,6 +87,8 @@ module Tamoz
       end
 
       def scrub(text) = Tamoz::Core.scrub_secrets(text)
+
+      def thread_checkpoint(summary) = ContextEngine::Compaction.checkpoint_text(summary)
 
       def reports? = header.tool_names.include?(Harness::PromptPack.report_tool.name)
 
@@ -101,8 +109,10 @@ module Tamoz
           next unless allowed.include?(name)
 
           ContextEngine::ToolSchema.new(name:, description: toolbox.descriptions.fetch(name), parameters:)
-        end + probe_schemas(allowed)
+        end + probe_schemas(allowed) + memory_schemas
       end
+
+      def memory_schemas = @configuration.memory ? Harness::PromptPack.memory_tools : []
 
       # The operator's probes, and report_findings to finish with on a read-only turn; none when no probe is admitted.
       def probe_schemas(allowed)
