@@ -130,6 +130,14 @@ module Tamoz
           transition(id)
         end
 
+        # Every recorded transition row of one kind, as stored.
+        def rows(kind:)
+          @store.each(BehaviorTransition::TRANSITIONS_NAMESPACE, limit: 64).filter_map do |entry|
+            value = entry.value
+            value if value.is_a?(Hash) && value['kind'] == kind.to_s
+          end
+        end
+
         def transition(transition_id)
           entry = fetch_transition_row(transition_id)
           return nil unless entry

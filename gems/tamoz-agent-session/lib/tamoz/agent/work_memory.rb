@@ -29,12 +29,12 @@ module Tamoz
                           'passed' => succeeded && outcome.value.dig('check', 'passed') == true }] }
       end
 
-      def enabled? = !engine.nil?
+      def enabled? = !access.nil?
 
       def brief(task)
         return Brief.new(text: nil, event: nil) unless enabled?
 
-        result = engine.retrieval.brief(caller:, task:)
+        result = access.brief(task)
         records = result.records
         Brief.new(text: records.empty? ? nil : block(records),
                   event: { 'event' => 'memory_injected', 'ids' => records.map(&:memory_id),
@@ -47,25 +47,24 @@ module Tamoz
       def recall(arguments)
         return open_record(String(arguments['id'])) if arguments['id']
 
-        records = search(String(arguments['query']), arguments['layer'])
+        records = access.recall(String(arguments['query']), layer: arguments['layer'], limit: MAX_RECALLED)
         records.empty? ? 'No remembered items match.' : block(records)
       rescue StandardError => e
         "Error: memory is unavailable (#{e.class.name.split('::').last})."
       end
 
       def remember(state, context, arguments)
-        result = engine.knowledge.remember(
-          quote: String(arguments['quote']), key: arguments['key'], scope: (arguments['scope'] || 'project').to_sym,
-          user_messages: user_messages(state, context), owner:, project:, session: session_id(state)
-        )
+        result = access.remember(quote: String(arguments['quote']), key: arguments['key'],
+                                 scope: (arguments['scope'] || 'project').to_sym,
+                                 user_messages: user_messages(state, context), session: session_id(state))
         remembered_text(result)
       rescue Tamoz::Error => e
         "Not remembered: #{e.message}"
       end
 
       def forget(state, context, arguments)
-        receipt = engine.knowledge.forget(target: String(arguments['target']), quote: String(arguments['quote']),
-                                          user_messages: user_messages(state, context), owner:, project:)
+        receipt = access.forget(target: String(arguments['target']), quote: String(arguments['quote']),
+                                user_messages: user_messages(state, context))
         return "Forgotten #{receipt.fetch('memory_id')}." if receipt.fetch('forgotten')
         return UNQUOTED.sub('remembered', 'forgotten') if receipt.fetch('reason') == 'quote_not_from_user'
 
@@ -76,10 +75,6 @@ module Tamoz
 
       private
 
-      def search(query, layer)
-        engine.retrieval.recall(caller:, query: { terms: [query], layer: }.compact).records.first(MAX_RECALLED)
-      end
-
       def remembered_text(result)
         return UNQUOTED if result.reason == 'quote_not_from_user'
         return "Not remembered: #{result.reason}." unless result.accepted?
@@ -88,10 +83,7 @@ module Tamoz
         "Remembered #{record.memory_id} v#{record.record_version}#{key_text(record)}: \"#{record.statement}\""
       end
 
-      def engine = @configuration.memory
-      def owner = @configuration.memory_owner || 'session'
-      def project = Memory::Surface.project_scope(@configuration.toolbox.root)
-      def caller = engine.caller(user: owner, project:)
+      def access = @configuration.memory_access
       def session_id(state) = state.dig(:session, 'session_id') || 'session'
 
       def user_messages(state, context)
@@ -99,21 +91,12 @@ module Tamoz
         [state.fetch(:task)] + prior.map { |fragment| fragment.fetch('text') }
       end
 
-      # One record by id, only inside this caller's own scope and only while it is eligible.
       def open_record(id)
-        record = %w[knowledge experience].lazy.filter_map do |layer|
-          engine.repository.fetch(engine.namespace, layer, id)&.fetch(:entry)&.value
-        end.first
-        return 'No remembered item has that id.' unless visible?(record)
+        record = access.find(id)
+        return 'No remembered item has that id.' unless record
 
         sources = record.source_refs.map { |ref| ref.fetch('identity') }
         "#{block([record])}\nDerived from: #{sources.join(', ')}"
-      end
-
-      def visible?(record)
-        record.is_a?(Memory::MemoryRecord) && record.eligible? && !record.sensitive? && record.owner == owner &&
-          [project, '*'].include?(record.scopes['project']) &&
-          (record.valid_until.nil? || record.valid_until.to_i > Time.now.to_i)
       end
 
       def block(records)

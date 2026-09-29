@@ -17,3 +17,7 @@
   SQLite ran `MATCH` once per candidate row: 26 s per search at 10,000 records. A
   `WITH fts AS MATERIALIZED (...)` runs it once: 21 ms. Re-check with
   `docs/memory-next-level-2026-09-28/probes/bench_scale.rb` after touching the search SQL.
+- **Outside the memory gem, use `Memory::Access` only.** The first CLI and work-route code
+  read repository rows, the store namespace, and record scopes directly, and each re-implemented
+  "who may see this record" — three copies of an authorization rule. `engine.access(owner:,
+  workspace:)` owns scopes and visibility; `test/memory_boundary_test.rb` fails on a leak.

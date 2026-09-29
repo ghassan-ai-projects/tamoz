@@ -10,30 +10,19 @@ module Tamoz
     module CLIMemoryCommands
       MEMORY_FILE = 'memory.sqlite3'
       MAX_CONSOLIDATION_GROUPS = 5
-
-      # Whose memory, in which project: the operator's view is scoped like a session's.
-      MemoryTarget = Data.define(:engine, :owner, :project) do
-        def caller = engine.caller(user: owner, project:)
-
-        def record(layer, id)
-          found = engine.repository.fetch(engine.namespace, layer, id)&.fetch(:entry)&.value
-          found if found && found.owner == owner && [project, '*'].include?(found.scopes['project'])
-        end
-      end
+      NOT_FOUND = 'tamoz: no remembered item %s in this project'
 
       private
 
-      # [engine, owner, adapter] or nil. The caller closes the adapter.
+      # [engine, owner] or nil. The caller closes the engine.
       def open_memory(options, session_dir)
         directory = memory_directory(options)
         return nil unless directory
 
         settings = directory.source_settings('memory')
-        adapter = Tamoz::SQLite::Adapter.new(path: File.join(session_dir, MEMORY_FILE),
-                                             state_codec: Memory::Surface.codec,
-                                             limits: Tamoz::SQLite::Limits.new(lease_ttl:))
-        [Memory::Engine.new(tenant: settings['tenant'] || 'default', adapter:), settings['owner'] || 'operator',
-         adapter]
+        [Memory::Engine.open(path: File.join(session_dir, MEMORY_FILE), tenant: settings['tenant'] || 'default',
+                             lease_ttl:),
+         settings['owner'] || 'operator']
       end
 
       def memory_directory(options)
@@ -47,16 +36,15 @@ module Tamoz
       def cmd_memory(options, argv)
         action = argv.shift
         require 'tamoz/sqlite'
-        engine, owner, adapter = open_memory(options, provision_private_session_dir!(options))
+        engine, owner = open_memory(options, provision_private_session_dir!(options))
         unless engine
           @err.puts 'tamoz: sources.memory is not enabled in the runtime config (--runtime-dir)'
           return 1
         end
 
-        target = MemoryTarget.new(engine:, owner:, project: Memory::Surface.project_scope(memory_root(options)))
-        run_memory_action(action, argv, target, options)
+        run_memory_action(action, argv, engine.access(owner:, workspace: memory_root(options)), options)
       ensure
-        adapter&.close
+        engine&.close
       end
 
       # The same root the session's toolbox uses, so the project scope matches.
@@ -66,67 +54,46 @@ module Tamoz
         options[:root] || Dir.pwd
       end
 
-      def run_memory_action(action, argv, target, options)
+      def run_memory_action(action, argv, access, options)
         case action
-        when 'list' then list_memory(target, argv.join(' '))
-        when 'show' then show_memory(target, argv.fetch(0))
-        when 'forget' then forget_memory(target, argv.fetch(0))
-        when 'consolidate' then consolidate_memory(target, options)
+        when 'list' then list_memory(access, argv.join(' '))
+        when 'show' then show_memory(access, argv.fetch(0))
+        when 'forget' then forget_memory(access, argv.fetch(0))
+        when 'consolidate' then consolidate_memory(access, options)
         else
           @err.puts 'usage: tamoz memory list [QUERY] | show ID | forget ID | consolidate'
           2
         end
       end
 
-      def list_memory(target, query)
-        rows = target.engine.repository.search(caller: target.caller,
-                                               query: { terms: query.empty? ? [] : [query] }).candidates
-        rows.each do |row|
-          @out.puts "#{row.fetch('memory_id')} v#{row.fetch('record_version')} #{row.fetch('layer')} " \
-                    "#{row.fetch('class')}"
+      def list_memory(access, query)
+        records = access.list(query)
+        records.each do |record|
+          @out.puts "#{record.memory_id} v#{record.record_version} #{record.layer} #{record.klass}"
         end
-        @out.puts '(no remembered items)' if rows.empty?
+        @out.puts '(no remembered items)' if records.empty?
         0
       end
 
-      def show_memory(target, id)
-        record = %w[knowledge experience].filter_map { |layer| target.record(layer, id) }.first
-        return 1.tap { @err.puts "tamoz: no remembered item #{id} in this project" } unless record
+      def show_memory(access, id)
+        record = access.find(id)
+        return 1.tap { @err.puts format(NOT_FOUND, id) } unless record
 
-        @out.puts JSON.pretty_generate(record.to_h)
-        0
+        0.tap { @out.puts JSON.pretty_generate(record.to_h) }
       end
 
       # The operator is the authority here; the user-quote rule is for the model's tools.
-      def forget_memory(target, id)
-        return 1.tap { @err.puts "tamoz: no remembered item #{id} in this project" } unless
-          %w[knowledge experience].any? { |layer| target.record(layer, id) }
+      def forget_memory(access, id)
+        receipt = access.delete(id)
+        return 1.tap { @err.puts format(NOT_FOUND, id) } unless receipt
 
-        receipt = target.engine.lifecycle.delete(memory_id: id, actor: 'operator', reason: 'operator forget')
         0.tap { @out.puts JSON.pretty_generate(receipt) }
       end
 
-      # W3: groups of related Experience (at least two distinct sessions) become Knowledge
-      # through the gated, journaled consolidation. A group already consumed is skipped.
-      def consolidate_memory(target, options)
-        groups = Memory::ExperienceGroups.for(target.engine, caller: target.caller, limit: MAX_CONSOLIDATION_GROUPS)
-        model = build_model(options)
-        results = groups.map { |group| consolidate_group(target, group, model) }
-        @out.puts JSON.pretty_generate('groups' => groups.length, 'results' => results)
-        0
-      end
-
-      def consolidate_group(target, group, model)
-        owner = target.owner
-        scopes = { 'tenant' => target.engine.tenant, 'user' => owner, 'project' => target.project,
-                   'session' => 'consolidation' }
-        consolidation = target.engine.consolidation
-        candidate = consolidation.candidate_from(experiences: group, owner:, scopes:)
-        result = consolidation.consolidate(candidates: [candidate], model:, owner:, scopes:,
-                                           context: consolidation_context)
-        { 'sources' => group.map(&:memory_id), 'knowledge' => result.record.memory_id }
-      rescue Memory::MemoryConsolidationError => e
-        { 'sources' => group.map(&:memory_id), 'skipped' => e.message }
+      def consolidate_memory(access, options)
+        results = access.consolidate(model: build_model(options), context: consolidation_context,
+                                     limit: MAX_CONSOLIDATION_GROUPS)
+        0.tap { @out.puts JSON.pretty_generate('groups' => results.length, 'results' => results) }
       end
 
       def consolidation_context

@@ -59,6 +59,13 @@ module Tamoz
       class Engine
         attr_reader :tenant, :adapter, :store, :repository, :limits, :clock
 
+        # An engine over its own SQLite file (a CLI session directory's memory); `close` closes it.
+        def self.open(path:, tenant:, lease_ttl:)
+          adapter = Tamoz::SQLite::Adapter.new(path:, state_codec: Surface.codec,
+                                               limits: Tamoz::SQLite::Limits.new(lease_ttl:))
+          new(tenant:, adapter:)
+        end
+
         def initialize(tenant:, adapter:, protection: nil, limits: MemoryLimits, clock: -> { Time.now })
           @tenant = SafeText.normalize(
             tenant, name: "memory tenant", max_bytes: 256,
@@ -95,6 +102,11 @@ module Tamoz
         def consolidation = @consolidation
         def transitions = @transitions
         def wisdom = @wisdom
+
+        def access(owner:, workspace:) = Access.new(self, owner:, workspace:)
+
+        # Only for an engine made by `open`; a shared adapter belongs to whoever opened it.
+        def close = @adapter.closed? || @adapter.close
 
         # The retrieval caller for this tenant/session.
         def caller(user:, project:, sensitivity: :internal, compatibility: {})

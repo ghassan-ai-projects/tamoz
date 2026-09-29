@@ -58,7 +58,10 @@ module Tamoz
         :graph_version,
         :harness,
         :previous_turn_reader
-      )
+      ) do
+        # This session's owner and workspace in durable memory; nil when memory is off.
+        def memory_access = memory&.access(owner: memory_owner || 'session', workspace: toolbox.root)
+      end
 
       # Immutable collaborator graph for the durable session façade.
       NodeServices = Data.define(

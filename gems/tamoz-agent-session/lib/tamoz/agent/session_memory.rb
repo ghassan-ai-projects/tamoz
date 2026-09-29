@@ -85,17 +85,13 @@ module Tamoz
         return unless completed?(state)
         return unless verification && verification.fetch('satisfied') == true
 
-        @configuration.memory.admission.admit_episode(
-          episode: episode_record(state, verification),
-          owner: memory_owner
+        @configuration.memory_access.record_experience(
+          session: state.fetch(:session).fetch('session_id'), task: state.fetch(:task),
+          plan_digest: plan_digest(state), statement: episode_statement(state, verification),
+          outcome: state.fetch(:terminal_reason)
         )
-        @configuration.memory.lifecycle.sweep
       rescue StandardError
         nil
-      end
-
-      def memory_owner
-        @configuration.memory_owner || 'session'
       end
 
       COMPLETED = %w[completed completed_without_check check_passed done verified_no_changes reported].freeze
@@ -105,20 +101,6 @@ module Tamoz
       private
 
       def completed?(state) = COMPLETED.include?(state.fetch(:terminal_reason))
-
-      def episode_record(state, verification)
-        session = state.fetch(:session)
-        {
-          session_id: session.fetch('session_id'),
-          task: state.fetch(:task),
-          plan_digest: plan_digest(state),
-          completed_at: Time.now.to_i,
-          scopes: episode_scopes(session),
-          sensitivity: :internal,
-          statement: episode_statement(state, verification),
-          observed_outcome: { 'outcome' => state.fetch(:terminal_reason) }
-        }
-      end
 
       # What happened, from the turn's own records: never the answer prose.
       def episode_statement(state, verification)
@@ -151,15 +133,6 @@ module Tamoz
       end
 
       def clip(text, bytes) = Tamoz::Core.scrub_secrets(text.to_s.gsub(/\s+/, ' ').strip).byteslice(0, bytes).scrub('')
-
-      def episode_scopes(session)
-        {
-          'tenant' => @configuration.memory.tenant,
-          'user' => memory_owner,
-          'project' => Tamoz::Agent::Memory::Surface.project_scope(@configuration.toolbox.root),
-          'session' => session.fetch('session_id')
-        }
-      end
     end
   end
 end

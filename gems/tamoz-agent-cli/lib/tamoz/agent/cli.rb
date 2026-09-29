@@ -613,7 +613,7 @@ module Tamoz
           end
         ensure
           mcp&.close
-          memory&.last&.close
+          memory&.first&.close
           adapter.close unless read_only
         end
       end

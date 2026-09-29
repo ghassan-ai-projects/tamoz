@@ -14,6 +14,12 @@ Extracted from `tamoz-agent`; the namespace stays `Tamoz::Agent::Memory`.
   `consolidation` (`Consolidation`), `transitions`
   (`BehaviorTransition` + `TransitionRegistry`), and `wisdom` (`Wisdom`).
   `SituationRecaller` adapts recall to `Tamoz::Core::SituationRecall`.
+- **`Memory::Access`** (`engine.access(owner:, workspace:)`) — one owner's memory in one
+  workspace, and the only way sessions, the CLI and operators use it: `brief`, `recall`,
+  `list`, `find`, `remember`, `forget`, `delete`, `record_experience`, `consolidate`. Scopes,
+  the store layout, and who may see a record are decided here; `test/memory_boundary_test.rb`
+  fails if another gem reaches past it. `Engine.open(path:, tenant:, lease_ttl:)` gives an
+  engine over its own SQLite file.
 - **Values**: `MemoryRecord` (frozen, digest-addressed via
   `MemoryRecordDigest`) and `VerifiedOutcomeReference`.
 - **Error family** (all under `MemoryError < Tamoz::Agent::Error`):
