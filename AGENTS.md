@@ -46,6 +46,12 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
   key layouts, repository rows, record internals, or a private rule re-implemented on the
   caller's side. If the facade lacks what you need, add it to the owning gem; do not reach
   past it. Guard a boundary with a test that fails on a leak (`test/memory_boundary_test.rb`).
+- **Clean house as you go.** When a file you read breaks a rule in this document, do not
+  walk past it. Fix it in the same change only if the file is already in your change, the
+  fix is small, and a test proves it; otherwise report it — file:line and the rule — in your
+  final report or as a follow-up task, never silently. Keep such fixes in their own commit. When
+  the rule can be checked mechanically, prefer adding a test that fails on it over fixing one
+  instance.
 - **Understand before you build; extend, don't reinvent.** Before writing new
   machinery, map how Tamoz already does the thing — with enola
   (`explore`/`traverse`/`impact_analysis`) and by reading the real path end to end.
