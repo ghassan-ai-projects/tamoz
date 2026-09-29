@@ -15,7 +15,7 @@ changes; `SubagentSpec::MET` in `test/support/subagent_spec.rb` is the record.
 | C1 | **met** (R3) | `test/subagent_kill_test.rb` (slow lane): real SIGKILL, recovery replays recorded child calls |
 | A1–A3, A5, A6 | met | gates below; enola: no new cycle or layer violation; no migration, table, thread or effect type; `ChildTask`/`delegate_child_task` untouched |
 | F1–F4 | **met** (R6) | `rake agenteval:subagents:prove`; `test/agenteval_subagent_pack_test.rb` (slow lane): nine controls each trip only their own gate, blinded graders are caught, `Record.read` over a real session store |
-| G0–G7 | not run | R7 (real-model run, paid) |
+| G0–G7 | R7 run; **inconclusive** | [FINDINGS.md](FINDINGS.md): G0 not met (the model never delegated; 0/16 broad trials), so G1/G4/G5 are not read; G2, G3, G7 met; G6 on-arm ~15% more tokens for an unused tool |
 
 ## R0 — red at the parent (`0cd6a0ab`)
 
@@ -64,4 +64,7 @@ HEAD), `rake docs:check`. The repo-wide `rubocop` gate is red at `0cd6a0ab` as w
 | R0 | done (`2feccdbe`) |
 | R1 | done: roles data and loader, `:subagent` surface, `delegate` schema; B9 met, A5 pinned; enola: no new cycle, layer or gem edge |
 | R2–R5 | done: `delegate` tool (`WorkDelegation`), child graphs (`SubagentApps`, built only when a plain read is allowed, via the approval engine's `simulate`), per-turn cap, result/spill/trace, `TurnUsage`; subgraph request identity and child-codec recovery (`.agent/rules/subgraphs.md`); a child never raises an approval ask; CLI `--subagents`, runtime-directory `harness.subagents`, worker parity, `tamoz show` (the two observability signals were declared but never emitted; removed after review, DESIGN §9 export left for later) |
-| R6–R8 | not started |
+| R6 | done (`d57e0fa5`): subagent pack, graders, nine controls; F1–F4 met |
+| Review | done (`07bcca0a`): six review findings fixed with regression tests; live-run defect fixed (`a95633ed`) |
+| R7 | done: 56 real-model trials; inconclusive on G0; default stays off |
+| R8 | not started: conditional on R7 showing a gain, which it did not; next step is a harder pack (FINDINGS.md) |

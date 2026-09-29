@@ -7,6 +7,7 @@
 | [QUALITY_BAR.md](QUALITY_BAR.md) | Checkable rows A–G with evidence; red-at-parent rule |
 | [EVAL.md](EVAL.md) | Offline spec suite, pack controls, real-model subagent pack (on vs off) |
 | [PLAN.md](PLAN.md) | Owner decisions D1–D8 and rounds R0–R8 |
+| [FINDINGS.md](FINDINGS.md) | The real-model run: inconclusive (the model never delegated), costs and next steps |
 | [STATUS.md](STATUS.md) | Row-by-row state, the parent commit, deviations from the design, round log |
 
 In short: Tamoz can already spawn a durable child thread, but the parent never gets its
@@ -16,4 +17,4 @@ as a durable subgraph on the parent's thread and returns a bounded, grounded res
 stay with the parent. It is opt-in until a real-model run shows it helps without costing
 more on simple tasks.
 
-Status: implementation in progress; see STATUS.md.
+Status: implemented and evaluated; opt-in. The real-model run was inconclusive (see FINDINGS.md).

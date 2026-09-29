@@ -59,3 +59,8 @@ harness that scores an agent.
 - **A read-count check counts only calls that could reach the server.** "Reads = dispatched calls" failed in a
   real run (475 for 477) because calls refused for bad arguments are dispatched but never read. Record each
   call's error code in the report, so a mismatch names its cause instead of leaving a guess.
+- **A task that measures a capability must need it.** The subagent pack's `broad` tasks planted a needle among 200
+  distractors, yet `search_text` found it in one call; the real model never delegated in 16 trials and the run was
+  inconclusive (`docs/subagents-2026-09-29/FINDINGS.md`). Before a paid run, check that the solo control's path is long
+  (many reads that no single search replaces), or the arm difference measures nothing. An offered-but-unused tool still
+  costs: the unused `delegate` schema added ~15% tokens per solved scenario.
