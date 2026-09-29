@@ -57,7 +57,8 @@ module Tamoz
         @directory = directory
         @model_factory = model_factory
         @routing = normalize_routing(routing)
-        @harness = harness
+        @harness = harness.transform_keys(&:to_sym)
+        @harness[:subagents] ||= directory.subagents
 
         # The channel projection is nil-safe by default (ADR-042): a worker
         # without a comms surface delivers nothing and never raises.

@@ -24,7 +24,7 @@ module Tamoz
         namespace = child_namespace(child, call_index)
         child_context = child_context(child, context, call_index)
         loop do
-          latest = parent.checkpointer.latest(
+          latest = bound.checkpointer.latest(
             thread_id: checkpoint.thread_id,
             namespace:
           )
@@ -119,7 +119,7 @@ module Tamoz
           "subgraph.#{child.name}",
           task_id: context.task_id,
           run_id: child_execution_id(child, call_index)
-        )
+        ).with(request_id: child_execution_id(child, call_index))
       end
 
       def next_call_index

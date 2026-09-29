@@ -19,7 +19,10 @@ module Tamoz
         @services = services
         @work = work
         @memory = memory
+        @delegation = WorkDelegation.new(services:, work:)
       end
+
+      def delegate(state, context, call) = @delegation.call(state, context, call)
 
       def direct(state, context, call)
         case call.name
@@ -103,17 +106,28 @@ module Tamoz
         return Outcome.new(text: limit_text, update: {}) if reviews >= MAX_PLAN_REVIEWS
 
         call = review_call(state, context, plan, iteration, reviews)
-        return Outcome.new(text: 'Plan review did not complete; try update_plan again.', update: {}) unless
-          call.status == :succeeded
-
-        decide(plan, Deliberation.parse_review(call.value), reviews)
+        result = if call.status == :succeeded
+                   decide(plan, Deliberation.parse_review(call.value.fetch('content')), reviews)
+                 else
+                   Outcome.new(text: 'Plan review did not complete; try update_plan again.', update: {})
+                 end
+        Outcome.new(text: result.text, update: result.update.merge(work_trace: [review_trace(call)]))
       rescue ProtocolError => e
         Outcome.new(text: "Plan review was invalid (#{e.message}); try update_plan again.",
-                    update: { work_plan_reviews: reviews + 1 })
+                    update: { work_plan_reviews: reviews + 1, work_trace: call ? [review_trace(call)] : [] })
+      end
+
+      def review_trace(call)
+        usage = call.value.is_a?(Hash) && call.value['usage']
+        if usage
+          usage = { 'prompt_tokens' => usage.fetch('input_tokens'),
+                    'output_tokens' => usage.fetch('output_tokens') }
+        end
+        { 'event' => 'request', 'stage' => 'work_plan_review', 'usage' => usage }
       end
 
       def review_call(state, context, plan, iteration, reviews)
-        @services.effects.model_call(
+        @services.effects.model_call_with_usage(
           context, stage: :work_plan_review, system: Harness::PromptPack.fetch('plan_review'),
                    prompt: JSON.pretty_generate('task' => state.fetch(:task), 'plan' => plan.document,
                                                 'available_tools' => @work.header.tool_names),

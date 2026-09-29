@@ -69,6 +69,7 @@ module Tamoz
         return {} unless options[:work_routing]
 
         settings = { surface: :cli, guidance_files: guidance_files(options), persona: operator_persona(options) }
+        settings[:subagents] = options[:subagents] if options[:subagents]
         File.write(pin, JSON.generate(settings.except(:surface)), perm: 0o600)
         settings
       end

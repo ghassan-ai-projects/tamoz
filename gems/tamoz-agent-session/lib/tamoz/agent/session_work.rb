@@ -28,6 +28,7 @@ module Tamoz
         brief = @memory.brief(base.fetch(:task))
         entries = opening(base, context, previous, brief)
         base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
+                   work_execution_id: context.execution_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
                    work_checkpoint: previous[:work_checkpoint],
@@ -44,7 +45,9 @@ module Tamoz
         call = @services.effects.converse(context, stage: :work_step, messages:, tools: @work.header.tools,
                                                    iteration: state.fetch(:work_step_count),
                                                    attempt: state.fetch(:work_overflowed) ? 1 : 0)
-        stopped?(context) ? CANCELLED : stepped(state, call, messages)
+        return CANCELLED.merge(work_trace: [attempt_trace(state, call)]) if stopped?(context)
+
+        stepped(state, call, messages)
       end
 
       def gate(state, context) = stopped?(context) ? CANCELLED : @gate.gate(state, context)
@@ -73,12 +76,21 @@ module Tamoz
 
       def stepped(state, call, messages)
         return answered(state, call, messages) if call.status == :succeeded
-        return overflow(state) if window_exceeded?(call)
         raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
-        return failed_step(call) if call.status == :failed
 
-        @services.evidence.blocked_update(call, 'work model call outcome is unknown',
-                                          operation: 'model.converse.work_step')
+        update = if window_exceeded?(call)
+                   overflow(state)
+                 elsif call.status == :failed
+                   failed_step(call)
+                 else
+                   @services.evidence.blocked_update(call, 'work model call outcome is unknown',
+                                                     operation: 'model.converse.work_step')
+                 end
+        update.merge(work_trace: [attempt_trace(state, call)])
+      end
+
+      def attempt_trace(state, call)
+        { 'event' => 'request', 'step' => state.fetch(:work_step_count), 'status' => call.status.to_s, 'usage' => nil }
       end
 
       def now_ms = (Time.now.to_f * 1000).to_i

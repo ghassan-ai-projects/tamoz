@@ -132,6 +132,8 @@ module Tamoz
         settings.is_a?(Hash) ? settings : {}
       end
 
+      def subagents = Array(@config.dig('harness', 'subagents'))
+
       # The deployed channel surfaces (COMMS_DESIGN §14): surface_id -> entry,
       # validated strictly at load against the closed kind list and the
       # mandatory revision/expected_bot_id fields. Deep field validation is
@@ -171,6 +173,7 @@ module Tamoz
         validate_schema_version!(document)
         validate_workspace_root!(document)
         validate_channels!(document["channels"])
+        validate_subagents!(document['harness'])
       end
 
       # Strict per-entry validation (COMMS_DESIGN §14): the kind comes from the
@@ -294,6 +297,23 @@ module Tamoz
 
           raw.each_key { |surface_id| validate_channel!(surface_id, raw.fetch(surface_id)) }
         end
+
+        def validate_subagents!(harness)
+          return if harness.nil?
+          raise Error, 'harness must be a mapping' unless harness.is_a?(Hash)
+
+          roles = harness['subagents']
+          return if roles.nil?
+          unless subagent_roles_list?(roles)
+            raise Error, 'harness.subagents must be a unique list of role names'
+          end
+
+          roles.each { |role| Tamoz::Harness::SubagentRoles.shipped.fetch(role) }
+        rescue Tamoz::Harness::Error => error
+          raise Error, "harness.subagents: #{error.message}"
+        end
+
+        def subagent_roles_list?(roles) = roles.is_a?(Array) && roles.all?(String) && roles.uniq == roles
       end
 
       private

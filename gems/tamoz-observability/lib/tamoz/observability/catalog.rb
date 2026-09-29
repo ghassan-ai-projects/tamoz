@@ -22,9 +22,29 @@ module Tamoz
 
       def self.seed(catalog)
         model_events(catalog)
+        subagent_events(catalog)
         worker_events(catalog)
         comms_events(catalog)
       end
+
+      def self.subagent_events(catalog)
+        catalog.event(
+          'tamoz.agent.subagent.started', since: 1, stability: :stable, safety_bearing: false,
+                                          correlation: MODEL_SPINE,
+                                          required: { role: :low_cardinality, brief_digest: :digest },
+                                          optional: { child_execution_id: :string }
+        )
+        catalog.event(
+          'tamoz.agent.subagent.finished', since: 1, stability: :stable, safety_bearing: false,
+                                           correlation: MODEL_SPINE,
+                                           required: { role: :low_cardinality, status: :enum },
+                                           optional: { duration_ms: :integer, model_calls: :integer,
+                                                       tool_calls: :integer, prompt_tokens: :integer,
+                                                       completion_tokens: :integer, read_count: :integer,
+                                                       truncated: :boolean }
+        )
+      end
+      private_class_method :subagent_events
 
       def self.model_events(catalog)
         catalog.event(

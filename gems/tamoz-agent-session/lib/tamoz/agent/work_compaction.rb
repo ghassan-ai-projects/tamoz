@@ -64,15 +64,18 @@ module Tamoz
         selection = ContextEngine::Compaction.select(entries, retain_tokens: retain, resolve: @work.resolve)
         return replacement_update(pruned, 'prune') unless selection
 
-        summary = summarize(state, context, entries, selection)
+        call = summary_call(state, context, entries, selection)
+        summary = validate_summary(call, state, selection)
         checkpoint = ContextEngine::Compaction.checkpoint_entry(summary, selection:, entries:, store: @work.store)
         checkpointed = with_plan_reread(state, entries + [checkpoint])
         combine(replacement_update(pruned, 'prune'), replacement_update(checkpointed - entries, 'compaction'))
           .merge(work_compactions: state.fetch(:work_compactions) + 1, work_series: declared(state),
-                 work_checkpoint: summary)
+                 work_checkpoint: summary, work_trace: [request_trace(call)])
       rescue ContextEngine::InvalidSummaryError, SummaryUnavailable => e
+        events = [{ 'event' => 'compaction_fallback', 'reason' => e.message }]
+        events << request_trace(call) if call
         combine(replacement_update(pruned, 'prune'),
-                { work_trace: [{ 'event' => 'compaction_fallback', 'reason' => e.message }] })
+                { work_trace: events })
           .merge(work_compactions: state.fetch(:work_compactions) + 1)
       end
       # rubocop:enable Metrics/AbcSize
@@ -80,12 +83,14 @@ module Tamoz
       # The summary could not be produced; the loop continues on the pruned surface.
       class SummaryUnavailable < StandardError; end
 
-      def summarize(state, context, entries, selection)
+      def summary_call(state, context, entries, selection)
         messages = ContextEngine::Compaction.summary_messages(entries, header: @work.header, selection:,
                                                                        resolve: @work.resolve)
-        call = @services.effects.converse(context, stage: :work_compact, messages:, tools: @work.header.tools,
-                                                   iteration: state.fetch(:work_step_count),
-                                                   tool_choice: 'none')
+        @services.effects.converse(context, stage: :work_compact, messages:, tools: @work.header.tools,
+                                            iteration: state.fetch(:work_step_count), tool_choice: 'none')
+      end
+
+      def validate_summary(call, state, selection)
         raise SummaryUnavailable, "summary call ended #{call.status}" unless call.status == :succeeded
 
         ContextEngine::Compaction.validate!(
@@ -95,6 +100,11 @@ module Tamoz
                                        ),
                                        previous: state[:work_checkpoint]
         )
+      end
+
+      def request_trace(call)
+        usage = call.value.is_a?(Hash) && ContextEngine::Usage.from_provider(call.value['usage'])
+        { 'event' => 'request', 'stage' => 'work_compact', 'usage' => usage&.to_h }
       end
 
       def reset(state, entries, pruned, reason)

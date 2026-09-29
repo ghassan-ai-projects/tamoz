@@ -10,7 +10,7 @@ module SubagentSpec
   include SubagentFixtures
   include ApprovalCase
 
-  MET = %w[B9].freeze
+  MET = %w[A4 B1 B2 B3 B4 B4.report B5 B6 B7 B8 B9 C1 C2 C3 C4 C5 C6 C7 D1 D2 D3 D4 E1 E2].freeze
   PENDING = Hash.new { |hash, key| hash[key] = [] }
 
   Minitest.after_run do

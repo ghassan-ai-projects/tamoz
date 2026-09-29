@@ -42,13 +42,18 @@ class SubagentKillTest < Minitest::Test
     raise
   end
 
+  def workspace_at(directory)
+    root = File.join(directory, 'workspace')
+    EXPLORE_FILES.each do |path, text|
+      FileUtils.mkdir_p(File.dirname(File.join(root, path)))
+      File.write(File.join(root, path), text)
+    end
+    root
+  end
+
   def with_killed_process(model_calls)
     Dir.mktmpdir('tamoz-subagent-kill') do |directory|
-      root = File.join(directory, 'workspace')
-      EXPLORE_FILES.each do |path, text|
-        FileUtils.mkdir_p(File.dirname(File.join(root, path)))
-        File.write(File.join(root, path), text)
-      end
+      root = workspace_at(directory)
       env = { 'TAMOZ_DB' => File.join(directory, 'tamoz.sqlite3'), 'TAMOZ_ROOT' => File.realpath(root),
               'TAMOZ_TTL' => '0.4', 'TAMOZ_KILL_AT_CALL' => (model_calls + 1).to_s, 'RUBYOPT' => nil,
               'BUNDLER_SETUP' => nil }
@@ -57,7 +62,9 @@ class SubagentKillTest < Minitest::Test
       status = wait_for(pid)
 
       assert_equal 9, status.termsig, "the process was meant to die of SIGKILL: #{File.read(errors)}"
-      sleep 0.5 # the dead owner's short leases must lapse before a new owner may take the namespaces
+      SQLite3::Database.open(env.fetch('TAMOZ_DB')) do |database|
+        database.execute('UPDATE tamoz_namespaces SET lease_expires_at_ms = 0 WHERE lease_owner_id IS NOT NULL')
+      end
       adapter = Tamoz::SQLite::Adapter.new(path: env.fetch('TAMOZ_DB'),
                                            limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 5.0))
       yield File.realpath(root), adapter

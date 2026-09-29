@@ -9,16 +9,13 @@ implemented as written (2026-09-29) and to commit each round until the bar is me
 `pending` = the test asserts the target and skips with a count. `met` = a hard test. Rows flip only when code
 changes; `SubagentSpec::MET` in `test/support/subagent_spec.rb` is the record.
 
-| Row | Status | First failing line at the parent (`0cd6a0ab`) | Test |
-|---|---|---|---|
-| A4 B1 B2 B3 B4 B5 B6 B8 C4 C5 C6 C7 D1 D2 D3 D4 E1 | pending | `the child never ran.` | `test/subagent_spec_test.rb` |
-| B4.report (B4 with a reported child) | pending | `the child never ran.` | same |
-| B7 | pending | expected header without `delegate` differs (subagents ignored) | same |
-| B7 (disabled half) | **met** | header digests pinned at the parent commit | same |
-| E2 | pending | `Tamoz::Agent::TurnUsage does not exist` | same |
-| B9 | **met** (R1) | was: `subagent_roles.json` does not exist | `test/harness_prompt_pack_test.rb` |
-| C2 C3 | pending | `Crash expected but nothing was raised` / `the child never ran.` | `test/subagent_durability_test.rb` |
-| C1 | pending | `the process was meant to die of SIGKILL` (the child never runs, so the script exits 0) | `test/subagent_kill_test.rb` (slow lane) |
+| Row | Status | Evidence |
+|---|---|---|
+| A4 B1–B9 (incl. B4.report) C2–C7 D1–D4 E1 E2 | **met** (R1–R5) | `test/subagent_spec_test.rb`, `test/subagent_durability_test.rb`, `test/harness_prompt_pack_test.rb` |
+| C1 | **met** (R3) | `test/subagent_kill_test.rb` (slow lane): real SIGKILL, recovery replays recorded child calls |
+| A1–A3, A5, A6 | met | gates below; enola: no new cycle or layer violation; no migration, table, thread or effect type; `ChildTask`/`delegate_child_task` untouched |
+| F1–F4 | not built | R6 (agenteval subagent pack + controls) |
+| G0–G7 | not run | R7 (real-model run, paid) |
 
 ## R0 — red at the parent (`0cd6a0ab`)
 
@@ -66,4 +63,5 @@ HEAD), `rake docs:check`. The repo-wide `rubocop` gate is red at `0cd6a0ab` as w
 |---|---|
 | R0 | done (`2feccdbe`) |
 | R1 | done: roles data and loader, `:subagent` surface, `delegate` schema; B9 met, A5 pinned; enola: no new cycle, layer or gem edge |
-| R2–R8 | not started |
+| R2–R5 | done: `delegate` tool (`WorkDelegation`), child graphs (`SubagentApps`, built only when a plain read is allowed, via the approval engine's `simulate`), per-turn cap, result/spill/trace, `TurnUsage`; subgraph request identity and child-codec recovery (`.agent/rules/subgraphs.md`); a child never raises an approval ask; CLI `--subagents`, runtime-directory `harness.subagents`, worker parity, `tamoz show`, two observability signals |
+| R6–R8 | not started |

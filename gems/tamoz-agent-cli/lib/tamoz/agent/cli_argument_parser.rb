@@ -94,6 +94,17 @@ module Tamoz
             value.on('--work-routing', 'Serve worker and chat turns with the tool-calling work loop') do
               options[:work_routing] = true
             end
+            value.on('--subagents ROLES', 'Enable read-only subagent roles for work turns (comma-separated)') do |entry|
+              names = entry.split(',').map(&:strip)
+              raise OptionParser::InvalidArgument, '--subagents needs a role' if names.empty? || names.any?(&:empty?)
+
+              names.each do |name|
+                Tamoz::Harness::SubagentRoles.shipped.fetch(name)
+              rescue Tamoz::Harness::Error => e
+                raise OptionParser::InvalidArgument, e.message
+              end
+              options[:subagents] = names.uniq
+            end
             value.on('--shadow-routing', 'Record routing decisions while using the standard workflow') do
               options[:shadow_routing] = true
             end
