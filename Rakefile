@@ -53,6 +53,7 @@ SLOW_TESTS = %w[
   test/sqlite_raw_oracle_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
+  test/subagent_kill_test.rb
   test/sqlite_convergence_probe_test.rb
   test/mcp_supervisor_test.rb
   test/sqlite_scenario_driver_test.rb

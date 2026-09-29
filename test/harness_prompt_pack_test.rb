@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/subagent_spec'
 
 class HarnessPromptPackTest < Minitest::Test
+  include SubagentSpec
+
   H = Tamoz::Harness
 
   # A prompt change is a deliberate, reviewed edit: update the digest here with it.
@@ -62,6 +65,45 @@ class HarnessPromptPackTest < Minitest::Test
     assert_raises(H::Error) { H::PromptPack.sections(surface: :email) }
     assert_raises(H::Error) { H::Persona.render('verbosity' => 'loud') }
     assert_raises(H::Error) { H::Persona.render('mood' => 'happy') }
+  end
+
+  ROLES_PATH = ROOT.join('gems/tamoz-harness/prompts/subagent_roles.json')
+
+  def roles_with_extra_tool(tool)
+    shipped = JSON.parse(File.read(ROLES_PATH))
+    explore = shipped.fetch('explore')
+    JSON.generate(shipped.merge('explore' => explore.merge('tools' => explore.fetch('tools') + [tool])))
+  end
+
+  def test_b9_the_shipped_role_file_loads_with_its_prompt_and_a_turn_cap
+    spec_row('B9') do
+      assert_path_exists ROLES_PATH
+      roles = H::SubagentRoles.parse(File.read(ROLES_PATH))
+
+      assert_includes H::PromptPack.digests, roles.fetch('explore').prompt
+      assert_operator roles.max_per_turn, :>=, 1
+    end
+  end
+
+  def test_b9_the_shipped_role_carries_a_validated_loop_policy
+    spec_row('B9') do
+      assert_path_exists ROLES_PATH
+
+      assert_kind_of H::LoopPolicy, H::SubagentRoles.parse(File.read(ROLES_PATH)).fetch('explore').loop_policy
+    end
+  end
+
+  # A subagent role can only narrow the parent's authority. The loader is where that stops being a convention: a role
+  # file naming a tool that can change anything, start another agent, or touch memory is refused before a child exists.
+  def test_b9_a_role_file_naming_a_writing_tool_run_check_delegate_or_a_memory_tool_is_refused_at_load
+    spec_row('B9') do
+      assert_path_exists ROLES_PATH
+      (FORBIDDEN_IN_CHILD + %w[* apply_* run_*]).each do |tool|
+        error = assert_raises(H::Error) { H::SubagentRoles.parse(roles_with_extra_tool(tool)) }
+
+        assert_includes error.message, tool
+      end
+    end
   end
 
   def test_no_prompt_sentence_lives_in_harness_ruby
