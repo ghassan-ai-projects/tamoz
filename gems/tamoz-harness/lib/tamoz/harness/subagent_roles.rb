@@ -2,9 +2,15 @@
 
 module Tamoz
   module Harness
-    # The subagent roles the harness ships, and how many of them one turn may start.
+    # The subagent roles the harness ships, how many children one turn and one fan-out may start, and when the work loop
+    # suggests delegating (after `nudge_reads` distinct reads, or at `nudge_window` of the compaction threshold).
+    # :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:TooManyInstanceVariables
+    # Each limit is one validated field of the same document.
     class SubagentRoles
-      attr_reader :max_per_turn
+      LIMITS = { 'max_per_turn' => 1..16, 'max_fanout' => 2..8, 'nudge_reads' => 1..500,
+                 'nudge_window' => 0.05..0.95 }.freeze
+
+      attr_reader :max_per_turn, :max_fanout, :nudge_reads, :nudge_window
 
       def self.shipped
         @shipped ||= parse(File.read(File.join(PromptPack::DIRECTORY, 'subagent_roles.json'), encoding: Encoding::UTF_8))
@@ -20,9 +26,9 @@ module Tamoz
       end
 
       def initialize(document)
-        @max_per_turn = document['max_per_turn']
-        validate_cap
-        @roles = document.except('max_per_turn').to_h do |name, definition|
+        @max_per_turn, @max_fanout, @nudge_reads, @nudge_window =
+          LIMITS.map { |key, range| limit(document, key, range) }
+        @roles = document.except(*LIMITS.keys).to_h do |name, definition|
           [name, SubagentRole.new(name:, definition:)]
         end.freeze
         raise Error, 'subagent roles must define at least one role' if @roles.empty?
@@ -36,10 +42,11 @@ module Tamoz
 
       private
 
-      def validate_cap
-        return if @max_per_turn.is_a?(Integer) && @max_per_turn.between?(1, 16)
+      def limit(document, key, range)
+        value = document[key]
+        return value if value.is_a?(range.first.class) && range.cover?(value)
 
-        raise Error, 'max_per_turn must be an integer from 1 to 16'
+        raise Error, "#{key} must be a #{range.first.class.name.downcase} from #{range.first} to #{range.last}"
       end
     end
   end

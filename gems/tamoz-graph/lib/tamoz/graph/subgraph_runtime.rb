@@ -2,6 +2,9 @@
 
 module Tamoz
   module Graph
+    # Runs compiled child graphs from inside a parent node, durably, on the parent's checkpointer and thread.
+    # :reek:DataClump :reek:LongParameterList :reek:MissingSafeMethod :reek:TooManyMethods :reek:TooManyStatements
+    # The child's identity (graph, call index, namespace, context) travels together through one resume protocol.
     class SubgraphRuntime
       attr_reader :parent, :checkpoint, :task, :concurrency
 
@@ -15,12 +18,34 @@ module Tamoz
       end
 
       def call(child, input, context)
-        unless child.is_a?(Compiled)
-          raise ConfigurationError, "graph runtime can invoke only a compiled graph"
-        end
+        compiled!(child)
+        call_at(child, input, context, next_call_index)
+      end
 
+      # Runs one child per input at once. Call indexes are taken in input order before any child starts, so a re-run
+      # node pairs each input with its own stored child. Every child finishes before the first failure (in input order)
+      # is raised on the caller's thread: a sibling left running would race the recovery of the failed node.
+      def call_many(child, inputs, context)
+        compiled!(child)
+        indexes = inputs.map { next_call_index }
+        threads = inputs.zip(indexes).map do |input, call_index|
+          Thread.new do
+            Thread.current.report_on_exception = false
+            call_at(child, input, context, call_index)
+          end
+        end
+        threads.each { |thread| thread.join rescue Exception } # rubocop:disable Style/RescueModifier -- joined only; value re-raises below
+        threads.map(&:value)
+      end
+
+      private
+
+      def compiled!(child)
+        raise ConfigurationError, "graph runtime can invoke only a compiled graph" unless child.is_a?(Compiled)
+      end
+
+      def call_at(child, input, context, call_index)
         bound = child.__send__(:with_checkpointer, parent.checkpointer)
-        call_index = next_call_index
         namespace = child_namespace(child, call_index)
         child_context = child_context(child, context, call_index)
         loop do
@@ -48,8 +73,6 @@ module Tamoz
           raise CancelledError, "subgraph execution was cancelled"
         end
       end
-
-      private
 
       def run_child(child, latest, input, context, namespace, call_index)
         if latest.nil?

@@ -1,9 +1,24 @@
 {
   "max_per_turn": 4,
+  "max_fanout": 4,
+  "nudge_reads": 12,
+  "nudge_window": 0.5,
   "explore": {
     "summary": "Search and read the workspace, then report what was found with file:line references.",
     "prompt": "subagent_explore.md",
-    "tools": ["read_file", "list_directory", "search_text", "glob", "load_skill", "read_skill_resource", "probe_*"],
-    "loop_policy": {"max_model_calls": 20, "max_tool_calls": 80, "max_seconds": 300}
+    "tools": [
+      "read_file",
+      "list_directory",
+      "search_text",
+      "glob",
+      "load_skill",
+      "read_skill_resource",
+      "probe_*"
+    ],
+    "loop_policy": {
+      "max_model_calls": 20,
+      "max_tool_calls": 80,
+      "max_seconds": 300
+    }
   }
 }

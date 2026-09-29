@@ -85,11 +85,14 @@ module Tamoz
 
       def section(name, order, text) = ContextEngine::Section.new(name:, order: Integer(order), text:)
 
+      # :reek:TooManyStatements -- two schema fields filled from the same roles
       def with_roles(parameters, roles)
         properties = parameters.fetch('properties')
         summaries = roles.map { |role| "#{role.name}: #{role.summary}" }.join(' ')
         offered = { 'enum' => roles.map(&:name), 'description' => summaries }
-        parameters.merge('properties' => properties.merge('role' => properties.fetch('role').merge(offered)))
+        briefs = properties.fetch('briefs').merge('maxItems' => SubagentRoles.shipped.max_fanout)
+        role = properties.fetch('role').merge(offered)
+        parameters.merge('properties' => properties.merge('role' => role, 'briefs' => briefs))
       end
       private_class_method :surface_entry, :section, :with_roles
     end

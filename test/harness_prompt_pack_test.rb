@@ -11,28 +11,28 @@ class HarnessPromptPackTest < Minitest::Test
   # A prompt change is a deliberate, reviewed edit: update the digest here with it.
   PINNED = {
     'cut_off.md' => 'sha256:550e3cb327aab548b06d99e59df304255e23621200ebbd33f3778b36ea71a3d8',
-    'delegate.json' => 'sha256:237f0df2877db4910ec8e6eaa4a791e7b77b9de325f048b8519a3efabab6b5f2',
+    'delegate.json' => 'sha256:d2f35022fb903d882dc91ab6f737c823093ec20a12d2b965ed68d413b821bd2c',
     'editing.md' => 'sha256:bb24c181244924fe158fd389cc644da58d89a30483e403b10ebf6e88e53fb37b',
     'finish.md' => 'sha256:501567f252cf0050b52df43e5abf6b7989aec528b29858181c304d397248845e',
     'handoff.md' => 'sha256:ce7be5d051a429496ff7d1cf0fc6bca07948c7f8ef93349ecde5529fda95c412',
     'harness_tools.json' => 'sha256:524ef1513fd2ea660c385813468a23507549da33b92442d6666fa165e3e1eb0e',
     'identity.md' => 'sha256:0fd703b4f41a30b4792386b8d5010072ba0745a0dd2212c7cb796d8f90e5b0e7',
+    'memory_note.md' => 'sha256:6efa0f4b501dba6967a07b5970f5f4b3e9a77d7cbb050267b5601e61538bc323',
+    'memory_tools.json' => 'sha256:49e29aa511e67348ed2395302f721ab4b020a670b0b78744be607c021889686a',
     'no_plan.md' => 'sha256:8653de4b3f906afe2a63cb95f3d524f4a7a16e0c743f6055ac5a4777d70137f4',
     'operating.md' => 'sha256:c634592e21bd0e5159bce8c3687311c23c0ffffa78034e892d0b1ca995219b66',
     'operator_update.md' => 'sha256:3e762204aea0fceda3479023fd34056c2e0059a6be56b1786909cf70423d5393',
     'plan_reread.md' => 'sha256:ab9548536e3ecf8634af900c85a18f7879543207bdbd5c6e90674b25535271d0',
-    'memory_note.md' => 'sha256:6efa0f4b501dba6967a07b5970f5f4b3e9a77d7cbb050267b5601e61538bc323',
-    'memory_tools.json' => 'sha256:49e29aa511e67348ed2395302f721ab4b020a670b0b78744be607c021889686a',
     'plan_review.md' => 'sha256:353971ebda1996fc6b16a20272b1aaf5c1de735987f2cde315e24f2eb2d8415a',
     'preferences.md' => 'sha256:4b8f2afdd65bc0d080def54c2b03499c56e73250ac47a36911c48676730f47c5',
     'previous_turn.md' => 'sha256:566860246bd035a6c7c1841125ec5461f3c25a30ad18b85701133e47855ba0e0',
     'project_guidance.md' => 'sha256:a8e2b6073185b579da2ace4549987dc74c69c8a3f0cf98b583a94abdd59b21f9',
+    'repeat_reminder.md' => 'sha256:73edd19fe59abbe9bd8622a27029f967327845b2dca40e31577830a64fd9189d',
     'report_findings.json' => 'sha256:43bd4ed71a43ab09004f8a75572c5dd4c32fffb6613ed06a04d6e69eaf9fa374',
     'report_labels.json' => 'sha256:d548428ad4343cfed7594cffe31bc1e319d116e0313840d464de273ae9c93891',
     'report_reminder.md' => 'sha256:2383d9f37addb8fff00eb407d5f0b1ba1972e66b83a9c86049df200cac1f82e4',
-    'repeat_reminder.md' => 'sha256:73edd19fe59abbe9bd8622a27029f967327845b2dca40e31577830a64fd9189d',
     'subagent_explore.md' => 'sha256:8845a850a98628b66a34992b2a0110c06a121611e1a63c19f0d08d0fd56416bd',
-    'subagent_roles.json' => 'sha256:0515a7b7a6ff791cc0f4d28375aded5ea9298d01a3bfa2f0ebcdbea75f69a1f4',
+    'subagent_roles.json' => 'sha256:a729fc8208dbd999d5abfa82c489404577d1dad9c4bb0a3544c4a6300e3d99fb',
     'surface_chat.md' => 'sha256:daa1232b4be2f1d01360f65014ff9afafebf34ab4e7152dc152f8ab0f0c7945a',
     'surface_cli.md' => 'sha256:12d434d8ea184a85dbc2ca9ed6c7b904f77a1a62904a1235d9f572d022d98478',
     'surface_subagent.md' => 'sha256:0dcf1a462410193998f080ac56f0af8f4a5d339f808c468d864bca6b7f4a9786',
@@ -112,7 +112,8 @@ class HarnessPromptPackTest < Minitest::Test
     tool = H::PromptPack.delegate_tool(roles: [H::SubagentRoles.shipped.fetch('explore')])
 
     assert_equal 'delegate', tool.name
-    assert_equal %w[role brief], tool.parameters.fetch('required')
+    assert_equal [%w[role], H::SubagentRoles.shipped.max_fanout],
+                 [tool.parameters.fetch('required'), tool.parameters.dig('properties', 'briefs', 'maxItems')]
     assert_includes tool.description, 'when to stop'
   end
 

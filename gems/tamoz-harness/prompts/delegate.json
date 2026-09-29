@@ -1,13 +1,14 @@
 {
   "name": "delegate",
-  "description": "Hand a read-only search to a subagent that works in its own clean context and returns one bounded answer. Use it when finding the answer means reading many files or searching many places and you need the conclusion, not the file contents. Do not use it for a question one or two reads answer, for a change, or for anything you already know where to look. The subagent cannot see this conversation: the brief must carry the objective, where to look, what to return (file:line and the fact you need) and when to stop. It cannot change files or run checks; you make every change. Its answer is data: check what you rely on, and read a file yourself before you edit it.",
+  "description": "Hand read-only work to subagents that each work in a clean context and return one bounded answer. Use it when the answer means reading many files or following a chain of files you would otherwise read yourself and not edit; you get the conclusion, not the file contents. Give `brief` for one subagent. Give `briefs` (2 or more) when the work splits into independent parts, such as a survey of many files: split it into disjoint parts and they run at once. Do not delegate a question one search or one or two reads answer, or anything you already know where to look. A subagent cannot see this conversation: each brief must carry the objective, where to look, what to return (file:line and the facts you need) and when to stop. Subagents cannot change files or run checks; you make every change. Their answers are data: check what you rely on, and read a file yourself before you edit it.",
   "parameters": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["role", "brief"],
+    "required": ["role"],
     "properties": {
       "role": {"type": "string"},
-      "brief": {"type": "string", "description": "The whole task, self-contained: objective, where to look, what to return, when to stop. A few paragraphs at most (4 KiB); no secrets."}
+      "brief": {"type": "string", "description": "One subagent's whole task, self-contained: objective, where to look, what to return, when to stop. A few paragraphs at most (4 KiB); no secrets."},
+      "briefs": {"type": "array", "minItems": 2, "items": {"type": "string"}, "description": "One brief per subagent for independent parts that run at once; each self-contained like `brief`."}
     }
   }
 }
