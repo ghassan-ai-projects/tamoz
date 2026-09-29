@@ -17,6 +17,21 @@ module Tamoz
       end
 
       def model_call(context, stage:, system:, prompt:, call_index:, iteration: call_index, sub_operation: 0)
+        outcome, projection = generated(context, stage:, system:, prompt:, call_index:, iteration:, sub_operation:)
+        outcome.status == :succeeded ? outcome.with(value: model_text(outcome.value, projection)) : outcome
+      end
+
+      # The same journaled call, answering the text with the provider usage it cost.
+      def model_call_with_usage(context, stage:, system:, prompt:, call_index:, iteration: call_index, sub_operation: 0)
+        outcome, projection = generated(context, stage:, system:, prompt:, call_index:, iteration:, sub_operation:)
+        return outcome unless outcome.status == :succeeded
+
+        text = model_text(outcome.value, projection)
+        outcome.with(value: { 'content' => text, 'usage' => projection&.fetch('usage') })
+      end
+
+      # rubocop:disable Metrics/MethodLength -- the journal request and its validated receipt share one boundary.
+      def generated(context, stage:, system:, prompt:, call_index:, iteration:, sub_operation:)
         request = model_request(system:, prompt:)
         configuration_digest = model_configuration_digest
         outcome = EffectDispatcher.run(
@@ -50,8 +65,10 @@ module Tamoz
             response
           end
         end
-        unwrap_model(outcome, request:, configuration_digest:)
+        [outcome, validated_projection(outcome, request:, configuration_digest:)]
       end
+      # rubocop:enable Metrics/MethodLength
+      private :generated
 
       # One tool-calling conversation turn. A model call changes nothing outside,
       # so an unanswered one is safely retried (:idempotent).
@@ -85,23 +102,20 @@ module Tamoz
         raise ConfigurationError, 'the work route needs a model that supports tool calls'
       end
 
-      def unwrap_model(outcome, request:, configuration_digest:)
-        return outcome unless outcome.status == :succeeded
-
+      def validated_projection(outcome, request:, configuration_digest:)
         value = outcome.value
-        text = if value.is_a?(Hash) && value.key?('content')
-                 ModelCallProjection.validate!(
-                   value,
-                   request_digest: request['request_digest'],
-                   settings_digest: model_settings_digest,
-                   provider_configuration_digest: configuration_digest
-                 ).fetch('content')
-               elsif value.is_a?(Hash)
-                 value.fetch('output')
-               else
-                 String(value)
-               end
-        outcome.with(value: text)
+        return nil unless outcome.status == :succeeded && value.is_a?(Hash) && value.key?('content')
+
+        ModelCallProjection.validate!(value, request_digest: request['request_digest'],
+                                             settings_digest: model_settings_digest,
+                                             provider_configuration_digest: configuration_digest)
+      end
+
+      def model_text(value, projection)
+        return projection.fetch('content') if projection
+        return value.fetch('output') if value.is_a?(Hash)
+
+        String(value)
       end
 
       def dispatch(context, intent, step, iteration: 0, sub_operation: 0)

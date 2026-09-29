@@ -51,6 +51,7 @@ module Tamoz
     # things the operator chose: which thread, how much transcript, and whether
     # they asked for JSON.
     module CLIRendering
+      SUBAGENT_EVENTS = %w[subagent_started subagent_finished].freeze
       TERMINAL_NOTES = {
         'direct_response' => 'Response provided; no task completion was claimed.',
         'reported' => "\nFindings report: every finding cites a probe result from this turn. " \
@@ -154,6 +155,12 @@ module Tamoz
           'status_projection' => SessionStatusProjection.document(view),
           'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
         }
+        trace = Array(view.state&.fetch(:work_trace, nil))
+        events = trace.select { |event| SUBAGENT_EVENTS.include?(event['event']) }
+        unless events.empty?
+          fields['subagent_events'] = events
+          fields['turn_usage'] = TurnUsage.summarize(trace)
+        end
         report = view.state&.dig(:verification, 'report')
         report ? fields.merge('report' => report) : fields
       end
@@ -179,7 +186,24 @@ module Tamoz
         render_show_header(view, thread_id)
         render_show_interrupts(view)
         render_show_receipts(view, transcript)
+        render_show_subagents(view)
         render_show_terminal(view)
+      end
+
+      def render_show_subagents(view)
+        events = projection_fields(view)['subagent_events']
+        return unless events
+
+        @out.puts 'Subagents:'
+        events.each do |event|
+          next unless event['event'] == 'subagent_finished'
+
+          @out.puts "  - #{event.fetch('role')}: #{event.fetch('status')} " \
+                    "(#{event.fetch('model_calls')} model calls, #{event.fetch('tool_calls')} tool calls)"
+        end
+        usage = TurnUsage.summarize(view.state.fetch(:work_trace))
+        @out.puts "Model calls: #{usage.dig('parent', 'model_calls')} parent, " \
+                  "#{usage.dig('children', 'model_calls')} children"
       end
 
       def render_show_header(view, thread_id)

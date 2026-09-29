@@ -12,9 +12,9 @@ module Tamoz
 
       module_function
 
-      def definition_for(nodes, version)
+      def definition_for(nodes, version, name: GRAPH_NAME)
         version = String(version)
-        Tamoz.graph(name: GRAPH_NAME, version: version) do
+        Tamoz.graph(name:, version: version) do
           SessionGraph.declare_states(self, version)
           SessionGraph.declare_nodes(self, nodes, version)
           SessionGraph.declare_edges(self, version)
@@ -169,7 +169,8 @@ module Tamoz
           work_step_count: 0, work_series: nil, work_compactions: 0, work_resets: 0, work_mutated: false,
           work_verified: false, work_checked: false, work_boundary: false, work_overflowed: false,
           work_force_reduce: false, work_exhausted: nil, work_started_ms: 0, work_mutation_count: 0,
-          work_turn: nil, work_reminders: [], work_observations: nil, work_checkpoint: nil
+          work_turn: nil, work_reminders: [], work_observations: nil, work_checkpoint: nil,
+          work_execution_id: nil
         }.freeze
 
         def work_channels(builder)

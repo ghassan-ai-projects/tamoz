@@ -9,7 +9,7 @@ module Tamoz
       def build(tools:, model:, surface:, persona: nil, preferences: {})
         ContextEngine::RequestHeader.build(
           sections: PromptPack.sections(surface:) + Persona.sections(persona:, preferences:),
-          tools: tools + PromptPack.tools,
+          tools: tools + PromptPack.harness_tools(surface:),
           model:
         )
       end

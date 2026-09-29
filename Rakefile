@@ -53,6 +53,9 @@ SLOW_TESTS = %w[
   test/sqlite_raw_oracle_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
+  test/subagent_kill_test.rb
+  test/agenteval_subagent_pack_test.rb
+  test/agenteval_topology_pack_test.rb
   test/sqlite_convergence_probe_test.rb
   test/mcp_supervisor_test.rb
   test/sqlite_scenario_driver_test.rb
@@ -561,6 +564,40 @@ namespace :agenteval do
       out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "memory-#{Time.now.utc.strftime("%Y%m%d")}.json"))
       sh agenteval_ruby, BIN, "memory", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
          "--budget", ENV.fetch("AGENTEVAL_BUDGET", "300"), "--out", out
+    end
+  end
+
+  namespace :topologies do
+    desc "Prove the topology-pack graders discriminate and the hard tasks defeat a single search (no model calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "topologies", "prove"
+    end
+
+    desc "Run the hard topology pack, subagents on vs off (real model; AGENTEVAL_SEEDS, AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
+    task run: :prove do
+      utf8_env!
+      real_run_ready!
+      out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "topologies-#{Time.now.utc.strftime("%Y%m%d")}.json"))
+      seeds = ENV["AGENTEVAL_SEEDS"] ? ["--seeds", ENV["AGENTEVAL_SEEDS"]] : []
+      sh agenteval_ruby, BIN, "topologies", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
+         *seeds, "--budget", ENV.fetch("AGENTEVAL_BUDGET", "900"), "--out", out
+    end
+  end
+
+  namespace :subagents do
+    desc "Prove the subagent-pack graders discriminate — offline controls and authoring rules (no model calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "subagents", "prove"
+    end
+
+    desc "Run the subagent pack, subagents on vs off (real model; AGENTEVAL_REPEAT, AGENTEVAL_WINDOW, AGENTEVAL_OUT)"
+    task run: :prove do
+      utf8_env!
+      real_run_ready!
+      out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "subagents-#{Time.now.utc.strftime("%Y%m%d")}.json"))
+      window = ENV["AGENTEVAL_WINDOW"] ? ["--window", ENV["AGENTEVAL_WINDOW"]] : []
+      sh agenteval_ruby, BIN, "subagents", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
+         "--budget", ENV.fetch("AGENTEVAL_BUDGET", "600"), *window, "--out", out
     end
   end
 

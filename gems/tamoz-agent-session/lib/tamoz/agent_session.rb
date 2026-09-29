@@ -31,6 +31,7 @@ require_relative "agent/session_options"
 require_relative "agent/session_context_controls"
 require_relative "agent/session"
 require_relative "agent/session_status_projection"
+require_relative "agent/turn_usage"
 
 module Tamoz
   module Agent

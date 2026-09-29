@@ -1,0 +1,40 @@
+{
+  "max_per_turn": 4,
+  "max_fanout": 4,
+  "nudge_reads": 6,
+  "nudge_window": 0.5,
+  "explore": {
+    "summary": "Search and read the workspace, then report what was found with file:line references.",
+    "prompt": "subagent_explore.md",
+    "tools": [
+      "read_file",
+      "list_directory",
+      "search_text",
+      "glob",
+      "load_skill",
+      "read_skill_resource",
+      "probe_*"
+    ],
+    "loop_policy": {
+      "max_model_calls": 20,
+      "max_tool_calls": 80,
+      "max_seconds": 300
+    }
+  },
+  "review": {
+    "summary": "Read a change the parent just made, with fresh eyes, and report the defects it introduced as file:line.",
+    "prompt": "subagent_review.md",
+    "tools": [
+      "read_file",
+      "list_directory",
+      "search_text",
+      "glob"
+    ],
+    "loop_policy": {
+      "max_model_calls": 15,
+      "max_tool_calls": 60,
+      "max_seconds": 300
+    },
+    "reviews_changes": true
+  }
+}

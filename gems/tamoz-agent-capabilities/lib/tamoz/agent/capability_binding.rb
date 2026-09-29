@@ -45,13 +45,14 @@ module Tamoz
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
       MCP_CAPABILITY_KINDS = %i[mcp_tool websearch].freeze
 
-      def self.build(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil)
-        new(toolbox:, mcp:, child_task_runtime:, profile:)
+      def self.build(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil, allowed_names: nil)
+        new(toolbox:, mcp:, child_task_runtime:, profile:, allowed_names:)
       end
 
-      def initialize(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil)
+      def initialize(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil, allowed_names: nil)
         @toolbox = toolbox
         @mcp = mcp
+        @allowed_names = allowed_names&.map(&:to_s)&.freeze
         child = child_dispatcher(child_task_runtime, profile)
         local = BoundLocalDispatcher.new(toolbox, child:)
 
@@ -165,9 +166,10 @@ module Tamoz
       # surface; the MCP ids are the caller's pinned catalog descriptors, which
       # `Session#verify_mcp_binding!` pins across resume.
       def admission_set
-        @toolbox.allowed_tools +
-          (@child_enabled ? [ChildTaskDispatcher::TOOL_NAME] : []) +
-          (@mcp ? @mcp.names : [])
+        admitted = @toolbox.allowed_tools +
+                   (@child_enabled ? [ChildTaskDispatcher::TOOL_NAME] : []) +
+                   (@mcp ? @mcp.names : [])
+        @allowed_names ? admitted & @allowed_names : admitted
       end
 
       def build_toolbox_source(source_id, names, toolbox)

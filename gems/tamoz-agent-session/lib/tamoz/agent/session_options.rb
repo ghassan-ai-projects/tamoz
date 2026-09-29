@@ -61,13 +61,14 @@ module Tamoz
           GRAPH_VERSION_BY_ROUTING.fetch(routing.to_sym)
         end
 
-        def node_arguments(transcript_reader:, previous_turn_reader: nil)
+        def node_arguments(transcript_reader:, previous_turn_reader: nil, subagent_apps: {}, allowed_capabilities: nil)
           {
             model:, toolbox:, max_plan_attempts:, max_repair_attempts:,
             approval_engine:, approval_session_id:, model_call_safety:,
             profile:, mcp:, profile_roles:, profile_budgets:, profile_narrowed:,
             memory:, memory_owner:, artifact_store:, artifact_tenant:,
-            child_task_runtime:, transcript_reader:, harness:, previous_turn_reader:
+            child_task_runtime:, transcript_reader:, harness:, previous_turn_reader:,
+            subagent_apps:, allowed_capabilities:
           }
         end
 

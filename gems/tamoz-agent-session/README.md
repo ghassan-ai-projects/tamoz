@@ -21,6 +21,8 @@ Under `Tamoz::Agent` (unchanged constant paths):
   `tamoz-agent`'s ephemeral driver.
 - **SessionStatusProjection** — `.document` / `.SCHEMA` / projection helpers
   over a session view (CLI rendering and worker status output).
+- **TurnUsage** — `.summarize(work_trace)` separates parent and child model
+  calls and tokens for the CLI and eval reports.
 - **SessionPlanningContext** — follow-up payload assembly; the CLI calls
   `.follow_up_payload` directly.
 - **SessionNodes** — the graph-node module whose size limits

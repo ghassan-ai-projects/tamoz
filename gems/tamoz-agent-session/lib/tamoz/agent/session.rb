@@ -90,7 +90,10 @@ module Tamoz
         previous_turn_reader = lambda do |thread_id:, execution_id:|
           previous_turn_state(thread_id:, execution_id:)
         end
-        @nodes_by_version = build_nodes(options.node_arguments(transcript_reader:, previous_turn_reader:))
+        work_limits = ->(harness) { graph_limits(GraphVersions::WORK_GRAPH_VERSION, harness) }
+        subagent_apps = SubagentApps.build(options, limits: work_limits)
+        @nodes_by_version = build_nodes(options.node_arguments(transcript_reader:, previous_turn_reader:,
+                                                               subagent_apps:))
         @definitions = build_definitions(@nodes_by_version)
         @apps = @definitions.to_h do |version, definition|
           [version, definition.compile(checkpointer: options.checkpointer, **graph_limits(version, options.harness))]

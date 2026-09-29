@@ -27,6 +27,8 @@ module Agenteval
       when "preview" then cmd_preview(argv)
       when "compare" then cmd_compare(argv)
       when "memory" then cmd_memory(argv)
+      when "subagents" then cmd_subagents(argv)
+      when "topologies" then cmd_topologies(argv)
       else
         @err.puts(usage)
         64
@@ -81,6 +83,66 @@ module Agenteval
                               partial:, keep_root:, scenarios: options[:scenarios])
       File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
       @out.puts(JSON.pretty_generate(report.fetch("arms")))
+      0
+    end
+
+    # The subagent pack: `subagents prove` runs the offline controls and the authoring validator; `subagents run`
+    # drives real tamoz sessions with and without `--subagents explore` and needs prove first.
+    def cmd_subagents(argv)
+      require_relative "../subagents/pack"
+      action = argv.shift
+      problems = SubagentPack.prove
+      problems.each { |problem| @err.puts("subagent pack: #{problem}") }
+      return (problems.empty? ? 0 : 1) if action == "prove"
+      return 1 unless problems.empty?
+      return 64.tap { @err.puts("usage: agenteval subagents prove | run [--families SA1,..] [--seeds 1,2] [--arms a,b] [--repeat N] [--window N] [--out PATH]") } unless action == "run"
+
+      options = { arms: SubagentPack::ARMS, repeat: 2, budget: 600, out: nil, families: nil, seeds: SubagentPack::RUN_SEEDS, window: nil }
+      OptionParser.new do |parser|
+        parser.on("--arms LIST") { |value| options[:arms] = value.split(",") }
+        parser.on("--repeat N", Integer) { |value| options[:repeat] = value }
+        parser.on("--budget N", Integer) { |value| options[:budget] = value }
+        parser.on("--window N", Integer) { |value| options[:window] = value }
+        parser.on("--seeds LIST") { |value| options[:seeds] = value.split(",").map { |seed| Integer(seed) } }
+        parser.on("--families LIST") { |value| options[:families] = value.split(",") }
+        parser.on("--out PATH") { |value| options[:out] = value }
+      end.parse!(argv)
+      partial = options[:out] && "#{options[:out]}.partial.jsonl"
+      keep_root = options[:out] && File.join(Agenteval::ROOT, "sessions", "subagents", File.basename(options[:out], ".json"))
+      report = SubagentPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget],
+                                seeds: options[:seeds], window: options[:window], families: options[:families],
+                                partial:, keep_root:)
+      File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
+      @out.puts(JSON.pretty_generate(report.fetch("arms")))
+      0
+    end
+
+    # The hard topology pack: `topologies prove` is offline; `topologies run` drives real sessions and needs prove.
+    def cmd_topologies(argv)
+      require_relative "../topologies/pack"
+      action = argv.shift
+      options = { arms: TopologyPack::ARMS, repeat: 2, budget: 900, out: nil, families: nil, seeds: TopologyPack::DEVELOPMENT_SEEDS }
+      OptionParser.new do |parser|
+        parser.on("--arms LIST") { |value| options[:arms] = value.split(",") }
+        parser.on("--repeat N", Integer) { |value| options[:repeat] = value }
+        parser.on("--budget N", Integer) { |value| options[:budget] = value }
+        parser.on("--seeds LIST") { |value| options[:seeds] = value.split(",").map { |seed| Integer(seed) } }
+        parser.on("--families LIST") { |value| options[:families] = value.split(",") }
+        parser.on("--out PATH") { |value| options[:out] = value }
+      end.parse!(argv)
+      seeds = (options[:seeds] + TopologyPack::DEVELOPMENT_SEEDS).uniq
+      problems = TopologyPack.prove(seeds:)
+      problems.each { |problem| @err.puts("topology pack: #{problem}") }
+      return (problems.empty? ? 0 : 1) if action == "prove"
+      return 1 unless problems.empty?
+      return 64.tap { @err.puts("usage: agenteval topologies prove | run [--families HA1,..] [--seeds 3,4] [--arms a,b] [--repeat N] [--out PATH]") } unless action == "run"
+
+      partial = options[:out] && "#{options[:out]}.partial.jsonl"
+      keep_root = options[:out] && File.join(Agenteval::ROOT, "sessions", "topologies", File.basename(options[:out], ".json"))
+      report = TopologyPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget],
+                                seeds: options[:seeds], families: options[:families], partial:, keep_root:)
+      File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
+      @out.puts(JSON.pretty_generate(report.fetch("topology")))
       0
     end
 

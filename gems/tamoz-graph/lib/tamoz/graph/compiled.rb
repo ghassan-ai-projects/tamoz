@@ -137,6 +137,16 @@ module Tamoz
         runtime.call(self, input, context)
       end
 
+      # One concurrent run of this graph per input, from inside a parent node; outputs in input order.
+      # :reek:ManualDispatch -- the runtime is the parent task's, duck-typed like #call's.
+      def call_many(inputs, context)
+        runtime = context&.graph_runtime
+        unless runtime.respond_to?(:call_many)
+          raise ConfigurationError, "compiled graph invocation requires a parent graph task Context"
+        end
+        runtime.call_many(self, inputs, context)
+      end
+
       def state(thread:, checkpoint_id: nil, namespace: [])
         StateOperations.new(self).state(thread:, checkpoint_id:, namespace:)
       end

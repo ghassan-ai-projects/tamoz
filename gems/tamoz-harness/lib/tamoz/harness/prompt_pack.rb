@@ -6,7 +6,13 @@ module Tamoz
     module PromptPack
       DIRECTORY = File.expand_path('../../../prompts', __dir__)
       SECTIONS = [%w[identity 100], %w[operating 200], %w[tools 300], %w[editing 400], %w[finish 500]].freeze
-      SURFACES = { cli: 'surface_cli', chat: 'surface_chat' }.freeze
+      # A subagent is read-only and answers one brief: plan, editing and finish rules stay out of its header.
+      SUBAGENT_SECTIONS = [%w[identity 100], %w[tools 300]].freeze
+      SURFACES = {
+        cli: { file: 'surface_cli', shared: SECTIONS, without: [] },
+        chat: { file: 'surface_chat', shared: SECTIONS, without: [] },
+        subagent: { file: 'surface_subagent', shared: SUBAGENT_SECTIONS, without: %w[update_plan] }
+      }.freeze
       DIGEST_DOMAIN = "tamoz.harness.prompt.v1\n"
 
       module_function
@@ -23,9 +29,9 @@ module Tamoz
       end
 
       def sections(surface:)
-        surface_name = SURFACES.fetch(surface) { raise Error, "unknown surface #{surface.inspect}" }
-        SECTIONS.map { |name, order| ContextEngine::Section.new(name:, order: Integer(order), text: fetch(name)) } +
-          [ContextEngine::Section.new(name: 'surface', order: 600, text: fetch(surface_name))]
+        entry = surface_entry(surface)
+        entry.fetch(:shared).map { |name, order| section(name, order, fetch(name)) } +
+          [section('surface', 600, fetch(entry.fetch(:file)))]
       end
 
       def tools
@@ -37,6 +43,19 @@ module Tamoz
       end
 
       def tool_names = tools.map(&:name)
+
+      # The harness tools a surface is offered; a subagent has no plan to write.
+      def harness_tools(surface:)
+        without = surface_entry(surface).fetch(:without)
+        tools.reject { |tool| without.include?(tool.name) }
+      end
+
+      # Offered only when the operator enabled subagents; `roles` are the SubagentRoles::Role values it may name.
+      def delegate_tool(roles:)
+        tool = JSON.parse(File.read(File.join(DIRECTORY, 'delegate.json'), encoding: Encoding::UTF_8))
+        ContextEngine::ToolSchema.new(name: tool.fetch('name'), description: tool.fetch('description'),
+                                      parameters: with_roles(tool.fetch('parameters'), roles))
+      end
 
       def report_labels
         @report_labels ||= Tamoz::Core.deep_freeze(
@@ -61,6 +80,21 @@ module Tamoz
                                         parameters: tool.fetch('parameters'))
         end
       end
+
+      def surface_entry(surface) = SURFACES.fetch(surface) { raise Error, "unknown surface #{surface.inspect}" }
+
+      def section(name, order, text) = ContextEngine::Section.new(name:, order: Integer(order), text:)
+
+      # :reek:TooManyStatements -- two schema fields filled from the same roles
+      def with_roles(parameters, roles)
+        properties = parameters.fetch('properties')
+        summaries = roles.map { |role| "#{role.name}: #{role.summary}" }.join(' ')
+        offered = { 'enum' => roles.map(&:name), 'description' => summaries }
+        briefs = properties.fetch('briefs').merge('maxItems' => SubagentRoles.shipped.max_fanout)
+        role = properties.fetch('role').merge(offered)
+        parameters.merge('properties' => properties.merge('role' => role, 'briefs' => briefs))
+      end
+      private_class_method :surface_entry, :section, :with_roles
     end
   end
 end

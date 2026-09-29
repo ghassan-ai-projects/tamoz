@@ -19,7 +19,11 @@ require_relative "work_context"
 require_relative "work_observations"
 require_relative "work_memory"
 require_relative "work_tools"
+require_relative "subagent_report"
+require_relative "work_delegation"
+require_relative "subagent_apps"
 require_relative "work_compaction"
+require_relative "work_nudge"
 require_relative "work_gate"
 require_relative "session_work"
 
@@ -57,7 +61,9 @@ module Tamoz
         :approval_session_id,
         :graph_version,
         :harness,
-        :previous_turn_reader
+        :previous_turn_reader,
+        :subagent_apps,
+        :allowed_capabilities
       ) do
         # This session's owner and workspace in durable memory; nil when memory is off.
         def memory_access = memory&.access(owner: memory_owner || 'session', workspace: toolbox.root)
@@ -99,7 +105,9 @@ module Tamoz
         transcript_reader: nil,
         graph_version: GraphVersions::GRAPH_VERSION,
         harness: {},
-        previous_turn_reader: nil
+        previous_turn_reader: nil,
+        subagent_apps: {},
+        allowed_capabilities: nil
       )
         graph_version = String(graph_version).freeze
         @toolbox = toolbox
@@ -109,7 +117,8 @@ module Tamoz
         @profile = profile
         @mcp = mcp
         verify_profile_roles!(profile_roles)
-        @capabilities = CapabilityBinding.build(toolbox:, mcp:, child_task_runtime:, profile:)
+        @capabilities = CapabilityBinding.build(toolbox:, mcp:, child_task_runtime:, profile:,
+                                                allowed_names: allowed_capabilities)
 
         configuration = NodeConfiguration.new(
           model:,
@@ -132,7 +141,9 @@ module Tamoz
           capabilities: @capabilities,
           graph_version:,
           harness:,
-          previous_turn_reader:
+          previous_turn_reader:,
+          subagent_apps:,
+          allowed_capabilities:
         )
         @memory_nodes = SessionMemory.new(configuration:)
         @bindings = SessionBindings.new(

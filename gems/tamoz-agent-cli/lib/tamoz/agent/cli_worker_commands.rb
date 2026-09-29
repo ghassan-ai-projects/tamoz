@@ -674,6 +674,12 @@ module Tamoz
         options[:experimental_routing] ? :experimental : :legacy
       end
 
+      def worker_harness(options)
+        return {} unless options[:work_routing]
+
+        { surface: :chat, guidance_files: Array(options[:guidance]), subagents: options[:subagents] }
+      end
+
       def with_worker_runtime(options)
         directory = RuntimeDirectory.resolve(path: options[:runtime_dir], env: @env)
         runtime = WorkerRuntime.open(
@@ -681,7 +687,7 @@ module Tamoz
           model_factory: ->(profile:) { build_model(options, profile:) },
           lease_ttl: lease_ttl,
           routing: worker_routing(options),
-          harness: options[:work_routing] ? { surface: :chat, guidance_files: Array(options[:guidance]) } : {}
+          harness: worker_harness(options)
         )
         begin
           yield runtime

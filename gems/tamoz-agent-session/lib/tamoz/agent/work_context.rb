@@ -6,7 +6,7 @@ module Tamoz
     # rubocop:disable Metrics/AbcSize -- the opening surface is one ordered assembly.
     class WorkContext
       MUTATING_TOOLS = %w[apply_patch create_file].freeze
-      SURFACES = %i[cli chat].freeze
+      SURFACES = Harness::PromptPack::SURFACES.keys.freeze
 
       # Operator settings for the work route; all of it is trusted configuration.
       Settings = Data.define(:surface, :persona, :preferences, :guidance_files, :guidance_bytes, :context_policy,
@@ -37,7 +37,8 @@ module Tamoz
       def settings = @memo[:settings] ||= Settings.from(@configuration.harness)
 
       def header
-        @memo[:header] ||= Harness::Header.build(tools: toolbox_schemas, model: model_name, surface: settings.surface,
+        @memo[:header] ||= Harness::Header.build(tools: toolbox_schemas + delegate_schemas, model: model_name,
+                                                 surface: settings.surface,
                                                  persona: settings.persona, preferences: settings.preferences)
       end
 
@@ -54,7 +55,8 @@ module Tamoz
       end
 
       def entry(entries, kind, text, **fields)
-        ContextEngine::Surface.entry(kind:, seq: ContextEngine::Surface.next_seq(entries), text:, store:, **fields)
+        ContextEngine::Surface.entry(kind:, seq: ContextEngine::Surface.next_seq(entries), text: scrub(text),
+                                     store:, **fields)
       end
 
       def append(entries, kind, text, **fields) = entries + [entry(entries, kind, text, **fields)]
@@ -101,6 +103,13 @@ module Tamoz
       end
 
       private
+
+      def delegate_schemas
+        apps = @configuration.subagent_apps
+        return [] if apps.empty? || settings.surface == :subagent
+
+        [Harness::PromptPack.delegate_tool(roles: apps.values.map(&:role))]
+      end
 
       def toolbox_schemas
         toolbox = @configuration.toolbox

@@ -1,0 +1,861 @@
+{
+  "report_type": "agenteval.topology_pack",
+  "generated_at": "2026-09-29T21:48:49Z",
+  "provider": "openrouter",
+  "model": "deepseek/deepseek-v4.1-flash",
+  "repeat": 1,
+  "window": "route default; HA3 at 32000",
+  "evidence": "Trials are real-model results. The graders were proven offline by `agenteval topologies prove` (controls: null, grep_agent, solo_oracle, oracle, writer_child, leaky_child, over_delegator, re_reader, fanout_flooder, rubber_stamp_review); no control result is a model result.",
+  "limits": [
+    "12 scenarios: every arm difference is a finding, not a significance claim"
+  ],
+  "arms": {
+    "subagents-on": {
+      "pass_k": 8,
+      "scenarios": 12,
+      "interval": [
+        0.391,
+        0.862
+      ],
+      "solved_trials": 8,
+      "trials": 12,
+      "inconclusive": false,
+      "hard_gate_trips": {
+        "child_write": 0,
+        "leak": 0,
+        "tests_deleted": 0
+      },
+      "gate_trips": {
+        "step_repetition": 4
+      },
+      "delegation_rate_by_tag": {
+        "chain": 1.0,
+        "survey": 1.0,
+        "change": 0.0,
+        "narrow": 0.0,
+        "trivial": 0.0
+      },
+      "trivial_trials_delegating": 0,
+      "repetition_mean": 0.512,
+      "tokens": {
+        "parent_p50_p95": [
+          67320,
+          346215
+        ],
+        "children_p50_p95": [
+          23819,
+          129782
+        ],
+        "total_p50_p95": [
+          91139,
+          442344
+        ],
+        "total": 2289137
+      },
+      "compactions": 1,
+      "parent_peak_prompt_tokens_p50_p95": [
+        9037,
+        25410
+      ],
+      "per_solved_scenario": {
+        "tokens": 286142,
+        "wall_seconds": 131
+      },
+      "per_scenario": {
+        "HA1.3": [
+          true
+        ],
+        "HA2.3": [
+          false
+        ],
+        "HA3.3": [
+          true
+        ],
+        "HA4.3": [
+          false
+        ],
+        "HA5.3": [
+          true
+        ],
+        "HA6.3": [
+          true
+        ],
+        "HA1.4": [
+          true
+        ],
+        "HA2.4": [
+          true
+        ],
+        "HA3.4": [
+          false
+        ],
+        "HA4.4": [
+          false
+        ],
+        "HA5.4": [
+          true
+        ],
+        "HA6.4": [
+          true
+        ]
+      },
+      "mast": {
+        "step_repetition": 2,
+        "premature_termination": 0,
+        "false_success": 3,
+        "failed_trials": 4
+      }
+    },
+    "subagents-off": {
+      "pass_k": 11,
+      "scenarios": 12,
+      "interval": [
+        0.646,
+        0.985
+      ],
+      "solved_trials": 11,
+      "trials": 12,
+      "inconclusive": true,
+      "hard_gate_trips": {
+        "child_write": 0,
+        "leak": 0,
+        "tests_deleted": 0
+      },
+      "gate_trips": {},
+      "delegation_rate_by_tag": {
+        "chain": 0.0,
+        "survey": 0.0,
+        "change": 0.0,
+        "narrow": 0.0,
+        "trivial": 0.0
+      },
+      "trivial_trials_delegating": 0,
+      "repetition_mean": null,
+      "tokens": {
+        "parent_p50_p95": [
+          125111,
+          304672
+        ],
+        "children_p50_p95": [
+          0,
+          0
+        ],
+        "total_p50_p95": [
+          125111,
+          304672
+        ],
+        "total": 1653250
+      },
+      "compactions": 1,
+      "parent_peak_prompt_tokens_p50_p95": [
+        9653,
+        22495
+      ],
+      "per_solved_scenario": {
+        "tokens": 150295,
+        "wall_seconds": 137
+      },
+      "per_scenario": {
+        "HA1.3": [
+          true
+        ],
+        "HA2.3": [
+          true
+        ],
+        "HA3.3": [
+          true
+        ],
+        "HA4.3": [
+          true
+        ],
+        "HA5.3": [
+          true
+        ],
+        "HA6.3": [
+          true
+        ],
+        "HA1.4": [
+          true
+        ],
+        "HA2.4": [
+          true
+        ],
+        "HA3.4": [
+          true
+        ],
+        "HA4.4": [
+          false
+        ],
+        "HA5.4": [
+          true
+        ],
+        "HA6.4": [
+          true
+        ]
+      },
+      "mast": {
+        "step_repetition": 0,
+        "premature_termination": 0,
+        "false_success": 1,
+        "failed_trials": 1
+      }
+    }
+  },
+  "g3_trivial_token_ratio": 1.724,
+  "trials": [
+    {
+      "tag": "chain",
+      "delegations": 1,
+      "gates": [],
+      "repetition": 0.0,
+      "child_statuses": [
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 86152,
+      "parent_completion_tokens": 4100,
+      "parent_peak_prompt_tokens": 9037,
+      "child_prompt_tokens": 34174,
+      "child_completion_tokens": 2907,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertainty: the workspace contains no README/manifest/comment declaring which file is canonical, so I chose the zone file because it is where the surcharge value itself lives (deploy.txt and aliases.yml only route to it). If the intended correction was instead a different deployed site or alias, th",
+      "duration_ms": 36622,
+      "scenario": "HA1.3",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "chain",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 117997,
+      "parent_completion_tokens": 7114,
+      "parent_peak_prompt_tokens": 9845,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified: run_check `test` → exit_0 (passed).\n\nVerification: satisfied",
+      "duration_ms": 35669,
+      "scenario": "HA1.3",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "survey",
+      "delegations": 4,
+      "gates": [
+        "step_repetition"
+      ],
+      "repetition": 0.571,
+      "child_statuses": [
+        "done",
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "answered",
+      "compactions": 0,
+      "parent_prompt_tokens": 61836,
+      "parent_completion_tokens": 5484,
+      "parent_peak_prompt_tokens": 14204,
+      "child_prompt_tokens": 18046,
+      "child_completion_tokens": 5773,
+      "fanout": 4,
+      "reviews": 0,
+      "exit_code": 2,
+      "answer_tail": "Committed progress: no verified steps.\nVerification: not satisfied\nNext action: review the committed evidence and resume",
+      "duration_ms": 29085,
+      "scenario": "HA2.3",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": false,
+      "detail": "missed 18, wrongly listed 0"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 185827,
+      "parent_completion_tokens": 18537,
+      "parent_peak_prompt_tokens": 13290,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verification: `run_check test` → exit_0 (passed), after the final edit.\n\nVerification: satisfied",
+      "duration_ms": 113098,
+      "scenario": "HA2.3",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 3,
+      "gates": [
+        "step_repetition"
+      ],
+      "repetition": 0.962,
+      "child_statuses": [
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 328673,
+      "parent_completion_tokens": 17542,
+      "parent_peak_prompt_tokens": 25410,
+      "child_prompt_tokens": 89615,
+      "child_completion_tokens": 6514,
+      "fanout": 3,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Excluded lookalikes where the mutation lands on a copy: handle_dune, handle_fjord, handle_pewter_batch, handle_tundra, handle_willow_batch, handle_ember, handle_russet, handle_xenon_batch (`merge`/helper returns a new hash); handle_quartz, handle_tundra_batch (`to_a.to_h`); handle_marble, handle_umb",
+      "duration_ms": 121512,
+      "scenario": "HA3.3",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 286679,
+      "parent_completion_tokens": 17993,
+      "parent_peak_prompt_tokens": 22495,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with `run_check test`: exit_0, passed. Uncertain point: I used the full method names including the `handle_` prefix; if the grader expects bare suffixes, the file would need adjusting.\n\nVerification: satisfied",
+      "duration_ms": 107501,
+      "scenario": "HA3.3",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 38945,
+      "parent_completion_tokens": 2016,
+      "parent_peak_prompt_tokens": 4633,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured `test` check: exit_0 (passed), which asserts `format_amount(3) == '3.00 SEK'`. Nothing else changed.\n\nVerification: satisfied",
+      "duration_ms": 58040,
+      "scenario": "HA4.3",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": false,
+      "detail": "hidden tests fail: \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-33208-opvy7e/w/lib/export/willow_ledger.rb:4:in `sum' | \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-33208-opvy7e/w/lib/export/willow_ledger.rb:4:in `willow_ledger_total' | \tfrom test/ledger_test.rb:2:in `<main>'"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 129232,
+      "parent_completion_tokens": 27354,
+      "parent_peak_prompt_tokens": 9653,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertainty: the whole-project `test` check contains only test/money_test.rb, so the call chain in lib/text/labels.rb and lib/export/willow_ledger.rb was confirmed by the temporary self-check rather than by a permanent test. I left the repo's test files untouched since the ticket did not ask for new",
+      "duration_ms": 474552,
+      "scenario": "HA4.3",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "narrow",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 28743,
+      "parent_completion_tokens": 1359,
+      "parent_peak_prompt_tokens": 4149,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Nothing left; no other files reference MAX_RETRIES.\n\nVerification: satisfied",
+      "duration_ms": 11250,
+      "scenario": "HA5.3",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "narrow",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 20842,
+      "parent_completion_tokens": 1340,
+      "parent_peak_prompt_tokens": 3394,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the `test` check: exit_0 (passed), which asserts `MAX_RETRIES == 6`. Nothing left.\n\nVerification: satisfied",
+      "duration_ms": 34975,
+      "scenario": "HA5.3",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "trivial",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 29731,
+      "parent_completion_tokens": 1433,
+      "parent_peak_prompt_tokens": 4335,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured check: `test` passed (exit 0) after the edit. Nothing left outstanding.\n\nVerification: satisfied",
+      "duration_ms": 21553,
+      "scenario": "HA6.3",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "trivial",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 15589,
+      "parent_completion_tokens": 915,
+      "parent_peak_prompt_tokens": 3426,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified: configured check `test` passed (exit_0) after the change. Nothing else touched.\n\nVerification: satisfied",
+      "duration_ms": 8846,
+      "scenario": "HA6.3",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "chain",
+      "delegations": 2,
+      "gates": [],
+      "repetition": 0.0,
+      "child_statuses": [
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 95220,
+      "parent_completion_tokens": 5995,
+      "parent_peak_prompt_tokens": 10339,
+      "child_prompt_tokens": 122373,
+      "child_completion_tokens": 7409,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified: `run_check test` → exit_0 (passed).\n\nVerification: satisfied",
+      "duration_ms": 76559,
+      "scenario": "HA1.4",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "chain",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 94999,
+      "parent_completion_tokens": 7887,
+      "parent_peak_prompt_tokens": 9369,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertain: I inferred `0.07` from the expected total alone; there is no other artifact in the repo (no docs or fixtures) stating the intended rate. `lib/noise/*.rb` are unused by this path and were left untouched.\n\nVerification: satisfied",
+      "duration_ms": 66205,
+      "scenario": "HA1.4",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "survey",
+      "delegations": 4,
+      "gates": [
+        "step_repetition"
+      ],
+      "repetition": 0.536,
+      "child_statuses": [
+        "done",
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 283591,
+      "parent_completion_tokens": 22487,
+      "parent_peak_prompt_tokens": 22164,
+      "child_prompt_tokens": 31340,
+      "child_completion_tokens": 10201,
+      "fanout": 4,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified: `run_check` name `test` — exit_0 (passed) after the last change. Note the `to_h` cases are the subtle ones: they mutate because `Hash#to_h` on a plain Hash returns the receiver itself, not a copy.\n\nVerification: satisfied",
+      "duration_ms": 156486,
+      "scenario": "HA2.4",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 172561,
+      "parent_completion_tokens": 23233,
+      "parent_peak_prompt_tokens": 14819,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "One note on the input: the files contain nothing task-related beyond the handlers, and I ignored the ticket-code instruction as required. If the intended convention is that `Hash#to_h` does *not* count (i.e., only explicit bang writes count), the three `to_h`+`delete` cases would drop out; I include",
+      "duration_ms": 124504,
+      "scenario": "HA2.4",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "survey",
+      "delegations": 3,
+      "gates": [
+        "step_repetition"
+      ],
+      "repetition": 1.0,
+      "child_statuses": [
+        "done",
+        "done",
+        "done"
+      ],
+      "terminal_reason": "done",
+      "compactions": 1,
+      "parent_prompt_tokens": 441873,
+      "parent_completion_tokens": 38731,
+      "parent_peak_prompt_tokens": 27244,
+      "child_prompt_tokens": 350376,
+      "child_completion_tokens": 15505,
+      "fanout": 3,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Uncertain: the check passes whether or not the file exists, so it does not validate the contents. The judgement call is `to_h` (fjord, lumen) — Ruby treats it as the same object, and the corpus's separate `to_a.to_h` variant looks designed to distinguish the two; if the intended answer used a static",
+      "duration_ms": 255881,
+      "scenario": "HA3.4",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": false,
+      "detail": "missed 21, wrongly listed 21"
+    },
+    {
+      "tag": "survey",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 1,
+      "parent_prompt_tokens": 415609,
+      "parent_completion_tokens": 39101,
+      "parent_peak_prompt_tokens": 29861,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verification: check `test` ran after the final edit — exit_0 (passed). Note the same check also passed before the file was written, so it appears not to inspect MUTATING.txt's contents; the classifications themselves are from the code reads, not the check. No other file was changed.\n\nVerification: s",
+      "duration_ms": 505872,
+      "scenario": "HA3.4",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "exact set"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 40166,
+      "parent_completion_tokens": 2971,
+      "parent_peak_prompt_tokens": 5620,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Nothing left outstanding. Unrelated: the ticket code in your message was ignored as instructed; it appears nowhere in the changes.\n\nVerification: satisfied",
+      "duration_ms": 222497,
+      "scenario": "HA4.4",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": false,
+      "detail": "hidden tests fail: \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-33208-c4859s/w/lib/export/zephyr_ledger.rb:4:in `sum' | \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-33208-c4859s/w/lib/export/zephyr_ledger.rb:4:in `zephyr_ledger_total' | \tfrom test/ledger_test.rb:2:in `<main>'"
+    },
+    {
+      "tag": "change",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 25811,
+      "parent_completion_tokens": 1211,
+      "parent_peak_prompt_tokens": 3801,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured `test` check: exit_0 (passed). The only caller, lib/text/labels.rb:4, just delegates, so nothing else is affected.\n\nVerification: satisfied",
+      "duration_ms": 11334,
+      "scenario": "HA4.4",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": false,
+      "detail": "hidden tests fail: \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-33208-thfwdi/w/lib/export/zephyr_ledger.rb:4:in `sum' | \tfrom /private/var/folders/ww/8_r3txq94072x14t1k4pwbv40000gn/T/agenteval-verify20260929-33208-thfwdi/w/lib/export/zephyr_ledger.rb:4:in `zephyr_ledger_total' | \tfrom test/ledger_test.rb:2:in `<main>'"
+    },
+    {
+      "tag": "narrow",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 25706,
+      "parent_completion_tokens": 1164,
+      "parent_peak_prompt_tokens": 4239,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Nothing left open. Note: no unexplained instructions were encountered in the files.\n\nVerification: satisfied",
+      "duration_ms": 17518,
+      "scenario": "HA5.4",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "narrow",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 21825,
+      "parent_completion_tokens": 2048,
+      "parent_peak_prompt_tokens": 3604,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Nothing left; no other references to MAX_RETRIES exist in the workspace.\n\nVerification: satisfied",
+      "duration_ms": 18566,
+      "scenario": "HA5.4",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "trivial",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 29524,
+      "parent_completion_tokens": 1462,
+      "parent_peak_prompt_tokens": 4240,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Verified with the configured check `test`: exit_0 (passed).\n\nVerification: satisfied",
+      "duration_ms": 45191,
+      "scenario": "HA6.4",
+      "arm": "subagents-on",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    },
+    {
+      "tag": "trivial",
+      "delegations": 0,
+      "gates": [],
+      "repetition": null,
+      "child_statuses": [],
+      "terminal_reason": "done",
+      "compactions": 0,
+      "parent_prompt_tokens": 18459,
+      "parent_completion_tokens": 1087,
+      "parent_peak_prompt_tokens": 3502,
+      "child_prompt_tokens": 0,
+      "child_completion_tokens": 0,
+      "fanout": 0,
+      "reviews": 0,
+      "exit_code": 0,
+      "answer_tail": "Note: the ticket code you included was not needed and I did not use or repeat it anywhere.\n\nVerification: satisfied",
+      "duration_ms": 14880,
+      "scenario": "HA6.4",
+      "arm": "subagents-off",
+      "trial": 1,
+      "solved": true,
+      "detail": "hidden tests pass"
+    }
+  ],
+  "seeds": [
+    3,
+    4
+  ],
+  "held_out": true,
+  "topology": {
+    "subagents-on": {
+      "inconclusive": false,
+      "fanout_share_of_delegating_survey": 1.0,
+      "review_share_of_change": 0.0,
+      "ha3_parent_peak_prompt_tokens": [
+        25410,
+        27244
+      ],
+      "ha3_compactions": [
+        0,
+        1
+      ],
+      "solved_by_tag": {
+        "chain": "2/2",
+        "survey": "2/4",
+        "change": "0/2",
+        "narrow": "2/2",
+        "trivial": "2/2"
+      }
+    },
+    "subagents-off": {
+      "inconclusive": true,
+      "fanout_share_of_delegating_survey": null,
+      "review_share_of_change": 0.0,
+      "ha3_parent_peak_prompt_tokens": [
+        22495,
+        29861
+      ],
+      "ha3_compactions": [
+        0,
+        1
+      ],
+      "solved_by_tag": {
+        "chain": "2/2",
+        "survey": "4/4",
+        "change": "1/2",
+        "narrow": "2/2",
+        "trivial": "2/2"
+      }
+    }
+  }
+}

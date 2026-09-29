@@ -7,6 +7,7 @@ module Tamoz
   module Agent
     # Runs one pending tool call: scope and approval at the gate, the journaled effect at execute,
     # and the shaped, scrubbed, spilled result appended to the surface.
+    # rubocop:disable Metrics/ClassLength -- one gate owns all work tool routing and approval state.
     class WorkGate
       PLAN_BOUND_TOOLS = (WorkContext::MUTATING_TOOLS + %w[run_check]).freeze
 
@@ -23,6 +24,9 @@ module Tamoz
         return round_complete(state) if cursor >= pending.length
 
         call = with_arguments(pending.fetch(cursor))
+        # A call refused while parsing carries placeholder arguments and ran nothing: it is not a repeat.
+        return result(state, call, "Error: #{call.fetch('error')}") if call['error']
+
         signature = Harness::LoopPolicy.signature(call.fetch('name'), call.fetch('arguments'),
                                                   epoch: state.fetch(:work_mutation_count))
         verdict, count = @work.settings.loop_policy.repeat(state.fetch(:work_signatures), signature)
@@ -75,9 +79,8 @@ module Tamoz
       end
 
       def route(state, context, call, cursor)
-        return result(state, call, "Error: #{call.fetch('error')}") if call['error']
-
         case call.fetch('name')
+        when 'delegate' then harness_result(state, call, @tools.delegate(state, context, tool_call(call)))
         when 'update_plan'
           harness_result(state, call, @tools.update_plan(state, context, tool_call(call),
                                                          iteration: state.fetch(:work_step_count)))
@@ -151,6 +154,7 @@ module Tamoz
         arguments.merge('expected_sha256' => ledger)
       end
 
+      # rubocop:disable Metrics/AbcSize -- policy verdict and the child approval refusal share one gate.
       def approve(state, context, call, prepared, step)
         verdict = journaled_verdict(state, step)
         return queued(prepared) if verdict == 'approve'
@@ -164,9 +168,15 @@ module Tamoz
         case decision.verdict
         when :allow then queued(prepared)
         when :deny then result(state, call, "Error: denied by policy (#{decision.reason}, rule #{decision.rule_id}).")
-        else ask(state, context, call, prepared, step, decision)
+        when :ask
+          return result(state, call, 'Error: a subagent cannot request approval.') if
+            @work.settings.surface == :subagent
+
+          ask(state, context, call, prepared, step, decision)
+        else raise ConfigurationError, "unknown approval verdict #{decision.verdict.inspect}"
         end
       end
+      # rubocop:enable Metrics/AbcSize
 
       # rubocop:disable Metrics/ParameterLists -- the approval needs the prepared effect and the decision it answers
       def ask(state, context, call, prepared, step, decision)
@@ -332,5 +342,6 @@ module Tamoz
         ContextEngine::Spill.new(store: @work.store, max_inline_bytes: limit).apply(scrubbed, summary:)
       end
     end
+    # rubocop:enable Metrics/ClassLength
   end
 end
