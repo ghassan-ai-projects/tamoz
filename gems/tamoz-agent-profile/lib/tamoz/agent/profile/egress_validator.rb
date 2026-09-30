@@ -54,10 +54,18 @@ module Tamoz
           validate_limits!
           validate_circuit!
           validate_credential_refs!
+          validate_page_reads!
           @egress
         end
 
         private
+
+        def validate_page_reads!
+          reads = @egress.fetch('page_reads', 'none')
+          return if %w[none public].include?(reads)
+
+          raise ValidationError, "#{@path}: egress.page_reads must be none or public"
+        end
 
         def validate_shape!
           raise ValidationError, "#{@path}: egress must be a mapping" unless @egress.is_a?(Hash)

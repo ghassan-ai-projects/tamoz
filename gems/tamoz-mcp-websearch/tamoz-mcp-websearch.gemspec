@@ -11,6 +11,7 @@ TamozGemspec.build(
   description: 'Bounded, policy-enforced websearch egress with redirect, credential, and circuit controls.',
   dependencies: [
     ['tamoz-mcp', "= #{Tamoz::Core::VERSION}"],
-    ['tamoz-core', "= #{Tamoz::Core::VERSION}"]
+    ['tamoz-core', "= #{Tamoz::Core::VERSION}"],
+    ['nokogiri', '~> 1.18']
   ]
 )

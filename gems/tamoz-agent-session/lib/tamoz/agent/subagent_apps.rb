@@ -19,11 +19,18 @@ module Tamoz
         names.to_h { |name| [name, new(options, roles.fetch(name), limits).app] }.freeze
       end
 
+      # The operator's roles, and the research role whenever websearch can serve a research turn.
       def self.enabled(options)
         return [] unless options.routing.to_sym == :work
 
         harness = options.harness
-        Array(harness[:subagents] || harness['subagents']).map(&:to_s).uniq
+        named = Array(harness[:subagents] || harness['subagents']).map(&:to_s)
+        (named + (research?(options) ? ['research'] : [])).uniq
+      end
+
+      def self.research?(options)
+        backings = Harness::ResearchPack.web_backings.values
+        (backings - Array(options.mcp&.read_only_names)).empty?
       end
 
       def self.reads_allowed?(options)
@@ -49,8 +56,9 @@ module Tamoz
 
       def nodes
         local = allowed(@options.toolbox.read_only_names)
+        remote = allowed_remote(Array(@options.mcp&.read_only_names))
         arguments = @options.node_arguments(transcript_reader: nil, previous_turn_reader: nil,
-                                            allowed_capabilities: local + allowed(Array(@options.mcp&.read_only_names)))
+                                            allowed_capabilities: local + remote)
         SessionNodes.new(**arguments, toolbox: toolbox(local), harness:, memory: nil, memory_owner: nil,
                                       child_task_runtime: nil, profile_narrowed: true, subagent_apps: {},
                                       graph_version: GraphVersions::WORK_GRAPH_VERSION)
@@ -58,14 +66,23 @@ module Tamoz
 
       def allowed(names) = names.select { |tool| @role.tools.any? { |pattern| Harness::SubagentRole.match?(pattern, tool) } }
 
+      # A remote capability the role names directly, or through the web tool it backs.
+      def allowed_remote(names)
+        web = Harness::ResearchPack.web_backings.filter_map { |name, backing| backing if allowed([name]).any? }
+        allowed(names) | (names & web)
+      end
+
+      # A role with no local tool (research) keeps a read-only toolbox it can never call: its capabilities are
+      # narrowed to the role's tools, and a toolbox may not be empty.
       def toolbox(names)
         parent = @options.toolbox
-        Tamoz::Tools::Toolbox.new(root: parent.root, allowed_tools: names, skills: parent.skills)
+        allowed = names.empty? ? parent.read_only_names : names
+        Tamoz::Tools::Toolbox.new(root: parent.root, allowed_tools: allowed, skills: parent.skills)
       end
 
       def harness
         @options.harness.merge(surface: :subagent, persona: Harness::PromptPack.fetch(@role.prompt.delete_suffix('.md')),
-                               loop_policy: @role.loop_policy.to_h)
+                               loop_policy: @role.loop_policy.to_h, research: (:child if @role.research?))
       end
     end
   end

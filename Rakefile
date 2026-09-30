@@ -54,6 +54,7 @@ SLOW_TESTS = %w[
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
+  test/research_durability_test.rb
   test/agenteval_subagent_pack_test.rb
   test/agenteval_topology_pack_test.rb
   test/sqlite_convergence_probe_test.rb
@@ -581,6 +582,22 @@ namespace :agenteval do
       seeds = ENV["AGENTEVAL_SEEDS"] ? ["--seeds", ENV["AGENTEVAL_SEEDS"]] : []
       sh agenteval_ruby, BIN, "topologies", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
          *seeds, "--budget", ENV.fetch("AGENTEVAL_BUDGET", "900"), "--out", out
+    end
+  end
+
+  namespace :research do
+    desc "Prove the research-pack graders discriminate (offline, no model or search calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "research", "prove"
+    end
+
+    desc "Run the research pack (real GLM + Brave, capped by the Brave ledger; SET=dev|held_out, IDS, ARMS)"
+    task run: :prove do
+      utf8_env!
+      extra = []
+      extra += ["--ids", ENV["IDS"]] if ENV["IDS"]
+      extra += ["--arms", ENV["ARMS"]] if ENV["ARMS"]
+      sh agenteval_ruby, BIN, "research", "run", "--set", ENV.fetch("SET", "dev"), *extra
     end
   end
 

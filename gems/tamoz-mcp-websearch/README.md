@@ -12,6 +12,15 @@ The adapter is operator-supplied. Tamoz itself never makes an outbound call.
 The deterministic fixture path is plumbing and governance evidence; it is not
 evidence of real-provider intelligence.
 
-This gem depends exactly on the repository lockstep `tamoz-mcp` and
-`tamoz-core` packages. It does not depend on the agent, CLI, evals, or MCP SDK
-directly.
+It serves two tools through `script/websearch_adapter`: `search` (Brave, or a
+fixture web) and `read_page` (a page one of its own searches returned). The
+pieces are `BraveSearch` (fixed endpoint, `TAMOZ_BRAVE_API_KEY`), `PageReader`
+over `EgressClient`'s public reach (any public FQDN, every per-hop check kept),
+`PageText` (HTML to readable text with `nokogiri`) and `FixtureWeb`.
+`RecordedWeb` (a directory cache shared by runs, with `SearchLedger`'s hard cap
+on live searches) sits in front of any of them, and the declaration's
+`EgressCircuit` opens after the declared consecutive-failure threshold.
+
+This gem depends on the repository lockstep `tamoz-mcp` and `tamoz-core`
+packages and on `nokogiri`. It does not depend on the agent, CLI, evals, or
+MCP SDK directly.

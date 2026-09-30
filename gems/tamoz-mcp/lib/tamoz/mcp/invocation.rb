@@ -84,19 +84,19 @@ module Tamoz
         def call(descriptor, arguments, snapshot:, supervisor:, client_factory: nil, headless: false, url_policy: nil)
           validate_descriptor!(descriptor)
           arguments = validate_arguments!(descriptor, arguments)
-          client = open_pinned_channel(
-            descriptor,
-            snapshot: snapshot,
-            supervisor: supervisor,
-            client_factory: client_factory
-          )
-          effect_key = effect_key(descriptor, arguments)
-
-          round_trip(
-            descriptor: descriptor, arguments: arguments, client: client,
-            supervisor: supervisor, effect_key: effect_key,
-            headless: headless, url_policy: url_policy, input: nil
-          )
+          supervisor.exclusively do
+            client = open_pinned_channel(
+              descriptor,
+              snapshot: snapshot,
+              supervisor: supervisor,
+              client_factory: client_factory
+            )
+            round_trip(
+              descriptor: descriptor, arguments: arguments, client: client,
+              supervisor: supervisor, effect_key: effect_key(descriptor, arguments),
+              headless: headless, url_policy: url_policy, input: nil
+            )
+          end
         end
 
         # Re-issues an originating call after a §7 interrupt has been answered.
@@ -107,20 +107,20 @@ module Tamoz
         # the server asks for more input.
         def reissue(descriptor, arguments, snapshot:, supervisor:, interrupt:, answers:, client_factory: nil, headless: false, url_policy: nil)
           validate_descriptor!(descriptor)
-          client = open_pinned_channel(
-            descriptor,
-            snapshot: snapshot,
-            supervisor: supervisor,
-            client_factory: client_factory
-          )
           merge = Elicitation.answer(interrupt, answers)
-          effect_key = effect_key(descriptor, arguments)
-
-          round_trip(
-            descriptor: descriptor, arguments: arguments, client: client,
-            supervisor: supervisor, effect_key: effect_key,
-            headless: headless, url_policy: url_policy, input: merge
-          )
+          supervisor.exclusively do
+            client = open_pinned_channel(
+              descriptor,
+              snapshot: snapshot,
+              supervisor: supervisor,
+              client_factory: client_factory
+            )
+            round_trip(
+              descriptor: descriptor, arguments: arguments, client: client,
+              supervisor: supervisor, effect_key: effect_key(descriptor, arguments),
+              headless: headless, url_policy: url_policy, input: merge
+            )
+          end
         end
 
         # Deterministic key of the originating call, used as the interrupt's
@@ -394,6 +394,8 @@ module Tamoz
               ensure_connected!(descriptor, client, supervisor)
               retry
             end
+            # A timed-out request may still answer on this pipe; the next call must read a fresh one.
+            supervisor.restart if error.is_a?(Timeout::Error) && !supervisor.open?
             raise_classified_transport(descriptor, supervisor, error, sent: sent)
           end
           response

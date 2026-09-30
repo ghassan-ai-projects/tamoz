@@ -32,9 +32,16 @@ class HarnessPromptPackTest < Minitest::Test
     'report_findings.json' => 'sha256:43bd4ed71a43ab09004f8a75572c5dd4c32fffb6613ed06a04d6e69eaf9fa374',
     'report_labels.json' => 'sha256:d548428ad4343cfed7594cffe31bc1e319d116e0313840d464de273ae9c93891',
     'report_reminder.md' => 'sha256:2383d9f37addb8fff00eb407d5f0b1ba1972e66b83a9c86049df200cac1f82e4',
+    'research_lead.json' => 'sha256:9a9d2a74ddf4948eaaeb92081490dd8df95ec247ecdf373129cbd7de94b86d39',
+    'research_method.md' => 'sha256:51de50f14240bed1152686fd53dfd1b44f97759093dad32d9e985bbeec8ae5b4',
+    'research_reminder.md' => 'sha256:4c5464582482bfd157b022c1f610f99ebb0887a31935481fe73fcfdc443aede6',
+    'research_replies.json' => 'sha256:ddac9cc135986ca538f2ac3150d796e7ed9bc8370fd1ffe1d7c7c310fb6bdd4b',
+    'research_tools.json' => 'sha256:87da8354bc4a2a7802bd7715ff66896fa722d0336421dc925ec511eeba86a749',
+    'research_verify.md' => 'sha256:2a773eef47710aa31fc08003879939369638ac886af36ae6cc3bba51121397d9',
     'subagent_explore.md' => 'sha256:8845a850a98628b66a34992b2a0110c06a121611e1a63c19f0d08d0fd56416bd',
+    'subagent_research.md' => 'sha256:d09a22bcf854a606c29fa2d060672a22a065862d35c21ee20243227046b45fb8',
     'subagent_review.md' => 'sha256:f5c829333ba8e9d9633f505bdfd1ac21fc54633fc6cad11648baceaf55b231e4',
-    'subagent_roles.json' => 'sha256:c310390b0810d954b02b03024e2d6c0f6e4fa9bf3a5b2b4e3b46656fc92b2040',
+    'subagent_roles.json' => 'sha256:a97340e3d330e287218c8e1998d498a34d7fc36421a64348d9c79a3a553c7cd2',
     'surface_chat.md' => 'sha256:daa1232b4be2f1d01360f65014ff9afafebf34ab4e7152dc152f8ab0f0c7945a',
     'surface_cli.md' => 'sha256:12d434d8ea184a85dbc2ca9ed6c7b904f77a1a62904a1235d9f572d022d98478',
     'surface_subagent.md' => 'sha256:0dcf1a462410193998f080ac56f0af8f4a5d339f808c468d864bca6b7f4a9786',
@@ -122,7 +129,7 @@ class HarnessPromptPackTest < Minitest::Test
   def test_the_shipped_roles_load_with_their_tools_as_data
     roles = H::SubagentRoles.shipped
 
-    assert_equal [%w[explore review], 4], [roles.names, roles.max_per_turn]
+    assert_equal [%w[explore review research], 4], [roles.names, roles.max_per_turn]
     assert_empty roles.fetch('review').tools - Tamoz::Tools::ToolCatalog::READ_DESCRIPTIONS.keys
     assert_includes roles.fetch('explore').tools, 'probe_*'
   end

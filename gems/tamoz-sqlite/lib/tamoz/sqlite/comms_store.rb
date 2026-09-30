@@ -121,7 +121,7 @@ module Tamoz
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
       def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
-                            history: [])
+                            history: [], research: nil)
         transaction('comms.admit.enqueue') do |txn|
           anchor = inbound_anchor(txn, envelope_wire, bot_id)
           if anchor
@@ -146,6 +146,7 @@ module Tamoz
           payload_bytes, payload_digest, input_digest = encode_request(
             REQUEST_OPERATION, REQUEST_DELIVERY,
             turn_payload(envelope_wire.fetch('text'), history, thread:, request_id:)
+              .merge(research ? { 'research' => research } : {})
           )
           @checkpoints.enqueue_request_in_transaction!(
             txn, thread:, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'fileutils'
 require 'tamoz/agent/model_call_projection'
 
 module Tamoz
@@ -69,6 +70,30 @@ module Tamoz
       end
       # rubocop:enable Metrics/MethodLength
       private :generated
+
+      def write_files(directory, files)
+        files.each do |relative, content|
+          path = File.join(directory, relative)
+          FileUtils.mkdir_p(File.dirname(path))
+          File.write("#{path}.partial", content)
+          File.rename("#{path}.partial", path)
+        end
+        { 'directory' => directory, 'files' => files.keys.sort }
+      end
+      private :write_files
+
+      # A finished research run's files, written once: a replay returns the recorded receipt, and each file lands
+      # through a rename, so a crash never leaves half a report.
+      def write_research(context, directory:, files:)
+        request = { 'directory' => directory,
+                    'files' => files.transform_values { |content| Digest::SHA256.hexdigest(content) } }
+        EffectDispatcher.run(
+          context:, operation: 'research.write_run', safety: :idempotent, call_index: 0, request:,
+          actor: 'tamoz.agent.session',
+          logical_identity: logical_identity(context:, operation: 'research.write_run', capability_id: 'research:run',
+                                             arguments: request, iteration: 0, sub_operation: 0)
+        ) { write_files(directory, files) }
+      end
 
       # One tool-calling conversation turn. A model call changes nothing outside,
       # so an unanswered one is safely retried (:idempotent).

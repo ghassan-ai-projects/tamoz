@@ -9,6 +9,11 @@ require_relative "websearch/version"
 require_relative "websearch/egress_policy"
 require_relative "websearch/egress_client"
 require_relative "websearch/egress_circuit"
+require_relative "websearch/page_text"
+require_relative "websearch/page_reader"
+require_relative "websearch/brave_search"
+require_relative "websearch/fixture_web"
+require_relative "websearch/recorded_web"
 
 module Tamoz
   module Mcp
@@ -42,8 +47,6 @@ module Tamoz
           max_output_bytes: egress.fetch("max_response_bytes")
         )
       end
-
-      # --- credential hygiene (invariant 24 / P17 §5, W6, P17-A3) ----------
 
       # A query argument VALUE is credential-shaped when it is an env-style
       # assignment to a credential name, or a bare secret-shaped token. Such a

@@ -17,13 +17,16 @@ module Tamoz
         "xai" => {default_base: "https://api.x.ai/v1", protocol: "openai-compatible", kind: "direct"},
         "perplexity" => {default_base: "https://api.perplexity.ai/v1", protocol: "openai-compatible", kind: "direct"},
         "mistral" => {default_base: "https://api.mistral.ai/v1", protocol: "openai-compatible", kind: "direct"},
+        'zai' => { default_base: 'https://api.z.ai/api/paas/v4', protocol: 'openai-compatible', kind: 'direct' },
         "anthropic" => {default_base: nil, protocol: "native-rejected", kind: "rejected"},
         "gemini" => {default_base: nil, protocol: "native-rejected", kind: "rejected"}
       }.transform_values(&:freeze).freeze
 
       class << self
+        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists -- one build: every ensure,
+        # the configuration digest and the transport in the order a caller can read them.
         def build(provider:, model:, profile_role:, environment:, explicit_api_base: nil,
-                  safety: :unsafe, gateway: nil, timeout_seconds: 120, context_window: nil)
+                  safety: :unsafe, gateway: nil, timeout_seconds: nil, context_window: nil)
           name = normalize_provider(provider)
           descriptor = descriptor_for(name)
           ensure_model!(model, name)
@@ -36,18 +39,17 @@ module Tamoz
           ensure_credential!(api_key, name, profile_role:, credential_name:)
           ensure_endpoint!(endpoint, name)
           safety = normalize_safety(safety)
-          configuration = configuration_document(
-            name, model, endpoint, descriptor, profile_role, safety
-          )
+          configuration = configuration_document(name, model, endpoint, descriptor, profile_role, safety)
           EpisodeModelTransport.new(
-            endpoint:, model:, provider: name, api_key:, safety:,
-            gateway:, timeout_seconds:,
+            endpoint:, model:, provider: name, api_key:, safety:, gateway:,
+            timeout_seconds: timeout_seconds || ModelWindows.request_timeout(provider: name, model:),
             context_window: context_window || configured_context_window(profile_role, environment, name, model),
             provider_configuration_digest: Tamoz::Core.digest(
               "tamoz.agent.model.configuration.v1\n", configuration
             )
           )
         end
+        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
 
         def environment_names(provider:, profile_role: nil)
           name = normalize_provider(provider)

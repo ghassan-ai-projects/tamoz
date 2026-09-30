@@ -9,10 +9,11 @@ module Tamoz
     # schedule. An unknown slash command gets a typed `unknown_command` control
     # reply and never becomes model input.
     module Commands
-      KNOWN = %w[help status new cancel redirect whoami start reset compact usage context think verbose answer].freeze
+      KNOWN = %w[help status new cancel redirect whoami start reset compact usage context think verbose answer
+                 research].freeze
 
-      # The typed command crossing admission into the gateway. It carries no
-      # free-form task text and is never a model prompt.
+      # The typed command crossing admission into the gateway. Only /redirect, /answer and /research carry text meant
+      # for the model (a replacement task, an answer, a research question); the command itself is never a prompt.
       CommandIntent = Data.define(:name, :arguments)
 
       # A parsed known command. `arguments` is nil when absent.

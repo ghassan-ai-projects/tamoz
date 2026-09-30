@@ -23,7 +23,7 @@ class WebsearchInvocationTest < Minitest::Test
   ].freeze
   WEBSEARCH_FLAGS = %w[
     TAMOZ_WEBSEARCH_GRANT TAMOZ_WEBSEARCH_EGRESS TAMOZ_WEBSEARCH_FIXTURE_MODE
-    TAMOZ_WEBSEARCH_FIXTURE_OVERSIZE TAMOZ_WEBSEARCH_FIXTURE_ERROR
+    TAMOZ_WEBSEARCH_FIXTURE_OVERSIZE TAMOZ_WEBSEARCH_FIXTURE_ERROR TAMOZ_WEBSEARCH_PROVIDER
   ].freeze
 
   def setup
@@ -112,7 +112,7 @@ class WebsearchInvocationTest < Minitest::Test
       "connect_timeout_s" => 10,
       "redirect_max_hops" => 3,
       "circuit" => {"threshold" => 3, "scope_type" => "egress", "budget_breach" => true},
-      "credential_refs" => ["TAMOZ_SEARCH_API_TOKEN"]
+      "credential_refs" => ["TAMOZ_BRAVE_API_KEY"]
     }
   end
 
@@ -222,15 +222,23 @@ class WebsearchInvocationTest < Minitest::Test
     end
 
     # With the grant + egress + a fixture provider the adapter's search is
-    # deterministic and dial-free (its http provider is the recorded deferral).
+    # deterministic and dial-free.
+    web = File.join(@dir, "web.json")
+    File.write(web, JSON.generate("pages" => [{"url" => "https://answers.example/42", "title" => "The answer",
+                                               "text" => "The configured answer is 42."}]))
     ENV["TAMOZ_WEBSEARCH_GRANT"] = "1"
     ENV["TAMOZ_WEBSEARCH_EGRESS"] = JSON.generate(egress)
-    ENV["TAMOZ_WEBSEARCH_PROVIDER"] = JSON.generate("provider" => "fixture")
+    ENV["TAMOZ_WEBSEARCH_PROVIDER"] = JSON.generate("search" => "fixture", "reader" => "fixture", "web" => web)
     supervisor = Supervisor.new(adapter_config)
     begin
-      outcome = call_search(supervisor:, snapshot:)
+      outcome = call_search(supervisor:, snapshot:, arguments: {"query" => "the configured answer"})
       assert_equal :succeeded, outcome.status
       assert outcome.observation.text.include?("42")
+      entry = snapshot.entries.find { |candidate| candidate.name == "read_page" }
+      read = Invocation.descriptor_for(entry, snapshot:, effect_class: :read_only)
+      page = Invocation.call(read, {"url" => "https://answers.example/42"}, snapshot:, supervisor:)
+      assert_equal :succeeded, page.status
+      assert page.observation.text.include?("The configured answer is 42.")
     ensure
       supervisor.close
     end

@@ -16,6 +16,7 @@ class ModelClientFactoryTest < Minitest::Test
     'xai' => ['XAI_API_KEY', 'https://api.x.ai/v1'],
     'perplexity' => ['PERPLEXITY_API_KEY', 'https://api.perplexity.ai/v1'],
     'mistral' => ['MISTRAL_API_KEY', 'https://api.mistral.ai/v1'],
+    'zai' => ['ZAI_API_KEY', 'https://api.z.ai/api/paas/v4'],
     'anthropic' => ['ANTHROPIC_API_KEY', nil],
     'gemini' => ['GEMINI_API_KEY', nil]
   }.freeze

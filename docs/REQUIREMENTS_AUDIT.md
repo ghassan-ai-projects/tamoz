@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 565 | 297 | 15 | **no** |
+| 569 | 300 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 535 |
+| pass | 539 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -395,6 +395,9 @@ generating run.
 | `API-tamoz-otel-Tamoz::OTel::EgressPolicy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-otel-Tamoz::OTel::HTTPExporter` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-otel-Tamoz::OTel::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-research-Tamoz::Research` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-research-Tamoz::Research::Error` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-research-Tamoz::Research::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::ClockRollbackError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::GrantIntersector` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::KINDS` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -473,6 +476,7 @@ generating run.
 | `CLI-config` | cli_command | yes | pass | `test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup` |
 | `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
+| `CLI-deep-research` | cli_command | yes | pass | `test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-improve` | cli_command | yes | pass | `test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |

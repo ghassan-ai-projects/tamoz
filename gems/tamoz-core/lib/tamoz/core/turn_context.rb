@@ -14,6 +14,8 @@ module Tamoz
       MAX_FRAGMENT_TEXT_BYTES = 500
       MAX_CONTEXT_BYTES = 8_192
       ROLES = %w[user assistant].freeze
+      # The turn input entry that makes a turn a deep-research turn, for every surface that starts one.
+      RESEARCH_INPUT = { 'mode' => 'lead' }.freeze
 
       module_function
 

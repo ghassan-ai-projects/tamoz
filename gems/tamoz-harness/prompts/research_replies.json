@@ -1,0 +1,5 @@
+{
+  "go": ["go", "yes", "y", "ok", "okay", "start", "proceed", "continue", "sure", "fine", "good", "looks good",
+         "approve", "approved", "accept", "👍", "نعم", "ابدأ", "موافق", "تمام", "اوكي", "حسنا", "ايوه"],
+  "stop": ["stop", "cancel", "no", "abort", "never mind", "لا", "توقف", "الغاء", "إلغاء", "لا تبدأ"]
+}

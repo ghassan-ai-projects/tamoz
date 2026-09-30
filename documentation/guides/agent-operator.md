@@ -214,21 +214,44 @@ sources:
       - TAMOZ_WEBSEARCH_GRANT
       - TAMOZ_WEBSEARCH_EGRESS
       - TAMOZ_WEBSEARCH_PROVIDER
+    credential_refs:
+      - TAMOZ_BRAVE_API_KEY
+    read_only_tools: [search, read_page]
 ```
+
+The adapter serves two tools: `search` and `read_page`. `read_page` reads only a
+page one of the adapter's own searches returned, so no configuration and no
+model can make it fetch an arbitrary URL. The providers are named, never an
+endpoint:
+
+- `{"search":"brave","reader":"direct"}`: Brave search (the egress declaration
+  must allowlist `api.search.brave.com` and name `TAMOZ_BRAVE_API_KEY` in
+  `credential_refs`) and direct page reads. Page reads need the declaration's
+  explicit opt-in `"page_reads": "public"`: a page read then reaches any public
+  host through the same per-hop checks (https, DNS pinning, no private or
+  tunnelled address, redirect re-checks, no provider header on a host change),
+  streams at most 2 MiB without compression, and returns readable text.
+- `{"search":"fixture","reader":"fixture","web":"<path>"}`: a frozen web file,
+  with no socket.
+
+If your key is stored as `BRAVE_API_KEY`, export it under the ref name when you
+start the worker: `export TAMOZ_BRAVE_API_KEY="$BRAVE_API_KEY"`.
 
 The deterministic, no-network fixture is the safest wiring check:
 
 ```bash
 export TAMOZ_WEBSEARCH_GRANT=1
 export TAMOZ_WEBSEARCH_EGRESS='{"allowlisted_hosts":["api.search.example"],"schemes":["https"],"deny_private_ranges":true,"max_request_bytes":2048,"max_response_bytes":4096,"connect_timeout_s":10,"redirect_max_hops":3,"circuit":{"threshold":3,"scope_type":"egress","budget_breach":true},"credential_refs":[]}'
-export TAMOZ_WEBSEARCH_PROVIDER='{"provider":"fixture"}'
+echo '{"pages":[{"url":"https://answers.example/42","title":"Answer","text":"The answer is 42."}]}' > /tmp/web.json
+export TAMOZ_WEBSEARCH_PROVIDER='{"search":"fixture","reader":"fixture","web":"/tmp/web.json"}'
 
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json \
   | jq '.capability_catalog'
 ```
 
-The expected catalog entry is `mcp:websearch/search`. A fixture search returns
-deterministic text and does not access the network. It proves admission and
+The expected catalog entries are `mcp:websearch/search` and
+`mcp:websearch/read_page`. A fixture search returns deterministic results and
+does not access the network. It proves admission and
 catalog wiring, not live internet access.
 
 For a durable profile, put the same egress declaration under the profile's
@@ -247,18 +270,18 @@ egress:
   credential_refs: []
 ```
 
-For a live HTTP provider, use an `https://` endpoint whose exact host is in
-`allowlisted_hosts` and set:
+For live search, allowlist Brave and set the named providers:
 
 ```bash
-export TAMOZ_WEBSEARCH_PROVIDER='{"provider":"http","endpoint":"https://api.search.example/search"}'
+export TAMOZ_WEBSEARCH_EGRESS='{"allowlisted_hosts":["api.search.brave.com"],"schemes":["https"],"deny_private_ranges":true,"max_request_bytes":2048,"max_response_bytes":65536,"connect_timeout_s":10,"redirect_max_hops":3,"circuit":{"threshold":3,"scope_type":"egress","budget_breach":true},"credential_refs":["TAMOZ_BRAVE_API_KEY"],"page_reads":"public"}'
+export TAMOZ_WEBSEARCH_PROVIDER='{"search":"brave","reader":"direct"}'
 ```
 
 Live providers are operator-gated and are not covered by the repository's
 network tests. Validate the adapter and egress policy in the deployment before
-relying on current internet facts. If the provider requires an API token,
-verify the installed integration's credential-ref wiring before use; never put
-the token in `config.yaml`, a profile, or an MCP argument.
+relying on current internet facts. Never put the token in `config.yaml`, a
+profile, or an MCP argument; it reaches the adapter only as the
+`TAMOZ_BRAVE_API_KEY` credential ref.
 
 Treat search output as untrusted, author-claimed evidence. It can inform a
 response, but it does not grant tools, change policy, or prove a current fact by

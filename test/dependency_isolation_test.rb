@@ -40,6 +40,18 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
+  # tamoz-research is the rules of a research run: it must load no agent, graph, store, MCP or HTTP code, or
+  # the session could not call it without dragging those into every caller.
+  def test_research_loads_only_core
+    features = loaded_features_after("tamoz/research")
+
+    assert_includes features, "tamoz/research.rb"
+    refute(
+      features.any? { |path| path.match?(%r{tamoz/(?:graph|sqlite|agent|evals|mcp|harness|tools)|ruby_llm}) },
+      features.inspect
+    )
+  end
+
   def test_core_loads_only_its_declared_runtime_boundary
     features = loaded_features_after("tamoz/core")
 
@@ -181,11 +193,13 @@ class DependencyIsolationTest < Minitest::Test
     assert_empty unexpected, unexpected.inspect
   end
 
-  def test_websearch_gemspec_declares_exactly_mcp_and_core
+  # nokogiri turns a page read into readable text; it is the only non-Tamoz runtime dependency the adapter adds.
+  def test_websearch_gemspec_declares_exactly_mcp_core_and_nokogiri
     spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-mcp-websearch").join("tamoz-mcp-websearch.gemspec").to_s)
 
     assert_equal(
       {
+        "nokogiri" => "~> 1.18",
         "tamoz-core" => "= 0.1.0.alpha.1",
         "tamoz-mcp" => "= 0.1.0.alpha.1"
       },
@@ -340,6 +354,27 @@ class DependencyIsolationTest < Minitest::Test
     production.each do |name, root|
       spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
       refute_includes spec.runtime_dependencies.map(&:name), "tamoz-evals", name
+    end
+  end
+
+  # DESIGN §11: only the session, the improvement tuner and the CLI may hold the research edge.
+  def test_research_gemspec_declares_exactly_core
+    spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-research").join("tamoz-research.gemspec").to_s)
+
+    assert_equal(
+      { "tamoz-core" => "= 0.1.0.alpha.1" },
+      spec.runtime_dependencies.to_h { |dependency| [dependency.name, dependency.requirement.to_s] }
+    )
+  end
+
+  def test_only_the_named_gems_depend_on_research
+    allowed = %w[tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli]
+
+    GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner").each do |name, root|
+      next if allowed.include?(name)
+
+      spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+      refute_includes spec.runtime_dependencies.map(&:name), "tamoz-research", name
     end
   end
 

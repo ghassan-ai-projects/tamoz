@@ -728,7 +728,8 @@ module Tamoz
             'context' => '/context',
             'think' => '/think medium',
             'verbose' => '/verbose normal',
-            'answer' => '/answer'
+            'answer' => '/answer',
+            'research' => '/research'
           }
           sweep = {}
           update_id = 550

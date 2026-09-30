@@ -77,7 +77,7 @@ request_id = sha256("tamoz.comms.request.v1\n" +
 
 The inbox then deduplicates before lease acquisition, and a duplicate delivery returns the prior outcome or joins the active turn — invariant 23 does the rest for free. The inbound table also records the raw payload hash: same update id with a different hash is a durable integrity conflict, quarantined rather than admitted. Authority binding precedes work: the integration creates its deterministic thread and writes the surface's profile id with a write-once compare-and-set before any admission may enqueue work.
 
-The closed command table is `/help`, `/status`, `/new`, `/cancel`, `/redirect`, and `/whoami`. An unknown slash command gets a typed control reply and never becomes model input. There is no text approval command and no command that names a profile, tool, root, model, budget, or schedule; `/status` is a redacted per-conversation view.
+The closed command table is `Tamoz::Comms::Commands::KNOWN`: `/help`, `/status`, `/new`, `/cancel`, `/redirect`, `/whoami`, `/start`, `/reset`, `/compact`, `/usage`, `/context`, `/think`, `/verbose`, `/answer` and `/research`. An unknown slash command gets a typed control reply and never becomes model input. `/redirect`, `/answer` and `/research` carry text on purpose: a replacement task, a clarification answer, a research question. There is no text approval command and no command that names a profile, tool, root, model, budget, or schedule; `/status` is a redacted per-conversation view.
 
 ## 8. Approval policy — v1 is deny-only
 

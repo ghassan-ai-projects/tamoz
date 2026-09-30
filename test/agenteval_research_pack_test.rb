@@ -1,0 +1,88 @@
+# frozen_string_literal: true
+
+require 'stringio'
+require 'tmpdir'
+
+require_relative 'test_helper'
+require_relative '../agenteval/research/pack'
+
+# The research pack's offline controls (docs/deep-research-2026-09-30/EVAL.md §3): every grader separates a planted
+# good report from a planted bad one before any real-model number is read.
+# rubocop:disable Metrics/AbcSize -- each row reads the pre-registered shape from several sides.
+class AgentevalResearchPackTest < Minitest::Test
+  Pack = Agenteval::Research::Pack
+
+  def setup = @dir = Dir.mktmpdir('tamoz-agenteval-pack')
+
+  def teardown = FileUtils.remove_entry(@dir)
+
+  def test_every_grader_control_holds
+    failed = Pack.controls.reject(&:last).map(&:first)
+
+    assert_empty failed
+  end
+
+  def test_the_question_set_is_pre_registered_in_its_design_shape
+    dev = Pack.questions('dev')
+    held_out = Pack.questions('held_out')
+
+    assert_equal [6, 8], [dev.length, held_out.length]
+
+    assert_equal %w[comparison contested current factual survey], held_out.map { |q| q.fetch('class') }.uniq.sort
+    Pack.questions.each do |question|
+      question.fetch('facts').each { |fact| fact.fetch('any').each { |pattern| Regexp.new(pattern) } }
+
+      assert question['after'] || !question.fetch('facts').empty?, "#{question['id']} grades nothing"
+    end
+  end
+
+  def test_the_arms_differ_only_in_children_per_wave
+    fanout, single = Pack::ARMS.values_at('fanout', 'single')
+
+    assert_equal fanout.fetch('ceilings'), single.fetch('ceilings').except('children_per_wave')
+    assert_equal 1, single.dig('ceilings', 'children_per_wave')
+    Pack::ARMS.each_value { |override| Tamoz::Research.budgets(override:) }
+  end
+
+  def test_the_judge_reads_a_nested_answer_whole_not_inner_object_first
+    text = "Sure!\n{\"comprehensiveness\": \"A\", \"detail\": {\"depth\": 2}, \"insight\": \"B\"}\nThanks"
+    extracted = JSON.parse(Agenteval::Research::Judge.object_in(text))
+
+    assert_equal({ 'comprehensiveness' => 'A', 'detail' => { 'depth' => 2 }, 'insight' => 'B' }, extracted)
+    assert_nil Agenteval::Research::Judge.object_in('no object here')
+  end
+
+  def test_an_arm_that_does_not_exist_is_refused_before_anything_runs
+    error = assert_raises(RuntimeError) do
+      Pack.run(set: 'dev', arms: ['../escape'], out: File.join(@dir, 'out.json'), log: StringIO.new)
+    end
+
+    assert_includes error.message, 'unknown arm'
+  end
+
+  def test_a_finished_run_is_reused_only_when_it_reported
+    question = { 'id' => 'q1' }
+    folder = File.join(@dir, 'fanout', 'q1')
+    FileUtils.mkdir_p(folder)
+    File.write(File.join(folder, 'result.json'), JSON.generate('status' => 'no_report'))
+
+    assert_nil Pack.finished(@dir, question, 'fanout')
+    File.write(File.join(folder, 'result.json'), JSON.generate('status' => 'report'))
+
+    assert_equal 'report', Pack.finished(@dir, question, 'fanout').fetch('status')
+  end
+
+  def test_a_real_held_out_question_id_is_refused_as_a_tuning_input
+    held = Pack.questions('held_out').map { |question| question.fetch('id') }
+
+    error = assert_raises(ArgumentError) do
+      Tamoz::Agent::Improvement::ResearchBudgetTuner.new(
+        records: [{ 'run_id' => held.first, 'depth' => 'quick', 'stop_reason' => 'saturation', 'waves' => 2 }],
+        holdout_ids: held
+      )
+    end
+
+    assert_includes error.message, held.first
+  end
+end
+# rubocop:enable Metrics/AbcSize

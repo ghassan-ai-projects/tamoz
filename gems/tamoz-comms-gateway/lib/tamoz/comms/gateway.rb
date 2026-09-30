@@ -39,9 +39,11 @@ module Tamoz
       HELP_MORE_REPLY = 'Commands: /help [more], /status [r<reference>] [--diagnostic], /new, ' \
                         '/cancel [r<reference>], /redirect r<reference> <new task>, /whoami, ' \
                         '/start <pairing code>, /answer r<reference> <answer>, /reset, /compact, /usage, ' \
-                        '/context, /think <low|medium|high>, /verbose <quiet|normal|detailed>. ' \
+                        '/context, /think <low|medium|high>, /verbose <quiet|normal|detailed>, ' \
+                        '/research <question> (a cited report; you see the plan first). ' \
                         'Commands are controls, not task text.'
       HELP_USAGE_REPLY = 'Usage: /help [more]'
+      RESEARCH_USAGE_REPLY = 'Usage: /research <question>. I show you a research plan first, then write a cited report.'
       NO_WORK_REPLY = 'Nothing is running right now.'
       STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'

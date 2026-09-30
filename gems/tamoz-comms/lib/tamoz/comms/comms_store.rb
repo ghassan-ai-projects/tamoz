@@ -39,8 +39,11 @@ module Tamoz
       # :duplicate, and the SAME identity under a DIFFERENT payload digest is
       # a durable integrity conflict recorded on the ONE anchor row — its
       # conflict counter advances, nothing is enqueued (invariant 1).
+      # `history` is the conversation so far; `research` (TurnContext::RESEARCH_INPUT, or nil) rides in the payload and
+      # makes the turn a deep-research turn.
       # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:)
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
+                            history: [], research: nil)
         raise NotImplementedError
       end
 

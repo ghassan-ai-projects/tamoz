@@ -56,7 +56,7 @@ module Tamoz
               Usage: tamoz [global-options] [subcommand] [options] [ARGS]
                      tamoz [options] TASK
 
-              Interactive:  ask, code, investigate, resume, continue, list, show,
+              Interactive:  ask, code, investigate, deep-research, resume, continue, list, show,
                             follow-up, redirect, cancel, resolve, profile, probes
               Unattended:   init, queue, worker, status, schedule, approve, observe,
                             trace, improve
@@ -105,6 +105,9 @@ module Tamoz
               end
               options[:subagents] = names.uniq
             end
+            value.on('--research-budgets FILE', 'Narrow the deep-research budgets with a JSON file') do |path|
+              options[:research_budgets] = research_budget_override(path)
+            end
             value.on('--shadow-routing', 'Record routing decisions while using the standard workflow') do
               options[:shadow_routing] = true
             end
@@ -137,6 +140,14 @@ module Tamoz
           raise OptionParser::InvalidArgument, "duplicate check #{name.inspect}" if options[:checks].key?(name)
 
           options[:checks][name] = check_argv
+        end
+
+        def research_budget_override(path)
+          override = JSON.parse(File.read(path))
+          Tamoz::Research.budgets(override:)
+          override
+        rescue SystemCallError, JSON::ParserError, Tamoz::Research::Error => e
+          raise OptionParser::InvalidArgument, "--research-budgets #{path}: #{e.message}"
         end
       end
     end

@@ -38,11 +38,18 @@ module Tamoz
       #
       # This class is the operator-side adapter's HTTP stack — it lives in the
       # process Tamoz supervises, never in Tamoz's own process (correction 2).
+      # :reek:TooManyConstants :reek:TooManyInstanceVariables :reek:TooManyMethods -- the one per-hop client.
       class EgressClient
         DEFAULT_PORT = 443
         REDIRECT_STATUSES = [301, 302, 303, 307, 308].freeze
         MAX_REDIRECT_LOCATION_BYTES = 2048
         CREDENTIAL_HEADER_NAMES = %w[authorization proxy-authorization cookie].freeze
+        # The only request headers a redirect to another host keeps: any other may carry a provider's credential.
+        CROSS_HOST_HEADERS = %w[accept accept-language user-agent].freeze
+        # `:allowlist` reaches only the declared hosts; `:public` (the page reader) reaches any public FQDN, with every
+        # other per-hop check unchanged.
+        REACHES = %i[allowlist public].freeze
+        READER_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
         # The bounded outcome of one fetch. `truncated` is true when the body
         # was cut at `max_response_bytes` (the caller surfaces it as evidence
@@ -62,12 +69,15 @@ module Tamoz
         # AND its query — it is the request, so a connector that ignores it is
         # asking a different question than the caller asked. Both default to
         # real implementations.
-        def initialize(policy:, resolver: nil, connector: nil)
+        # :reek:ControlParameter
+        def initialize(policy:, resolver: nil, connector: nil, reach: :allowlist, max_response_bytes: nil)
           unless policy.is_a?(EgressPolicy)
             raise ValidationError, "policy must be a Tamoz::Mcp::Websearch::EgressPolicy"
           end
 
           @policy = policy
+          @reach = checked_reach(reach)
+          @max_response_bytes = response_bound(max_response_bytes || policy.max_response_bytes)
           @resolver = resolver || default_resolver
           @connector = connector || default_connector
           @dials = []
@@ -111,10 +121,23 @@ module Tamoz
 
         private
 
-        # --- target construction (every hop re-runs this) -------------------
+        def checked_reach(reach)
+          raise ValidationError, "reach must be one of #{REACHES.join(', ')}" unless REACHES.include?(reach)
+          if reach == :public && !(policy.deny_private_ranges && policy.page_reads == "public")
+            raise ValidationError, "the public reach needs deny_private_ranges and page_reads: public"
+          end
+
+          reach
+        end
+
+        def response_bound(bytes)
+          return bytes if bytes.is_a?(Integer) && (1..READER_MAX_RESPONSE_BYTES).cover?(bytes)
+
+          raise ValidationError, "max_response_bytes must be 1 to #{READER_MAX_RESPONSE_BYTES}"
+        end
 
         def initial_target(url, headers, body)
-          uri = parse_url(url)
+          uri = upgraded(parse_url(url))
           validate_scheme!(uri)
           host = validate_host!(uri.host)
           validate_port!(uri)
@@ -141,7 +164,7 @@ module Tamoz
           end
 
           uri = begin
-            URI.join("https://#{current.fetch(:host)}#{current.fetch(:path)}", location)
+            upgraded(URI.join("https://#{current.fetch(:host)}#{current.fetch(:path)}", location))
           rescue URI::InvalidURIError
             raise EgressPolicyError, "the websearch redirect Location is malformed"
           end
@@ -150,7 +173,7 @@ module Tamoz
           validate_port!(uri)
           headers = current.fetch(:headers)
           if host != current.fetch(:host)
-            headers = headers.reject { |name, _| CREDENTIAL_HEADER_NAMES.include?(name.downcase) }.freeze
+            headers = headers.select { |name, _| CROSS_HOST_HEADERS.include?(name.downcase) }.freeze
           end
 
           {host:, path: request_path(uri), headers:, body: nil}
@@ -163,6 +186,13 @@ module Tamoz
           URI.parse(text)
         rescue URI::InvalidURIError
           raise EgressPolicyError, "the websearch target URL is malformed"
+        end
+
+        # A public page named over http is asked for over https; nothing is ever fetched over http.
+        def upgraded(uri)
+          return uri unless @reach == :public && uri.instance_of?(URI::HTTP) && uri.port == URI::HTTP::DEFAULT_PORT
+
+          URI::HTTPS.build(host: uri.host, path: uri.path, query: uri.query)
         end
 
         def validate_scheme!(uri)
@@ -185,7 +215,7 @@ module Tamoz
                   "the websearch target host #{host.inspect} is an IP literal; " \
                   "v1 allows exact allowlisted FQDNs only"
           end
-          unless policy.allowlisted_host?(host)
+          unless @reach == :public || policy.allowlisted_host?(host)
             raise EgressPolicyError,
                   "the websearch target host #{host.inspect} is not allowlisted"
           end
@@ -205,8 +235,6 @@ module Tamoz
 
           path
         end
-
-        # --- per-hop resolve → classify → pin --------------------------------
 
         def pin_address(host)
           addresses = begin
@@ -231,8 +259,6 @@ module Tamoz
                 "addresses"
         end
 
-        # --- response handling ------------------------------------------------
-
         def redirect?(response)
           status = response.fetch("status")
           REDIRECT_STATUSES.include?(status) && response.fetch("headers").key?("location")
@@ -243,8 +269,8 @@ module Tamoz
           headers = response.fetch("headers")
           body = String(response.fetch("body") || "")
           truncated = false
-          if body.bytesize > policy.max_response_bytes
-            body = body.byteslice(0, policy.max_response_bytes).scrub("").rstrip
+          if body.bytesize > @max_response_bytes
+            body = body.byteslice(0, @max_response_bytes).scrub("").rstrip
             truncated = true
           end
           Result.new(status:, headers: headers.dup.freeze, body: body.freeze, truncated:)
@@ -262,8 +288,11 @@ module Tamoz
         # the TLS SNI / certificate identity. `ipaddr=` selects the connect
         # address while `address` stays the allowlisted hostname, so the
         # validated IP is what is dialed and certificate verification still
-        # checks the hostname the operator allowlisted.
+        # checks the hostname the operator allowlisted. The body is streamed and
+        # cut past the response bound, identity-encoded (no gzip bomb), and the
+        # whole read stays inside a deadline.
         def default_connector
+          limit = @max_response_bytes
           lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
             http = Net::HTTP.new(host, port)
             http.ipaddr = pinned_ip
@@ -276,14 +305,23 @@ module Tamoz
             # on a GET dropped it silently — the query never reached the
             # provider. A request that carries a body is a POST.
             request = (body ? Net::HTTP::Post : Net::HTTP::Get).new(path)
-            headers.each { |name, value| request[name] = value }
+            headers.merge("Accept-Encoding" => "identity").each { |name, value| request[name] = value }
             request.body = body if body
-            response = http.start { |connection| connection.request(request) }
-            {
-              "status" => response.code.to_i,
-              "headers" => response.each_header.to_h.freeze,
-              "body" => response.body.to_s
-            }
+            http.start { |connection| bounded_exchange(connection, request, limit, timeout * 3) }
+          end
+        end
+
+        # :reek:DuplicateMethodCall :reek:LongParameterList :reek:NestedIterators :reek:TooManyStatements
+        # :reek:UtilityFunction
+        def bounded_exchange(connection, request, limit, seconds)
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+          connection.request(request) do |response|
+            received = +""
+            response.read_body do |chunk|
+              received << chunk
+              break if received.bytesize > limit || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+            end
+            return {"status" => response.code.to_i, "headers" => response.each_header.to_h.freeze, "body" => received}
           end
         end
       end

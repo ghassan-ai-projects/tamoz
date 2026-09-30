@@ -232,6 +232,24 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # /research <question> admits the same turn as a message, with the research entry that makes it a research turn.
+  def test_a_research_command_admits_a_research_turn_and_a_message_does_not
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      start = Time.utc(2026, 9, 30, 12, 0, 0)
+      transport.batch([update(101, text: '/research How large is Oslo?')])
+      gateway.serve_once(now: start)
+      transport.batch([update(102, text: 'thanks')])
+      gateway.serve_once(now: start + 2)
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      research, plain = checkpoints.request_history(thread_id: thread).map(&:payload)
+
+      assert_equal({ 'mode' => 'lead' }, research.fetch('research'))
+      assert_equal 'How large is Oslo?', research.fetch('task')
+      refute plain.key?('research')
+    end
+  end
+
   def test_a_replayed_update_does_not_create_a_second_request
     with_gateway do |gateway, transport, store, adapter, checkpoints|
       seed_binding(store)

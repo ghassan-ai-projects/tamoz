@@ -5,6 +5,7 @@
 # Nothing here reaches up into session, worker, or CLI code.
 require "tamoz/agent_kernel"
 require "tamoz/agent_memory"
+require "tamoz/research"
 
 require_relative "agent/improvement/version"
 require_relative "agent/improvement/errors"
@@ -17,6 +18,7 @@ require_relative "agent/improvement/promotion"
 require_relative "agent/improvement/candidate_proposal"
 require_relative "agent/improvement/candidate_policy"
 require_relative "agent/improvement/candidate_lifecycle"
+require_relative "agent/improvement/research_budget_tuner"
 
 module Tamoz
   module Agent

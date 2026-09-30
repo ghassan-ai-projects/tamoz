@@ -1,0 +1,103 @@
+{
+  "registered": "2026-09-30",
+  "note": "Pre-registered before any real run. A key fact is recalled when one cited report sentence matches any of its patterns (case-insensitive). A question with `after` is also graded on recency: the share of cited sources published on or after that date. Dev questions may be used for tuning; held-out questions are run once per arm and never tune anything.",
+  "questions": [
+    {"id": "D1", "set": "dev", "class": "factual",
+     "question": "What is the half-life of carbon-14, who led the development of radiocarbon dating, and what prize did that work earn?",
+     "facts": [
+       {"id": "half_life", "any": ["5,?730", "5,?700"]},
+       {"id": "libby", "any": ["Libby"]},
+       {"id": "nobel", "any": ["Nobel Prize in Chemistry", "Nobel.{0,40}(Chemistry|1960)", "1960.{0,40}Nobel"]}
+     ]},
+    {"id": "D2", "set": "dev", "class": "factual",
+     "question": "Who was CERN's first Director-General, and in what year was CERN founded?",
+     "facts": [
+       {"id": "bloch", "any": ["Felix Bloch", "\\bBloch\\b"]},
+       {"id": "founded", "any": ["\\b1954\\b"]}
+     ]},
+    {"id": "D3", "set": "dev", "class": "comparison",
+     "question": "How do SQLite and PostgreSQL differ in handling concurrent writes?",
+     "facts": [
+       {"id": "sqlite_one_writer", "any": ["one writer", "single writer", "only one (connection|process|transaction).{0,40}writ", "database[- ]level lock"]},
+       {"id": "wal", "any": ["\\bWAL\\b", "write-ahead log"]},
+       {"id": "postgres_mvcc", "any": ["\\bMVCC\\b", "multi-?version concurrency"]},
+       {"id": "row_locks", "any": ["row-level lock", "row level lock", "locks? (individual )?rows"]}
+     ]},
+    {"id": "D4", "set": "dev", "class": "comparison",
+     "question": "How do Rust and Go manage memory, and what are the trade-offs of each approach?",
+     "facts": [
+       {"id": "rust_ownership", "any": ["ownership", "borrow checker", "borrowing"]},
+       {"id": "rust_no_gc", "any": ["no garbage collector", "without a garbage collector", "does not use a garbage collector", "no GC"]},
+       {"id": "go_gc", "any": ["Go.{0,80}garbage[- ]collect", "garbage[- ]collect.{0,80}\\bGo\\b"]},
+       {"id": "go_concurrent_gc", "any": ["concurrent.{0,30}(mark|collector|garbage)", "mark[- ]and[- ]sweep", "tri-?color"]}
+     ]},
+    {"id": "D5", "set": "dev", "class": "survey",
+     "question": "What are the main approaches and metrics for evaluating retrieval-augmented generation (RAG) systems?",
+     "facts": [
+       {"id": "faithfulness", "any": ["faithful", "grounded", "groundedness"]},
+       {"id": "context_quality", "any": ["context (precision|recall|relevance)", "retrieval (precision|recall)", "recall@", "precision@"]},
+       {"id": "answer_relevance", "any": ["answer relevan"]},
+       {"id": "frameworks", "any": ["RAGAS", "ARES", "TruLens", "DeepEval"]}
+     ]},
+    {"id": "D6", "set": "dev", "class": "current",
+     "question": "What are the notable changes in the Ruby programming language release published in December 2025?",
+     "after": "2025-10-01",
+     "facts": []},
+
+    {"id": "H1", "set": "held_out", "class": "factual",
+     "question": "Which engineers designed the structure of the Eiffel Tower, and in what year was it completed?",
+     "facts": [
+       {"id": "koechlin", "any": ["Koechlin"]},
+       {"id": "nouguier", "any": ["Nouguier"]},
+       {"id": "completed", "any": ["\\b1889\\b"]}
+     ]},
+    {"id": "H2", "set": "held_out", "class": "factual",
+     "question": "How high is the summit of Mount Everest according to the latest official survey, and at about what temperature does water boil there?",
+     "facts": [
+       {"id": "height", "any": ["8,?848\\.86", "8,?849"]},
+       {"id": "boiling", "any": ["\\b(6[89]|7[0-2])(\\.\\d)?\\s?(°|degrees?|º)\\s?C", "\\b(6[89]|7[0-2])(\\.\\d)?\\s?°"]}
+     ]},
+    {"id": "H3", "set": "held_out", "class": "comparison",
+     "question": "How do HTTP/2 and HTTP/3 differ, and what problem does HTTP/3 solve?",
+     "facts": [
+       {"id": "quic", "any": ["\\bQUIC\\b"]},
+       {"id": "udp", "any": ["\\bUDP\\b"]},
+       {"id": "hol", "any": ["head[- ]of[- ]line"]},
+       {"id": "tcp", "any": ["HTTP/2.{0,80}\\bTCP\\b", "\\bTCP\\b.{0,80}HTTP/2"]}
+     ]},
+    {"id": "H4", "set": "held_out", "class": "comparison",
+     "question": "How do lithium iron phosphate (LFP) and nickel manganese cobalt (NMC) batteries compare for electric cars?",
+     "facts": [
+       {"id": "density", "any": ["energy density"]},
+       {"id": "cycle_life", "any": ["cycle life", "more (charge )?cycles", "\\d,?\\d{3}\\+? cycles"]},
+       {"id": "cost", "any": ["cheaper", "lower cost", "less expensive", "cost less"]},
+       {"id": "cobalt", "any": ["cobalt"]}
+     ]},
+    {"id": "H5", "set": "held_out", "class": "survey",
+     "question": "What methods exist for detecting hallucinations in large language model outputs?",
+     "facts": [
+       {"id": "consistency", "any": ["SelfCheckGPT", "self-consisten", "sampl.{0,40}consisten"]},
+       {"id": "uncertainty", "any": ["entropy", "uncertaint", "token probabilit", "log-?prob"]},
+       {"id": "retrieval", "any": ["retriev", "fact-?check", "external (knowledge|source)"]},
+       {"id": "judge", "any": ["LLM-as-a-judge", "LLM as a judge", "judge model", "another (model|LLM)"]}
+     ]},
+    {"id": "H6", "set": "held_out", "class": "survey",
+     "question": "What are the main approaches to carbon dioxide removal, and how mature is each?",
+     "facts": [
+       {"id": "dac", "any": ["direct air capture", "\\bDAC(CS)?\\b"]},
+       {"id": "beccs", "any": ["BECCS", "bioenergy with carbon capture"]},
+       {"id": "forests", "any": ["afforestation", "reforestation"]},
+       {"id": "weathering", "any": ["enhanced (rock )?weathering"]}
+     ]},
+    {"id": "H7", "set": "held_out", "class": "contested",
+     "question": "Is intermittent fasting more effective than continuous daily calorie restriction for weight loss in adults?",
+     "facts": [
+       {"id": "similar", "any": ["similar", "comparable", "no significant difference", "no clear difference", "equivalent"]},
+       {"id": "trials", "any": ["randomi[sz]ed", "meta-analys", "systematic review"]}
+     ]},
+    {"id": "H8", "set": "held_out", "class": "current",
+     "question": "What were the most important developments in fusion energy research in 2026?",
+     "after": "2026-01-01",
+     "facts": []}
+  ]
+}

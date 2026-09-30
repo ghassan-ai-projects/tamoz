@@ -23,7 +23,7 @@ module Tamoz
         cursor = state.fetch(:work_cursor)
         return round_complete(state) if cursor >= pending.length
 
-        call = with_arguments(pending.fetch(cursor))
+        call = with_arguments(state, pending.fetch(cursor))
         # A call refused while parsing carries placeholder arguments and ran nothing: it is not a repeat.
         return result(state, call, "Error: #{call.fetch('error')}") if call['error']
 
@@ -41,7 +41,7 @@ module Tamoz
       # rubocop:disable Metrics/AbcSize -- preview, dispatch and outcome of one effect stay in journal order
       def execute(state, context)
         prepared = state.fetch(:work_prepared)
-        call = with_arguments(state.fetch(:work_pending).fetch(state.fetch(:work_cursor)))
+        call = with_arguments(state, state.fetch(:work_pending).fetch(state.fetch(:work_cursor)))
         step = prepared.fetch('step').merge(
           'arguments' => pinned(state, call.fetch('name'), call.fetch('arguments'))
         )
@@ -56,11 +56,15 @@ module Tamoz
       end
       # rubocop:enable Metrics/AbcSize
 
+      def finish_refusal(state) = @tools.finish_refusal(state)
+
       private
 
-      def with_arguments(call)
+      # A research child's web call comes back as the capability that backs it, with its shown name kept.
+      def with_arguments(state, call)
         arguments = JSON.parse(@work.resolve.call(call.fetch('arguments_ref')))
-        call.merge('arguments' => @work.settings.context_policy.window_arguments(call.fetch('name'), arguments))
+        windowed = @work.settings.context_policy.window_arguments(call.fetch('name'), arguments)
+        @tools.web.resolve(state, call.merge('arguments' => windowed))
       end
 
       # Reminders wait until every call of the step is answered: a user message between the
@@ -85,8 +89,17 @@ module Tamoz
           harness_result(state, call, @tools.update_plan(state, context, tool_call(call),
                                                          iteration: state.fetch(:work_step_count)))
         when *WorkTools::DIRECT then harness_result(state, call, @tools.direct(state, context, tool_call(call)))
-        else toolbox_gate(state, context, call, cursor)
+        when *WorkResearch::LEAD_TOOLS
+          harness_result(state, call, @tools.research(state, context, tool_call(call)))
+        when WorkWeb::FINISH then harness_result(state, call, @tools.report_sources(state, tool_call(call)))
+        else web_gate(state, context, call, cursor)
         end
+      end
+
+      # :reek:LongParameterList
+      def web_gate(state, context, call, cursor)
+        refusal = call['shown_name'] && @tools.web.refusal(state, call)
+        refusal ? result(state, call, refusal) : toolbox_gate(state, context, call, cursor)
       end
 
       def tool_call(call)
@@ -253,10 +266,12 @@ module Tamoz
                  "Error: #{@services.evidence.tool_error_message(outcome)}"
                end
         source = 'probe' if outcome.status == :succeeded && @work.probe?(name)
+        text, research = web_result(state, call, outcome, text)
         result(state, call, text, summary: summary(name, outcome), source:)
           .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil,
                                               **observation_update(state, name, call, outcome),
-                                              **WorkMemory.turn_facts(name, call.fetch('arguments'), outcome))
+                                              **WorkMemory.turn_facts(name, call.fetch('arguments'), outcome),
+                                              **(research ? { research: } : {}))
       end
 
       # The one seam outside this class that maintains the ledger: a read, a creation, or a
@@ -275,6 +290,15 @@ module Tamoz
         when 'create_file' then observations(state).record_create(call.fetch('arguments').fetch('path'), step:)
         else observations(state).record_write(call.fetch('arguments').fetch('path'), step:)
         end
+      end
+
+      # :reek:LongParameterList
+      def web_result(state, call, outcome, text)
+        shown = call['shown_name']
+        return [text, nil] unless shown
+        return [text, @tools.web.charged(state, shown)] unless outcome.status == :succeeded
+
+        @tools.web.observed(state, shown, String(outcome.value.fetch('output')))
       end
 
       def success_text(name, value, preview)
@@ -326,9 +350,10 @@ module Tamoz
 
       # source 'probe' marks a probe result a findings report may cite.
       def result(state, call, text, summary: nil, source: nil)
-        spilled = spilled_result(call.fetch('name'), text, summary: summary || call.fetch('name'))
+        name = call.fetch('shown_name', call.fetch('name'))
+        spilled = spilled_result(name, text, summary: summary || name)
         entry = @work.entry(state.fetch(:work_entries), 'tool_result', spilled.text,
-                            tool_call_id: call.fetch('id'), name: call.fetch('name'), spilled: spilled.spilled, source:)
+                            tool_call_id: call.fetch('id'), name:, spilled: spilled.spilled, source:)
         { work_entries: [entry], work_cursor: state.fetch(:work_cursor) + 1, next_node: 'work_gate' }
       end
 

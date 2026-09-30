@@ -16,7 +16,8 @@ TamozGemspec.build(
     ['tamoz-concurrency', "= #{Tamoz::Agent::CLI::VERSION}"],
     ['tamoz-agent-capabilities', "= #{Tamoz::Agent::CLI::VERSION}"],
     ['tamoz-agent-session', "= #{Tamoz::Agent::CLI::VERSION}"],
-    ['tamoz-comms-gateway', "= #{Tamoz::Agent::CLI::VERSION}"]
+    ['tamoz-comms-gateway', "= #{Tamoz::Agent::CLI::VERSION}"],
+    ['tamoz-research', "= #{Tamoz::Agent::CLI::VERSION}"]
   ],
   executable: 'tamoz'
 )

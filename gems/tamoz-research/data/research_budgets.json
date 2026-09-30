@@ -1,0 +1,35 @@
+{
+  "ceilings": {
+    "children_per_wave": 4,
+    "children_per_run": 12,
+    "waves": 3,
+    "searches": 80,
+    "page_reads": 60
+  },
+  "depths": {
+    "quick": {
+      "children_per_wave": 2,
+      "waves": 1,
+      "searches": 10,
+      "page_reads": 8,
+      "minutes": 3,
+      "words": [500, 800]
+    },
+    "standard": {
+      "children_per_wave": 4,
+      "waves": 2,
+      "searches": 40,
+      "page_reads": 30,
+      "minutes": 10,
+      "words": [1500, 2500]
+    },
+    "deep": {
+      "children_per_wave": 4,
+      "waves": 3,
+      "searches": 80,
+      "page_reads": 60,
+      "minutes": 25,
+      "words": [4000, 6000]
+    }
+  }
+}

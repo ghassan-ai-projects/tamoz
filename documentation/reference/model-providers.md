@@ -12,6 +12,7 @@ single `EpisodeModelTransport` OpenAI-compatible request shape.
 | `xai` | direct OpenAI-compatible | `https://api.x.ai/v1` | `XAI_API_KEY` | `XAI_API_BASE` | non-empty provider model id |
 | `perplexity` | direct OpenAI-compatible | `https://api.perplexity.ai/v1` | `PERPLEXITY_API_KEY` | `PERPLEXITY_API_BASE` | non-empty provider model id |
 | `mistral` | direct OpenAI-compatible | `https://api.mistral.ai/v1` | `MISTRAL_API_KEY` | `MISTRAL_API_BASE` | non-empty provider model id |
+| `zai` | direct OpenAI-compatible | `https://api.z.ai/api/paas/v4` (a GLM Coding Plan key needs `https://api.z.ai/api/coding/paas/v4`) | `ZAI_API_KEY` | `ZAI_API_BASE` | non-empty provider model id, e.g. `glm-5.3-flash` |
 | `anthropic` | native protocol rejected | none | `ANTHROPIC_API_KEY` | `ANTHROPIC_API_BASE` | fail closed; use `openrouter` explicitly |
 | `gemini` | native protocol rejected | none | `GEMINI_API_KEY` | `GEMINI_API_BASE` | fail closed; use `openrouter` explicitly |
 

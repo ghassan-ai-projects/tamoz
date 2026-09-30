@@ -26,6 +26,7 @@ module Tamoz
           when 'answer'
             reply = answer_command(envelope, intent.arguments, now:)
             append_control(reply, envelope, now:) if reply
+          when 'research' then research_command(envelope, intent.arguments, now:)
           when 'whoami'
             append_control(whoami_text(envelope), envelope, now:)
           when 'start'
@@ -35,6 +36,18 @@ module Tamoz
           end
         end
         # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity
+
+        # A question after /research is admitted as a deep-research turn; the plan is shown before any search.
+        def research_command(envelope, question, now:)
+          if question.to_s.strip.empty?
+            outcome = record_disposition(envelope, disposition: 'ignored', reason: 'research_usage', now:)
+            return append_control(RESEARCH_USAGE_REPLY, envelope, now:) unless outcome == :duplicate
+
+            return
+          end
+
+          admit_request(envelope.merge('text' => question), now:, research: Tamoz::Core::TurnContext::RESEARCH_INPUT)
+        end
 
         def help_reply(arguments)
           return HELP_REPLY if arguments.nil?

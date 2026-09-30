@@ -5054,6 +5054,48 @@
       "package": "tamoz-otel"
     },
     {
+      "id": "API-tamoz-research-Tamoz::Research",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research"
+    },
+    {
+      "id": "API-tamoz-research-Tamoz::Research::Error",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research::Error",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research"
+    },
+    {
+      "id": "API-tamoz-research-Tamoz::Research::VERSION",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research::VERSION",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research"
+    },
+    {
       "id": "API-tamoz-scheduler-Tamoz::Scheduler::ClockRollbackError",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -6146,6 +6188,22 @@
       "status": "unverified",
       "named_test": "test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-deep-research",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz deep-research",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace",
+      "supporting_tests": [
+        "test/agent_cli_research_test.rb#test_a_research_thread_paused_at_its_plan_resumes_with_an_answer",
+        "test/agent_cli_research_test.rb#test_deep_research_refuses_to_change_files"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null

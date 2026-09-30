@@ -37,6 +37,14 @@ tool_tiers:
   "probe_*":
     tier: read
     verb: read
+  # The governed websearch (sources.websearch, operator-granted egress). Declared read-only by the operator it lands in
+  # tier read, which a research subagent needs because it cannot ask; undeclared, every call asks.
+  "mcp:websearch/search":
+    tier: network
+    verb: read
+  "mcp:websearch/read_page":
+    tier: network
+    verb: read
 
 fallback_tier:
   tier: local_execute
@@ -107,3 +115,7 @@ simulations:
       tool: probe_pond_log
       verb: read
     expect: allow
+  - request:
+      tool: "mcp:websearch/read_page"
+      verb: read
+    expect: ask

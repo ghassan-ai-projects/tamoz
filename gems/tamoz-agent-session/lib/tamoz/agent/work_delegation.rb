@@ -32,6 +32,24 @@ module Tamoz
         WorkTools::Outcome.new(text: text(reports, plan.budget), update: { work_trace: trace })
       end
 
+      # Runs one child graph per input, at most `batch` at once; the outputs come back in input order.
+      def run_inputs(child, inputs, context, batch:)
+        inputs.each_slice(batch).flat_map do |slice|
+          slice.length == 1 ? [child.app.call(slice.first, context)] : child.app.call_many(slice, context)
+        end
+      end
+
+      # The started and finished events of children run with run_inputs.
+      def trace(child, outputs, inputs)
+        outputs.zip(inputs).flat_map do |output, input|
+          report = SubagentReport.new(role: child.role.name, output:, store: @work.store, scrub: @work.method(:scrub))
+          [{ 'event' => 'subagent_started', 'role' => report.role,
+             'brief_digest' => "sha256:#{Digest::SHA256.hexdigest(input.fetch(:task))}",
+             'execution_id' => output.fetch(:work_execution_id) },
+           report.finished_event(0, ANSWER_BYTES)]
+        end
+      end
+
       private
 
       def run(child, briefs, context)
@@ -60,7 +78,7 @@ module Tamoz
       end
 
       def admitted(state, arguments, call_id)
-        apps = @services.configuration.subagent_apps
+        apps = @services.configuration.subagent_apps.reject { |_, app| app.role.research? }
         child = apps[arguments['role']]
         return [nil, nil, "unknown subagent role; one of #{apps.keys.join(', ')}"] unless child
 

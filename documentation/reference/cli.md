@@ -39,6 +39,7 @@ on that thread.
 | `--work-routing` | Serve worker and chat turns with the tool-calling work loop |
 | `--guidance FILE` | Project guidance file for the work loop, e.g. `AGENTS.md` (repeatable, workspace root only) |
 | `--check NAME=COMMAND` | Configure a named verification command |
+| `--research-budgets FILE` | Narrow deep-research budgets for the turn from a JSON override — it may only lower the shipped ceilings and depth defaults, and is validated before anything runs |
 | `--json` | Emit newline-delimited JSON events |
 | `--non-interactive` | Fail instead of prompting |
 | `--version` | Print the Tamoz version |
@@ -57,6 +58,7 @@ Work you are watching, against a session directory.
 | `ask` | Start a new turn on a thread | `TASK` (positional) |
 | `code` | Start a coding turn in the durable tool-calling work loop; needs `--allow-changes` or a profile, and a known context window (profile role `normalized_settings.context_window`, `TAMOZ_CONTEXT_WINDOW`, or the route's recorded window). See [the coding guide](../guides/coding.md) | `TASK` (positional) |
 | `investigate` | Start a read-only investigation turn in the work loop: the operator's probes (`sources.probes`), then a findings report whose every finding cites a probe that answered; proposals are not executed; refuses `--allow-changes`. See [the investigation guide](../guides/investigation.md) | `TASK` (positional), `--json` |
+| `deep-research` | Start a read-only deep-research turn: the research plan is shown and answered (go, changes, or stop) before any search; research subagents search and read pages through `sources.websearch`; the cited report and its run folder are saved under the workspace's `research/`; refuses `--allow-changes`. See [the deep-research guide](../guides/deep-research.md) | `QUESTION` (positional), `--json` |
 | `probes` | Validate and list the operator's probe catalog without starting any MCP server | `--json` |
 | `memory` | `list [QUERY]`, `show ID`, `forget ID`, `consolidate`: the operator's view of durable memory in `<session-dir>/memory.sqlite3` (needs `sources.memory` enabled in the runtime config) | `--runtime-dir`, `--session-dir`, `--root` |
 | `resume` | Answer the approvals or questions a paused thread is waiting on | `THREAD`, `--answer ANSWER`, `--approval-profile NAME`, `--recover` |
@@ -121,6 +123,7 @@ Work an operator runs against the runtime directory.
 | `/new` | Starts a fresh conversation; earlier messages are no longer used. |
 | `/status [r<ref>] [--diagnostic]` | One plain sentence (working, queued, waiting for Approve/Deny, stopping, nothing running); `--diagnostic` prints every state axis. |
 | `/cancel [r<ref>]` | Stops every open message in the conversation (or one), replies "Stopping…", and the turn ends with "Stopped." at its next step. |
+| `/research <question>` | Starts a deep-research turn: it shows its plan and waits for your reply ("go", changes in words, or "stop"), then researches and writes `report.md`, replying with the summary and the path. |
 | `/start <code>` | Pairing: shows the code to read to the operator, or the greeting once paired. |
 
 ### Queue verbs
