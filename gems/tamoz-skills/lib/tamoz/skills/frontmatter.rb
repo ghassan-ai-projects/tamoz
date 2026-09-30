@@ -22,6 +22,8 @@ module Tamoz
     class Frontmatter
       PORTABLE_KEYS = %w[name description license compatibility metadata allowed-tools].freeze
       KNOWN_EXTENSIONS = %w[tamoz.risk tamoz.eval-suite].freeze
+      # Whitespace (the spec) or commas (Claude Code) separate tools; a scope in parentheses may hold spaces.
+      TOOL_TOKEN = /[^\s,(]+(?:\([^)]*\))?/
 
       def initialize(text, label, limits)
         @text = text
@@ -40,7 +42,8 @@ module Tamoz
           'name' => string!(data, 'name', required: true, limit: 64),
           'description' => description(data),
           'license' => string!(data, 'license', required: false, limit: 128),
-          'compatibility' => string!(data, 'compatibility', required: false, limit: 512),
+          'compatibility' => string!(data, 'compatibility', required: false,
+                                                        limit: @limits.fetch(:max_compatibility_chars)),
           'metadata' => metadata(data),
           'allowed-tools' => requested_capabilities(data),
           'extra' => extra(data),
@@ -66,7 +69,7 @@ module Tamoz
       end
 
       def description(data)
-        value = string!(data, 'description', required: true, limit: @limits.fetch(:max_description_bytes))
+        value = string!(data, 'description', required: true, limit: @limits.fetch(:max_description_chars))
         if value.match?(/[\x00-\x08\x0B-\x1F\x7F]/)
           reject!('skill_description_invalid', 'description contains control characters')
         end
@@ -81,7 +84,7 @@ module Tamoz
           return nil
         end
         unless valid_string?(value, limit)
-          reject!('skill_field_invalid', "#{key} must be a string of at most #{limit} bytes")
+          reject!('skill_field_invalid', "#{key} must be a string of at most #{limit} characters")
         end
         reject!('skill_name_invalid', 'name is not a valid skill name') if key == 'name' && !NAME_PATTERN.match?(value)
 
@@ -89,7 +92,7 @@ module Tamoz
       end
 
       def valid_string?(value, limit)
-        value.is_a?(String) && !value.empty? && value.bytesize <= limit &&
+        value.is_a?(String) && !value.empty? && value.length <= limit &&
           value.valid_encoding? && !value.include?("\0")
       end
 
@@ -142,7 +145,7 @@ module Tamoz
 
       def requested_list(value)
         case value
-        when String then value.split(',').map(&:strip).reject(&:empty?)
+        when String then value.scan(TOOL_TOKEN)
         when Array then value
         else reject!('skill_field_invalid', 'allowed-tools must be a list or comma-separated string')
         end

@@ -38,6 +38,9 @@ module Tamoz
           digest: digest.dup.freeze, executable:
         )
       end
+
+      # SKILL.md arrives through load_skill; scripts are identity-only until they can run.
+      def readable? = path != MANIFEST_BASENAME && area != UNREADABLE_AREA
     end
 
     # The compiled immutable identity and content of one accepted skill.
@@ -48,7 +51,7 @@ module Tamoz
       :body, :manifest_digest, :description_digest, :tree_digest, :resource_index
     ) do
       def readable_resources
-        resource_index.values.select { |entry| READABLE_AREAS.include?(entry.area) }
+        resource_index.values.select(&:readable?)
       end
 
       # Deterministic, unguessable-in-advance attribution fence (see DELIMITER_SENTINEL).

@@ -67,7 +67,7 @@ class AgentSkillsAdversarialTest < Minitest::Test
                     "references/a..b.md"
     refute_includes Dir.children(File.join(@operator, "fix-answer", "references")), ".."
 
-    [".hidden", "-dash", "sp ace", "semi;colon", "back\\slash"].each do |name|
+    ["-dash", "sp ace", "semi;colon", "back\\slash"].each do |name|
       FileUtils.remove_entry(File.join(@operator, "fix-answer"))
       directory = write_skill("fix-answer")
       FileUtils.mkdir_p(File.join(directory, "references"))

@@ -19,8 +19,6 @@ module Tamoz
     # next one depends on; `charge_budget!` and `read_nofollow` are likewise
     # single checks with their own failure messages.
     # :reek:UtilityFunction — `area_of` is a pure classification of a path.
-    # :reek:ControlParameter — `reject!`'s optional `entry` names the offending
-    # path when there is one; a tree-wide refusal has none.
     # :reek:DataClump — (absolute, path, joined, stat, depth) is ONE directory
     # entry's identity moving through the gauntlet. The lstat result must
     # travel with the path it came from: re-stat'ing later is precisely the
@@ -57,7 +55,7 @@ module Tamoz
         max_depth = @limits.fetch(:max_depth)
         reject!('skill_depth_exceeded', "depth exceeds #{max_depth}") if depth > max_depth
 
-        Dir.children(absolute).sort.each { |child| visit(absolute, relative, child, depth) }
+        Skills.visible_children(absolute).each { |child| visit(absolute, relative, child, depth) }
       rescue SystemCallError
         reject!('skill_realpath_changed', 'tree changed during the walk')
       end
@@ -76,9 +74,8 @@ module Tamoz
         entry_absolute = File.join(absolute, child)
         stat = File.lstat(entry_absolute)
         ftype = stat.ftype
-        reject!('skill_entry_type_invalid', "#{joined} is a #{ftype}", joined) unless ENTRY_TYPES.include?(ftype)
+        reject!('skill_entry_type_invalid', "#{joined} is a #{ftype}") unless ENTRY_TYPES.include?(ftype)
 
-        validate_layout!(path, stat, joined)
         count_entry!(joined)
         record_entry(entry_absolute, path, joined, stat, depth)
       end
@@ -96,7 +93,7 @@ module Tamoz
         charge_budget!(joined, stat)
         size = stat.size
         content = read_nofollow(absolute, joined)
-        reject!('skill_realpath_changed', "#{joined} changed during the walk", joined) unless content.bytesize == size
+        reject!('skill_realpath_changed', "#{joined} changed during the walk") unless content.bytesize == size
 
         {
           path: joined,
@@ -114,9 +111,9 @@ module Tamoz
       def charge_budget!(joined, stat)
         size = stat.size
         links = stat.nlink
-        reject!('skill_hardlink_rejected', "#{joined} has #{links} links", joined) unless links == 1
+        reject!('skill_hardlink_rejected', "#{joined} has #{links} links") unless links == 1
         if size > @limits.fetch(:max_resource_bytes)
-          reject!('skill_resource_bytes_exceeded', "#{joined} is #{size} bytes", joined)
+          reject!('skill_resource_bytes_exceeded', "#{joined} is #{size} bytes")
         end
 
         max_tree = @limits.fetch(:max_tree_bytes)
@@ -134,14 +131,14 @@ module Tamoz
           handle.read.to_s
         end
       rescue SystemCallError
-        reject!('skill_entry_type_invalid', "#{joined} could not be read as a regular file", joined)
+        reject!('skill_entry_type_invalid', "#{joined} could not be read as a regular file")
       end
 
       def validate_component!(child, joined)
         text = child.dup.force_encoding(Encoding::UTF_8)
         return if text.valid_encoding? && COMPONENT_PATTERN.match?(text)
 
-        reject!('skill_path_invalid', "#{Skills.describe(child)} is not a valid component", joined)
+        reject!('skill_path_invalid', "#{Skills.describe(joined)} is not a valid path component")
       end
 
       # ASCII-only components make NFC a no-op; it runs anyway so the property
@@ -149,22 +146,9 @@ module Tamoz
       # independent either way.
       def validate_case!(joined)
         key = joined.unicode_normalize(:nfc).downcase
-        reject!('skill_case_collision', "#{joined} collides with #{@seen.fetch(key)}", joined) if @seen.key?(key)
+        reject!('skill_case_collision', "#{joined} collides with #{@seen.fetch(key)}") if @seen.key?(key)
 
         @seen[key] = joined
-      end
-
-      def validate_layout!(path, stat, joined)
-        return if path.length > 1
-
-        head = path.first
-        if stat.directory?
-          return if AREA_DIRECTORIES.include?(head)
-
-          reject!('skill_layout_invalid', "#{joined} is not an allowed skill directory", joined)
-        elsif head != MANIFEST_BASENAME
-          reject!('skill_layout_invalid', "#{joined} is not allowed beside SKILL.md", joined)
-        end
       end
 
       def count_entry!(joined)
@@ -172,7 +156,7 @@ module Tamoz
         @count += 1
         return unless @count > max_entries
 
-        reject!('skill_entries_exceeded', "tree exceeds #{max_entries} entries", joined)
+        reject!('skill_entries_exceeded', "tree exceeds #{max_entries} entries")
       end
 
       def area_of(path)
@@ -182,8 +166,9 @@ module Tamoz
         AREA_DIRECTORIES.include?(head) ? head : 'root'
       end
 
-      def reject!(code, detail, entry = nil)
-        raise Rejected.new(code, entry || @label, detail)
+      # The skill is the entry; the offending path is in the detail.
+      def reject!(code, detail)
+        raise Rejected.new(code, @label, detail)
       end
     end
   end

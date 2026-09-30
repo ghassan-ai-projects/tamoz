@@ -40,7 +40,7 @@ module Tamoz
     TRUSTS = %w[bundled operator workspace].freeze
     DECLARED_RISKS = %w[elevated guarded read_only].freeze
     DEFAULT_DECLARED_RISK = "guarded"
-    READABLE_AREAS = %w[assets references].freeze
+    UNREADABLE_AREA = "scripts"
     AREA_DIRECTORIES = %w[assets references scripts].freeze
     MANIFEST_BASENAME = "SKILL.md"
 
@@ -51,12 +51,13 @@ module Tamoz
     DELIMITER_SENTINEL = "<<<TAMOZ_SKILL"
 
     SOURCE_ID_PATTERN = /\A[a-z][a-z0-9_-]{0,31}\z/
-    NAME_PATTERN = /\A[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?\z/
+    NAME_PATTERN = /\A(?!.*--)[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?\z/
     # ASCII only, must not start with `.`, so `.`, `..`, and dotfiles are rejected
     # by the pattern before any filesystem call. `/`, `\`, NUL, and whitespace
     # cannot appear either.
     COMPONENT_PATTERN = /\A[A-Za-z0-9][A-Za-z0-9._-]{0,63}\z/
-    TOOL_PATTERN = /\A[a-z][a-z0-9_.-]{0,63}\z/
+    # Printable ASCII: an author's tool name from any agent (`Read`, `Bash(git add:*)`).
+    TOOL_PATTERN = /\A[A-Za-z][\x20-\x7E]{0,127}\z/
     METADATA_KEY_PATTERN = /\A[a-z][a-z0-9_.-]{0,63}\z/
     FRONTMATTER_TERMINATOR = /^---[ \t]*(?:\r?\n|\z)/
 
@@ -71,7 +72,8 @@ module Tamoz
       max_manifest_bytes: 64 * 1024,
       max_frontmatter_bytes: 8 * 1024,
       max_body_bytes: 16 * 1024,
-      max_description_bytes: 1024,
+      max_description_chars: 1024,
+      max_compatibility_chars: 500,
       max_resource_bytes: 256 * 1024,
       max_read_bytes: 16 * 1024,
       max_tree_bytes: 2 * 1024 * 1024,
@@ -134,6 +136,9 @@ module Tamoz
       parent == expanded ? expanded : File.join(real_path(parent), File.basename(expanded))
     end
 
+    # Dotfiles (.DS_Store, .git) are neither walked, digested nor readable.
+    def visible_children(directory) = Dir.children(directory).reject { |child| child.start_with?(".") }.sort
+
     def canonical(value) = Tamoz::Core.canonical(value)
 
     def digest_of(domain, value)
@@ -153,7 +158,7 @@ module Tamoz
     def read_resource_entry!(record, path, limits: LIMITS)
       entry = record.resource_index[path]
       raise Tamoz::Core::ToolArgumentError, "skill_resource_unknown: #{describe(path)} is not indexed" unless entry
-      unless READABLE_AREAS.include?(entry.area)
+      unless entry.readable?
         raise Tamoz::Core::ToolArgumentError,
               "skill_resource_not_readable: #{entry.path} is in #{entry.area}/ and is " \
               "indexed for identity only"
@@ -243,7 +248,7 @@ module Tamoz
     def render_load(record, available_tools:)
       effective = record.requested_capabilities & Array(available_tools)
       resources = record.resource_index.values.map do |entry|
-        suffix = READABLE_AREAS.include?(entry.area) ? "" : ", not readable"
+        suffix = entry.readable? ? "" : ", not readable"
         "#{entry.path} (#{entry.bytes} bytes#{suffix})"
       end
       header = [

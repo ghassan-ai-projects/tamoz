@@ -91,7 +91,7 @@ module Tamoz
       end
 
       def source_children(source, root, rejections)
-        children = Dir.children(root).sort
+        children = Skills.visible_children(root)
         max_skills = @limits.fetch(:max_skills_per_source)
         return children if children.length <= max_skills
 
