@@ -159,9 +159,6 @@ module WebsearchAdapter
       [policy, load_providers, egress_circuit(policy)]
     end
 
-    # The declared egress circuit, enforced here where the failures happen: a session-side breaker never sees
-    # this process's refusals, which arrive as well-formed answers. The operator clears it by restarting the
-    # process — no in-process caller resets its own circuit.
     def egress_circuit(policy)
       @circuit ||= W::EgressCircuit.new(threshold: policy.circuit.fetch("threshold"),
                                         scope_id: W::DEFAULT_SERVER_ID,

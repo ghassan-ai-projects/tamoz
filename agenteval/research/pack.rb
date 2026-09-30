@@ -145,8 +145,7 @@ module Agenteval
         { "error" => e.message[0, 200] }
       end
 
-      # A run already on disk is graded again, never run again: a restart spends no search twice. Only a run that
-      # reported is reused; a failed or timed-out one is re-created, and its searches are spent again.
+      # A run already on disk is graded again, never run again: a restart spends no search twice.
       def finished(root, question, arm)
         path = File.join(root, arm, question.fetch("id"), "result.json")
         return nil unless File.exist?(path)

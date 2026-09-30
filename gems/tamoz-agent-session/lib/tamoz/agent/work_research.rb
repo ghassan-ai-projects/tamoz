@@ -13,8 +13,6 @@ module Tamoz
     class WorkResearch
       LEAD_TOOLS = %w[propose_research_plan research_wave write_report].freeze
       FINISH = 'write_report'
-      # Raised when the support check did not answer or its answer cannot be read: the report is refused, and the
-      # lead retries write_report rather than delivering citations nobody confirmed.
       SupportCheckError = Class.new(StandardError)
       # One refusal for both cases the lead can reach it from: a plan the user already accepted, or a research whose
       # waves have started.
@@ -69,8 +67,6 @@ module Tamoz
         outcome("Error: #{e.message}; call write_report again.")
       end
 
-      # C2: the refusal the lead reads when it answers without the report while the run must keep going, or nil when
-      # a stop condition (or a run with no accepted plan yet) lets it end.
       def finish_refusal(state)
         research = state[:research]
         return nil unless research.is_a?(Hash) && research['accepted']
@@ -270,8 +266,6 @@ module Tamoz
         raise SupportCheckError, 'the support check answer is unreadable'
       end
 
-      # The judge's one JSON object, wherever it sits in the reply and however deeply it nests; a brace inside a
-      # string defeats the depth count only for answers that were unreadable anyway.
       def judge_object(text)
         text = String(text)
         start = text.index('{')

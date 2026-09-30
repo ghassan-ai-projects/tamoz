@@ -175,8 +175,6 @@ module Tamoz
       end
       # rubocop:enable Metrics/AbcSize
 
-      # C2: a lead that answers in prose while sub-questions are open and no stop condition holds is sent back with
-      # the refusal; the loop budget ends the turn if it never complies.
       def refused_stop(state, entry, update, refusal)
         note = work(state).entry(state.fetch(:work_entries) + [entry], 'system_update', refusal)
         update.merge(work_entries: [entry, note], next_node: 'work_step')

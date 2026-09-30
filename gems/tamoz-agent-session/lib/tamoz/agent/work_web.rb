@@ -49,8 +49,7 @@ module Tamoz
         research.merge(key => research.fetch(key) + 1)
       end
 
-      # The rendered result the child reads, and the research state with its refs recorded. A read or search that
-      # succeeded but cannot be parsed still spent the child's budget, so the attempt is charged either way.
+      # The rendered result the child reads, and the research state with its refs recorded.
       def observed(state, shown_name, output)
         research = state.fetch(:research)
         shown_name == 'web_search' ? searched(research, output) : read(research, output)

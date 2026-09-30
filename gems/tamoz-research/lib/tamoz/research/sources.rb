@@ -11,8 +11,7 @@ module Tamoz
       EXCERPT = (20..400)
       MAX_CLAIMS = 12
 
-      # One accepted claim: what it says, the excerpt that backs it, and the page it quotes (with the date that
-      # page was read, when the reader stated one).
+      # One accepted claim: what it says, the excerpt that backs it, and the page it quotes.
       Claim = Data.define(:text, :excerpt, :primary, :url, :title, :published, :read_at)
       # A sub-question as one child reports it: found, conflicting or not_found, with its claims.
       Finding = Data.define(:sub_question, :status, :claims, :note)

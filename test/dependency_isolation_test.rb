@@ -357,8 +357,7 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
-  # DESIGN §11: tamoz-research is pure rules over tamoz-core, and only the session (the turn), the improvement
-  # tuner (budget candidates) and the CLI (--research-budgets validation) may hold the edge.
+  # DESIGN §11: only the session, the improvement tuner and the CLI may hold the research edge.
   def test_research_gemspec_declares_exactly_core
     spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-research").join("tamoz-research.gemspec").to_s)
 

@@ -28,7 +28,6 @@ module Tamoz
 
       attr_reader :web
 
-      # C2: nil when the turn may end, else the research lead's refusal — the run is not done.
       def finish_refusal(state) = @research.finish_refusal(state)
 
       def delegate(state, context, call) = @delegation.call(state, context, call)

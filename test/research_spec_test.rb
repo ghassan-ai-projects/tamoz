@@ -227,8 +227,6 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  # What the lead read between its own calls: the user-role channel the harness writes (reminders, refusals,
-  # tool results). The assistant's own tool calls name write_report, so only this channel can prove a reminder.
   def read_back(model)
     model.parent_requests.flat_map { |request| JSON.parse(request).fetch('messages') }
          .select { |message| message['role'] == 'user' }.map { |message| message['content'].to_s }.join("\n")
@@ -253,8 +251,6 @@ class ResearchSpecTest < Minitest::Test
       start_research(session)
 
       assert_equal :completed, reply(session, 'go').status
-      # The refusal, never the write-the-report reminder: the refusal's text and the method prompt both say
-      # "write_report", so the reminder's own sentence is what tells the two paths apart.
       refute_includes read_back(model), 'Answering in plain text ends it'
       assert_includes read_back(model), 'Still open: Q2'
       assert_equal 'researched', session.view(thread: 'research').state.fetch(:terminal_reason)

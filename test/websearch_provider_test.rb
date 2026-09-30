@@ -78,8 +78,6 @@ class WebsearchProviderTest < Minitest::Test
     assert_includes text(WebsearchAdapter.read_page_response('https://ssb.no/oslo')), 'operator grant'
   end
 
-  # The declared egress circuit: three consecutive provider failures open it, and the refusal names the operator's
-  # way out — the session side never sees this process's refusals, so nobody else can feed the breaker.
   def test_three_provider_failures_in_a_row_open_the_declared_circuit
     File.write(@web, '{broken')
     3.times { assert_predicate WebsearchAdapter.search_response('Oslo', 3), :error? }
