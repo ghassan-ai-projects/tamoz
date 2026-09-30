@@ -6,7 +6,11 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 
 | Row | State | Evidence |
 |---|---|---|
-| A1–A5 | pending | — |
+| A1 | partly met | fast and slow lanes green except `SQLiteScenarioDriverTest` (red before this work) on this machine; lint and Reek comparison deferred at the owner's request (2026-09-30) |
+| A2 | met, one edge declared late | enola diff against the R0 baseline: no cycle, no layer violation. New findings are the facade's fan-in (`Tamoz::Research`, by design), a subcommand dispatched by name (`cmd_deep_research`, false positive) and two loops over small nested lists. Edges: session → research, improvement → research (planned), and cli → research for `--research-budgets` validation (not planned; declared in the CLI gemspec) |
+| A3 | met | the lead is the work loop, children are `delegate`-style subgraphs, the plan checkpoint is the existing `clarify` interrupt, the ledger lives in child outputs; the MCP fix adds a lock, not a mechanism |
+| A4 | met | every search, page read, model call and the report write go through `EffectDispatcher.run`; `test/research_durability_test.rb` counts one journal row per recorded call |
+| A5 | met | method, roles, tool schemas, verify prompt and budgets are data (prompt pack, `research_budgets.json`); the fixture web is `test/fixtures/research/`; the question classes are a five-word vocabulary constant, not domain content |
 | A6 | met | `test/research_boundary_test.rb` (a planted `Tamoz::Research::Ledger` reference in `tamoz-agent-session` fails it; inner classes are also `private_constant`), `test/dependency_isolation_test.rb#test_research_loads_only_core` |
 | P1 | met | `research_spec_test`: a wave before an accepted plan is refused with zero web calls; the lead has no web tool |
 | P2 | met | an edit in words reaches the lead; the revised plan is shown again; children get only the revised sub-questions |

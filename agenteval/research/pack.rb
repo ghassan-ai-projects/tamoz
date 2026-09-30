@@ -120,7 +120,8 @@ module Agenteval
               next
             end
             log.puts("#{question.fetch('id')} #{arm} ...")
-            result = run_one(question, arm, out: File.join(File.dirname(out), File.basename(out, ".json")), env:)
+            root = File.join(File.dirname(out), File.basename(out, ".json"))
+            result = finished(root, question, arm) || run_one(question, arm, out: root, env:)
             result["support"] = support(judge, result["folder"]) if result["folder"]
             results << result
             write(out, set, results)
@@ -137,6 +138,14 @@ module Agenteval
         verdicts = judge.supported(items)
         { "sentences" => items.length, "supported" => verdicts.count(true),
           "rate" => items.empty? ? nil : verdicts.count(true).fdiv(items.length).round(3) }
+      rescue StandardError => e
+        { "error" => e.message[0, 200] }
+      end
+
+      # A run already on disk is graded again, never run again: a restart spends no search twice.
+      def finished(root, question, arm)
+        path = File.join(root, arm, question.fetch("id"), "result.json")
+        File.exist?(path) ? JSON.parse(File.read(path)) : nil
       end
 
       # fanout against single on the rubric, both orders; a criterion is won only when both orders agree.
@@ -215,11 +224,15 @@ module Agenteval
         wall = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(1)
         File.write(File.join(dir, "output.txt"), output)
         folder = Dir[File.join(workspace, "research", "*", "report.md")].first
-        return { "id" => question.fetch("id"), "arm" => arm, "status" => "no_report", "exit" => status,
-                 "wall_s" => wall } unless folder
-
-        graded(question, arm, Graders.load(File.dirname(folder))).merge("exit" => status, "wall_s" => wall,
-                                                                         "folder" => File.dirname(folder))
+        result = if folder
+                   graded(question, arm, Graders.load(File.dirname(folder)))
+                     .merge("exit" => status, "wall_s" => wall, "folder" => File.dirname(folder))
+                 else
+                   { "id" => question.fetch("id"), "arm" => arm, "status" => "no_report", "exit" => status,
+                     "wall_s" => wall }
+                 end
+        File.write(File.join(dir, "result.json"), JSON.generate(result))
+        result
       end
 
       def graded(question, arm, folder)

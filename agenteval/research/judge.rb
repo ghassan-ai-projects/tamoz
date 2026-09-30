@@ -22,7 +22,7 @@ module Agenteval
       def supported(items)
         items.each_slice(BATCH).flat_map do |batch|
           asked = batch.each_with_index.reject { |item, _| item.fetch("excerpts").empty? }
-          verdicts = asked.empty? ? [] : ask(support_prompt(asked.map(&:first))).fetch("supported")
+          verdicts = asked.empty? ? [] : answer(support_prompt(asked.map(&:first)), "supported")
           answers = asked.map(&:last).zip(verdicts).to_h
           batch.each_index.map { |index| answers[index] == true }
         end
@@ -48,6 +48,15 @@ module Agenteval
       end
 
       private
+
+      # The judge sometimes answers without the field asked for; three tries, then the grade is missing, not guessed.
+      def answer(prompt, key)
+        3.times do
+          value = ask(prompt)[key]
+          return value if value
+        end
+        raise "the judge gave no #{key.inspect} after three tries"
+      end
 
       def support_prompt(items)
         listed = items.each_with_index.map do |item, index|
