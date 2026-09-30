@@ -314,6 +314,17 @@ class ResearchSpecTest < Minitest::Test
     assert_equal 3, Tamoz::Agent::ModelWindows.max_concurrent_requests(provider: 'zai', model: 'glm-5.3-flash') - 1
   end
 
+  def test_a_web_result_that_parses_to_nothing_still_spends_the_childs_budget
+    web = Tamoz::Agent::WorkWeb.new(work: nil)
+    state = { research: { 'mode' => 'child', 'hits' => {}, 'pages' => {}, 'search_count' => 1, 'read_count' => 2,
+                          'sub_questions' => %w[Q1], 'searches' => 3, 'page_reads' => 3 } }
+
+    text, research = web.observed(state, 'web_search', '{"nothing": true}')
+
+    assert_includes text, 'no results list'
+    assert_equal 2, research.fetch('search_count')
+  end
+
   def test_an_ordinary_turn_cannot_delegate_to_the_research_role
     lead = [{ calls: [['delegate', { 'role' => 'research', 'brief' => 'Search the web.' }]] }, { content: 'No.' }]
     with_research(lead:, subagents: %w[explore]) do |session, model, web, _out|
