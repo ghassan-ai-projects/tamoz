@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "monitor"
+
 require "digest"
 
 require "mcp"
@@ -171,6 +173,7 @@ module Tamoz
         @retired = false
         @request_sent = false
         @sent_mutex = Mutex.new
+        @call_lock = Monitor.new
         super(
           command: config.command,
           args: config.arguments,
@@ -196,6 +199,9 @@ module Tamoz
           block&.call
         end
       end
+
+      # One call at a time: the server answers on one pipe, and a restart closes it under any other caller.
+      def exclusively(&) = @call_lock.synchronize(&)
 
       def request_sent?
         @sent_mutex.synchronize { @request_sent }

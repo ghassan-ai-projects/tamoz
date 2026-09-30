@@ -412,6 +412,44 @@ class McpInvocationTest < Minitest::Test
     supervisor&.close
   end
 
+  # Concurrent callers (research children reading pages at once) share one stdio pipe: each must get its own answer.
+  def test_concurrent_calls_to_one_server_each_get_their_own_answer
+    _config, snapshot, supervisor = setup_environment
+    descriptor = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+
+    texts = Array.new(6) do |index|
+      Thread.new do
+        Invocation.call(descriptor, { "value" => "v#{index}" }, snapshot: snapshot, supervisor: supervisor)
+                  .observation.text
+      end
+    end.map(&:value)
+
+    assert_equal Array.new(6) { |index| "v#{index}" }, texts
+  ensure
+    supervisor&.close
+  end
+
+  # A call that times out restarts the server; another caller's call must not lose its pipe mid-read.
+  def test_a_timeout_restart_does_not_break_another_callers_call
+    config, snapshot, = setup_environment(budgets: Budgets.new(request_timeout: 0.5))
+    supervisor = Supervisor.new(config, retry_budget: 1, base_backoff: 0.01)
+    slow = descriptor_for(snapshot, "sleep_ms", effect_class: :read_only)
+    echo = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+
+    timed_out = Thread.new do
+      Invocation.call(slow, { "ms" => 2_000 }, snapshot: snapshot, supervisor: supervisor)
+    rescue Tamoz::Mcp::UnavailableError => error
+      error
+    end
+    sleep 0.1
+    answered = Invocation.call(echo, { "value" => "still here" }, snapshot: snapshot, supervisor: supervisor)
+
+    assert_instance_of Tamoz::Mcp::UnavailableError, timed_out.value
+    assert_equal "still here", answered.observation.text
+  ensure
+    supervisor&.close
+  end
+
   # Row: same as above with effect_class :read_only → typed unavailable, retryable
   # by the caller.
   def test_timeout_after_send_with_read_only_effect_is_typed_unavailable_and_retryable

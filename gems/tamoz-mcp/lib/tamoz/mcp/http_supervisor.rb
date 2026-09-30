@@ -11,6 +11,9 @@ module Tamoz
     class HttpSupervisor
       include CircuitSupervision
 
+      # Each HTTP request stands alone, so calls need no turn-taking.
+      def exclusively = yield
+
       DEFAULT_CIRCUIT_THRESHOLD = CircuitSupervision::DEFAULT_CIRCUIT_THRESHOLD
       DEFAULT_RETRY_BUDGET = CircuitSupervision::DEFAULT_RETRY_BUDGET
       DEFAULT_BASE_BACKOFF = CircuitSupervision::DEFAULT_BASE_BACKOFF

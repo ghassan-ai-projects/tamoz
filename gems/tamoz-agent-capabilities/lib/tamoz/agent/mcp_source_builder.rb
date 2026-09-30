@@ -29,6 +29,8 @@ module Tamoz
       class Error < Tamoz::Agent::Error; end
 
       WEBSEARCH_SERVER_ID = "websearch"
+      # A page read may follow three redirects, each hop bounded at 30 s by the adapter's egress client.
+      WEBSEARCH_REQUEST_TIMEOUT_S = 120.0
 
       SOURCE_DIGEST_PREFIX = "tamoz.agent.mcp.source.v1\n"
       PEEK_DIGEST_PREFIX = "tamoz.agent.mcp.peek.v1\n"
@@ -298,7 +300,9 @@ module Tamoz
         return nil unless @directory.enabled_sources.include?("websearch")
 
         settings = @directory.source_settings("websearch")
-        [config_for(WEBSEARCH_SERVER_ID, settings), settings]
+        config = config_for(WEBSEARCH_SERVER_ID, settings)
+        budgets = config.budgets.with(request_timeout: WEBSEARCH_REQUEST_TIMEOUT_S)
+        [config.with(budgets:), settings]
       end
 
       def config_for(server_id, settings)
