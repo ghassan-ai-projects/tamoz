@@ -121,6 +121,15 @@ class ResearchTest < Minitest::Test
     assert_equal 'https://www.ssb.no/oslo', accepted.findings.first.claims.first.url
   end
 
+  def test_a_claim_carries_the_date_its_page_was_read
+    stamped = R.page(JSON.generate('url' => 'https://www.ssb.no/oslo', 'title' => 'SSB Oslo',
+                                   'published' => '2025-02-01', 'read_at' => '2026-09-30T10:00:00Z',
+                                   'text' => PAGE_TEXT), ref: 'P1')
+    accepted = R.sources(report_arguments, pages: { 'P1' => stamped }, assigned: %w[Q1])
+
+    assert_equal '2026-09-30T10:00:00Z', accepted.findings.first.claims.first.read_at
+  end
+
   def test_sources_are_refused_when_an_excerpt_is_not_on_a_page_the_child_read
     invented = report_arguments(excerpt: 'The population of Oslo is exactly one million people today.')
     error = assert_raises(Tamoz::Research::Error) { R.sources(invented, pages: pages, assigned: %w[Q1]) }

@@ -12,8 +12,8 @@ module Tamoz
       # A numbered claim (C1…) with the sub-question it answers, the wave of the child that found it, and the page it
       # quotes.
       Entry = Data.define(:id, :sub_question, :wave, :text, :excerpt, :primary, :source)
-      # A page a claim quotes.
-      Source = Data.define(:url, :title, :published)
+      # A page a claim quotes, with the date it was read ('' when the reader stated none).
+      Source = Data.define(:url, :title, :published, :read_at)
 
       # A child must have searched this much before its not_found makes a sub-question unanswerable.
       MIN_SEARCHES_FOR_NOT_FOUND = 3
@@ -64,7 +64,8 @@ module Tamoz
         claim_pairs.each_with_index.map do |(child, sub_question, claim), index|
           Entry.new(id: "C#{index + 1}", sub_question:, wave: child.wave, text: claim.text, excerpt: claim.excerpt,
                     primary: claim.primary,
-                    source: Source.new(url: claim.url, title: claim.title, published: claim.published))
+                    source: Source.new(url: claim.url, title: claim.title, published: claim.published,
+                                       read_at: claim.read_at))
         end
       end
 

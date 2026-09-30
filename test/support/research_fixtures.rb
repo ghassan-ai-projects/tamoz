@@ -45,7 +45,7 @@ module ResearchFixtures
     given = SOURCE.merge(options.transform_keys(&:to_s))
     claim = { 'text' => 'Oslo had 717,710 residents.', 'excerpt' => 'a population of 717,710 residents',
               'primary' => given.fetch('primary'), 'url' => given.fetch('url'), 'title' => 'SSB Oslo',
-              'published' => '2025-02-01' }
+              'published' => '2025-02-01', 'read_at' => '2025-02-01T12:00:00Z' }
     second = given.fetch('second_url')
     list = Array.new(given.fetch('claims')) { |index| index.positive? && second ? claim.merge('url' => second) : claim }
     { 'summary' => 'Found it.', 'findings' => [{ 'sub_question' => given.fetch('sub_question'),

@@ -11,8 +11,9 @@ module Tamoz
       EXCERPT = (20..400)
       MAX_CLAIMS = 12
 
-      # One accepted claim: what it says, the excerpt that backs it, and the page it quotes.
-      Claim = Data.define(:text, :excerpt, :primary, :url, :title, :published)
+      # One accepted claim: what it says, the excerpt that backs it, and the page it quotes (with the date that
+      # page was read, when the reader stated one).
+      Claim = Data.define(:text, :excerpt, :primary, :url, :title, :published, :read_at)
       # A sub-question as one child reports it: found, conflicting or not_found, with its claims.
       Finding = Data.define(:sub_question, :status, :claims, :note)
 
@@ -78,7 +79,7 @@ module Tamoz
 
         excerpt = quoted(page, raw['excerpt'], id)
         Claim.new(text: Text.bounded(raw['claim'], "#{id} claim", max: 400), excerpt:, primary: raw['primary'] == true,
-                  url: page.url, title: page.title, published: page.published)
+                  url: page.url, title: page.title, published: page.published, read_at: page.read_at)
       rescue Error => e
         note(problems, e.message)
       end

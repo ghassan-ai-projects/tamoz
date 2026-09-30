@@ -89,6 +89,10 @@ class ResearchLedgerTest < Minitest::Test
     assert_equal "#{report.markdown}\n", files.fetch('report.md')
     assert_equal 1, JSON.parse(files.fetch('run.json')).fetch('plan_edits')
     assert_includes files.fetch('notes/2.md'), 'No accepted sources.'
+    source = JSON.parse(files.fetch('sources.jsonl').lines.first)
+
+    assert_equal '2025-02-01', source.fetch('published')
+    assert_equal '2025-02-01T12:00:00Z', source.fetch('read_at')
   end
 
   def test_the_run_folder_is_named_by_date_and_question

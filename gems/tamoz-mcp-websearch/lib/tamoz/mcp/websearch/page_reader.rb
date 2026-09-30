@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'time'
+
 module Tamoz
   module Mcp
     module Websearch
@@ -18,7 +20,8 @@ module Tamoz
           freeze
         end
 
-        # {"url", "title", "published", "text", "truncated"}; raises EgressPolicyError when the page cannot be read.
+        # {"url", "title", "published", "read_at", "text", "truncated"}; raises EgressPolicyError when the page
+        # cannot be read.
         def read(url)
           result = @client.fetch(url, headers: { 'Accept' => ACCEPT, 'User-Agent' => USER_AGENT })
           status = result.status
@@ -29,7 +32,7 @@ module Tamoz
           raise EgressPolicyError, 'the page has no readable text' if text.strip.empty?
 
           { 'url' => url, 'title' => Websearch.sanitize_result(extracted.title), 'published' => extracted.published,
-            'text' => text, 'truncated' => cut || result.truncated }
+            'read_at' => Time.now.utc.iso8601, 'text' => text, 'truncated' => cut || result.truncated }
         end
 
         private

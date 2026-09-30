@@ -11,7 +11,7 @@ module Tamoz
       # One search result and the ref a child reads it by (S2-3).
       Hit = Data.define(:ref, :title, :url, :snippet, :age)
       # One page a child read, by its ref (P4).
-      Page = Data.define(:ref, :url, :title, :published, :text, :truncated)
+      Page = Data.define(:ref, :url, :title, :published, :read_at, :text, :truncated)
 
       module_function
 
@@ -45,7 +45,8 @@ module Tamoz
         raise Error, 'the page read returned no text' if Text.squash(text).empty?
 
         Page.new(ref:, url: String(fields.fetch('url')), title: Text.squash(fields['title']),
-                 published: Text.squash(fields['published']), text:, truncated: fields['truncated'] == true)
+                 published: Text.squash(fields['published']), read_at: Text.squash(fields['read_at']),
+                 text:, truncated: fields['truncated'] == true)
       end
 
       def render_page(page)
