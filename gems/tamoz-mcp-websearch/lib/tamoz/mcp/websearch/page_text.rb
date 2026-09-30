@@ -37,9 +37,9 @@ module Tamoz
         # The largest article-like node, when it carries a real share of the page; the body otherwise.
         def main_node(document)
           body = document.at_css('body') || document.root
-          total = words(body).length
-          best = CANDIDATES.flat_map { |selector| document.css(selector).to_a }.max_by { |node| words(node).length }
-          best && words(best).length >= total * MAIN_SHARE ? best : body
+          total = plain(body).length
+          best = CANDIDATES.flat_map { |selector| document.css(selector).to_a }.max_by { |node| plain(node).length }
+          best && plain(best).length >= total * MAIN_SHARE ? best : body
         end
 
         # Every text node joins the innermost block that holds it, so text in divs is kept and nested blocks keep
@@ -65,7 +65,7 @@ module Tamoz
           "#{MARKERS.fetch(block.name, '')}#{text}" unless text.empty?
         end
 
-        def words(node) = node.text.gsub(/[[:space:]]+/, ' ').strip
+        def plain(node) = node.text.gsub(/[[:space:]]+/, ' ').strip
 
         def title(document)
           meta = document.at_css('meta[property="og:title"]')&.[]('content')

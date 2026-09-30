@@ -10,6 +10,7 @@ module Tamoz
       # A hard cap on paid searches, shared by every process that names the same counter file
       # ({"cap": 500, "used": 0}).
       class SearchLedger
+        # Raised by charge! when the counter file's used has reached its cap: the search is refused, not charged.
         class Exhausted < StandardError; end
 
         def initialize(path)
