@@ -4,7 +4,8 @@ module Tamoz
   module Agent
     # A deep-research turn's state, as it opens: the lead starts with no plan; a research child starts with its
     # wave's assignment, its budget and no refs yet.
-    # :reek:ControlParameter :reek:NilCheck :reek:TooManyStatements
+    # :reek:ControlParameter :reek:NilCheck :reek:TooManyStatements -- opened() builds the opening state from
+    # whatever research input the surface sent, or nil for an ordinary turn.
     module WorkResearchState
       UNAVAILABLE = 'Deep research is not available here: it needs the websearch source with search and read_page ' \
                     'admitted as read-only tools.'

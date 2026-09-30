@@ -8,7 +8,8 @@ module Tamoz
     # The lead of a deep-research turn: the plan the user accepts, waves of research subagents, the report on disk.
     # :reek:ControlParameter :reek:DataClump :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:LongParameterList
     # :reek:ManualDispatch :reek:NestedIterators :reek:NilCheck :reek:TooManyMethods :reek:TooManyStatements
-    # :reek:UncommunicativeVariableName :reek:UtilityFunction
+    # :reek:UncommunicativeVariableName :reek:UtilityFunction -- one method per lead tool: state, context and the
+    # call travel together, and the render/refuse pairs read in place.
     class WorkResearch
       LEAD_TOOLS = %w[propose_research_plan research_wave write_report].freeze
       FINISH = 'write_report'

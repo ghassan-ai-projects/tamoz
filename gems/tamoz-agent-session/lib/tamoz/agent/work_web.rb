@@ -4,7 +4,8 @@ module Tamoz
   module Agent
     # A research subagent's web tools: the model names a search result by its ref (S2-3), never a URL.
     # :reek:ControlParameter :reek:DataClump :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:TooManyStatements
-    # :reek:UncommunicativeVariableName :reek:UtilityFunction
+    # :reek:UncommunicativeVariableName :reek:UtilityFunction -- each method reshapes one tool call against the
+    # child's state that call names.
     class WorkWeb
       # Answered here without the approval gate: it only reads what this turn already recorded.
       FINISH = 'report_sources'
