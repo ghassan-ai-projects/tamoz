@@ -145,10 +145,14 @@ module Agenteval
         { "error" => e.message[0, 200] }
       end
 
-      # A run already on disk is graded again, never run again: a restart spends no search twice.
+      # A run already on disk is graded again, never run again: a restart spends no search twice. Only a run that
+      # reported is reused; a failed or timed-out one is re-created, and its searches are spent again.
       def finished(root, question, arm)
         path = File.join(root, arm, question.fetch("id"), "result.json")
-        File.exist?(path) ? JSON.parse(File.read(path)) : nil
+        return nil unless File.exist?(path)
+
+        parsed = JSON.parse(File.read(path))
+        parsed["status"] == "report" ? parsed : nil
       end
 
       # fanout against single on the rubric, both orders; a criterion is won only when both orders agree.

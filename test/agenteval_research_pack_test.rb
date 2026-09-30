@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'stringio'
+require 'tmpdir'
+
 require_relative 'test_helper'
 require_relative '../agenteval/research/pack'
 
@@ -7,6 +10,10 @@ require_relative '../agenteval/research/pack'
 # good report from a planted bad one before any real-model number is read.
 class AgentevalResearchPackTest < Minitest::Test
   Pack = Agenteval::Research::Pack
+
+  def setup = @dir = Dir.mktmpdir('tamoz-agenteval-pack')
+
+  def teardown = FileUtils.remove_entry(@dir)
 
   def test_every_grader_control_holds
     failed = Pack.controls.reject(&:last).map(&:first)
@@ -40,5 +47,25 @@ class AgentevalResearchPackTest < Minitest::Test
 
     assert_equal({ 'comprehensiveness' => 'A', 'detail' => { 'depth' => 2 }, 'insight' => 'B' }, extracted)
     assert_nil Agenteval::Research::Judge.object_in('no object here')
+  end
+
+  def test_an_arm_that_does_not_exist_is_refused_before_anything_runs
+    error = assert_raises(RuntimeError) do
+      Pack.run(set: 'dev', arms: ['../escape'], out: File.join(@dir, 'out.json'), log: StringIO.new)
+    end
+
+    assert_includes error.message, 'unknown arm'
+  end
+
+  def test_a_finished_run_is_reused_only_when_it_reported
+    question = { 'id' => 'q1' }
+    folder = File.join(@dir, 'fanout', 'q1')
+    FileUtils.mkdir_p(folder)
+    File.write(File.join(folder, 'result.json'), JSON.generate('status' => 'no_report'))
+
+    assert_nil Pack.finished(@dir, question, 'fanout')
+    File.write(File.join(folder, 'result.json'), JSON.generate('status' => 'report'))
+
+    assert_equal 'report', Pack.finished(@dir, question, 'fanout').fetch('status')
   end
 end
