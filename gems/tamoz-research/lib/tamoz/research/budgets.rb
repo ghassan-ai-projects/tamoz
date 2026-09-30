@@ -107,7 +107,10 @@ module Tamoz
       end
 
       def lower(current, value, path)
-        return value if value.is_a?(Integer) && value.positive? && current.is_a?(Integer) && value <= current
+        unless current.is_a?(Integer)
+          raise Error, "override may only lower a number and #{path.join('.')} is not one (#{current.inspect})"
+        end
+        return value if value.is_a?(Integer) && value.positive? && value <= current
 
         raise Error, "override may only lower #{path.join('.')} (#{current} → #{value.inspect})"
       end

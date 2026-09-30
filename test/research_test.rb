@@ -31,6 +31,11 @@ class ResearchTest < Minitest::Test
     end
     assert_match(/may only lower/, error.message)
     assert_raises(Tamoz::Research::Error) { R.budgets(override: { 'depths' => { 'huge' => { 'waves' => 1 } } }) }
+    words = assert_raises(Tamoz::Research::Error) do
+      R.budgets(override: { 'depths' => { 'quick' => { 'words' => [10, 20] } } })
+    end
+
+    assert_match(/may only lower a number/, words.message)
   end
 
   def test_a_plan_numbers_its_sub_questions_and_reads_plainly
