@@ -104,6 +104,23 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
+  def test_b2_a_claim_citing_a_read_that_failed_is_refused
+    child = [{ calls: [['web_search', { 'query' => 'Oslo population statistics' }]] },
+             { calls: [['read_page', { 'ref' => 'S1-1' }]] },
+             { calls: [sources_call('Q1', 'P1', SSB_EXCERPT)] },
+             { calls: [sources_call('Q1', nil, '', status: 'not_found')] }]
+    lead = [{ calls: [plan_call(texts: ['How many people live in Oslo?'])] }, { calls: [wave_call(%w[Q1])] },
+            { calls: [report_call('Oslo had residents.')] }]
+    with_research(lead:, children: child) do |session, model, web, out|
+      web.failing_reads = true
+      start_research(session)
+
+      assert_equal :completed, reply(session, 'go').status
+      assert_includes tool_messages(model.child_requests[3]).join, 'is not a page you read'
+      assert_includes File.read(Dir[File.join(out, '*', 'report.md')].first), 'No source was cited.'
+    end
+  end
+
   def test_s1_a_page_read_names_a_search_result_never_a_url
     child = [{ calls: [['read_page', { 'ref' => 'S9-9' }]] },
              { calls: [['web_search', { 'query' => 'Oslo population' }]] },
