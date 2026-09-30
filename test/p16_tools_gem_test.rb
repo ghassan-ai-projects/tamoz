@@ -13,7 +13,7 @@ class P16ToolsGemTest < Minitest::Test
   MATRIX_DIGEST = "sha256:48a1e1a94fc1ac7a2f7948efcbec40953a85aecd09ba78cb6190e75db3a15a57"
 
   REJECTION_MESSAGES = {
-    "bad_skills_type" => "skills must be a Tamoz::Agent::Skills::SkillSnapshot",
+    "bad_skills_type" => "skills must be a Tamoz::Skills::SkillSnapshot",
     "bad_root" => "workspace root is unavailable",
     "bad_check_name" => "invalid check name \"bad name!\"",
     "relative_check_program" =>
@@ -85,8 +85,8 @@ class P16ToolsGemTest < Minitest::Test
           "Reference material.\n",
           encoding: Encoding::UTF_8
         )
-        snapshot = Tamoz::Tools::Skills::Compiler.new(
-          sources: [Tamoz::Tools::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
+        snapshot = Tamoz::Skills::Compiler.new(
+          sources: [Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
         ).compile
 
         # Both skill_epoch branches: the empty-snapshot LEGACY_SKILL_EPOCH path and
@@ -195,21 +195,21 @@ class P16ToolsGemTest < Minitest::Test
     assert_empty stderr
   end
 
-  # P16-05: the in-tools Skills::Error base resolves without any agent constant.
+  # P16-05: the Skills::Error base resolves without any agent constant.
   def test_t2_skills_error_base_is_core_visible_in_the_clean_env
     script = <<~'RUBY'
       # encoding: UTF-8
       require "json"
       require "tamoz/tools"
       caught = begin
-        Tamoz::Tools::Skills::SkillSource.new(id: "Bad Id", root: "/tmp", trust: "operator")
+        Tamoz::Skills::SkillSource.new(id: "Bad Id", root: "/tmp", trust: "operator")
         false
-      rescue Tamoz::Tools::Skills::Error => error
+      rescue Tamoz::Skills::Error => error
         error.class.name
       end
       puts JSON.generate(
         "caught" => caught,
-        "base" => Tamoz::Tools::Skills::Error.superclass.name,
+        "base" => Tamoz::Skills::Error.superclass.name,
         "agent_defined" => defined?(Tamoz::Agent).inspect
       )
     RUBY
@@ -226,7 +226,7 @@ class P16ToolsGemTest < Minitest::Test
     )
     assert status.success?, stderr
     result = JSON.parse(stdout)
-    assert_equal "Tamoz::Tools::Skills::Error", result.fetch("caught")
+    assert_equal "Tamoz::Skills::Error", result.fetch("caught")
     assert_equal "Tamoz::Core::ToolError", result.fetch("base")
     assert_equal "nil", result.fetch("agent_defined")
   end
@@ -237,13 +237,13 @@ class P16ToolsGemTest < Minitest::Test
     fixture = {
       "b" => [3, 1, 2], "a" => {"x" => 1, "y" => [{"k" => :v}]}, 2 => "two", :sym => {1 => "one"}
     }
-    assert_equal CANONICAL_FIXTURE_JSON, JSON.generate(Tamoz::Tools::Skills.canonical(fixture))
+    assert_equal CANONICAL_FIXTURE_JSON, JSON.generate(Tamoz::Skills.canonical(fixture))
     assert_equal CANONICAL_FIXTURE_JSON, JSON.generate(Tamoz::Core.canonical(fixture))
     assert_equal CANONICAL_FIXTURE_JSON, JSON.generate(Tamoz::Agent::Deliberation.canonical(fixture))
-    assert_equal Tamoz::Tools::Skills.canonical(fixture), Tamoz::Core.canonical(fixture)
+    assert_equal Tamoz::Skills.canonical(fixture), Tamoz::Core.canonical(fixture)
 
     input = {"z" => 1, "a" => [2, 1]}
-    Tamoz::Tools::Skills.canonical(input)
+    Tamoz::Skills.canonical(input)
     assert_equal({"z" => 1, "a" => [2, 1]}, input)
   end
 
@@ -255,7 +255,6 @@ class P16ToolsGemTest < Minitest::Test
     aliases = {
       "Toolbox" => Tamoz::Agent::Toolbox,
       "CheckReceipt" => Tamoz::Agent::CheckReceipt,
-      "Skills" => Tamoz::Agent::Skills,
       "ToolError" => Tamoz::Agent::ToolError,
       "ToolArgumentError" => Tamoz::Agent::ToolArgumentError,
       "ToolPolicyError" => Tamoz::Agent::ToolPolicyError
@@ -286,24 +285,6 @@ class P16ToolsGemTest < Minitest::Test
     assert receipt.passed?
   end
 
-  # P16-08: the skills corpus and the three `Skills =` test files resolve every
-  # compiler/catalog/snapshot name through the alias (the scorecard covers the
-  # corpus; here we cover the module surface the tests rely on).
-  def test_skills_alias_exposes_the_full_compiler_surface
-    assert_equal Tamoz::Agent::Skills::Compiler, Tamoz::Tools::Skills::Compiler
-    assert_equal Tamoz::Agent::Skills::SkillSource, Tamoz::Tools::Skills::SkillSource
-    assert_equal Tamoz::Agent::Skills::Catalog, Tamoz::Tools::Skills::Catalog
-    assert_equal Tamoz::Agent::Skills::Snapshot, Tamoz::Tools::Skills::Snapshot
-    assert_equal Tamoz::Agent::Skills::SkillSnapshot, Tamoz::Tools::Skills::SkillSnapshot
-
-    empty = Tamoz::Agent::Skills::Snapshot.empty
-    assert empty.empty?
-    assert_equal "skills:1:#{SNAPSHOT_EMPTY_DIGEST}", empty.epoch
-    box = Tamoz::Agent::Toolbox.new(root: @dir, skills: empty)
-    assert box.skills.empty?
-    assert_equal "none", box.skill_epoch
-  end
-
   # ---------------------------------------------------------------------------
   # T1 (P16-19/P16-20): the full digest matrix is byte-identical to the P16-start
   # capture, and the digest-input axes (check_safeties, allowed_tools) feed the
@@ -319,9 +300,9 @@ class P16ToolsGemTest < Minitest::Test
         "---\nname: fix\ndescription: A bounded procedure.\nallowed-tools: [read_file]\n---\n\nBody.\n",
         encoding: Encoding::UTF_8
       )
-      snap_empty = Tamoz::Tools::Skills::Snapshot.empty
-      snap_full = Tamoz::Tools::Skills::Compiler.new(
-        sources: [Tamoz::Tools::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
+      snap_empty = Tamoz::Skills::Snapshot.empty
+      snap_full = Tamoz::Skills::Compiler.new(
+        sources: [Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
       ).compile
 
       checks = {"answer" => ["echo", "42"]}
@@ -490,16 +471,16 @@ class P16ToolsGemTest < Minitest::Test
       "---\nname: fix\ndescription: A bounded procedure.\nallowed-tools: [read_file]\n---\n\nBody.\n",
       encoding: Encoding::UTF_8
     )
-    snapshot = Tamoz::Tools::Skills::Compiler.new(
-      sources: [Tamoz::Tools::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
+    snapshot = Tamoz::Skills::Compiler.new(
+      sources: [Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
     ).compile
 
     assert_equal SNAPSHOT_CATALOG_DIGEST, snapshot.catalog_digest
     assert_equal "skills:1:#{SNAPSHOT_CATALOG_DIGEST}", snapshot.epoch
-    assert_equal "skills:1:#{SNAPSHOT_EMPTY_DIGEST}", Tamoz::Tools::Skills::Snapshot.empty.epoch
+    assert_equal "skills:1:#{SNAPSHOT_EMPTY_DIGEST}", Tamoz::Skills::Snapshot.empty.epoch
     assert_equal(
       "- operator/fix [operator, declared-risk guarded]: A bounded procedure.",
-      Tamoz::Tools::Skills::Catalog.new(snapshot).render
+      Tamoz::Skills::Catalog.new(snapshot).render
     )
   end
 

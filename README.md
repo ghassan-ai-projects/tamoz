@@ -24,7 +24,8 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |
-| `tamoz-tools` | The workspace toolbox, the skills compiler, the capability host | `tamoz-core` |
+| `tamoz-skills` | Portable Agent Skills: the inert compiler, the catalog, content-addressed identity | `tamoz-core` |
+| `tamoz-tools` | The workspace toolbox, the skill tools, the capability host | `tamoz-core`, `tamoz-skills` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header, append-only surface, spill, pruner, compaction, cache accounting | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets, finish contract | `tamoz-context-engine`, `tamoz-core` |
 | `tamoz-research` | The rules of a deep-research run behind one facade: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder. Pure: no I/O | `tamoz-core` |

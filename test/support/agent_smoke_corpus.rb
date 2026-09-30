@@ -1141,19 +1141,19 @@ module Tamoz
         end
 
         def bare_name_unresolvable?(snapshot)
-          Tamoz::Agent::Skills::Catalog.new(snapshot).resolve("fix-answer-constant")
+          Tamoz::Skills::Catalog.new(snapshot).resolve("fix-answer-constant")
           false
         rescue Tamoz::Agent::ToolError => error
           error.message.start_with?("skill_name_ambiguous:")
         end
 
         def compile_skill_snapshot(operator_root, repo_root)
-          Tamoz::Agent::Skills::Compiler.new(
+          Tamoz::Skills::Compiler.new(
             sources: [
-              Tamoz::Agent::Skills::SkillSource.new(
+              Tamoz::Skills::SkillSource.new(
                 id: "operator", root: operator_root, trust: "operator"
               ),
-              Tamoz::Agent::Skills::SkillSource.new(
+              Tamoz::Skills::SkillSource.new(
                 id: "repo", root: repo_root, trust: "workspace"
               )
             ]
@@ -2522,7 +2522,7 @@ module Tamoz
           expected_terminal: %w[completed],
           requires_check: false,
           mutation_needed: false,
-          skills: Tamoz::Agent::Skills::Snapshot.empty,
+          skills: Tamoz::Skills::Snapshot.empty,
           store: nil,
           memory_config: nil,
           memory_capture: nil

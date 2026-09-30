@@ -165,8 +165,8 @@ module AutonomyCase
     def rewrite_profile_for_skills
       path = File.join(dir, "profiles", "trusted.yaml")
       document = Psych.safe_load_file(path)
-      snapshot = Tamoz::Tools::Skills::Compiler.new(
-        sources: [Tamoz::Tools::Skills::SkillSource.new(
+      snapshot = Tamoz::Skills::Compiler.new(
+        sources: [Tamoz::Skills::SkillSource.new(
           id: "operator", root: File.join(dir, "skills"), trust: "operator", precedence: 0
         )]
       ).compile

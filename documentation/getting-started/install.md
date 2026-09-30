@@ -66,7 +66,8 @@ named example task in a clean subprocess.
 | `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core`, `tamoz-concurrency` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability`, `tamoz-concurrency` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
-| `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core`, `tamoz-cancellation` |
+| `tamoz-skills` | Portable Agent Skills: the inert compiler, the catalog, content-addressed identity | `tamoz-core` |
+| `tamoz-tools` | The workspace toolbox and the skill tools | `tamoz-core`, `tamoz-cancellation`, `tamoz-skills` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header, append-only surface, spill, pruner, compaction, cache accounting | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets, finish contract | `tamoz-context-engine`, `tamoz-core` |
 | `tamoz-research` | The rules of a deep-research run: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder | `tamoz-core` |

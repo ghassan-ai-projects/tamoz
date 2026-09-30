@@ -5,7 +5,7 @@ require_relative "test_helper"
 # P9-A: the inert skill compiler, its digests, its resource index, and the
 # stage-1 catalog. Adversarial containment lives in agent_skills_adversarial_test.rb.
 class AgentSkillsTest < Minitest::Test
-  Skills = Tamoz::Agent::Skills
+  Skills = Tamoz::Skills
 
   def setup
     @dir = Dir.mktmpdir("tamoz-skills")

@@ -5,7 +5,7 @@ require_relative "test_helper"
 # P9 §9.2 adversarial matrix. Every test asserts a *typed* outcome, not merely
 # "did not crash". Rows are labelled A-n to match the plan.
 class AgentSkillsAdversarialTest < Minitest::Test
-  Skills = Tamoz::Agent::Skills
+  Skills = Tamoz::Skills
 
   def setup
     @dir = Dir.mktmpdir("tamoz-skills-adv")
@@ -367,14 +367,12 @@ class AgentSkillsAdversarialTest < Minitest::Test
   # ------------------------------------------------------- load-time inertness --
 
   # A-13a: static. A stubbed-method test is not honestly implementable (plan review
-  # C-2), so the source itself is asserted to contain no execution verb. P16: the
-  # compiler moved wholesale to tamoz-tools, so the source lives there now.
+  # C-2), so the source itself is asserted to contain no execution verb, in every
+  # file of the tamoz-skills gem.
   def test_a13a_the_compiler_source_contains_no_execution_verb
-    source_path = ROOT.join("gems", "tamoz-tools", "lib", "tamoz", "tools", "skills.rb")
-    code = source_path.read(encoding: Encoding::UTF_8)
-                      .lines
-                      .reject { |line| line.strip.start_with?("#") }
-                      .join
+    code = Dir[ROOT.join("gems", "tamoz-skills", "lib", "**", "*.rb").to_s].map do |path|
+      File.read(path, encoding: Encoding::UTF_8).lines.reject { |line| line.strip.start_with?("#") }.join
+    end.join
     forbidden = {
       # `tamoz.eval-suite` is a legitimate SKILLS_DESIGN metadata key, so the
       # pattern must not match a dotted or hyphenated occurrence.
@@ -393,12 +391,12 @@ class AgentSkillsAdversarialTest < Minitest::Test
       "%x" => /%x[({\[|!\/]/
     }
     forbidden.each do |label, pattern|
-      refute_match pattern, code, "skills.rb must not contain #{label}"
+      refute_match pattern, code, "tamoz-skills must not contain #{label}"
     end
 
-    requires = code.lines.grep(/^\s*require\b/).map(&:strip)
+    requires = code.lines.grep(/^\s*require\b/).map(&:strip).uniq
 
-    assert_equal ['require "digest"', 'require "json"', 'require "psych"'], requires.sort
+    assert_equal ['require "digest"', 'require "json"', 'require "psych"', 'require "tamoz/core"'], requires.sort
   end
 
   # A-13b: behavioural. TracePoint can actually observe these calls, so this test

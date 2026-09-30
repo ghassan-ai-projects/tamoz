@@ -16,7 +16,8 @@ flowchart BT
     G["tamoz-graph<br/>BSP engine · interrupts · replay"]
     SCH["tamoz-scheduler<br/>schedule values + store contract"]
     STR["tamoz-stream<br/>EpisodeWorker (gRPC)"]
-    T["tamoz-tools<br/>toolbox · skills compiler · capability host"]
+    SK["tamoz-skills<br/>skills compiler · catalog · identity"]
+    T["tamoz-tools<br/>toolbox · skill tools · capability host"]
     CE["tamoz-context-engine<br/>header · surface · spill · pruner · compaction"]
     H["tamoz-harness<br/>prompt pack · plan · loop budgets · finish"]
     RS["tamoz-research<br/>research rules · ledger · report"]
@@ -47,6 +48,8 @@ flowchart BT
     H --> CE
     H --> CORE
     RS --> CORE
+    SK --> CORE
+    T --> SK
     ASESS --> RS
     M --> CORE
     M --> CAN
@@ -101,7 +104,8 @@ Two edges deserve emphasis:
 | `tamoz-scheduler` | Durable scheduling values and the `ScheduleStore` contract (the SQLite implementation lives in `tamoz-sqlite`). Never executes work itself | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC `EpisodeWorker`: containment host, snapshot verification, typed Decision builder, reverse channel for evidence/outcomes/approvals, artifact manifest. One sealed, digest-verified Situation snapshot per episode (the old streaming-input engine was retired by `MIGRATION_13`) | `tamoz-core`, `grpc ~> 1.83`, `google-protobuf ~> 4.35` |
 | `tamoz-sqlite` | SQLite persistence: checkpoints, request inbox, effect journal, leases, schedules, comms, circuit, memory index, backup/restore. Migrator `CURRENT_VERSION = 13` | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3 ~> 2.9` |
-| `tamoz-tools` | Workspace toolbox, the skills compiler, and the sealed capability host | `tamoz-core` |
+| `tamoz-skills` | Portable Agent Skills: the inert compiler, tree-digest identity, the catalog, attributed rendering and digest-pinned resource reads. Grants no authority | `tamoz-core` |
+| `tamoz-tools` | Workspace toolbox, the skill tools, and the sealed capability host | `tamoz-core`, `tamoz-cancellation`, `tamoz-skills` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header and request series, append-only surface, spill, pruner, compaction, token meter, cache accounting, trace | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: digest-pinned prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets and repeat guard, finish contract, handoff | `tamoz-context-engine`, `tamoz-core` |
 | `tamoz-research` | The rules of a deep-research run behind one facade: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder. Pure: no I/O | `tamoz-core` |

@@ -907,16 +907,16 @@ module Tamoz
       # operator can see what was refused rather than wondering why a skill never
       # appeared.
       def skills_snapshot
-        return Skills::Snapshot.empty unless @directory.enabled_sources.include?("skills")
+        return Tamoz::Skills::Snapshot.empty unless @directory.enabled_sources.include?("skills")
 
         @skills_snapshot ||= begin
           root = @directory.skills_root
           if File.directory?(root)
-            Skills::Compiler.new(
-              sources: [Skills::SkillSource.new(id: "operator", root:, trust: "operator", precedence: 0)]
+            Tamoz::Skills::Compiler.new(
+              sources: [Tamoz::Skills::SkillSource.new(id: "operator", root:, trust: "operator", precedence: 0)]
             ).compile
           else
-            Skills::Snapshot.empty
+            Tamoz::Skills::Snapshot.empty
           end
         end
       end

@@ -5,7 +5,7 @@ require_relative "test_helper"
 # P9-B: progressive disclosure through the ordinary tool boundary, the prompt
 # surface epoch, and the durable exact-digest resume rule.
 class AgentSkillsToolboxTest < Minitest::Test
-  Skills = Tamoz::Agent::Skills
+  Skills = Tamoz::Skills
   Toolbox = Tamoz::Agent::Toolbox
 
   # Measured at 6dee1b6, before skills.rb existed; re-measured when the tool

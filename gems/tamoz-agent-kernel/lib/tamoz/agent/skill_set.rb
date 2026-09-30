@@ -8,8 +8,8 @@ module Tamoz
     # P5/§B6-B9: the skill set an episode may render into its frame. The wire
     # carries ORDERED refs [{name, tree_sha256}], digest-pinned; the worker
     # resolves each skill's text ONLY from the operator-approved source (the
-    # injected map — the production seam is the compiled Skills::Snapshot from
-    # tamoz-tools) and requires the tree digest to match the rendered bytes. A
+    # injected map — the production seam is the compiled Tamoz::Skills snapshot from
+    # tamoz-skills) and requires the tree digest to match the rendered bytes. A
     # missing name or a digest mismatch fails closed BEFORE any model call.
     #
     # The canonical skill-set digest binds the ordered list of

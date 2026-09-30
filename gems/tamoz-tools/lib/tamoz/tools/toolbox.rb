@@ -52,7 +52,7 @@ module Tamoz
         check_timeout: DEFAULT_CHECK_TIMEOUT,
         check_safeties: {},
         allowed_tools: nil,
-        skills: Skills::Snapshot.empty,
+        skills: Tamoz::Skills::Snapshot.empty,
         reap_staging: true
       )
         @root = Pathname.new(root).expand_path.realpath.freeze
@@ -62,7 +62,7 @@ module Tamoz
         @allow_changes = allow_changes
         @check_timeout = check_timeout.to_f
         @skills = skills
-        @skill_catalog = Skills::Catalog.new(skills)
+        @skill_catalog = Tamoz::Skills::Catalog.new(skills)
         catalog = ToolCatalog.new(allow_changes:, checks:, check_safeties:, allowed_tools:, skills:)
         assign_catalog(catalog)
         @argument_validator = ToolArgumentValidator.new(
@@ -194,7 +194,7 @@ module Tamoz
         unless check_timeout.is_a?(Numeric) && check_timeout.positive? && check_timeout <= 600
           raise ArgumentError, 'check_timeout must be between 0 and 600 seconds'
         end
-        raise ArgumentError, 'skills must be a Tamoz::Agent::Skills::SkillSnapshot' unless skills.is_a?(Skills::SkillSnapshot)
+        raise ArgumentError, 'skills must be a Tamoz::Skills::SkillSnapshot' unless skills.is_a?(Tamoz::Skills::SkillSnapshot)
       end
 
       def patch_operations = PatchOperations.new(self)
@@ -203,13 +203,13 @@ module Tamoz
 
       def load_skill(arguments)
         record = @skill_catalog.resolve(arguments.fetch('skill'))
-        Skills.render_load(record, available_tools: names)
+        Tamoz::Skills.render_load(record, available_tools: names)
       end
 
       def read_skill_resource(arguments)
         record = @skill_catalog.resolve(arguments.fetch('skill'))
         path = arguments.fetch('path')
-        Skills.render_resource(record, path, Skills.read_resource(record, path))
+        Tamoz::Skills.render_resource(record, path, Tamoz::Skills.read_resource(record, path))
       end
 
       def resolve(raw_path, type:, allow_symlinks: true)

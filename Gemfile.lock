@@ -228,6 +228,12 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-skills
+  specs:
+    tamoz-skills (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-sqlite
   specs:
     tamoz-sqlite (0.1.0.alpha.1)
@@ -258,6 +264,7 @@ PATH
     tamoz-tools (0.1.0.alpha.1)
       tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
+      tamoz-skills (= 0.1.0.alpha.1)
 
 GEM
   remote: https://rubygems.org/
@@ -446,6 +453,7 @@ DEPENDENCIES
   tamoz-otel!
   tamoz-research!
   tamoz-scheduler!
+  tamoz-skills!
   tamoz-sqlite!
   tamoz-stream!
   tamoz-telegram!
@@ -537,6 +545,7 @@ CHECKSUMS
   tamoz-otel (0.1.0.alpha.1)
   tamoz-research (0.1.0.alpha.1)
   tamoz-scheduler (0.1.0.alpha.1)
+  tamoz-skills (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
   tamoz-stream (0.1.0.alpha.1)
   tamoz-telegram (0.1.0.alpha.1)
