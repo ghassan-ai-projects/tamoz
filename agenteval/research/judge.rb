@@ -80,7 +80,7 @@ module Agenteval
         raise "judge answered HTTP #{response.code}: #{response.body.to_s[0, 200]}" unless response.code == "200"
 
         content = JSON.parse(response.body).dig("choices", 0, "message", "content").to_s
-        JSON.parse(content[/\{.*\}/m] || "{}")
+        JSON.parse(content[/\{[^{}]*\}/] || "{}")
       end
     end
   end

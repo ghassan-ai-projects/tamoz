@@ -68,7 +68,7 @@ module WorkLoopFixtures
     def generate(stage:, system:, prompt:)
       @generations << { stage:, system:, prompt: }
       review = @reviews.length > 1 ? @reviews.shift : @reviews.first
-      JSON.generate(review)
+      review.is_a?(String) ? review : JSON.generate(review)
     end
 
     private

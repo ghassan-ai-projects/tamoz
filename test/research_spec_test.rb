@@ -150,6 +150,19 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
+  # GLM-5.3-Flash was seen writing its JSON answer twice; the first answer counts, not a failed check.
+  def test_b4_a_check_that_repeats_its_answer_still_flags_only_what_it_named
+    repeated = "{\"unsupported\": [\"C2\"]}\n\n\n{\"unsupported\": [\"C2\"]}\n"
+    with_research(lead: happy_lead, children: happy_children, reviews: [repeated]) do |session, _model, _web, out|
+      start_research(session)
+      reply(session, 'go')
+      text = File.read(Dir[File.join(out, '*', 'report.md')].first)
+
+      assert_includes text, 'Oslo had 717,710 residents at the start of 2025 [1].'
+      assert_includes text, 'It grew by about 8,700 in 2024 [unverified].'
+    end
+  end
+
   def test_c2_the_report_is_refused_while_a_sub_question_is_open_and_budget_remains
     lead = [{ calls: [plan_call(depth: 'standard', texts: ['How many people live in Oslo?'])] },
             { calls: [wave_call(%w[Q1])] }, { calls: [report_call('Early [C1].')] }, { calls: [wave_call(%w[Q1])] },

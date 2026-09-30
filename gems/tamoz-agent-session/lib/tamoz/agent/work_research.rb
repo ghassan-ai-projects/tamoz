@@ -242,7 +242,7 @@ module Tamoz
         raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
         return cited unless call.status == :succeeded
 
-        listed = JSON.parse(call.value[/\{.*\}/m].to_s).fetch('unsupported', [])
+        listed = JSON.parse(call.value[/\{[^{}]*\}/].to_s).fetch('unsupported', [])
         listed.is_a?(Array) ? listed.grep(String) & cited : cited
       rescue JSON::ParserError
         cited
