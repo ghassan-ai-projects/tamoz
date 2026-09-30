@@ -158,7 +158,8 @@ module Tamoz
           'context' => ['Context: fragments visible '],
           'think' => ['Reasoning depth set to '],
           'verbose' => ['Answer verbosity set to '],
-          'answer' => ['Usage: /answer']
+          'answer' => ['Usage: /answer'],
+          'research' => ['Usage: /research']
         }.freeze
 
         def c5(facts, conversation:)

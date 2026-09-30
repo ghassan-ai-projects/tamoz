@@ -53,6 +53,7 @@ root is the entry point; this folder contains the detailed reference material.
 
 - [guides/coding.md](guides/coding.md): coding tasks with `tamoz code`
 - [guides/investigation.md](guides/investigation.md): operator probes, `tamoz investigate`, and probes in agentic-stream episodes
+- [guides/deep-research.md](guides/deep-research.md): `tamoz deep-research` and `/research`: the plan, the research, the cited report
 - [guides/agent-operator.md](guides/agent-operator.md): runbook for operating an agent over Tamoz
 - [guides/telegram.md](guides/telegram.md): talking to Tamoz over Telegram
 - [guides/evaluation.md](guides/evaluation.md): how evaluation, scorecards and release evidence work

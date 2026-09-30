@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-09-30T07:35:37Z",
-  "manifest_requirements": 568,
-  "named_cases_run": 297,
+  "generated_at": "2026-09-30T08:09:49Z",
+  "manifest_requirements": 569,
+  "named_cases_run": 300,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 15,
-    "pass": 538
+    "pass": 539
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -7022,6 +7022,24 @@
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-deep-research",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz deep-research",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace",
+      "supporting_tests": [
+        "test/agent_cli_research_test.rb#test_a_research_thread_paused_at_its_plan_resumes_with_an_answer",
+        "test/agent_cli_research_test.rb#test_deep_research_refuses_to_change_files"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,

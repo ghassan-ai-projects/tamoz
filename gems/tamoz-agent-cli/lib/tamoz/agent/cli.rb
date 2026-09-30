@@ -39,6 +39,7 @@ module Tamoz
         "ask" => :cmd_ask,
         "code" => :cmd_code,
         "investigate" => :cmd_investigate,
+        "deep-research" => :cmd_deep_research,
         "probes" => :cmd_probes,
         "memory" => :cmd_memory,
         "resume" => :cmd_resume,
@@ -219,7 +220,11 @@ module Tamoz
 
       def drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
         run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
-          session.start(task, thread: thread_id, request_id:, owner_id:, context:)
+          if options[:research]
+            session.research(task, thread: thread_id, request_id:, owner_id:, context:)
+          else
+            session.start(task, thread: thread_id, request_id:, owner_id:, context:)
+          end
         end
         view = drain_to_terminal(session, thread_id:, owner_id:, options:)
         exit_for_view(view)

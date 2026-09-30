@@ -40,6 +40,14 @@ module Tamoz
         end
       end
 
+      # A deep-research turn: the plan is shown before any search, the cited report lands in the workspace's research/.
+      def cmd_deep_research(options, argv)
+        raise OptionParser::InvalidArgument, 'tamoz deep-research is read-only; drop --allow-changes' if
+          options[:allow_changes]
+
+        cmd_ask(options.merge(work_routing: true, approval_profile: 'plan', research: true), argv)
+      end
+
       # The durable tool-calling work loop (docs/coding-harness): same session, same approvals.
       def cmd_code(options, argv)
         raise OptionParser::InvalidArgument, 'tamoz code needs --allow-changes or a --profile' unless
@@ -76,6 +84,12 @@ module Tamoz
         settings
       end
 
+      # A work thread (one with a pinned harness) resumes on the work route, so its subagents are built again.
+      def pinned_routing(options, thread_id)
+        pin = File.join(resolve_session_dir(options), "#{thread_id}.harness.json")
+        File.exist?(pin) ? options.merge(work_routing: true) : options
+      end
+
       def pinned_harness(pin, subagents)
         settings = JSON.parse(File.read(pin)).transform_keys(&:to_sym).merge(surface: :cli)
         return settings if subagents.nil? || subagents == settings[:subagents]
@@ -105,6 +119,7 @@ module Tamoz
       def cmd_resume(options, argv)
         resume_options = parse_resume_options(argv)
         thread_id = extract_thread!(argv)
+        options = pinned_routing(options, thread_id)
         profile = load_operator_profile(options)
         profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
@@ -115,6 +130,7 @@ module Tamoz
 
       def cmd_continue(options, argv)
         thread_id = extract_thread!(argv)
+        options = pinned_routing(options, thread_id)
         profile = load_operator_profile(options)
         profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|

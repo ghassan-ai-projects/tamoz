@@ -56,7 +56,7 @@ module Tamoz
               Usage: tamoz [global-options] [subcommand] [options] [ARGS]
                      tamoz [options] TASK
 
-              Interactive:  ask, code, investigate, resume, continue, list, show,
+              Interactive:  ask, code, investigate, deep-research, resume, continue, list, show,
                             follow-up, redirect, cancel, resolve, profile, probes
               Unattended:   init, queue, worker, status, schedule, approve, observe,
                             trace, improve

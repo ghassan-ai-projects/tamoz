@@ -351,7 +351,7 @@ module Tamoz
       # A deep-research turn on `question` (work routing only): the plan is shown before any search.
       # :reek:LongParameterList -- the same turn identity start takes.
       def research(question, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
-        deliver_turn({"task" => String(question), "research" => {"mode" => "lead"}},
+        deliver_turn({"task" => String(question), "research" => Tamoz::Core::TurnContext::RESEARCH_INPUT},
                      thread:, request_id:, owner_id:, emitter:, context:)
       end
 

@@ -12,7 +12,7 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | P2 | met | an edit in words reaches the lead; the revised plan is shown again; children get only the revised sub-questions |
 | P3 | met | "stop" ends the turn `cancelled_by_user`, nothing searched, no files |
 | P4 | pending (R6 kill test) | — |
-| P5 | partly met | the checkpoint is the existing `clarify` interrupt both surfaces render; the chat path is R5 |
+| P5 | met | one checkpoint on both surfaces: `tamoz deep-research` asks on the terminal (`test/agent_cli_research_test.rb`), `/research` in chat pauses on the same plan (`test/comms_gateway_test.rb`); a paused CLI thread resumes with `tamoz resume <id> --answer go` |
 | B1 | met | the sources list is generated from the ledger; a URL written into the body is never listed |
 | B2 | met | a made-up excerpt is refused until the child quotes the page (`research_spec_test`, `research_test`) |
 | B3 | met | an unknown claim id is refused; `[C1-C2]`-style cites are refused |
@@ -66,4 +66,13 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | R1 | `353f9996` | `zai` provider, GLM route, `max_concurrent_requests`; reviewed |
 | R3 | `1f5023a4` | `tamoz-research` gem: budgets, plan, waves, web refs, sources with the excerpt check, ledger and stop rule, report, run folder; 29 facade tests; reviewed, 15 review findings fixed |
 | R2 | `1c932e1e` | Brave search and direct page reads as named adapters; `http` provider removed; egress public reach; `nokogiri` extraction; reviewed, 10 findings fixed (2 security: cross-host provider header, unbounded body) |
-| R4 | (this commit) | the research turn: plan checkpoint, waves, child web tools, report on disk; `Session#research`; 18 spec rows; reviewed twice, all findings fixed. Also: `PromptPack.digests` now reads UTF-8 (a locale bug the first non-ASCII prompt exposed), and the requirements manifest/audit rows R3 missed |
+| R4 | `d0d07d02` | the research turn: plan checkpoint, waves, child web tools, report on disk; `Session#research`; 18 spec rows; reviewed twice, all findings fixed. Also: `PromptPack.digests` now reads UTF-8 (a locale bug the first non-ASCII prompt exposed), and the requirements manifest/audit rows R3 missed |
+| R5 | (this commit) | one interface: `tamoz deep-research "<question>"` and `/research <question>` in chat; web tools approved as network reads in `base.yaml`; report folder falls back to the workspace's `research/`; user guide `documentation/guides/deep-research.md`; reviewed, all findings fixed |
+
+## Known limits (not fixed; reported)
+
+| Limit | Effect |
+|---|---|
+| A resumed research thread does not re-apply the `plan` approval profile | The resumed lead still has only research tools; a file change would reach the ordinary approval path, not a hard refusal |
+| `/redirect` on a research turn starts an ordinary work turn | The redirected question is not researched; send `/research` again |
+| `/research` on a chat worker without `--work-routing` | The user gets the generic "cannot run" reply, not a research-specific one |

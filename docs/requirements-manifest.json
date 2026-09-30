@@ -6193,6 +6193,22 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-deep-research",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz deep-research",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace",
+      "supporting_tests": [
+        "test/agent_cli_research_test.rb#test_a_research_thread_paused_at_its_plan_resumes_with_an_answer",
+        "test/agent_cli_research_test.rb#test_deep_research_refuses_to_change_files"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-follow-up",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",

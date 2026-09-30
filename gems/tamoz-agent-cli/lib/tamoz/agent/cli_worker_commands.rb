@@ -677,7 +677,8 @@ module Tamoz
       def worker_harness(options)
         return {} unless options[:work_routing]
 
-        { surface: :chat, guidance_files: Array(options[:guidance]), subagents: options[:subagents] }
+        { surface: :chat, guidance_files: Array(options[:guidance]), subagents: options[:subagents],
+          research_dir: File.join(runtime_dir_path(options), 'research') }
       end
 
       def with_worker_runtime(options)

@@ -15,6 +15,8 @@ module ResearchSpec
   QUESTION = 'How many people live in Oslo, and is it growing?'
   FLAGS = %w[TAMOZ_WEBSEARCH_GRANT TAMOZ_WEBSEARCH_EGRESS TAMOZ_WEBSEARCH_PROVIDER].freeze
   SSB = 'https://www.ssb.no/en/befolkning/oslo'
+  SSB_EXCERPT = 'Oslo had 717,710 residents on 1 January 2025, up 1.2 percent from a year earlier.'
+  KOMMUNE_EXCERPT = 'the city grew by about 8,700 people in 2024'
   EGRESS = { 'allowlisted_hosts' => ['api.search.brave.com'], 'schemes' => ['https'], 'deny_private_ranges' => true,
              'max_request_bytes' => 2048, 'max_response_bytes' => 65_536, 'connect_timeout_s' => 10,
              'redirect_max_hops' => 3, 'circuit' => { 'threshold' => 3, 'scope_type' => 'egress',
@@ -140,4 +142,18 @@ module ResearchSpec
   end
 
   def web_calls(web) = web.calls.map(&:first)
+
+  # Two sub-questions, one child each, one wave.
+  def happy_lead
+    [{ calls: [plan_call] }, { calls: [wave_call(%w[Q1], %w[Q2])] },
+     { calls: [report_call('Oslo had 717,710 residents at the start of 2025 [C1]. ' \
+                           'It grew by about 8,700 in 2024 [C2].')] }]
+  end
+
+  def happy_children
+    reading_child('Q1', 'Oslo population statistics residents', SSB_EXCERPT) +
+      [{ calls: [['web_search', { 'query' => 'Oslo municipality growth' }]] },
+       { calls: [['read_page', { 'ref' => 'S1-1' }]] },
+       { calls: [sources_call('Q2', 'P1', KOMMUNE_EXCERPT)] }]
+  end
 end

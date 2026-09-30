@@ -191,8 +191,9 @@ module Tamoz
         File.join(research_dir, name)
       end
 
+      # The worker names one (the runtime directory's); otherwise the report lands in the workspace.
       def research_dir
-        @work.settings.research_dir || raise(ConfigurationError, 'a research turn needs a research directory')
+        @work.settings.research_dir || File.join(@services.configuration.toolbox.root.to_s, 'research')
       end
 
       def finished(answer, record)

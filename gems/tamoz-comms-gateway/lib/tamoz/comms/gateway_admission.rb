@@ -62,7 +62,8 @@ module Tamoz
           append_control(decision.control_reply, envelope, now:) if decision.control_reply
         end
 
-        def admit_request(envelope, now:)
+        # `research` makes the admitted turn a deep-research turn (the /research command).
+        def admit_request(envelope, now:, research: nil)
           conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
           thread = admission_thread(envelope, conversation)
           thread = fresh_thread_for_new_authority(envelope, conversation, now:) if stale_authority?(thread)
@@ -72,7 +73,7 @@ module Tamoz
           )
           outcome = @store.admit_and_enqueue(
             envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
-                      reservation: reservation_slots, now:, history:
+                      reservation: reservation_slots, now:, history:, research:
           )
           return if %i[enqueued duplicate].include?(outcome)
 
@@ -89,7 +90,7 @@ module Tamoz
         def admit_control(envelope, decision, now:)
           if control_inbound_too_large?(envelope)
             refuse_admission(envelope, :inbound_too_large, now:)
-          elsif decision.command_intent&.name == 'answer'
+          elsif %w[answer research].include?(decision.command_intent&.name)
             handle_command(envelope, decision, now:)
           else
             outcome = record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)

@@ -9,24 +9,8 @@ require_relative 'support/research_spec'
 class ResearchSpecTest < Minitest::Test
   include ResearchSpec
 
-  SSB_EXCERPT = 'Oslo had 717,710 residents on 1 January 2025, up 1.2 percent from a year earlier.'
-  KOMMUNE_EXCERPT = 'the city grew by about 8,700 people in 2024'
-
   INTERNALS = [/subagent/i, /\bwave\b/i, /research_wave|write_report|propose_research_plan|report_sources/,
                /\[C\d+\]/, /\bS\d+-\d+\b/, /\bP\d+\b/, /token/i, /sha256/].freeze
-
-  def happy_lead
-    [{ calls: [plan_call] }, { calls: [wave_call(%w[Q1], %w[Q2])] },
-     { calls: [report_call('Oslo had 717,710 residents at the start of 2025 [C1]. ' \
-                           'It grew by about 8,700 in 2024 [C2].')] }]
-  end
-
-  def happy_children
-    reading_child('Q1', 'Oslo population statistics residents', SSB_EXCERPT) +
-      [{ calls: [['web_search', { 'query' => 'Oslo municipality growth' }]] },
-       { calls: [['read_page', { 'ref' => 'S1-1' }]] },
-       { calls: [sources_call('Q2', 'P1', KOMMUNE_EXCERPT)] }]
-  end
 
   def test_a_research_run_plans_asks_researches_and_writes_its_report
     with_research(lead: happy_lead, children: happy_children) do |session, model, web, out|
