@@ -63,7 +63,9 @@ module Tamoz
         waves_left = depth.waves - used.fetch('waves')
         %w[searches page_reads].to_h do |key|
           left = depth.public_send(key) - used.fetch(key)
-          raise Error, "the run has spent its #{key.tr('_', ' ')}; write the report" if left < children
+          raise Error, "the run has spent its #{key.tr('_', ' ')}; write the report" if left.zero?
+          raise Error, "only #{left} #{key.tr('_', ' ')} are left; assign at most #{left} children this wave" if
+            left < children
 
           [key.to_sym, [left / waves_left / children, 1].max]
         end

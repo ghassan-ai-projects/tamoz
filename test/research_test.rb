@@ -144,6 +144,19 @@ class ResearchTest < Minitest::Test
     assert_equal [20, 15], [wave.assignments.first.searches, wave.assignments.first.page_reads]
   end
 
+  def test_a_wave_that_cannot_fund_its_children_names_the_smaller_wave
+    budgets = R.budgets(override: { 'depths' => { 'quick' => { 'searches' => 1 } } })
+    ledger = R.ledger(brief: plan, children: [])
+    error = assert_raises(Tamoz::Research::Error) do
+      R.wave({ 'assignments' => [assignment(%w[Q1]), assignment(%w[Q2])] }, ledger:, budgets:)
+    end
+
+    assert_match(/assign at most 1 children/, error.message)
+    one = R.wave({ 'assignments' => [assignment(%w[Q1])] }, ledger:, budgets:)
+
+    assert_equal 1, one.assignments.first.searches
+  end
+
   def test_excerpts_outside_their_length_bounds_are_refused
     [19, 401].each do |length|
       text = 'x' * length
