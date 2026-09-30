@@ -103,6 +103,9 @@ module Agenteval
       # Runs a question set in the named arms, stops before the ledger could be overdrawn, and writes the report as
       # it goes. The judge is checked first; a judge that cannot tell good from bad makes every number unreadable.
       def run(set:, arms:, out:, log:, ids: nil)
+        unknown = arms - ARMS.keys
+        raise "unknown arm #{unknown.join(', ')}; one of #{ARMS.keys.join(', ')}" unless unknown.empty?
+
         judge = Judge.new(base: "https://openrouter.ai/api/v1", key: key("OPENROUTER_API_KEY"),
                           model: ENV.fetch("AGENTEVAL_JUDGE_MODEL", "deepseek/deepseek-v4-pro"))
         failed = judge_controls(judge).reject(&:last)
