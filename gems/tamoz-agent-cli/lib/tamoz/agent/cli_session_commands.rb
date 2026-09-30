@@ -76,6 +76,8 @@ module Tamoz
         return pinned_harness(pin, options[:subagents]) if File.exist?(pin)
         raise OptionParser::InvalidArgument, '--subagents applies only to tamoz code and tamoz investigate' if
           options[:subagents] && !options[:work_routing]
+        raise OptionParser::InvalidArgument, %q(--skill applies only to tamoz code and tamoz investigate) if
+          options[:skill] && !options[:work_routing]
         return {} unless options[:work_routing]
 
         fresh_harness(options, pin)
@@ -84,6 +86,7 @@ module Tamoz
       def fresh_harness(options, pin)
         settings = { surface: :cli, guidance_files: guidance_files(options), persona: operator_persona(options) }
         settings[:subagents] = options[:subagents] if options[:subagents]
+        settings[:skill] = options[:skill] if options[:skill]
         settings[:research_budgets] = options[:research_budgets] if options[:research_budgets]
         File.write(pin, JSON.generate(settings.except(:surface)), perm: 0o600)
         settings

@@ -10,6 +10,7 @@ require_relative "skills/catalog"
 require_relative "skills/compiler"
 require_relative "skills/frontmatter_scanner"
 require_relative "skills/frontmatter"
+require_relative "skills/lint"
 require_relative "skills/walk"
 require_relative "skills/snapshot"
 require_relative "skills/values"
@@ -92,13 +93,15 @@ module Tamoz
 
     BUNDLED_ROOT = File.expand_path("../../skills", __dir__).freeze
 
-    private_constant :Compiler, :Frontmatter, :FrontmatterScanner, :Rejected, :Walk
+    private_constant :Compiler, :Frontmatter, :FrontmatterScanner, :Lint, :Rejected, :Walk
 
     module_function
 
     def compile(sources:, bindings: {}, limits: LIMITS) = Compiler.new(sources:, bindings:, limits:).compile
 
     def empty = EMPTY
+
+    def lint(record) = Lint.call(record)
 
     def bundled_root = BUNDLED_ROOT
 

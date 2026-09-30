@@ -151,6 +151,7 @@ The interactive subcommands drive one thread while you watch it.
 | `investigate` | Start a read-only investigation turn: the operator's probes (`sources.probes`), then a findings report whose every finding cites a probe that answered; proposals are not executed |
 | `deep-research` | Research a question on the web: Tamoz shows a research plan first, then research subagents search and read pages, and a cited report is saved in the workspace's `research/` |
 | `probes` | Validate and list the operator's probe catalog without starting any MCP server |
+| `skills` | List, check against the authoring bar, or locate the skills `--skills DIR` and `--bundled-skills` would load |
 | `memory` | List, show, forget, or consolidate what durable memory holds for this workspace (needs `sources.memory` in the runtime config) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on |
 | `continue` | Drive a paused thread forward without new input |

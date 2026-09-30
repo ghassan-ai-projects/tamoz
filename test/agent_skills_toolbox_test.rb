@@ -118,13 +118,10 @@ class AgentSkillsToolboxTest < Minitest::Test
 
   # --------------------------------------------------- H-4: profile isolation --
 
-  # A P8 profile's tools.allowed is a closed list that cannot name a skill tool,
-  # so a profile-bound toolbox is skill-free by construction. Fail-closed and
-  # deliberate for this run; lifted by P9-B2 after P8-E.
-  def test_a32_a_profile_bound_toolbox_exposes_no_skill_tool
+  # A profile may allow the skill tools; one whose tools.allowed does not name them exposes neither.
+  def test_a32_a_profile_that_does_not_allow_skill_tools_exposes_none
     write_skill("fix-answer")
-    refute_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "load_skill"
-    refute_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "read_skill_resource"
+    assert_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "load_skill"
 
     box = toolbox(skills: snapshot, allowed_tools: %w[read_file list_directory search_text glob])
 

@@ -85,6 +85,15 @@ module Tamoz
             value.on('--allow-changes', 'Enable reviewed and approved workspace changes') do
               options[:allow_changes] = true
             end
+            value.on('--skills DIR', 'Load operator skills from DIR (outside the workspace)') do |entry|
+              options[:skills_dir] = entry
+            end
+            value.on('--bundled-skills', 'Load the skills Tamoz ships') do
+              options[:bundled_skills] = true
+            end
+            value.on('--skill NAME', 'Load this skill before the first model call (tamoz code)') do |entry|
+              options[:skill] = entry
+            end
             value.on('--experimental-routing', 'Use the experimental fused request router') do
               options[:experimental_routing] = true
             end

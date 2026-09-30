@@ -22,7 +22,7 @@ class BenchmarkProtocolTest < Minitest::Test
   # 2026-09-13 bump: Gemfile.lock gains faraday and base64 as declared deps.)
   # 2026-09-30 bump: the CLI's declared tamoz-research dependency (lockfile).
   # 2026-10-01 bump: the tamoz-skills gem and its dependents join the lockfile.
-  COMMITTED_SHA256 = "6521a888cc4c367ed484ebc2ee85ddf864560dd1c9d21f15d9c4ba9894e824f2"
+  COMMITTED_SHA256 = "1e36324ac1da724d5871a45fe7fa25290d08dec56bfd0745ef75f2682b416f24"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider

@@ -271,7 +271,14 @@ module Tamoz
           .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil,
                                               **observation_update(state, name, call, outcome),
                                               **WorkMemory.turn_facts(name, call.fetch('arguments'), outcome),
+                                              **skill_trace(name, call, outcome),
                                               **(research ? { research: } : {}))
+      end
+
+      def skill_trace(name, call, outcome)
+        return {} unless name == 'load_skill' && outcome.status == :succeeded
+
+        { work_trace: [@work.skill_loaded(call.fetch('arguments').fetch('skill'), invoked_by: 'model')] }
       end
 
       # The one seam outside this class that maintains the ledger: a read, a creation, or a

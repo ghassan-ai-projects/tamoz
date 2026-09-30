@@ -86,6 +86,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Skills.compile" => {},
           "Tamoz::Skills.digest_of" => {},
           "Tamoz::Skills.empty" => {},
+          "Tamoz::Skills.lint" => {},
           "Tamoz::Skills.operator_snapshot" => {},
           "Tamoz::Skills.outside_workspace!" => {},
           "Tamoz::Skills.read_resource" => {},

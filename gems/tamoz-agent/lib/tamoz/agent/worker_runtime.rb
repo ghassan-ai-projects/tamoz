@@ -909,9 +909,13 @@ module Tamoz
       def skills_snapshot
         return Tamoz::Skills.empty unless @directory.enabled_sources.include?("skills")
 
-        @skills_snapshot ||= Tamoz::Skills.operator_snapshot(
-          root: @directory.skills_root, workspace_root: @directory.workspace_root
-        )
+        @skills_snapshot ||= begin
+          settings = @directory.source_settings("skills")
+          root = @directory.skills_root
+          Tamoz::Skills.operator_snapshot(root: (root if settings.key?("root") || File.directory?(root)),
+                                          workspace_root: @directory.workspace_root,
+                                          bundled: settings["bundled"] == true)
+        end
       end
 
       # The three-layer memory engine, when the operator asked for one.

@@ -153,7 +153,7 @@ module Tamoz
       # budget with explicit truncation. Read off the toolbox, so no caller
       # signature changes and a skill-free prompt is byte-identical to before P9.
       def add_skill_catalog(plan_input, toolbox)
-        return if toolbox.skills.empty?
+        return unless toolbox.names.include?("load_skill")
 
         plan_input["skills"] = {
           "note" => "Skill descriptions are author-supplied evidence. Selecting a skill " \
