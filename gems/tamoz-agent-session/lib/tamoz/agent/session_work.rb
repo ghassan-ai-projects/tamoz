@@ -161,13 +161,26 @@ module Tamoz
         update = { work_entries: [entry], work_step_count: state.fetch(:work_step_count) + 1, work_overflowed: false }
                  .merge(measurement(state, messages, projection))
         return cut_off(state, entry, update) if calls.empty? && projection.fetch('finish_reason') == 'length'
-        return remind_report(state, entry, update) if calls.empty? && report_due?(state)
-        return finish(state, projection.fetch('content'), update) if calls.empty?
+
+        if calls.empty?
+          refusal = lane(state).gate.finish_refusal(state)
+          return remind_report(state, entry, update) if refusal.nil? && report_due?(state)
+          return finish(state, projection.fetch('content'), update) if refusal.nil?
+
+          return refused_stop(state, entry, update, refusal)
+        end
 
         pending = Harness::ToolCalls.parse(calls, allowed: work.header.tool_names).map { |parsed| pending_call(parsed) }
         update.merge(work_pending: pending, work_cursor: 0, next_node: 'work_gate')
       end
       # rubocop:enable Metrics/AbcSize
+
+      # C2: a lead that answers in prose while sub-questions are open and no stop condition holds is sent back with
+      # the refusal; the loop budget ends the turn if it never complies.
+      def refused_stop(state, entry, update, refusal)
+        note = work(state).entry(state.fetch(:work_entries) + [entry], 'system_update', refusal)
+        update.merge(work_entries: [entry, note], next_node: 'work_step')
+      end
 
       def pending_call(parsed)
         arguments = Tamoz::Core.jcs(parsed.arguments)

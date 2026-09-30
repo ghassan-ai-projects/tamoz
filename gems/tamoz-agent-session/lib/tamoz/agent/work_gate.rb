@@ -56,6 +56,9 @@ module Tamoz
       end
       # rubocop:enable Metrics/AbcSize
 
+      # C2: nil when the turn may end, else the research lead's refusal — the run is not done.
+      def finish_refusal(state) = @tools.finish_refusal(state)
+
       private
 
       # A research child's web call comes back as the capability that backs it, with its shown name kept.

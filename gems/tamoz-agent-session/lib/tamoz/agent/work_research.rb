@@ -63,6 +63,18 @@ module Tamoz
         outcome("Report not accepted: #{e.message}")
       end
 
+      # C2: the refusal the lead reads when it answers without the report while the run must keep going, or nil when
+      # a stop condition (or a run with no accepted plan yet) lets it end.
+      def finish_refusal(state)
+        research = state[:research]
+        return nil unless research.is_a?(Hash) && research['accepted']
+
+        ledger = ledger(research)
+        return nil if Tamoz::Research.stop_reason(ledger, budgets:)
+
+        keep_going(ledger)
+      end
+
       private
 
       # The time the user spent reading the plan is not the lead's working time.

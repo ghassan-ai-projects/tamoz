@@ -180,6 +180,53 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
+  # What the lead read between its own calls: the user-role channel the harness writes (reminders, refusals,
+  # tool results). The assistant's own tool calls name write_report, so only this channel can prove a reminder.
+  def read_back(model)
+    model.parent_requests.flat_map { |request| JSON.parse(request).fetch('messages') }
+         .select { |message| message['role'] == 'user' }.map { |message| message['content'].to_s }.join("\n")
+  end
+
+  def test_c2_a_lead_that_answers_in_prose_while_open_is_sent_back_until_it_reports
+    lead = [{ calls: [plan_call(depth: 'standard', texts: ['How many people live in Oslo?', 'Is Oslo growing?'])] },
+            { calls: [wave_call(%w[Q1 Q2])] },
+            { content: 'I have found enough; consider the research done.' },
+            { content: 'The research is finished.' },
+            { calls: [wave_call(%w[Q2])] },
+            { calls: [report_call('Oslo had 717,710 residents [C1]; growth is unsettled.')] }]
+    half = [{ calls: [['web_search', { 'query' => 'Oslo population statistics' }]] },
+            { calls: [['read_page', { 'ref' => 'S1-1' }]] },
+            { calls: [['report_sources', { 'summary' => 'Done.', 'findings' => [
+              { 'sub_question' => 'Q1', 'status' => 'found',
+                'claims' => [{ 'claim' => SSB_EXCERPT, 'page' => 'P1', 'excerpt' => SSB_EXCERPT, 'primary' => true }] },
+              { 'sub_question' => 'Q2', 'status' => 'not_found', 'claims' => [] }] }]] }]
+    searches = %w[growth 2025 forecast].map { |query| { calls: [['web_search', { 'query' => "Oslo #{query}" }]] } }
+    child = half + searches + [{ calls: [sources_call('Q2', nil, '', status: 'not_found')] }]
+    with_research(lead:, children: child) do |session, model, _web, out|
+      start_research(session)
+
+      assert_equal :completed, reply(session, 'go').status
+      # The refusal, never the write-the-report reminder: the refusal's text and the method prompt both say
+      # "write_report", so the reminder's own sentence is what tells the two paths apart.
+      refute_includes read_back(model), 'Answering in plain text ends it'
+      assert_includes read_back(model), 'Still open: Q2'
+      assert_equal 'researched', session.view(thread: 'research').state.fetch(:terminal_reason)
+      refute_empty Dir[File.join(out, '*', 'report.md')]
+    end
+  end
+
+  def test_a_covered_lead_that_keeps_answering_without_the_report_ends_answered
+    lead = happy_lead[0, 2] + [{ content: 'Done.' }, { content: 'Truly done.' }]
+    with_research(lead:, children: happy_children) do |session, model, _web, out|
+      start_research(session)
+
+      assert_equal :completed, reply(session, 'go').status
+      assert_includes read_back(model), 'Answering in plain text ends it'
+      assert_equal 'answered', session.view(thread: 'research').state.fetch(:terminal_reason)
+      assert_empty Dir[File.join(out, '*', 'report.md')]
+    end
+  end
+
   def test_c4_a_child_cannot_search_past_its_share_of_the_budget
     budgets = { 'depths' => { 'quick' => { 'searches' => 2 } } }
     searches = Array.new(3) { |index| { calls: [['web_search', { 'query' => "Oslo population #{index}" }]] } }
