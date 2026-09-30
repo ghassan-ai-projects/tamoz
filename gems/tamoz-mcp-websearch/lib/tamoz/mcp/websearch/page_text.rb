@@ -8,7 +8,8 @@ module Tamoz
     module Websearch
       # The readable text of an HTML page: its main content as plain markdown, its title, and its published date
       # when the page states one. Link targets are not kept, so a page cannot hand the reader a URL to follow.
-      # :reek:DuplicateMethodCall :reek:NestedIterators :reek:TooManyConstants :reek:TooManyStatements :reek:UtilityFunction
+      # :reek:DuplicateMethodCall :reek:NestedIterators :reek:TooManyConstants
+      # :reek:TooManyStatements :reek:UtilityFunction
       module PageText
         # A page's title, stated publication date ('' when none) and readable text.
         Extracted = Data.define(:title, :published, :text)

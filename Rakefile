@@ -591,7 +591,7 @@ namespace :agenteval do
       sh agenteval_ruby, BIN, "research", "prove"
     end
 
-    desc "Run the research pack (real GLM + Brave, capped by agenteval/research/brave_ledger.json; SET=dev|held_out, IDS, ARMS)"
+    desc "Run the research pack (real GLM + Brave, capped by the Brave ledger; SET=dev|held_out, IDS, ARMS)"
     task run: :prove do
       utf8_env!
       extra = []

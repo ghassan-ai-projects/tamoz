@@ -4,6 +4,7 @@ require_relative 'test_helper'
 require_relative 'support/research_spec'
 
 # The eval's Brave cap and query cache (docs/deep-research-2026-09-30/EVAL.md §3): offline, no socket.
+# rubocop:disable Minitest/MultipleAssertions -- each case reads one record behaviour from several sides.
 class WebsearchRecordedWebTest < Minitest::Test
   include ResearchSpec
 
@@ -23,8 +24,14 @@ class WebsearchRecordedWebTest < Minitest::Test
     Dir.mktmpdir do |dir|
       web = W::RecordedWeb.new(dir: File.join(dir, 'cache'), ledger: W::SearchLedger.new(counter(dir, used: 0)))
       live = 0
-      first = web.search('Oslo  Population', 5) { live += 1; [{ 'url' => 'https://a.example/' }] }
-      again = web.search('oslo population', 5) { live += 1; [] }
+      first = web.search('Oslo  Population', 5) do
+        live += 1
+        [{ 'url' => 'https://a.example/' }]
+      end
+      again = web.search('oslo population', 5) do
+        live += 1
+        []
+      end
 
       assert_equal first, again
       assert_equal 1, live
@@ -61,3 +68,4 @@ class WebsearchRecordedWebTest < Minitest::Test
     path
   end
 end
+# rubocop:enable Minitest/MultipleAssertions

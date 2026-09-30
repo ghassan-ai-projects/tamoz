@@ -13,7 +13,9 @@ module Tamoz
     class WorkResearch
       LEAD_TOOLS = %w[propose_research_plan research_wave write_report].freeze
       FINISH = 'write_report'
-      SupportCheckError = Class.new(StandardError)
+
+      # Raised when the support check did not run or its answer cannot be read.
+      class SupportCheckError < StandardError; end
       # One refusal for both cases the lead can reach it from: a plan the user already accepted, or a research whose
       # waves have started.
       ALREADY_PLANNED = 'Error: there is already a plan for this research; the plan can no longer change.'
@@ -252,16 +254,17 @@ module Tamoz
       end
 
       def verdict(call, items)
-        cited = items.flat_map { |item| item.fetch('claims').map { |claim| claim.fetch('id') } }
         raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
         raise SupportCheckError, 'the support check did not run' unless call.status == :succeeded
 
-        listed = JSON.parse(judge_object(call.value)).fetch('unsupported', [])
-        unless listed.is_a?(Array) && listed.all?(String)
-          raise SupportCheckError, 'the support check answer is unreadable'
-        end
+        unsupported(call.value) & items.flat_map { |item| item.fetch('claims').map { |claim| claim.fetch('id') } }
+      end
 
-        listed & cited
+      def unsupported(answer)
+        listed = JSON.parse(judge_object(answer)).fetch('unsupported', [])
+        return listed if listed.is_a?(Array) && listed.all?(String)
+
+        raise SupportCheckError, 'the support check answer is unreadable'
       rescue JSON::ParserError
         raise SupportCheckError, 'the support check answer is unreadable'
       end

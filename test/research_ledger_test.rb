@@ -4,7 +4,7 @@ require_relative 'test_helper'
 require_relative 'support/research_fixtures'
 
 # The research rules after the children: the ledger's statuses and stop reason, the report and the run's files.
-# rubocop:disable Minitest/MultipleAssertions -- each case reads one research value from several sides.
+# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize -- each case reads one research value from several sides.
 class ResearchLedgerTest < Minitest::Test
   include ResearchFixtures
 
@@ -161,4 +161,4 @@ class ResearchLedgerTest < Minitest::Test
     assert_includes report.markdown, '[2] SSB Oslo. https://other.org/y.'
   end
 end
-# rubocop:enable Minitest/MultipleAssertions
+# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize

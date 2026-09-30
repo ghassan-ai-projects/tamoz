@@ -152,6 +152,7 @@ module Tamoz
         call.status == :failed && call.error.is_a?(Hash) && call.error['code'] == 'context_window_exceeded'
       end
 
+      # :reek:DuplicateMethodCall :reek:NilCheck :reek:TooManyStatements
       # rubocop:disable Metrics/AbcSize -- the assistant entry, the measurement and the routing are one durable update
       def answered(state, call, messages)
         projection = call.value
@@ -165,6 +166,7 @@ module Tamoz
         if calls.empty?
           refusal = lane(state).gate.finish_refusal(state)
           return remind_report(state, entry, update) if refusal.nil? && report_due?(state)
+
           return finish(state, projection.fetch('content'), update) if refusal.nil?
 
           return refused_stop(state, entry, update, refusal)
@@ -175,6 +177,7 @@ module Tamoz
       end
       # rubocop:enable Metrics/AbcSize
 
+      # :reek:LongParameterList
       def refused_stop(state, entry, update, refusal)
         note = work(state).entry(state.fetch(:work_entries) + [entry], 'system_update', refusal)
         update.merge(work_entries: [entry, note], next_node: 'work_step')

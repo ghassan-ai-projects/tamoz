@@ -5,7 +5,8 @@ require_relative 'support/research_spec'
 
 # Quality-bar rows P, B, C and I of docs/deep-research-2026-09-30 through the real work route. Scripted models: this
 # is plumbing and authority, never evidence that a model researches well.
-# rubocop:disable Metrics/AbcSize, Minitest/MultipleAssertions -- each row reads one research run from several sides.
+# rubocop:disable Metrics/AbcSize, Minitest/MultipleAssertions, Metrics/ClassLength, Metrics/MethodLength --
+# each row reads one research run from several sides.
 class ResearchSpecTest < Minitest::Test
   include ResearchSpec
 
@@ -201,7 +202,8 @@ class ResearchSpecTest < Minitest::Test
 
       assert_equal :completed, reply(session, 'go').status
       read = model.parent_requests.flat_map { |request| JSON.parse(request).fetch('messages') }
-                  .map { |message| message['content'].to_s }.join("\n")
+                                  .map { |message| message['content'].to_s }.join("\n")
+
       assert_includes read, 'the support check answer is unreadable'
       text = File.read(Dir[File.join(out, '*', 'report.md')].first)
 
@@ -229,7 +231,9 @@ class ResearchSpecTest < Minitest::Test
 
   def read_back(model)
     model.parent_requests.flat_map { |request| JSON.parse(request).fetch('messages') }
-         .select { |message| message['role'] == 'user' }.map { |message| message['content'].to_s }.join("\n")
+                         .filter_map do |message|
+      message['content'] if message['role'] == 'user'
+    end.join("\n")
   end
 
   def test_c2_a_lead_that_answers_in_prose_while_open_is_sent_back_until_it_reports
@@ -239,12 +243,15 @@ class ResearchSpecTest < Minitest::Test
             { content: 'The research is finished.' },
             { calls: [wave_call(%w[Q2])] },
             { calls: [report_call('Oslo had 717,710 residents [C1]; growth is unsettled.')] }]
-    half = [{ calls: [['web_search', { 'query' => 'Oslo population statistics' }]] },
-            { calls: [['read_page', { 'ref' => 'S1-1' }]] },
-            { calls: [['report_sources', { 'summary' => 'Done.', 'findings' => [
-              { 'sub_question' => 'Q1', 'status' => 'found',
-                'claims' => [{ 'claim' => SSB_EXCERPT, 'page' => 'P1', 'excerpt' => SSB_EXCERPT, 'primary' => true }] },
-              { 'sub_question' => 'Q2', 'status' => 'not_found', 'claims' => [] }] }]] }]
+    half = [
+      { calls: [['web_search', { 'query' => 'Oslo population statistics' }]] },
+      { calls: [['read_page', { 'ref' => 'S1-1' }]] },
+      { calls: [['report_sources', { 'summary' => 'Done.', 'findings' => [
+        { 'sub_question' => 'Q1', 'status' => 'found',
+          'claims' => [{ 'claim' => SSB_EXCERPT, 'page' => 'P1', 'excerpt' => SSB_EXCERPT, 'primary' => true }] },
+        { 'sub_question' => 'Q2', 'status' => 'not_found', 'claims' => [] }
+      ] }]] }
+    ]
     searches = %w[growth 2025 forecast].map { |query| { calls: [['web_search', { 'query' => "Oslo #{query}" }]] } }
     child = half + searches + [{ calls: [sources_call('Q2', nil, '', status: 'not_found')] }]
     with_research(lead:, children: child) do |session, model, _web, out|
@@ -406,4 +413,4 @@ class ResearchSpecTest < Minitest::Test
     assert_equal 1, Tamoz::Agent::WorkResearch.batch_for(Object.new)
   end
 end
-# rubocop:enable Metrics/AbcSize, Minitest/MultipleAssertions
+# rubocop:enable Metrics/AbcSize, Minitest/MultipleAssertions, Metrics/ClassLength, Metrics/MethodLength

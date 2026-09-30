@@ -438,8 +438,8 @@ class McpInvocationTest < Minitest::Test
 
     timed_out = Thread.new do
       Invocation.call(slow, { "ms" => 2_000 }, snapshot: snapshot, supervisor: supervisor)
-    rescue Tamoz::Mcp::UnavailableError => error
-      error
+    rescue Tamoz::Mcp::UnavailableError => e
+      e
     end
     sleep 0.1
     answered = Invocation.call(echo, { "value" => "still here" }, snapshot: snapshot, supervisor: supervisor)

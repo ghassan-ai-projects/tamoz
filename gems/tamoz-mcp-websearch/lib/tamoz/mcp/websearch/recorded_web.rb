@@ -41,10 +41,10 @@ module Tamoz
           FileUtils.mkdir_p(dir) if dir
         end
 
-        def search(query, count, &live)
+        def search(query, count)
           recorded("search-#{digest("#{query.downcase.split.join(' ')}\n#{count}")}") do
             @ledger&.charge!
-            live.call
+            yield
           end
         end
 

@@ -47,7 +47,9 @@ class ModelWindowsTest < Minitest::Test
     deepseek = Tamoz::Agent::ModelClientFactory.build(provider: 'deepseek', model: 'deepseek-flash', profile_role: nil,
                                                       environment: env)
 
-    assert_equal [600, 120], [zai, deepseek].map { |transport| transport.instance_variable_get(:@timeout_seconds) }
+    timeouts = [zai, deepseek].map { |transport| transport.instance_variable_get(:@timeout_seconds) }
+
+    assert_equal [600, 120], timeouts
   end
 
   def test_a_route_carries_its_pinned_concurrency_and_an_unpinned_one_runs_one_at_a_time

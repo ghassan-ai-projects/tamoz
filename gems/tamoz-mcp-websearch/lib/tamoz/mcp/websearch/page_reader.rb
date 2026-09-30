@@ -24,15 +24,18 @@ module Tamoz
         # cannot be read.
         def read(url)
           result = @client.fetch(url, headers: { 'Accept' => ACCEPT, 'User-Agent' => USER_AGENT })
-          status = result.status
-          raise EgressPolicyError, "the page answered HTTP #{status}" unless (200..299).cover?(status)
+          raise EgressPolicyError, "the page answered HTTP #{result.status}" unless (200..299).cover?(result.status)
 
           extracted = extract(content_type(result.headers), result.body)
           text, cut = bounded(Websearch.sanitize_result(extracted.text))
           raise EgressPolicyError, 'the page has no readable text' if text.strip.empty?
 
+          page(url, extracted, text, cut || result.truncated)
+        end
+
+        def page(url, extracted, text, truncated)
           { 'url' => url, 'title' => Websearch.sanitize_result(extracted.title), 'published' => extracted.published,
-            'read_at' => Time.now.utc.iso8601, 'text' => text, 'truncated' => cut || result.truncated }
+            'read_at' => Time.now.utc.iso8601, 'text' => text, 'truncated' => truncated }
         end
 
         private

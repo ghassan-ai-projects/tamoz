@@ -38,7 +38,7 @@ class ResearchBoundaryTest < Minitest::Test
 
   def production_files
     Dir[ROOT.join('{gems/*/lib,gems/*/exe,apps,bin,script,agenteval/lib,agenteval/adapters,agenteval/research}/**/*')
-          .to_s]
+            .to_s]
       .select { |path| File.file?(path) }.map { |path| path.delete_prefix("#{ROOT}/") }
   end
 

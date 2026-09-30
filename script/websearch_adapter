@@ -122,7 +122,7 @@ module WebsearchAdapter
     rescue RefusedGate => refused
       refusal(refused.message)
     rescue *REFUSED => error
-      @circuit&.record_failure
+      @egress_circuit&.record_failure
       refusal(reason(error))
     end
 
@@ -140,14 +140,14 @@ module WebsearchAdapter
     rescue RefusedGate => refused
       refusal(refused.message)
     rescue *REFUSED => error
-      @circuit&.record_failure
+      @egress_circuit&.record_failure
       refusal(reason(error))
     end
 
     def reset!
       @issued = {}
       @pages = {}
-      @circuit = nil
+      @egress_circuit = nil
     end
 
     private
@@ -160,7 +160,7 @@ module WebsearchAdapter
     end
 
     def egress_circuit(policy)
-      @circuit ||= W::EgressCircuit.new(threshold: policy.circuit.fetch("threshold"),
+      @egress_circuit ||= W::EgressCircuit.new(threshold: policy.circuit.fetch("threshold"),
                                         scope_id: W::DEFAULT_SERVER_ID,
                                         budget_breach: policy.circuit.fetch("budget_breach"))
     end

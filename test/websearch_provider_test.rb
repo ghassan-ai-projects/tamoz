@@ -8,6 +8,7 @@ require 'pathname'
 load Pathname.new(__dir__).join('..', 'script', 'websearch_adapter').to_s unless defined?(WebsearchAdapter)
 
 # -- each case reads one adapter response from several sides.
+# rubocop:disable Minitest/MultipleAssertions -- each case reads one adapter response from several sides.
 class WebsearchProviderTest < Minitest::Test
   FLAGS = %w[TAMOZ_WEBSEARCH_GRANT TAMOZ_WEBSEARCH_EGRESS TAMOZ_WEBSEARCH_PROVIDER].freeze
 
@@ -80,6 +81,7 @@ class WebsearchProviderTest < Minitest::Test
 
   def test_three_provider_failures_in_a_row_open_the_declared_circuit
     File.write(@web, '{broken')
+
     3.times { assert_predicate WebsearchAdapter.search_response('Oslo', 3), :error? }
 
     refusal = WebsearchAdapter.search_response('Oslo', 3)
@@ -89,12 +91,15 @@ class WebsearchProviderTest < Minitest::Test
 
   def test_a_success_between_failures_keeps_the_circuit_closed
     File.write(@web, '{broken')
+
     2.times { assert_predicate WebsearchAdapter.search_response('Oslo', 3), :error? }
+
     File.write(@web, @document)
 
     refute_predicate WebsearchAdapter.search_response('Oslo', 3), :error?
 
     File.write(@web, '{broken')
+
     refusal = WebsearchAdapter.search_response('Oslo', 3)
 
     assert_predicate refusal, :error?
@@ -112,3 +117,4 @@ class WebsearchProviderTest < Minitest::Test
       'credential_refs' => ['TAMOZ_BRAVE_API_KEY'], 'page_reads' => 'public' }
   end
 end
+# rubocop:enable Minitest/MultipleAssertions

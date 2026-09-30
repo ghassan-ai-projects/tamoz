@@ -8,6 +8,7 @@ require_relative '../agenteval/research/pack'
 
 # The research pack's offline controls (docs/deep-research-2026-09-30/EVAL.md §3): every grader separates a planted
 # good report from a planted bad one before any real-model number is read.
+# rubocop:disable Metrics/AbcSize -- each row reads the pre-registered shape from several sides.
 class AgentevalResearchPackTest < Minitest::Test
   Pack = Agenteval::Research::Pack
 
@@ -26,9 +27,11 @@ class AgentevalResearchPackTest < Minitest::Test
     held_out = Pack.questions('held_out')
 
     assert_equal [6, 8], [dev.length, held_out.length]
+
     assert_equal %w[comparison contested current factual survey], held_out.map { |q| q.fetch('class') }.uniq.sort
     Pack.questions.each do |question|
       question.fetch('facts').each { |fact| fact.fetch('any').each { |pattern| Regexp.new(pattern) } }
+
       assert question['after'] || !question.fetch('facts').empty?, "#{question['id']} grades nothing"
     end
   end
@@ -82,3 +85,4 @@ class AgentevalResearchPackTest < Minitest::Test
     assert_includes error.message, held.first
   end
 end
+# rubocop:enable Metrics/AbcSize
