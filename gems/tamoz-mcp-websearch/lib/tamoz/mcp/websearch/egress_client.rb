@@ -136,8 +136,6 @@ module Tamoz
           raise ValidationError, "max_response_bytes must be 1 to #{READER_MAX_RESPONSE_BYTES}"
         end
 
-        # --- target construction (every hop re-runs this) -------------------
-
         def initial_target(url, headers, body)
           uri = upgraded(parse_url(url))
           validate_scheme!(uri)
@@ -238,8 +236,6 @@ module Tamoz
           path
         end
 
-        # --- per-hop resolve → classify → pin --------------------------------
-
         def pin_address(host)
           addresses = begin
             @resolver.call(host)
@@ -262,8 +258,6 @@ module Tamoz
                 "the websearch target host #{host.inspect} resolved only to refused " \
                 "addresses"
         end
-
-        # --- response handling ------------------------------------------------
 
         def redirect?(response)
           status = response.fetch("status")

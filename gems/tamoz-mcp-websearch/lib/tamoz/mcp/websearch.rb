@@ -48,8 +48,6 @@ module Tamoz
         )
       end
 
-      # --- credential hygiene (invariant 24 / P17 §5, W6, P17-A3) ----------
-
       # A query argument VALUE is credential-shaped when it is an env-style
       # assignment to a credential name, or a bare secret-shaped token. Such a
       # query is rejected at invocation (fail closed, no call is issued) — the
