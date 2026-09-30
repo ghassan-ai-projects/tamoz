@@ -384,8 +384,9 @@ reads an inner field.
   `Tamoz::Research.budgets` validation, never by editing the file's internals
 
 **Edges.**
-- New: `tamoz-agent-session → tamoz-research` and `tamoz-agent-improvement → tamoz-research`, both
-  facade only. `tamoz-harness` holds only the `report_sources` JSON schema; parsing it is
+- New: `tamoz-agent-session → tamoz-research`, `tamoz-agent-improvement → tamoz-research` and
+  `tamoz-agent-cli → tamoz-research` (the CLI validates `--research-budgets` through the facade before a run
+  starts), all facade only. `tamoz-harness` holds only the `report_sources` JSON schema; parsing it is
   `Tamoz::Research`'s job, called from the session, so there is no harness → research edge.
 - `tamoz-research` imports nothing from `tamoz-agent-*`, `tamoz-mcp*`, `tamoz-harness` or
   `tamoz-graph`.

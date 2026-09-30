@@ -1,6 +1,6 @@
 # Gem map
 
-Tamoz is a monorepo of twenty-nine independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
+Tamoz is a monorepo of thirty independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
 
 ## The dependency chain
 
@@ -106,7 +106,7 @@ Two edges deserve emphasis:
 | `tamoz-harness` | The coding-harness protocol: digest-pinned prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets and repeat guard, finish contract, handoff | `tamoz-context-engine`, `tamoz-core` |
 | `tamoz-research` | The rules of a deep-research run behind one facade: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder. Pure: no I/O | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host over the official Ruby SDK | `tamoz-core`, `tamoz-cancellation`, `mcp ~> 1.1` |
-| `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter; preserves `Tamoz::Mcp::Websearch` | `tamoz-mcp`, `tamoz-core` |
+| `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter; preserves `Tamoz::Mcp::Websearch` | `tamoz-mcp`, `tamoz-core`, `nokogiri ~> 1.18` |
 | `tamoz-comms` | Channel contract gem: values, identity/admission policy, rendering, the `Transport` seam, and the structural `CommsStore` contract. Never opens a socket | `tamoz-core` |
 | `tamoz-comms-gateway` | Long-running `Gateway` and `DeliveryDrainer` process boundary over caller-injected transport, store, checkpoint, control, and effect-binding seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: requests, decisions, grants, policy documents, and durable decision log | `tamoz-core` |
@@ -119,8 +119,8 @@ Two edges deserve emphasis:
 | `tamoz-agent-healing` | Bounded self-healing: typed failure contract, classification with abstention, immutable digest-bound rules, reviewed remediation protocol, promotion gate | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validators, secure files, adoption and transition registries | `tamoz-agent-kernel`, `tamoz-core` |
 | `tamoz-agent-session` | Durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, and the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-research`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
-| `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime; the family's only executable | `tamoz-agent`, `tamoz-agent-session`, `tamoz-agent-capabilities`, `tamoz-comms-gateway`, `tamoz-cancellation`, `tamoz-concurrency` |
+| `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-research` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime; the family's only executable | `tamoz-agent`, `tamoz-agent-session`, `tamoz-agent-capabilities`, `tamoz-comms-gateway`, `tamoz-research`, `tamoz-cancellation`, `tamoz-concurrency` |
 | `tamoz-agent` | The deliberative agent runtime as a library: session state machine over the graph, worker/durable execution, capability and transport wiring | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical JSON, evidence values, verifier decisions and release evidence. Development/release gem; nothing depends on it | `tamoz-core` |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks. Inputs are caller-owned and supplied through an explicit manifest or adapter | `tamoz-evals`, selected runtime gems |

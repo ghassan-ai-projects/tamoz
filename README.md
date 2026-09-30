@@ -27,8 +27,9 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-tools` | The workspace toolbox, the skills compiler, the capability host | `tamoz-core` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header, append-only surface, spill, pruner, compaction, cache accounting | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets, finish contract | `tamoz-context-engine`, `tamoz-core` |
+| `tamoz-research` | The rules of a deep-research run behind one facade: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder. Pure: no I/O | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
-| `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core` |
+| `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core`, nokogiri |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport seam, store contract | `tamoz-core` |
 | `tamoz-comms-gateway` | Long-running gateway and delivery drainer over injected Comms transport/store seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: digest-pinned YAML documents, ask/park/deny ladder, scoped grants, durable decision log | `tamoz-core` |
@@ -40,9 +41,9 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-agent-memory` | Durable memory: `Memory::Engine` — admission, retrieval, lifecycle with deletion receipts, consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification with abstention, immutable rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
-| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
-| `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-agent-session`, `tamoz-agent-capabilities`, `tamoz-comms-gateway`, `tamoz-cancellation`, `tamoz-concurrency` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery, the coding work loop | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-harness`, `tamoz-research`, `tamoz-context-engine`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
+| `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-research` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-agent-session`, `tamoz-agent-capabilities`, `tamoz-comms-gateway`, `tamoz-research`, `tamoz-cancellation`, `tamoz-concurrency` |
 | `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, runtime gems used by the selected runner |
