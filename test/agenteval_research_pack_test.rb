@@ -33,4 +33,12 @@ class AgentevalResearchPackTest < Minitest::Test
     assert_equal 1, single.dig('ceilings', 'children_per_wave')
     Pack::ARMS.each_value { |override| Tamoz::Research.budgets(override:) }
   end
+
+  def test_the_judge_reads_a_nested_answer_whole_not_inner_object_first
+    text = "Sure!\n{\"comprehensiveness\": \"A\", \"detail\": {\"depth\": 2}, \"insight\": \"B\"}\nThanks"
+    extracted = JSON.parse(Agenteval::Research::Judge.object_in(text))
+
+    assert_equal({ 'comprehensiveness' => 'A', 'detail' => { 'depth' => 2 }, 'insight' => 'B' }, extracted)
+    assert_nil Agenteval::Research::Judge.object_in('no object here')
+  end
 end

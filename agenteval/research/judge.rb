@@ -12,6 +12,20 @@ module Agenteval
       RUBRIC = %w[comprehensiveness insight instruction_following readability].freeze
       BATCH = 10
 
+      # The reply's one JSON object, however deeply it nests; a flat regex match would grab an inner one instead.
+      def self.object_in(text)
+        start = text.index("{")
+        return unless start
+
+        depth = 0
+        text[start..].each_char.with_index do |char, offset|
+          depth += 1 if char == "{"
+          depth -= 1 if char == "}"
+          return text[start, offset + 1] if depth.zero?
+        end
+        nil
+      end
+
       def initialize(base:, key:, model:)
         @uri = URI("#{base.chomp('/')}/chat/completions")
         @key = key
@@ -80,7 +94,7 @@ module Agenteval
         raise "judge answered HTTP #{response.code}: #{response.body.to_s[0, 200]}" unless response.code == "200"
 
         content = JSON.parse(response.body).dig("choices", 0, "message", "content").to_s
-        JSON.parse(content[/\{[^{}]*\}/] || "{}")
+        JSON.parse(Judge.object_in(content) || "{}")
       end
     end
   end
