@@ -17,6 +17,7 @@ PATH
       tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-comms-gateway (= 0.1.0.alpha.1)
       tamoz-concurrency (= 0.1.0.alpha.1)
+      tamoz-research (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent-healing
