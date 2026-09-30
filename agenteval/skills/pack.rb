@@ -26,8 +26,12 @@ module Agenteval
              "audit/findings.json following audit/findings.schema.json, and a report to audit/REPORT.md. " \
              "Do not modify the documents. Run the verify check before you finish."
     BOOTSTRAP_SAMPLES = 2000
+    # The provider refused the call: the trial measured the account, not the agent.
+    PROVIDER_FAILURES = %w[model_key_refused model_out_of_credit model_rate_limited].freeze
+    MAX_PROVIDER_FAILURES = 2
 
     Scenario = Data.define(:id, :corpus, :truth)
+    ProviderUnavailable = Class.new(StandardError)
 
     # The gates each control must trip over the whole pack (and nothing else), and whether it solves every scenario.
     EXPECTED = {
@@ -215,10 +219,12 @@ module Agenteval
         run = { "exit_code" => status, "answer_tail" => output.to_s.lines.last(3).join.strip[0, 300],
                 "duration_ms" => ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started) * 1000).round }
         begin
-          run.merge(metrics(File.join(sessions, "#{thread}.sqlite3")))
+          run = run.merge(metrics(File.join(sessions, "#{thread}.sqlite3")))
         rescue StandardError => e
-          run.merge("metrics_error" => "#{e.class}: #{e.message}"[0, 200])
+          run = run.merge("metrics_error" => "#{e.class}: #{e.message}"[0, 200])
         end
+        reason = run["terminal_reason"]
+        PROVIDER_FAILURES.include?(reason) ? run.merge("provider_failure" => reason) : run
       end
     end
 
@@ -244,6 +250,7 @@ module Agenteval
     def run(arms:, repeat:, budget:, only: nil, partial: nil, keep_root: nil)
       selected = scenarios.select { |scenario| only.nil? || only.include?(scenario.id) }
       turn = 0
+      failures = 0
       rows = selected.flat_map do |scenario|
         (1..repeat).flat_map do |index|
           order = arms.rotate(turn)
@@ -252,6 +259,10 @@ module Agenteval
             keep = keep_root && File.join(keep_root, "#{scenario.id}-#{arm}-#{index}")
             row = trial(scenario, arm:, trial: index, keep:) { |workspace, root| tamoz_agent(scenario, arm, budget:).call(workspace, root) }
             File.open(partial, "a") { |file| file.puts(JSON.generate(row)) } if partial
+            failures = row["provider_failure"] ? failures + 1 : 0
+            raise ProviderUnavailable, "provider refused #{failures} trials in a row (#{row['provider_failure']})" if
+              failures >= MAX_PROVIDER_FAILURES
+
             row
           end
         end
@@ -289,6 +300,8 @@ module Agenteval
     def decision(summary, rows)
       forced = summary["forced"]
       none = summary["none"]
+      refused = rows.count { |row| row["provider_failure"] }
+      return "invalid: the provider refused #{refused} trial(s)" if refused.positive?
       return "incomplete: needs the forced and none arms" unless forced && none
 
       interval = bootstrap(rows, "forced", "none")

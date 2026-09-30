@@ -167,8 +167,13 @@ module Agenteval
       end.parse!(argv)
       partial = options[:out] && "#{options[:out]}.partial.jsonl"
       keep_root = options[:out] && File.join(Agenteval::ROOT, "sessions", "skills", File.basename(options[:out], ".json"))
-      report = SkillsPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget], only: options[:only],
-                              partial:, keep_root:)
+      report = begin
+        SkillsPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget], only: options[:only],
+                       partial:, keep_root:)
+      rescue SkillsPack::ProviderUnavailable => e
+        @err.puts("skills pack: stopped — #{e.message}; no result is reported")
+        return 2
+      end
       File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
       @out.puts(JSON.pretty_generate(report.except("rows")))
       0
