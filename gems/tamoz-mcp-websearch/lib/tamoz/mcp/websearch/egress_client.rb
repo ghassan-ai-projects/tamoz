@@ -294,11 +294,6 @@ module Tamoz
         # the TLS SNI / certificate identity. `ipaddr=` selects the connect
         # address while `address` stays the allowlisted hostname, so the
         # validated IP is what is dialed and certificate verification still
-        # checks the hostname the operator allowlisted.
-        # Real connector: Net::HTTP over the PINNED address with the hostname as
-        # the TLS SNI / certificate identity. `ipaddr=` selects the connect
-        # address while `address` stays the allowlisted hostname, so the
-        # validated IP is what is dialed and certificate verification still
         # checks the hostname the operator allowlisted. The body is streamed and
         # cut past the response bound, identity-encoded (no gzip bomb), and the
         # whole read stays inside a deadline.
