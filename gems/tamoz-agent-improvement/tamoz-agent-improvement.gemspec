@@ -13,6 +13,7 @@ TamozGemspec.build(
                'and promotion/rollback over the memory behavior-transition seam.',
   dependencies: [
     ['tamoz-agent-kernel', "= #{Tamoz::Agent::Improvement::VERSION}"],
-    ['tamoz-agent-memory', "= #{Tamoz::Agent::Improvement::VERSION}"]
+    ['tamoz-agent-memory', "= #{Tamoz::Agent::Improvement::VERSION}"],
+    ['tamoz-research', "= #{Tamoz::Agent::Improvement::VERSION}"]
   ]
 )

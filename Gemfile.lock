@@ -32,6 +32,7 @@ PATH
     tamoz-agent-improvement (0.1.0.alpha.1)
       tamoz-agent-kernel (= 0.1.0.alpha.1)
       tamoz-agent-memory (= 0.1.0.alpha.1)
+      tamoz-research (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent-kernel

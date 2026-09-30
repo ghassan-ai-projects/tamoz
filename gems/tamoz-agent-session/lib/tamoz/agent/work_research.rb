@@ -169,16 +169,27 @@ module Tamoz
       def written(state, context, call, ledger, stop)
         unsupported = unsupported_claims(state, context, ledger, call.arguments)
         report = Tamoz::Research.report(call.arguments, ledger:, stop_reason: stop, unsupported:)
-        date = Time.at(state.fetch(:work_started_ms) / 1000).utc.strftime('%Y-%m-%d')
-        record = Tamoz::Research.run_record(ledger:, report:, stop_reason: stop, extra: record_extra(state, date))
-        directory = run_directory(state, ledger, date)
+        record = Tamoz::Research.run_record(ledger:, report:, stop_reason: stop,
+                                            extra: record_extra(state, report, unsupported))
+        directory = run_directory(state, ledger)
         status = saved(context, directory, Tamoz::Research.run_folder_files(ledger:, report:, record:))
         return outcome("Error: the report could not be saved (#{status}).") unless status == :succeeded
 
         finished(report.reply(File.join(directory, 'report.md')), record)
       end
 
-      def record_extra(state, date) = { 'plan_edits' => state.fetch(:research).fetch('plan_edits'), 'date' => date }
+      def support_rate(report, unsupported)
+        cited = report.cited.length
+        cited.zero? ? nil : (cited - unsupported.length).fdiv(cited).round(3)
+      end
+
+      def record_extra(state, report, unsupported)
+        { 'run_id' => state.fetch(:work_execution_id), 'plan_edits' => state.fetch(:research).fetch('plan_edits'),
+          'date' => run_date(state), 'tokens' => TurnUsage.summarize(state.fetch(:work_trace)),
+          'support_rate' => support_rate(report, unsupported) }
+      end
+
+      def run_date(state) = Time.at(state.fetch(:work_started_ms) / 1000).utc.strftime('%Y-%m-%d')
 
       def saved(context, directory, files)
         written = @services.effects.write_research(context, directory:, files:)
@@ -187,8 +198,8 @@ module Tamoz
         written.status
       end
 
-      def run_directory(state, ledger, date)
-        name = Tamoz::Research.run_folder_name(date:, question: ledger.brief.question,
+      def run_directory(state, ledger)
+        name = Tamoz::Research.run_folder_name(date: run_date(state), question: ledger.brief.question,
                                                run_id: state.fetch(:work_execution_id))
         File.join(research_dir, name)
       end

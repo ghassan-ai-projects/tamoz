@@ -20,7 +20,8 @@ module ResearchFixtures
   end
 
   def plan(overrides = {})
-    R.brief({ 'question' => 'How large is Oslo?', 'depth' => 'quick', 'left_out' => ['tourism numbers'],
+    R.brief({ 'question' => 'How large is Oslo?', 'depth' => 'quick', 'question_class' => 'factual',
+              'left_out' => ['tourism numbers'],
               'sub_questions' => [{ 'text' => 'How many people live in Oslo?', 'perspective' => 'a statistician' },
                                   { 'text' => 'Is Oslo growing?', 'perspective' => 'a city planner' }] }
               .merge(overrides), budgets: @budgets)

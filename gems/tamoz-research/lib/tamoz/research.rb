@@ -12,6 +12,7 @@ require_relative 'research/sources'
 require_relative 'research/ledger'
 require_relative 'research/report'
 require_relative 'research/run_folder'
+require_relative 'research/run_record'
 
 module Tamoz
   # The rules of a deep-research run, and the only way into them. Pure: no I/O, no model or network call. A method
@@ -19,7 +20,7 @@ module Tamoz
   #
   #   Tamoz::Research.plan_text(Tamoz::Research.brief(arguments, budgets:), budgets:) # => "Here is my research plan…"
   module Research
-    private_constant :Text, :Budgets, :Brief, :Wave, :Web, :Sources, :Ledger, :Report, :RunFolder
+    private_constant :Text, :Budgets, :Brief, :Wave, :Web, :Sources, :Ledger, :Report, :RunFolder, :RunRecord
 
     module_function
 
@@ -76,11 +77,7 @@ module Tamoz
 
     # :reek:LongParameterList
     def run_record(ledger:, report:, stop_reason:, extra: {})
-      brief = ledger.brief
-      { 'question' => brief.question, 'depth' => brief.depth, 'sub_questions' => brief.ids.length,
-        'statuses' => ledger.statuses, 'stop_reason' => stop_reason, 'claims' => ledger.claims.length,
-        'sources' => ledger.sources.length, 'cited_claims' => report.cited.length,
-        'gaps' => report.gap_count }.merge(ledger.used).merge(extra)
+      RunRecord.build(ledger:, report:, stop_reason:, extra:)
     end
 
     def run_folder_name(date:, question:, run_id:) = RunFolder.name(date:, question:, run_id:)

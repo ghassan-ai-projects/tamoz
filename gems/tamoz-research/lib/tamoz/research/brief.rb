@@ -4,15 +4,17 @@ module Tamoz
   module Research
     # The research plan the lead proposes and the user accepts: the question, its sub-questions (each seen from a
     # perspective), what is left out, and how deep to go.
-    # :reek:TooManyInstanceVariables :reek:TooManyStatements :reek:NilCheck -- one checked plan and its rendering.
+    # :reek:TooManyInstanceVariables :reek:TooManyStatements :reek:NilCheck :reek:LongParameterList -- one checked plan
+    # and its rendering.
     class Brief
       MAX_SUB_QUESTIONS = 8
       MAX_LEFT_OUT = 6
 
       # One sub-question: its id (Q1…), what it asks, and the perspective it is researched from.
       SubQuestion = Data.define(:id, :text, :perspective)
+      QUESTION_CLASSES = %w[factual comparison survey contested current].freeze
 
-      attr_reader :question, :sub_questions, :left_out, :depth, :clarifying_question
+      attr_reader :question, :sub_questions, :left_out, :depth, :clarifying_question, :question_class
 
       # `arguments` are propose_research_plan's; sub-question ids are assigned here, Q1 onward.
       def self.parse(arguments, budgets:)
@@ -22,7 +24,15 @@ module Tamoz
             sub_questions: sub_questions(arguments['sub_questions']),
             left_out: left_out(arguments.fetch('left_out', [])),
             depth: budgets.depth(arguments['depth']).name,
+            question_class: question_class(arguments['question_class']),
             clarifying_question: clarifying(arguments['clarifying_question']))
+      end
+
+      def self.question_class(value)
+        raise Error, "question_class must be one of #{QUESTION_CLASSES.join(', ')}" unless
+          QUESTION_CLASSES.include?(value)
+
+        value
       end
 
       def self.sub_questions(items)
@@ -59,13 +69,14 @@ module Tamoz
         end
       end
 
-      private_class_method :sub_questions, :sub_question, :left_out, :clarifying
+      private_class_method :sub_questions, :sub_question, :left_out, :clarifying, :question_class
 
-      def initialize(question:, sub_questions:, left_out:, depth:, clarifying_question:)
+      def initialize(question:, sub_questions:, left_out:, depth:, question_class:, clarifying_question:) # rubocop:disable Metrics/ParameterLists
         @question = question
         @sub_questions = sub_questions
         @left_out = left_out
         @depth = depth
+        @question_class = question_class
         @clarifying_question = clarifying_question
         freeze
       end
@@ -76,12 +87,14 @@ module Tamoz
 
       def to_h
         { 'question' => @question, 'sub_questions' => @sub_questions.map { |sub| sub.to_h.transform_keys(&:to_s) },
-          'left_out' => @left_out, 'depth' => @depth, 'clarifying_question' => @clarifying_question }
+          'left_out' => @left_out, 'depth' => @depth, 'question_class' => @question_class,
+          'clarifying_question' => @clarifying_question }
       end
 
       def self.from_h(document)
         new(question: document.fetch('question'), left_out: document.fetch('left_out').dup.freeze,
-            depth: document.fetch('depth'), clarifying_question: document['clarifying_question'],
+            depth: document.fetch('depth'), question_class: question_class(document['question_class']),
+            clarifying_question: document['clarifying_question'],
             sub_questions: document.fetch('sub_questions').map do |sub|
               SubQuestion.new(id: sub.fetch('id'), text: sub.fetch('text'), perspective: sub.fetch('perspective'))
             end.freeze)

@@ -152,7 +152,7 @@ module ResearchSpec
   end
 
   def plan_call(depth: 'quick', texts: ['How many people live in Oslo?', 'Is Oslo growing?'])
-    ['propose_research_plan', { 'question' => QUESTION, 'depth' => depth,
+    ['propose_research_plan', { 'question' => QUESTION, 'depth' => depth, 'question_class' => 'factual',
                                 'sub_questions' => texts.map do |text|
                                   { 'text' => text, 'perspective' => 'a statistician' }
                                 end }]

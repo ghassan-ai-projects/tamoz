@@ -6,7 +6,7 @@
       "parameters": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["question", "sub_questions", "depth"],
+        "required": ["question", "sub_questions", "depth", "question_class"],
         "properties": {
           "question": {"type": "string", "description": "The question as you understood it, in the user's language."},
           "sub_questions": {
@@ -21,6 +21,7 @@
           },
           "left_out": {"type": "array", "maxItems": 6, "items": {"type": "string"}, "description": "What the research will not cover."},
           "depth": {"type": "string", "enum": ["quick", "standard", "deep"]},
+          "question_class": {"type": "string", "enum": ["factual", "comparison", "survey", "contested", "current"], "description": "factual: one checkable fact; comparison: things weighed on the same dimensions; survey: what a field agrees and disagrees on; contested: credible sources disagree; current: after your training cutoff."},
           "clarifying_question": {"type": "string", "description": "At most one question, only when the request is ambiguous."}
         }
       }

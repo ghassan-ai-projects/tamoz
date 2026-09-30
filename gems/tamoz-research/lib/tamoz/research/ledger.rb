@@ -9,8 +9,9 @@ module Tamoz
     class Ledger
       # One finished child: its wave, its assignment, its accepted Sources (nil when it produced none) and its spend.
       Child = Data.define(:wave, :sub_question_ids, :sources, :searches, :page_reads)
-      # A numbered claim (C1…) with the sub-question it answers and the page it quotes.
-      Entry = Data.define(:id, :sub_question, :text, :excerpt, :primary, :source)
+      # A numbered claim (C1…) with the sub-question it answers, the wave of the child that found it, and the page it
+      # quotes.
+      Entry = Data.define(:id, :sub_question, :wave, :text, :excerpt, :primary, :source)
       # A page a claim quotes.
       Source = Data.define(:url, :title, :published)
 
@@ -60,17 +61,22 @@ module Tamoz
       private
 
       def numbered_claims
-        claim_pairs.each_with_index.map do |(sub_question, claim), index|
-          Entry.new(id: "C#{index + 1}", sub_question:, text: claim.text, excerpt: claim.excerpt,
+        claim_pairs.each_with_index.map do |(child, sub_question, claim), index|
+          Entry.new(id: "C#{index + 1}", sub_question:, wave: child.wave, text: claim.text, excerpt: claim.excerpt,
                     primary: claim.primary,
                     source: Source.new(url: claim.url, title: claim.title, published: claim.published))
         end
       end
 
-      # [sub-question id, claim] for every accepted claim, once each.
+      # [child, sub-question id, claim] for every accepted claim, once each: the child that found a claim is what
+      # tells one wave's work from another's.
       def claim_pairs
-        pairs = findings(@children).flat_map { |finding| finding.claims.map { |claim| [finding.sub_question, claim] } }
-        pairs.uniq { |sub_question, claim| [sub_question, claim.url, claim.excerpt] }
+        pairs = @children.flat_map do |child|
+          findings([child]).flat_map do |finding|
+            finding.claims.map { |claim| [child, finding.sub_question, claim] }
+          end
+        end
+        pairs.uniq { |_child, sub_question, claim| [sub_question, claim.url, claim.excerpt] }
       end
 
       def findings(children) = children.filter_map(&:sources).flat_map(&:findings)
