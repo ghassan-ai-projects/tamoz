@@ -19,8 +19,11 @@ module Tamoz
         results = document(json).fetch('results') { raise Error, 'the search result has no results list' }
         raise Error, 'the search results are not a list' unless results.is_a?(Array)
 
-        results.each_with_index.map do |result, index|
-          Hit.new(ref: "S#{ordinal}-#{index + 1}", title: Text.squash(result['title']), url: String(result['url']),
+        usable = results.select do |result|
+          result['url'].is_a?(String) && result['url'].start_with?('http://', 'https://')
+        end
+        usable.each_with_index.map do |result, index|
+          Hit.new(ref: "S#{ordinal}-#{index + 1}", title: Text.squash(result['title']), url: result['url'],
                   snippet: Text.squash(result['snippet']), age: Text.squash(result['age']))
         end.freeze
       end

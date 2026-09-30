@@ -98,6 +98,17 @@ class ResearchTest < Minitest::Test
     assert_raises(Tamoz::Research::Error) { R.search_hits('not json', ordinal: 1) }
   end
 
+  def test_a_hit_without_a_usable_url_is_dropped_and_the_refs_stay_contiguous
+    hits = R.search_hits(JSON.generate('results' => [
+      { 'title' => 'no url', 'snippet' => 'x' },
+      { 'title' => 'junk url', 'url' => 'not a url', 'snippet' => 'x' },
+      { 'title' => 'Oslo facts', 'url' => 'https://ssb.no/oslo', 'snippet' => 'Oslo', 'age' => '2025' }
+    ]), ordinal: 1)
+
+    assert_equal ['S1-1'], hits.map(&:ref)
+    assert_equal 'https://ssb.no/oslo', hits.first.url
+  end
+
   def test_sources_keep_the_page_each_claim_quotes
     accepted = R.sources(report_arguments, pages: pages, assigned: %w[Q1])
 
