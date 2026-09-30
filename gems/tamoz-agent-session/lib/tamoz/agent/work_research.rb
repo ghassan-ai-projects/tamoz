@@ -211,11 +211,11 @@ module Tamoz
 
       def finished(answer, record)
         verification = SessionRecords.build(
-          'verification', answer:, satisfied: true, configured_check_passed: false, terminal_reason: 'reported',
+          'verification', answer:, satisfied: true, configured_check_passed: false, terminal_reason: 'researched',
                           evidence: ['a research report whose every citation is a claim quoting a page a research ' \
                                      'subagent read'], report: record
         )
-        outcome('Report written.', verification:, terminal_reason: 'reported', next_node: 'terminal')
+        outcome('Report written.', verification:, terminal_reason: 'researched', next_node: 'terminal')
       end
 
       # One journaled model call judges each cited sentence against the excerpts it cites.

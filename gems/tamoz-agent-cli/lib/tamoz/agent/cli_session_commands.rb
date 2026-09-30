@@ -80,6 +80,7 @@ module Tamoz
 
         settings = { surface: :cli, guidance_files: guidance_files(options), persona: operator_persona(options) }
         settings[:subagents] = options[:subagents] if options[:subagents]
+        settings[:research_budgets] = options[:research_budgets] if options[:research_budgets]
         File.write(pin, JSON.generate(settings.except(:surface)), perm: 0o600)
         settings
       end

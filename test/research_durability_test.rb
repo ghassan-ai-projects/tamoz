@@ -56,7 +56,7 @@ class ResearchDurabilityTest < Minitest::Test
       outcome = answer_plan(session, 'go', request_id: 'answer-after-kill')
 
       assert_equal :completed, outcome.status, outcome.inspect[0, 800]
-      assert_equal 'reported', session.view(thread: 'research').state.fetch(:terminal_reason)
+      assert_equal 'researched', session.view(thread: 'research').state.fetch(:terminal_reason)
       # The same plan was carried, not re-derived: the run finished without asking for the plan again.
       assert_empty session.view(thread: 'research').interrupts
       assert_equal 0, run_record(out).fetch('plan_edits'), 'the plan was asked for again after the restart'
@@ -88,7 +88,7 @@ class ResearchDurabilityTest < Minitest::Test
   # finished run must not hand its accepted plan to the next question on the thread — that would answer a different
   # question under the old brief, and count the old run's searches against the new one's budget.
   def test_a_new_question_on_a_finished_thread_opens_its_own_plan
-    { 'reported' => happy_lead, 'cancelled_by_user' => [{ calls: [plan_call] }] }.each do |ending, lead|
+    { 'researched' => happy_lead, 'cancelled_by_user' => [{ calls: [plan_call] }] }.each do |ending, lead|
       assert_next_question_is_fresh(ending, lead)
     end
   end
@@ -120,7 +120,7 @@ class ResearchDurabilityTest < Minitest::Test
     first = research_session(model: ScriptedTeam.new(parent: lead, child: happy_children),
                              root:, adapter:, web: FixtureWebsearch.new, out:)
     start_research(first)
-    reply(first, ending == 'reported' ? 'go' : 'stop')
+    reply(first, ending == 'researched' ? 'go' : 'stop')
 
     assert_equal ending, first.view(thread: 'research').state.fetch(:terminal_reason)
   end

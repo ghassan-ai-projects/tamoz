@@ -49,3 +49,7 @@ Depth sets the budget: `quick` (one narrow fact), `standard` (the default) or `d
 waves, searches, page reads, report length) are data in `gems/tamoz-research/data/research_budgets.json`. The
 research stops when every sub-question is covered, when another round finds nothing new, or at the budget; the
 report says which, and lists what stayed open.
+
+To narrow the budgets for one thread, pass a JSON file with the numbers to lower:
+`tamoz --research-budgets budgets.json deep-research "<question>"`, e.g. `{"ceilings": {"searches": 15}}`. A file that
+raises any number is refused. The narrowing is pinned to the thread, so a resumed thread keeps it.

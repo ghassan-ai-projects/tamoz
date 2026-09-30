@@ -13,6 +13,7 @@ require_relative "websearch/page_text"
 require_relative "websearch/page_reader"
 require_relative "websearch/brave_search"
 require_relative "websearch/fixture_web"
+require_relative "websearch/recorded_web"
 
 module Tamoz
   module Mcp

@@ -12,6 +12,7 @@ module Tamoz
     # :reek:DataClump -- (provider, model) is the route key every lookup takes, by design.
     module ModelWindows
       DATA = File.expand_path('../../../data/model_windows.yml', __dir__)
+      DEFAULT_REQUEST_TIMEOUT_S = 120
 
       class << self
         def routes = @routes ||= load_routes
@@ -22,6 +23,11 @@ module Tamoz
         # How many requests the operator lets this route carry at once; an unpinned route runs one at a time.
         def max_concurrent_requests(provider:, model:)
           entry(provider:, model:)&.fetch('max_concurrent_requests', nil) || 1
+        end
+
+        # Seconds to wait for one response; a reasoning model may think past the default.
+        def request_timeout(provider:, model:)
+          entry(provider:, model:)&.fetch('request_timeout_s', nil) || DEFAULT_REQUEST_TIMEOUT_S
         end
 
         # Keyed on the pair: one model name can have a different window at each gateway, so a bare

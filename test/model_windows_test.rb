@@ -40,6 +40,16 @@ class ModelWindowsTest < Minitest::Test
     end
   end
 
+  def test_a_reasoning_route_waits_longer_than_the_default
+    env = { 'ZAI_API_KEY' => 'sk-test', 'DEEPSEEK_API_KEY' => 'sk-test' }
+    zai = Tamoz::Agent::ModelClientFactory.build(provider: 'zai', model: 'glm-5.3-flash', profile_role: nil,
+                                                 environment: env)
+    deepseek = Tamoz::Agent::ModelClientFactory.build(provider: 'deepseek', model: 'deepseek-flash', profile_role: nil,
+                                                      environment: env)
+
+    assert_equal [600, 120], [zai, deepseek].map { |transport| transport.instance_variable_get(:@timeout_seconds) }
+  end
+
   def test_a_route_carries_its_pinned_concurrency_and_an_unpinned_one_runs_one_at_a_time
     assert_equal 4, MW.max_concurrent_requests(provider: 'zai', model: 'glm-5.3-flash')
     assert_equal 1, MW.max_concurrent_requests(provider: 'deepseek', model: 'deepseek-flash')

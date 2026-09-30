@@ -105,6 +105,13 @@ module Tamoz
               end
               options[:subagents] = names.uniq
             end
+            value.on('--research-budgets FILE', 'Narrow the deep-research budgets with a JSON file') do |path|
+              override = JSON.parse(File.read(path))
+              Tamoz::Research.budgets(override:)
+              options[:research_budgets] = override
+            rescue SystemCallError, JSON::ParserError, Tamoz::Research::Error => e
+              raise OptionParser::InvalidArgument, "--research-budgets #{path}: #{e.message}"
+            end
             value.on('--shadow-routing', 'Record routing decisions while using the standard workflow') do
               options[:shadow_routing] = true
             end

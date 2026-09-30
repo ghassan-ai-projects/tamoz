@@ -25,6 +25,8 @@
 #   TAMOZ_WEBSEARCH_EGRESS=<json>      the egress declaration (validated)
 #   TAMOZ_WEBSEARCH_PROVIDER=<json>    the providers
 #   TAMOZ_BRAVE_API_KEY=<value>        Brave's credential
+#   TAMOZ_WEBSEARCH_LEDGER=<path>      optional: a counter file capping live searches
+#   TAMOZ_WEBSEARCH_CACHE=<dir>        optional: searches and pages recorded for reuse
 
 # The operator-side adapter is a repo script (like script/mcp_test_server), so
 # it resolves the gem libs itself instead of relying on the caller's load path.
@@ -53,6 +55,8 @@ require "tamoz/mcp/websearch"
 EGRESS_ENV = "TAMOZ_WEBSEARCH_EGRESS"
 GRANT_ENV = "TAMOZ_WEBSEARCH_GRANT"
 PROVIDER_ENV = "TAMOZ_WEBSEARCH_PROVIDER"
+LEDGER_ENV = "TAMOZ_WEBSEARCH_LEDGER"
+CACHE_ENV = "TAMOZ_WEBSEARCH_CACHE"
 
 module WebsearchAdapter
   W = Tamoz::Mcp::Websearch
@@ -107,7 +111,7 @@ module WebsearchAdapter
       return refusal("the query exceeds the request bound") if query.bytesize > bound
 
       count = max_results.is_a?(Integer) ? max_results.clamp(1, MAX_RESULTS) : 5
-      results = searcher(policy, providers).search(query, count)
+      results = recorded_web.search(query, count) { searcher(policy, providers).search(query, count) }
       results.each { |result| @issued[result.fetch("url")] = true }
       @issued.shift while @issued.length > ISSUED
       text_response(JSON.generate("results" => results))
@@ -123,7 +127,7 @@ module WebsearchAdapter
       url = url.to_s
       return refusal("read_page reads only a page a search on this server returned") unless @issued[url]
 
-      page = @pages[url] ||= reader(policy, providers).read(url)
+      page = @pages[url] ||= recorded_web.read(url) { reader(policy, providers).read(url) }
       @pages.shift while @pages.length > PAGE_CACHE
       text_response(fit(page, policy.max_response_bytes))
     rescue RefusedGate => refused
@@ -144,6 +148,12 @@ module WebsearchAdapter
       raise RefusedGate, "the operator grant #{GRANT_ENV} is not set" unless ENV[GRANT_ENV] == "1"
 
       [policy, load_providers]
+    end
+
+    def recorded_web
+      ledger = ENV[LEDGER_ENV].to_s
+      W::RecordedWeb.new(dir: ENV[CACHE_ENV].to_s.empty? ? nil : ENV[CACHE_ENV],
+                         ledger: ledger.empty? ? nil : W::SearchLedger.new(ledger))
     end
 
     def load_policy
@@ -213,7 +223,7 @@ module WebsearchAdapter
     def escaped(text) = JSON.generate(text.scrub("")).bytesize - 2
 
     def reason(error)
-      known = error.is_a?(W::EgressPolicyError) || error.is_a?(Tamoz::Mcp::ValidationError)
+      known = [W::EgressPolicyError, Tamoz::Mcp::ValidationError, W::SearchLedger::Exhausted].any? { error.is_a?(_1) }
       known ? error.message : "the request failed (#{error.class})"
     end
 

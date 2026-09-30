@@ -29,6 +29,7 @@ module Agenteval
       when "memory" then cmd_memory(argv)
       when "subagents" then cmd_subagents(argv)
       when "topologies" then cmd_topologies(argv)
+      when "research" then cmd_research(argv)
       else
         @err.puts(usage)
         64
@@ -83,6 +84,33 @@ module Agenteval
                               partial:, keep_root:, scenarios: options[:scenarios])
       File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
       @out.puts(JSON.pretty_generate(report.fetch("arms")))
+      0
+    end
+
+    # The deep-research pack: `research prove` runs the offline grader controls; `research run --set dev|held_out`
+    # runs `tamoz deep-research` in both arms under the Brave ledger's cap and grades the reports.
+    def cmd_research(argv)
+      require_relative "../research/pack"
+      pack = Agenteval::Research::Pack
+      action = argv.shift
+      failed = pack.controls.reject(&:last)
+      failed.each { |name, _| @err.puts("research pack control failed: #{name}") }
+      return (failed.empty? ? 0 : 1) if action == "prove"
+      return 1 unless failed.empty?
+      return 64.tap { @err.puts("usage: agenteval research prove | run --set dev|held_out [--ids D1,D2] [--arms fanout,single] [--out PATH]") } unless action == "run"
+
+      options = { set: nil, ids: nil, arms: pack::ARMS.keys, out: nil }
+      OptionParser.new do |value|
+        value.on("--set SET") { |entry| options[:set] = entry }
+        value.on("--ids IDS") { |entry| options[:ids] = entry.split(",") }
+        value.on("--arms ARMS") { |entry| options[:arms] = entry.split(",") }
+        value.on("--out PATH") { |entry| options[:out] = entry }
+      end.parse!(argv)
+      return 64.tap { @err.puts("research run needs --set dev or --set held_out") } unless %w[dev held_out].include?(options[:set])
+
+      out = options[:out] || File.join(Agenteval::ROOT, "reports", "research-#{options[:set]}-#{Time.now.utc.strftime("%Y%m%d-%H%M")}.json")
+      report = pack.run(set: options[:set], ids: options[:ids], arms: options[:arms], out:, log: @err)
+      @out.puts(JSON.pretty_generate(report.fetch("summary")))
       0
     end
 

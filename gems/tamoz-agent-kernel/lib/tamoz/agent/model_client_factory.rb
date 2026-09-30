@@ -24,7 +24,7 @@ module Tamoz
 
       class << self
         def build(provider:, model:, profile_role:, environment:, explicit_api_base: nil,
-                  safety: :unsafe, gateway: nil, timeout_seconds: 120, context_window: nil)
+                  safety: :unsafe, gateway: nil, timeout_seconds: nil, context_window: nil)
           name = normalize_provider(provider)
           descriptor = descriptor_for(name)
           ensure_model!(model, name)
@@ -42,7 +42,7 @@ module Tamoz
           )
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:,
-            gateway:, timeout_seconds:,
+            gateway:, timeout_seconds: timeout_seconds || ModelWindows.request_timeout(provider: name, model:),
             context_window: context_window || configured_context_window(profile_role, environment, name, model),
             provider_configuration_digest: Tamoz::Core.digest(
               "tamoz.agent.model.configuration.v1\n", configuration

@@ -29,6 +29,7 @@ class AgentCliResearchTest < Minitest::Test
         refute_nil report, out
         assert_includes File.read(report), "[1] Population of Oslo - Statistics Norway. #{SSB}."
         assert_includes out, 'The full report is saved at'
+        refute_includes out, 'probe'
       end
     end
   end
@@ -58,6 +59,33 @@ class AgentCliResearchTest < Minitest::Test
 
       refute_equal 0, status
       assert_match(/read-only/, err.string)
+    end
+  end
+
+  def test_research_budgets_narrow_the_run_and_stay_with_the_thread
+    with_fixture_web do
+      with_runtime do |runtime|
+        configure_websearch(runtime)
+        budgets = File.join(runtime.dir, 'budgets.json')
+        File.write(budgets, JSON.generate('depths' => { 'quick' => { 'minutes' => 1 } }))
+        _status, _out, err = run_cli(runtime, input: '', args: ['--session', 'oslo', '--research-budgets', budgets,
+                                                                'deep-research', QUESTION])
+        pin = JSON.parse(File.read(File.join(runtime.dir, 'sessions', 'oslo.harness.json')))
+
+        assert_equal({ 'depths' => { 'quick' => { 'minutes' => 1 } } }, pin.fetch('research_budgets'))
+        assert_includes err, 'about 1 minutes'
+      end
+    end
+  end
+
+  def test_research_budgets_that_raise_a_number_are_refused
+    with_runtime do |runtime|
+      budgets = File.join(runtime.dir, 'budgets.json')
+      File.write(budgets, JSON.generate('depths' => { 'quick' => { 'searches' => 999 } }))
+      status, _out, err = run_cli(runtime, input: '', args: ['--research-budgets', budgets, 'deep-research', QUESTION])
+
+      refute_equal 0, status
+      assert_includes err, 'may only lower'
     end
   end
 

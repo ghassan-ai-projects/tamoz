@@ -585,6 +585,22 @@ namespace :agenteval do
     end
   end
 
+  namespace :research do
+    desc "Prove the research-pack graders discriminate (offline, no model or search calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "research", "prove"
+    end
+
+    desc "Run the research pack (real GLM + Brave, capped by agenteval/research/brave_ledger.json; SET=dev|held_out, IDS, ARMS)"
+    task run: :prove do
+      utf8_env!
+      extra = []
+      extra += ["--ids", ENV["IDS"]] if ENV["IDS"]
+      extra += ["--arms", ENV["ARMS"]] if ENV["ARMS"]
+      sh agenteval_ruby, BIN, "research", "run", "--set", ENV.fetch("SET", "dev"), *extra
+    end
+  end
+
   namespace :subagents do
     desc "Prove the subagent-pack graders discriminate — offline controls and authoring rules (no model calls)"
     task :prove do
