@@ -139,7 +139,7 @@ module Tamoz
         # --- target construction (every hop re-runs this) -------------------
 
         def initial_target(url, headers, body)
-          uri = parse_url(url)
+          uri = upgraded(parse_url(url))
           validate_scheme!(uri)
           host = validate_host!(uri.host)
           validate_port!(uri)
@@ -166,7 +166,7 @@ module Tamoz
           end
 
           uri = begin
-            URI.join("https://#{current.fetch(:host)}#{current.fetch(:path)}", location)
+            upgraded(URI.join("https://#{current.fetch(:host)}#{current.fetch(:path)}", location))
           rescue URI::InvalidURIError
             raise EgressPolicyError, "the websearch redirect Location is malformed"
           end
@@ -188,6 +188,13 @@ module Tamoz
           URI.parse(text)
         rescue URI::InvalidURIError
           raise EgressPolicyError, "the websearch target URL is malformed"
+        end
+
+        # A public page named over http is asked for over https; nothing is ever fetched over http.
+        def upgraded(uri)
+          return uri unless @reach == :public && uri.instance_of?(URI::HTTP) && uri.port == URI::HTTP::DEFAULT_PORT
+
+          URI::HTTPS.build(host: uri.host, path: uri.path, query: uri.query)
         end
 
         def validate_scheme!(uri)

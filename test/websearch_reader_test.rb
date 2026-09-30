@@ -26,12 +26,33 @@ class WebsearchReaderTest < Minitest::Test
     assert_equal([['93.184.216.40', 'news.example.org']], dials.map { |dial| dial.first(2) })
   end
 
-  def test_the_reader_mode_still_refuses_private_addresses_ip_literals_and_http
+  def test_the_reader_mode_still_refuses_private_addresses_ip_literals_and_odd_ports
     client = reader_client([], {}) { 'x' }
 
     assert_raises(W::EgressPolicyError) { client.fetch('https://intranet.example.org/') }
     assert_raises(W::EgressPolicyError) { client.fetch('https://10.0.0.7/') }
-    assert_raises(W::EgressPolicyError) { client.fetch('http://news.example.org/') }
+    assert_raises(W::EgressPolicyError) { client.fetch('http://news.example.org:8080/') }
+  end
+
+  # Old pages are often named, or redirected to, over http; they are asked for over https, never fetched over http.
+  def test_the_reader_mode_asks_for_an_http_page_over_https
+    dials = []
+    client = W::EgressClient.new(
+      policy:, reach: :public, resolver: ->(host) { PUBLIC.fetch(host, []) },
+      connector: lambda do |host:, path:, **|
+        dials << [host, path]
+        next { 'status' => 301, 'headers' => { 'location' => 'http://news.example.org/b?x=1' }, 'body' => '' } if
+          path == '/a'
+
+        { 'status' => 200, 'headers' => { 'content-type' => 'text/plain' }, 'body' => 'page' }
+      end
+    )
+
+    assert_equal 'page', client.fetch('http://news.example.org/a').body
+    assert_equal [['news.example.org', '/a'], ['news.example.org', '/b?x=1']], dials
+    assert_raises(W::EgressPolicyError) do
+      W::EgressClient.new(policy: policy, resolver: ->(host) { PUBLIC.fetch(host, []) }).fetch('http://api.search.brave.com/')
+    end
   end
 
   def test_the_reader_mode_needs_the_declared_opt_in_and_bounds_its_body
