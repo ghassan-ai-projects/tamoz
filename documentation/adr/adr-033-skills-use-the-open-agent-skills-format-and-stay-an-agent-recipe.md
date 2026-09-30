@@ -14,6 +14,7 @@ Tamoz consumes portable `SKILL.md` directories with progressive disclosure; exte
 under versioned flat `tamoz.*` metadata keys. Skills are a recipe/resource concern, not a new
 gem — they introduce no independent execution engine. Loading a skill is inert; scripts execute
 only through ordinary reviewed tools.
+*Note (2026-10-01):* ADR-056 moves skills into the `tamoz-skills` gem; the recipe decision stands.
 *Note (2026-08-29):* skill *sourcing* now lives in `tamoz-agent-capabilities` (ADR-052), not in
 a monolithic `tamoz-agent`; the decision (skills are a recipe, not their own engine) is
 unchanged.
@@ -28,7 +29,7 @@ Portable `SKILL.md` directories with progressive disclosure; loading a skill is 
 
 ## Verification
 
-Verified against code: 2026-08-29 — Portable `SKILL.md` sourcing is in `gems/tamoz-agent-capabilities`.
+Verified against code: 2026-08-29 — Portable `SKILL.md` sourcing is in `gems/tamoz-skills`.
 
 ## Next reads
 

@@ -6,7 +6,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 ## What a skill is — and is not
 
-A skill supplies instructions and resources. It is not a tool, plugin, credential bundle, policy, or sandbox; it is not a permission grant; it is not trusted because it is local; it is not automatically correct because its syntax validates; and it is not mutable during an execution. Skills live in `tamoz-agent`; the reusable contracts are the skill source, the catalog, and content-addressed skill snapshots.
+A skill supplies instructions and resources. It is not a tool, plugin, credential bundle, policy, or sandbox; it is not a permission grant; it is not trusted because it is local; it is not automatically correct because its syntax validates; and it is not mutable during an execution. Skills live in the `tamoz-skills` gem (ADR-056); the reusable contracts are the skill source, the catalog, and content-addressed skill snapshots.
 
 ## Format and frontmatter
 
@@ -61,6 +61,10 @@ At a turn boundary the catalog compiler discovers configured sources without fol
 
 ## Compilation never executes
 
+Today a bundled script runs only when the operator wires it as a check (`--check`); no path lets
+the model run a skill script. The execution lifecycle below is designed, not built.
+
+
 Loading a skill never executes installation hooks, scripts, or commands — **compilation is inert**. A script request passes through the same lifecycle as any other action:
 
 ```text
@@ -70,7 +74,11 @@ accepted plan → exact script digest → interpreter/tool policy → sandbox/pr
 
 Scripts receive an explicit working directory, arguments, input files, environment allowlist, egress policy, time/output/resource budgets, and credential handles; secrets are injected by the execution boundary only when policy permits and never substituted into skill text. Remote skill resources are staged and content-addressed before activation; Tamoz does not fetch mutable remote code during skill execution.
 
-## Supply-chain promotion (installation and updates)
+## Supply-chain promotion (installation and updates) — designed, not built
+
+None of this section exists yet: an operator places a skill directory by hand. See
+`docs/skills-review-2026-09-30/PLAN.md` phases 9–11.
+
 
 Installation is a staged workflow: resolve an immutable source, download to quarantine, verify expected digest/signature/provenance when available, unpack with size/path/link limits, validate license/manifest/resources, run a static security review and capability diff, evaluate, obtain human/policy approval, install atomically as a content-addressed artifact, and emit a candidate catalog epoch. Registry verification or a trusted publisher raises provenance confidence; it does not make instructions or code safe. Updates display semantic and byte-level changes; auto-update is allowed only for content-only, capability-nonwidening artifacts under an explicit operator policy, and activation remains a new digest/epoch. Generated skills are candidates: promotion requires validation, held-out trigger/evaluation, injection/path/secret/escalation tests, baseline comparison, and human approval for scripts or capability widening — and the agent cannot use a candidate's own instructions to evaluate or approve it. Uninstall tombstones the binding and preserves provenance/audit evidence.
 

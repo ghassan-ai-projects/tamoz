@@ -106,6 +106,7 @@ Status: **Accepted** in force · **Proposed** ratified before implementation ·
 | [053](./adr-053-approval-gem.md) | **Approval policy is isolated into `tamoz-approval`** | Accepted |
 | [054](./adr-054-websearch-capability-source.md) | **Websearch is the fourth capability source** | Accepted |
 | [055](./adr-055-two-repo-authority-split.md) | **Continuous plane is a separate Go authority; Tamoz is its episode worker** | Accepted |
+| [056](./adr-056-skills-gem.md) | **Skills are a gem, `tamoz-skills`, reached through one facade** | Accepted |
 
 **Next number to assign: 056.**
 

@@ -26,7 +26,7 @@ Identity is a canonical tree digest; install/update stage in quarantine and acti
 
 ## Verification
 
-Verified against code: 2026-08-29 — Skill tree-digest identity and staged activation are in `gems/tamoz-agent-capabilities`.
+Verified against code: 2026-08-29 — Skill tree-digest identity and staged activation are in `gems/tamoz-skills`.
 
 ## Next reads
 
