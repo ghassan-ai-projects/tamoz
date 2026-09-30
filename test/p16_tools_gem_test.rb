@@ -85,9 +85,9 @@ class P16ToolsGemTest < Minitest::Test
           "Reference material.\n",
           encoding: Encoding::UTF_8
         )
-        snapshot = Tamoz::Skills::Compiler.new(
+        snapshot = Tamoz::Skills.compile(
           sources: [Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
-        ).compile
+        )
 
         # Both skill_epoch branches: the empty-snapshot LEGACY_SKILL_EPOCH path and
         # the compiled-catalog path.
@@ -300,10 +300,10 @@ class P16ToolsGemTest < Minitest::Test
         "---\nname: fix\ndescription: A bounded procedure.\nallowed-tools: [read_file]\n---\n\nBody.\n",
         encoding: Encoding::UTF_8
       )
-      snap_empty = Tamoz::Skills::Snapshot.empty
-      snap_full = Tamoz::Skills::Compiler.new(
+      snap_empty = Tamoz::Skills.empty
+      snap_full = Tamoz::Skills.compile(
         sources: [Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
-      ).compile
+      )
 
       checks = {"answer" => ["echo", "42"]}
       safeties = {"answer" => :read_only}
@@ -471,13 +471,13 @@ class P16ToolsGemTest < Minitest::Test
       "---\nname: fix\ndescription: A bounded procedure.\nallowed-tools: [read_file]\n---\n\nBody.\n",
       encoding: Encoding::UTF_8
     )
-    snapshot = Tamoz::Skills::Compiler.new(
+    snapshot = Tamoz::Skills.compile(
       sources: [Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")]
-    ).compile
+    )
 
     assert_equal SNAPSHOT_CATALOG_DIGEST, snapshot.catalog_digest
     assert_equal "skills:1:#{SNAPSHOT_CATALOG_DIGEST}", snapshot.epoch
-    assert_equal "skills:1:#{SNAPSHOT_EMPTY_DIGEST}", Tamoz::Skills::Snapshot.empty.epoch
+    assert_equal "skills:1:#{SNAPSHOT_EMPTY_DIGEST}", Tamoz::Skills.empty.epoch
     assert_equal(
       "- operator/fix [operator, declared-risk guarded]: A bounded procedure.",
       Tamoz::Skills::Catalog.new(snapshot).render

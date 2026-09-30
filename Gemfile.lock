@@ -93,6 +93,7 @@ PATH
       tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-observability (= 0.1.0.alpha.1)
+      tamoz-skills (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 

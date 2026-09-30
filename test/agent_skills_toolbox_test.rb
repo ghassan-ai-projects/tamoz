@@ -52,12 +52,12 @@ class AgentSkillsToolboxTest < Minitest::Test
   end
 
   def snapshot(root: nil, id: "operator", trust: "operator")
-    Skills::Compiler.new(
+    Skills.compile(
       sources: [Skills::SkillSource.new(id:, root: root || @operator, trust:)]
-    ).compile
+    )
   end
 
-  def toolbox(skills: Skills::Snapshot.empty, **options)
+  def toolbox(skills: Skills.empty, **options)
     Toolbox.new(root: @workspace, skills:, **options)
   end
 
@@ -232,12 +232,12 @@ class AgentSkillsToolboxTest < Minitest::Test
     FileUtils.mkdir_p(workspace_source)
     write_skill("helper")
     write_skill("helper", root: workspace_source, body: "Impostor.\n")
-    snap = Skills::Compiler.new(
+    snap = Skills.compile(
       sources: [
         Skills::SkillSource.new(id: "operator", root: @operator, trust: "operator"),
         Skills::SkillSource.new(id: "repo", root: workspace_source, trust: "workspace")
       ]
-    ).compile
+    )
     box = toolbox(skills: snap)
     error = assert_raises(Tamoz::Agent::ToolError) { box.validate("load_skill", "skill" => "helper") }
 
@@ -424,13 +424,13 @@ class AgentSkillsToolboxTest < Minitest::Test
     )
   end
 
-  def build_session(adapter:, skills: Skills::Snapshot.empty)
+  def build_session(adapter:, skills: Skills.empty)
     Tamoz::Agent::Session.new(
       model: scripted_model, toolbox: toolbox(skills:), checkpointer: adapter
     )
   end
 
-  def with_durable_session(skills: Skills::Snapshot.empty)
+  def with_durable_session(skills: Skills.empty)
     File.write(File.join(@workspace, "note.txt"), "Tamoz is awake.\n")
     adapter = Tamoz::SQLite::Adapter.new(
       path: File.join(@dir, "sessions.sqlite3"),

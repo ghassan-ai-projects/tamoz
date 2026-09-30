@@ -52,6 +52,15 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  def test_skills_loads_only_core
+    allowed = declared_features("tamoz-core", "tamoz-skills")
+    features = loaded_features_after("tamoz/skills")
+
+    assert_includes features, "tamoz/skills.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
   def test_core_loads_only_its_declared_runtime_boundary
     features = loaded_features_after("tamoz/core")
 

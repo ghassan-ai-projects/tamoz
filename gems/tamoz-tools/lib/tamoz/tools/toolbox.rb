@@ -52,7 +52,7 @@ module Tamoz
         check_timeout: DEFAULT_CHECK_TIMEOUT,
         check_safeties: {},
         allowed_tools: nil,
-        skills: Tamoz::Skills::Snapshot.empty,
+        skills: Tamoz::Skills.empty,
         reap_staging: true
       )
         @root = Pathname.new(root).expand_path.realpath.freeze

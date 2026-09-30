@@ -51,7 +51,7 @@ module Tamoz
       checks: {},
       check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
       ask: nil,
-      skills: Tamoz::Skills::Snapshot.empty,
+      skills: Tamoz::Skills.empty,
       routing: :legacy,
       recorder: Tamoz::Observability::Recorder::Null::INSTANCE,
       healing_rules: Healing::RuleRegistry.new

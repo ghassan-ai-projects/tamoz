@@ -489,11 +489,11 @@ class PackagingTest < Minitest::Test
             "Reference material.\n",
             encoding: Encoding::UTF_8
           )
-          snapshot = Tamoz::Skills::Compiler.new(
+          snapshot = Tamoz::Skills.compile(
             sources: [
               Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")
             ]
-          ).compile
+          )
           toolbox = Tamoz::Tools::Toolbox.new(
             root:, allow_changes: true,
             checks: {"verify" => ["sh", "-c", "test -f a.txt && echo ok"]},

@@ -907,18 +907,11 @@ module Tamoz
       # operator can see what was refused rather than wondering why a skill never
       # appeared.
       def skills_snapshot
-        return Tamoz::Skills::Snapshot.empty unless @directory.enabled_sources.include?("skills")
+        return Tamoz::Skills.empty unless @directory.enabled_sources.include?("skills")
 
-        @skills_snapshot ||= begin
-          root = @directory.skills_root
-          if File.directory?(root)
-            Tamoz::Skills::Compiler.new(
-              sources: [Tamoz::Skills::SkillSource.new(id: "operator", root:, trust: "operator", precedence: 0)]
-            ).compile
-          else
-            Tamoz::Skills::Snapshot.empty
-          end
-        end
+        @skills_snapshot ||= Tamoz::Skills.operator_snapshot(
+          root: @directory.skills_root, workspace_root: @directory.workspace_root
+        )
       end
 
       # The three-layer memory engine, when the operator asked for one.
@@ -967,10 +960,6 @@ module Tamoz
 
       def local_capability_catalog
         local_toolbox.names.sort.freeze
-      end
-
-      def skill_rejections
-        skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
       end
 
       private

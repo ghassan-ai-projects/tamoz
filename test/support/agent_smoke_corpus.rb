@@ -1148,7 +1148,7 @@ module Tamoz
         end
 
         def compile_skill_snapshot(operator_root, repo_root)
-          Tamoz::Skills::Compiler.new(
+          Tamoz::Skills.compile(
             sources: [
               Tamoz::Skills::SkillSource.new(
                 id: "operator", root: operator_root, trust: "operator"
@@ -1157,7 +1157,7 @@ module Tamoz
                 id: "repo", root: repo_root, trust: "workspace"
               )
             ]
-          ).compile
+          )
         end
 
         def write_skill_tree(source_root, body:)
@@ -2522,7 +2522,7 @@ module Tamoz
           expected_terminal: %w[completed],
           requires_check: false,
           mutation_needed: false,
-          skills: Tamoz::Skills::Snapshot.empty,
+          skills: Tamoz::Skills.empty,
           store: nil,
           memory_config: nil,
           memory_capture: nil

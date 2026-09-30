@@ -41,7 +41,7 @@ class AgentSkillsAdversarialTest < Minitest::Test
   end
 
   def compile(sources: nil, bindings: {}, limits: Skills::LIMITS)
-    Skills::Compiler.new(sources: sources || [source], bindings:, limits:).compile
+    Skills.compile(sources: sources || [source], bindings:, limits:)
   end
 
   def codes(snapshot) = snapshot.rejections.map(&:code).sort

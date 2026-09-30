@@ -16,6 +16,7 @@ TamozGemspec.build(
     ["tamoz-agent-profile", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-session", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-improvement", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-skills", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-tools", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],

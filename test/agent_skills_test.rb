@@ -46,7 +46,7 @@ class AgentSkillsTest < Minitest::Test
   end
 
   def compile(sources: [source], bindings: {})
-    Skills::Compiler.new(sources:, bindings:).compile
+    Skills.compile(sources:, bindings:)
   end
 
   # ------------------------------------------------------------------- basics --
@@ -122,10 +122,10 @@ class AgentSkillsTest < Minitest::Test
   end
 
   def test_empty_snapshot_is_the_ordinary_output_of_compiling_zero_sources
-    assert_equal Skills::Compiler.new(sources: []).compile.catalog_digest,
-                 Skills::Snapshot.empty.catalog_digest
-    assert_predicate Skills::Snapshot.empty, :empty?
-    assert_match(/\Askills:1:sha256:[0-9a-f]{64}\z/, Skills::Snapshot.empty.epoch)
+    assert_equal Skills.compile(sources: []).catalog_digest,
+                 Skills.empty.catalog_digest
+    assert_predicate Skills.empty, :empty?
+    assert_match(/\Askills:1:sha256:[0-9a-f]{64}\z/, Skills.empty.epoch)
   end
 
   # ------------------------------------------------------------ catalog epoch --
@@ -312,9 +312,9 @@ class AgentSkillsTest < Minitest::Test
     assert_raises(Skills::Error) { Skills::SkillSource.new(id: "Bad Id", root: @operator, trust: "operator") }
     assert_raises(Skills::Error) { Skills::SkillSource.new(id: "ok", root: @operator, trust: "root") }
     assert_raises(Skills::Error) { Skills::SkillSource.new(id: "ok", root: @operator, trust: "operator", precedence: -1) }
-    assert_raises(Skills::Error) { Skills::Compiler.new(sources: [Object.new]) }
-    assert_raises(Skills::Error) { Skills::Compiler.new(sources: [source, source]) }
-    assert_raises(Skills::Error) { Skills::Compiler.new(sources: [], bindings: {1 => 2}) }
+    assert_raises(Skills::Error) { Skills.compile(sources: [Object.new]) }
+    assert_raises(Skills::Error) { Skills.compile(sources: [source, source]) }
+    assert_raises(Skills::Error) { Skills.compile(sources: [], bindings: {1 => 2}) }
     assert_raises(Skills::Error) { Skills::Catalog.new(Object.new) }
   end
 

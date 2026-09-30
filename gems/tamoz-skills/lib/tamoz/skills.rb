@@ -88,9 +88,51 @@ module Tamoz
     MAX_CATALOG_DESCRIPTION_BYTES = 320
     MAX_DETAIL_BYTES = 200
 
-    private_constant :FrontmatterScanner
+    BUNDLED_ROOT = File.expand_path("../../skills", __dir__).freeze
+
+    private_constant :Compiler, :Frontmatter, :FrontmatterScanner, :Rejected, :Walk
 
     module_function
+
+    def compile(sources:, bindings: {}, limits: LIMITS) = Compiler.new(sources:, bindings:, limits:).compile
+
+    def empty = EMPTY
+
+    def bundled_root = BUNDLED_ROOT
+
+    # What the operator configured: the skills Tamoz ships, one operator directory, or both.
+    # :reek:BooleanParameter :reek:ControlParameter — `bundled` is the operator's on/off switch itself.
+    def operator_snapshot(root: nil, workspace_root: nil, bundled: false)
+      sources = []
+      sources << SkillSource.new(id: "bundled", root: BUNDLED_ROOT, trust: "bundled") if bundled
+      if root
+        sources << SkillSource.new(id: "operator", root: outside_workspace!(root, workspace_root),
+                                   trust: "operator", precedence: 1)
+      end
+      sources.empty? ? empty : compile(sources:)
+    end
+
+    # A checkout the agent can write must not be able to write its own instructions.
+    def outside_workspace!(root, workspace_root)
+      resolved = real_path(root)
+      return resolved unless workspace_root
+
+      workspace = real_path(workspace_root)
+      return resolved unless resolved == workspace || resolved.start_with?("#{workspace}#{File::SEPARATOR}")
+
+      raise Error, "skills root #{resolved} is inside the workspace; " \
+                   "skills are instructions and must live outside the tree being worked on"
+    end
+
+    # The deepest existing ancestor is resolved, so a root that does not exist yet still
+    # compares under the same symlinks as the workspace (/var vs /private/var).
+    def real_path(path)
+      expanded = File.expand_path(path)
+      return File.realpath(expanded) if File.exist?(expanded)
+
+      parent = File.dirname(expanded)
+      parent == expanded ? expanded : File.join(real_path(parent), File.basename(expanded))
+    end
 
     def canonical(value) = Tamoz::Core.canonical(value)
 
@@ -234,15 +276,7 @@ module Tamoz
       values.empty? ? "(none)" : values.join(", ")
     end
 
-    # The empty snapshot, built once at load rather than memoized into a
-    # module instance variable on first use. `@empty ||=` on a singleton is
-    # hidden global state two threads can race to build; the result is frozen
-    # either way, so the race was harmless — but a constant makes it
-    # impossible rather than harmless.
-    #
-    # It is assigned here rather than in `snapshot.rb` because building it
-    # runs the compiler, which needs `values.rb` — everything this file has
-    # already required above.
-    Snapshot::EMPTY = Compiler.new(sources: []).compile
+    # Built once at load: a constant cannot be raced the way a memoized module variable can.
+    EMPTY = compile(sources: [])
   end
 end
