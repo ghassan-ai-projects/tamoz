@@ -12,6 +12,9 @@ module Tamoz
     class WorkResearch
       LEAD_TOOLS = %w[propose_research_plan research_wave write_report].freeze
       FINISH = 'write_report'
+      # One refusal for both cases the lead can reach it from: a plan the user already accepted, or a research whose
+      # waves have started.
+      ALREADY_PLANNED = 'Error: there is already a plan for this research; the plan can no longer change.'
 
       # Children run at once up to what the model route may carry, keeping one request for the lead.
       def self.batch_for(model)
@@ -28,8 +31,7 @@ module Tamoz
 
       def propose(state, context, call)
         research = state.fetch(:research)
-        return outcome('Error: the research is under way; the plan can no longer change.') if
-          research['accepted'] || !research.fetch('children').empty?
+        return outcome(ALREADY_PLANNED) if research['accepted'] || !research.fetch('children').empty?
 
         brief = Tamoz::Research.brief(call.arguments, budgets:)
         reply = Tamoz.interrupt(checkpoint(state, brief), context).to_s.strip

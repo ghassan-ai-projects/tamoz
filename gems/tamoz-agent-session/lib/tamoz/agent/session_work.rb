@@ -23,26 +23,10 @@ module Tamoz
       def intake(state, context, base)
         return base if base[:next_node] == 'terminal'
 
-        research = WorkResearchState.resumed(state[:research], carried(state, context))
+        research = WorkResearchState.opened(state[:research])
         return WorkResearchState.unavailable(base) if research&.fetch('mode') == 'lead' && !research_available?
 
         opened(base.merge(research:), context)
-      end
-
-      # The previous turn's research state, when the new turn carries on the same research: the same mode, and a
-      # previous turn that had not finished. A killed turn resumes its accepted plan and the refs its children
-      # earned, so the user is not asked again for a plan they already accepted. Every way a research turn ends —
-      # reported, handed off, failed, cancelled — leaves `next_node` terminal, so a finished run never carries.
-      def carried(state, context)
-        mode = state.dig(:research, 'mode')
-        return nil unless mode
-
-        previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
-                                                                      execution_id: context.execution_id)
-        return nil if previous.nil? || previous[:next_node] == 'terminal'
-
-        inherited = previous[:research]
-        inherited if inherited.is_a?(Hash) && inherited['mode'] == mode
       end
 
       # :reek:DuplicateMethodCall

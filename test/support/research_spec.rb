@@ -77,6 +77,17 @@ module ResearchSpec
     end
   end
 
+  # The fixture web, recording to `$TAMOZ_ISSUED_LOG` every call this process actually issues: a kill test reads that
+  # file to tell the crashed run's calls from the resumed run's, which the in-process `calls` array cannot show.
+  class LoggingFixtureWebsearch < FixtureWebsearch
+    def execute(context, name, arguments)
+      File.open(ENV.fetch('TAMOZ_ISSUED_LOG'), 'a') do |log|
+        log.puts("#{name}:#{arguments['query'] || arguments['ref']}")
+      end
+      super
+    end
+  end
+
   def with_research(lead:, children: [], reviews: [{ 'unsupported' => [] }], budgets: nil, subagents: [], &)
     with_fixture_web { research_workspace(lead:, children:, reviews:, budgets:, subagents:, &) }
   end

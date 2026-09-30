@@ -36,10 +36,13 @@ module SubagentInspection
   def journal(adapter)
     rows = nil
     adapter.store.open_transaction(label: 'spec.journal') do |tx|
-      rows = tx.rows('spec.journal', 'SELECT namespace, execution_id, operation, status FROM tamoz_effects ' \
-                                     'ORDER BY created_at_ms, effect_key', [])
+      rows = tx.rows('spec.journal',
+                     'SELECT namespace, execution_id, operation, status, effect_key FROM tamoz_effects ' \
+                     'ORDER BY created_at_ms, effect_key', [])
     end
-    rows.map { |namespace, execution_id, operation, status| { namespace:, execution_id:, operation:, status: } }
+    rows.map do |namespace, execution_id, operation, status, effect_key|
+      { namespace:, execution_id:, operation:, status:, effect_key: }
+    end
   end
 
   def child_journal(adapter) = journal(adapter).select { |row| row.fetch(:namespace).include?('subgraph') }

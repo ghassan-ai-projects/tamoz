@@ -27,7 +27,7 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | C4 | met | a child's searches and page reads are capped at its share; failed calls still spend it |
 | C5 | met | children run in batches of the route's pinned concurrency minus one (`WorkResearch.batch_for`, `run_inputs`) |
 | C6 | met | a page is fetched once per adapter process (`test/websearch_provider_test.rb#test_a_page_is_fetched_once_and_cut_to_the_output_budget`) |
-| C7 | met | `test/research_durability_test.rb`: a SIGKILL with a model call in flight; the resumed run records no work for a step the crashed run had already committed, and only the one in-flight call resolves |
+| C7 | partly met | `test/research_durability_test.rb`: a SIGKILL with a wave in flight; the journal holds exactly one row per recorded call, the resumed run writes no second receipt, and the run finishes. **Gap, reported not fixed:** the interrupted child's step replays under a new effect identity, so the provider is asked again for that one page although its receipt is held. Measured unchanged with the R6 fix stashed, so it is pre-existing |
 | I1 | met | the plan text and the reply carry no role, tool, wave, ref, token or hash words |
 | I2 | met | report shape: summary, findings, disagreements, gaps and limits, generated sources (`research_ledger_test`) |
 | I3 | met | the report and `run.json` are written through one idempotent journaled effect; the kill tests show a resumed run rewrites nothing the crashed run committed |
