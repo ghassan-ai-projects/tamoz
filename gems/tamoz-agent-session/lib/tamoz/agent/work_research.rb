@@ -12,6 +12,9 @@ module Tamoz
     class WorkResearch
       LEAD_TOOLS = %w[propose_research_plan research_wave write_report].freeze
       FINISH = 'write_report'
+      # Raised when the support check did not answer or its answer cannot be read: the report is refused, and the
+      # lead retries write_report rather than delivering citations nobody confirmed.
+      SupportCheckError = Class.new(StandardError)
       # One refusal for both cases the lead can reach it from: a plan the user already accepted, or a research whose
       # waves have started.
       ALREADY_PLANNED = 'Error: there is already a plan for this research; the plan can no longer change.'
@@ -61,6 +64,8 @@ module Tamoz
         written(state, context, call, ledger, stop)
       rescue Tamoz::Research::Error => e
         outcome("Report not accepted: #{e.message}")
+      rescue SupportCheckError => e
+        outcome("Error: #{e.message}; call write_report again.")
       end
 
       # C2: the refusal the lead reads when it answers without the report while the run must keep going, or nil when
@@ -252,12 +257,32 @@ module Tamoz
       def verdict(call, items)
         cited = items.flat_map { |item| item.fetch('claims').map { |claim| claim.fetch('id') } }
         raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
-        return cited unless call.status == :succeeded
+        raise SupportCheckError, 'the support check did not run' unless call.status == :succeeded
 
-        listed = JSON.parse(call.value[/\{[^{}]*\}/].to_s).fetch('unsupported', [])
-        listed.is_a?(Array) ? listed.grep(String) & cited : cited
+        listed = JSON.parse(judge_object(call.value)).fetch('unsupported', [])
+        unless listed.is_a?(Array) && listed.all?(String)
+          raise SupportCheckError, 'the support check answer is unreadable'
+        end
+
+        listed & cited
       rescue JSON::ParserError
-        cited
+        raise SupportCheckError, 'the support check answer is unreadable'
+      end
+
+      # The judge's one JSON object, wherever it sits in the reply and however deeply it nests; a brace inside a
+      # string defeats the depth count only for answers that were unreadable anyway.
+      def judge_object(text)
+        text = String(text)
+        start = text.index('{')
+        raise JSON::ParserError, 'no object in the answer' unless start
+
+        depth = 0
+        text[start..].each_char.with_index do |char, offset|
+          depth += 1 if char == '{'
+          depth -= 1 if char == '}'
+          return text[start, offset + 1] if depth.zero?
+        end
+        raise JSON::ParserError, 'unbalanced object in the answer'
       end
     end
   end

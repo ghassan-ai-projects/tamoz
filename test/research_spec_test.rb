@@ -163,6 +163,36 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
+  def test_b4_a_check_whose_answer_nests_its_json_still_flags_what_it_named
+    nested = { 'note' => { 'confidence' => 'low' }, 'unsupported' => ['C2'] }
+    with_research(lead: happy_lead, children: happy_children, reviews: [nested]) do |session, _model, _web, out|
+      start_research(session)
+      reply(session, 'go')
+      text = File.read(Dir[File.join(out, '*', 'report.md')].first)
+
+      assert_includes text, 'It grew by about 8,700 in 2024 [unverified].'
+      assert_includes text, 'Oslo had 717,710 residents at the start of 2025 [1].'
+    end
+  end
+
+  def test_b4_an_unreadable_check_refuses_the_report_until_the_lead_retries
+    lead = happy_lead[0, 2] + [{ calls: [report_call('Oslo had 717,710 residents [C1].')] },
+                               { calls: [report_call('Oslo grew [C2].')] }]
+    reviews = ['I cannot answer that in JSON.', { 'unsupported' => ['C2'] }]
+    with_research(lead:, children: happy_children, reviews:) do |session, model, _web, out|
+      start_research(session)
+
+      assert_equal :completed, reply(session, 'go').status
+      read = model.parent_requests.flat_map { |request| JSON.parse(request).fetch('messages') }
+                  .map { |message| message['content'].to_s }.join("\n")
+      assert_includes read, 'the support check answer is unreadable'
+      text = File.read(Dir[File.join(out, '*', 'report.md')].first)
+
+      assert_includes text, 'Oslo grew [unverified].'
+      refute_includes text, 'Oslo had 717,710 residents'
+    end
+  end
+
   def test_c2_the_report_is_refused_while_a_sub_question_is_open_and_budget_remains
     lead = [{ calls: [plan_call(depth: 'standard', texts: ['How many people live in Oslo?'])] },
             { calls: [wave_call(%w[Q1])] }, { calls: [report_call('Early [C1].')] }, { calls: [wave_call(%w[Q1])] },
