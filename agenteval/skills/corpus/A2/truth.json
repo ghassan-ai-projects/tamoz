@@ -1,0 +1,5 @@
+{ "criteria": {
+  "C1": { "conclusion": "exception", "path": "dpa.md", "quote": "within ten (10) business days of becoming aware of it" },
+  "C2": { "conclusion": "no_exception", "path": "dpa.md", "quote": "shall not engage any sub-processor without the prior written authorisation of the Customer" },
+  "C3": { "conclusion": "exception", "path": "dpa.md", "quote": "may retain Customer Data for as long as necessary for its business purposes" },
+  "C4": { "conclusion": "no_exception", "path": "dpa.md", "quote": "The Customer may audit the Processor's compliance with this Agreement" } } }

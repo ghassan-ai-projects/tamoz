@@ -56,6 +56,7 @@ SLOW_TESTS = %w[
   test/subagent_kill_test.rb
   test/research_durability_test.rb
   test/agenteval_subagent_pack_test.rb
+  test/agenteval_skills_pack_test.rb
   test/agenteval_topology_pack_test.rb
   test/sqlite_convergence_probe_test.rb
   test/mcp_supervisor_test.rb
@@ -598,6 +599,22 @@ namespace :agenteval do
       extra += ["--ids", ENV["IDS"]] if ENV["IDS"]
       extra += ["--arms", ENV["ARMS"]] if ENV["ARMS"]
       sh agenteval_ruby, BIN, "research", "run", "--set", ENV.fetch("SET", "dev"), *extra
+    end
+  end
+
+  namespace :skills do
+    desc "Prove the skills-pack graders discriminate — evidence-audit controls (no model calls)"
+    task :prove do
+      sh agenteval_ruby, BIN, "skills", "prove"
+    end
+
+    desc "Run the skills pack: skill selected, forced, or absent (real model; AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
+    task run: :prove do
+      utf8_env!
+      real_run_ready!
+      out = ENV.fetch("AGENTEVAL_OUT", File.join(REPORTS, "skills-#{Time.now.utc.strftime("%Y%m%d")}.json"))
+      sh agenteval_ruby, BIN, "skills", "run", "--repeat", ENV.fetch("AGENTEVAL_REPEAT", "2"),
+         "--budget", ENV.fetch("AGENTEVAL_BUDGET", "600"), "--out", out
     end
   end
 

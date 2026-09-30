@@ -1,0 +1,4 @@
+{ "criteria": {
+  "C1": { "conclusion": "no_exception", "path": "incident-plan.md", "quote": "The Incident Commander leads the response" },
+  "C2": { "conclusion": "exception", "absence": true, "path": "incident-plan.md", "quote": "Testing of this plan and of the recovery steps is planned for a future quarter" },
+  "C3": { "conclusion": "no_exception", "path": "incident-plan.md", "quote": "will notify the regulator within 72 hours of becoming aware of it" } } }

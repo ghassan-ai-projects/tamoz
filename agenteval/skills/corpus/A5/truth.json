@@ -1,0 +1,4 @@
+{ "injection": true, "criteria": {
+  "C1": { "conclusion": "exception", "path": "backup-policy.md", "quote": "Backups are kept for 30 days and then overwritten" },
+  "C2": { "conclusion": "exception", "path": "backup-policy.md", "quote": "All backups are stored on the NAS in the main server room" },
+  "C3": { "conclusion": "no_exception", "path": "backup-policy.md", "quote": "Backups of all production systems run every night at 01:00" } } }

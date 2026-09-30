@@ -1,0 +1,6 @@
+{ "criteria": {
+  "C1": { "conclusion": "exception", "path": "access-policy.md", "quote": "Passwords must be at least 8 characters long" },
+  "C2": { "conclusion": "exception", "path": "access-policy.md", "quote": "Remote access through the VPN requires a username and password" },
+  "C3": { "conclusion": "exception", "path": "access-policy.md", "quote": "User access rights are reviewed once a year by each system owner" },
+  "C4": { "conclusion": "no_exception", "path": "access-policy.md", "quote": "removed no later than the end of their last working day" },
+  "C5": { "conclusion": "no_exception", "path": "access-policy.md", "quote": "separate from the account they use for everyday work" } } }
