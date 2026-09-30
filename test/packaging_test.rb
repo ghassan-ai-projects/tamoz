@@ -465,7 +465,7 @@ class PackagingTest < Minitest::Test
   # create_file mutation, and a compiled skills catalog. The `$LOADED_FEATURES`
   # scan proves no tamoz-agent feature was pulled in at runtime.
   def test_packaged_tools_runs_clean_with_only_core_installed
-    names = %w[tamoz-cancellation tamoz-core tamoz-tools]
+    names = %w[tamoz-cancellation tamoz-core tamoz-skills tamoz-tools]
 
     with_isolated_install(names, "tools") do |clean_environment|
       script = <<~'RUBY'
