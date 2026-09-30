@@ -86,7 +86,8 @@ pack test also blinds each gate in turn, and the quote locator, and requires `pr
 
 ## 5. Real-model run (M2)
 
-- **Model:** OpenRouter `deepseek/deepseek-v4.1-flash` through `tamoz code` (the work loop),
+- **Model:** GLM-5.3-Flash (`zai/glm-5.3-flash`, owner decision 2026-10-01; the first runs used OpenRouter
+  `deepseek/deepseek-v4.1-flash` and are reported separately) through `tamoz code` (the work loop),
   approvals auto-granted (a declared measurement artefact, as in every agenteval pack).
 - **Same for every arm:** the corpus, the prompt, a copy of the output schema at
   `audit/findings.schema.json` in the workspace, and the verifier wired as a check named

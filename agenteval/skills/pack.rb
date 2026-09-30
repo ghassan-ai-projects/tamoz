@@ -26,6 +26,10 @@ module Agenteval
              "audit/findings.json following audit/findings.schema.json, and a report to audit/REPORT.md. " \
              "Do not modify the documents. Run the verify check before you finish."
     BOOTSTRAP_SAMPLES = 2000
+    # The model under test (owner, 2026-10-01): GLM-5.3-Flash on Z.ai's coding endpoint; AGENTEVAL_PROVIDER/MODEL override it.
+    PROVIDER = "zai"
+    MODEL = "glm-5.3-flash"
+    ZAI_BASE = "https://api.z.ai/api/coding/paas/v4"
     # The provider refused the call: the trial measured the account, not the agent.
     PROVIDER_FAILURES = %w[model_key_refused model_out_of_credit model_rate_limited].freeze
     MAX_PROVIDER_FAILURES = 2
@@ -207,6 +211,7 @@ module Agenteval
     def tamoz_agent(scenario, arm, budget:)
       tamoz_root = File.expand_path("..", Agenteval::ROOT)
       env = { "LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8" }.merge(TamozCode.environment(tamoz_root, nil))
+                                                                    .merge(model_env(tamoz_root))
       lambda do |workspace, root|
         sessions = File.join(root, "sessions")
         FileUtils.mkdir_p(sessions, mode: 0o700)
@@ -226,6 +231,14 @@ module Agenteval
         reason = run["terminal_reason"]
         PROVIDER_FAILURES.include?(reason) ? run.merge("provider_failure" => reason) : run
       end
+    end
+
+    def model_route = [ENV.fetch("AGENTEVAL_PROVIDER", PROVIDER), ENV.fetch("AGENTEVAL_MODEL", MODEL)]
+
+    def model_env(tamoz_root)
+      provider, model = model_route
+      { "TAMOZ_PROVIDER" => provider, "TAMOZ_MODEL" => model,
+        "ZAI_API_KEY" => TamozCode.credential(tamoz_root, "ZAI_API_KEY"), "ZAI_API_BASE" => ZAI_BASE }.compact
     end
 
     def metrics(store)
@@ -290,7 +303,8 @@ module Agenteval
                 "median_duration_ms" => median(mine.map { |row| row["duration_ms"].to_i }),
                 "matched" => matched, "planted" => planted }]
       end
-      { "arms" => summary, "decision" => decision(summary, rows), "rows" => rows }
+      provider, model = model_route
+      { "provider" => provider, "model" => model, "arms" => summary, "decision" => decision(summary, rows), "rows" => rows }
     end
 
     def sums(rows, part, whole) = [rows.sum { |row| row[part].to_i }, rows.sum { |row| row[whole].to_i }]
