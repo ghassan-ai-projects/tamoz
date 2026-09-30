@@ -5054,6 +5054,48 @@
       "package": "tamoz-otel"
     },
     {
+      "id": "API-tamoz-research-Tamoz::Research",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research"
+    },
+    {
+      "id": "API-tamoz-research-Tamoz::Research::Error",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research::Error",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research"
+    },
+    {
+      "id": "API-tamoz-research-Tamoz::Research::VERSION",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research::VERSION",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research"
+    },
+    {
       "id": "API-tamoz-scheduler-Tamoz::Scheduler::ClockRollbackError",
       "category": "public_api",
       "source": "docs/public-api.json",

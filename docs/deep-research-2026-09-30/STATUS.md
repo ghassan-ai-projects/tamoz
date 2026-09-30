@@ -8,16 +8,31 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 |---|---|---|
 | A1–A5 | pending | — |
 | A6 | met | `test/research_boundary_test.rb` (a planted `Tamoz::Research::Ledger` reference in `tamoz-agent-session` fails it; inner classes are also `private_constant`), `test/dependency_isolation_test.rb#test_research_loads_only_core` |
-| P1–P5 | pending | — |
-| B1–B4 | pending | — |
-| S1 | partly met | the adapter reads only a URL its own searches returned (`test/websearch_provider_test.rb`); the model-side ref (S2-3) comes in R4 |
+| P1 | met | `research_spec_test`: a wave before an accepted plan is refused with zero web calls; the lead has no web tool |
+| P2 | met | an edit in words reaches the lead; the revised plan is shown again; children get only the revised sub-questions |
+| P3 | met | "stop" ends the turn `cancelled_by_user`, nothing searched, no files |
+| P4 | pending (R6 kill test) | — |
+| P5 | partly met | the checkpoint is the existing `clarify` interrupt both surfaces render; the chat path is R5 |
+| B1 | met | the sources list is generated from the ledger; a URL written into the body is never listed |
+| B2 | met | a made-up excerpt is refused until the child quotes the page (`research_spec_test`, `research_test`) |
+| B3 | met | an unknown claim id is refused; `[C1-C2]`-style cites are refused |
+| B4 | met | a claim the check marks unsupported is shown `[unverified]`, loses its source number, and is counted in the gaps; a failed check marks every cited claim unverified |
+| S1 | met | `read_page` takes a ref (S2-3), resolved from the child's own recorded hits; an unknown ref dispatches nothing; the adapter also reads only URLs its searches returned |
 | S2 | met | public reach needs `deny_private_ranges` and the declared `page_reads: public`; private, tunnelled-IPv6 and IP-literal targets refused on every hop; provider headers dropped on a host change; streamed 2 MiB bound without compression (`test/websearch_reader_test.rb`, `test/websearch_adapter_test.rb`) |
-| S3–S4 | pending | — |
-| C1–C5 | pending | — |
+| S3 | pending (real model) | a scripted child cannot show a model ignoring an injected page; the fixture web plants one for R7/R8 |
+| S4 | met | the research role names only `web_search`/`read_page`; the child header is exactly those, `recall_output` and `report_sources`; ordinary `delegate` refuses the research role |
+| C1 | met | every sub-question gets a status from the ledger (`research_ledger_test`) |
+| C2 | met | `write_report` is refused while a sub-question is open and budget remains |
+| C3 | met | coverage, saturation and budget each reached (`research_ledger_test`); user stop via P3 |
+| C4 | met | a child's searches and page reads are capped at its share; failed calls still spend it |
+| C5 | met | children run in batches of the route's pinned concurrency minus one (`WorkResearch.batch_for`, `run_inputs`) |
 | C6 | met | a page is fetched once per adapter process (`test/websearch_provider_test.rb#test_a_page_is_fetched_once_and_cut_to_the_output_budget`) |
 | C7 | pending | — |
-| I1–I3 | pending | — |
-| T1–T3 | pending | — |
+| I1 | met | the plan text and the reply carry no role, tool, wave, ref, token or hash words |
+| I2 | met | report shape: summary, findings, disagreements, gaps and limits, generated sources (`research_ledger_test`) |
+| I3 | partly met | the run folder is written through an idempotent journaled effect; the kill test is R6 |
+| T1 | met | `run.json` carries the run record (`research_ledger_test`, `research_spec_test`) |
+| T2–T3 | pending (R9) | — |
 | R1–R6 | pending (real-model) | — |
 
 ## R0 seam checks
@@ -39,6 +54,8 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | DESIGN §7 | A child marks a claim `primary` and reports `conflicting`/`not_found`; the lead does not mark statuses. `answered` = a primary claim or claims from two hosts; `unanswerable` needs a child that searched at least 3 times | Deterministic from the ledger, one less lead tool; the lead still decides the next wave |
 | DESIGN §10 | Sources list shows the published date; the read date lives in `sources.jsonl` | The report has no clock; the session stamps the folder |
 | DESIGN §5 | Page reads need an explicit `page_reads: public` in the egress declaration (also accepted by the profile validator) | The review found that a provider name alone would widen egress without the pinned declaration saying so |
+| DESIGN §6 | The run folder is written under the harness `research_dir` (the CLI sets the workspace's `research/`, the chat worker the runtime directory's) | The report should land where the user works |
+| DESIGN §4 | The research lead gets its own loop budget (`research_lead.json`: 40 model calls, 60 tool calls, 3 h) | Sequential children on an unpinned route can take longer than an ordinary turn's 30 minutes |
 | EVAL §3 | The single arm is one `research` child per wave, not the lead researching itself | One code path; the arms still differ exactly in parallel fan-out |
 
 ## Rounds
@@ -48,4 +65,5 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | R0 | `32567071` | docs, enola baseline, seam checks |
 | R1 | `353f9996` | `zai` provider, GLM route, `max_concurrent_requests`; reviewed |
 | R3 | `1f5023a4` | `tamoz-research` gem: budgets, plan, waves, web refs, sources with the excerpt check, ledger and stop rule, report, run folder; 29 facade tests; reviewed, 15 review findings fixed |
-| R2 | (this commit) | Brave search and direct page reads as named adapters; `http` provider removed; egress public reach; `nokogiri` extraction; reviewed, 10 findings fixed (2 security: cross-host provider header, unbounded body) |
+| R2 | `1c932e1e` | Brave search and direct page reads as named adapters; `http` provider removed; egress public reach; `nokogiri` extraction; reviewed, 10 findings fixed (2 security: cross-host provider header, unbounded body) |
+| R4 | (this commit) | the research turn: plan checkpoint, waves, child web tools, report on disk; `Session#research`; 18 spec rows; reviewed twice, all findings fixed. Also: `PromptPack.digests` now reads UTF-8 (a locale bug the first non-ASCII prompt exposed), and the requirements manifest/audit rows R3 missed |

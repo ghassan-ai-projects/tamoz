@@ -11,8 +11,10 @@ module Tamoz
       NAME = /\A[a-z][a-z_]*\z/
       TOOL_PATTERN = /\A[a-z0-9_]*\*\z|\A[a-z][a-z0-9_]*\z/
       KEYS = %w[loop_policy prompt summary tools].freeze
-      # A reviewer is handed the paths its parent changed this turn, and refused when there are none.
-      OPTIONAL = %w[reviews_changes].freeze
+      # A reviewer is handed the paths its parent changed this turn, and refused when there are none. A research role
+      # answers a deep-research wave: it gets the web tools and finishes with report_sources.
+      OPTIONAL = %w[reviews_changes research].freeze
+      FLAGS = [nil, true, false].freeze
 
       attr_reader :name, :summary, :prompt, :tools, :loop_policy
 
@@ -33,6 +35,8 @@ module Tamoz
 
       def reviews_changes? = @definition['reviews_changes'] == true
 
+      def research? = @definition['research'] == true
+
       private
 
       def refuse(message) = raise(Error, "subagent role #{@name.inspect}: #{message}")
@@ -40,8 +44,8 @@ module Tamoz
       def validate_shape
         refuse('the name must be lowercase letters and underscores') unless @name.match?(NAME)
         valid = @definition.is_a?(Hash) && (@definition.keys - OPTIONAL).sort == KEYS &&
-                [nil, true, false].include?(@definition['reviews_changes'])
-        refuse("it needs #{KEYS.join(', ')} and optionally reviews_changes (true or false)") unless valid
+                OPTIONAL.all? { |key| FLAGS.include?(@definition[key]) }
+        refuse("it needs #{KEYS.join(', ')} and optionally #{OPTIONAL.join(' or ')} (true or false)") unless valid
       end
 
       def fields = [summary_text, prompt_file, tool_patterns, LoopPolicy.from_h(@definition.fetch('loop_policy'))]

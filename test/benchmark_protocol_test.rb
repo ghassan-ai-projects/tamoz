@@ -20,7 +20,7 @@ class BenchmarkProtocolTest < Minitest::Test
   # sealed_build_digest follows the Gemfile.lock change from the gem extractions
   # and the tamoz-agent-kernel net-http requirement tightening to ~> 0.5.
   # 2026-09-13 bump: Gemfile.lock gains faraday and base64 as declared deps.)
-  COMMITTED_SHA256 = "f9da0a9be77eec5a7ebb329a93efbec0fb078b3a314d10c0e914d49772f88824"
+  COMMITTED_SHA256 = "d3406bac523ab6969461359d6543d9a38911462c8f1d8227ffbdba0ee79f3480"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider

@@ -71,6 +71,7 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-harness (= 0.1.0.alpha.1)
+      tamoz-research (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 
 PATH

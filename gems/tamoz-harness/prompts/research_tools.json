@@ -1,0 +1,131 @@
+{
+  "lead": [
+    {
+      "name": "propose_research_plan",
+      "description": "Show the user your research plan and wait for their reply, before any research runs. The reply comes back as this call's result.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question", "sub_questions", "depth"],
+        "properties": {
+          "question": {"type": "string", "description": "The question as you understood it, in the user's language."},
+          "sub_questions": {
+            "type": "array", "minItems": 1, "maxItems": 8,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["text", "perspective"],
+              "properties": {
+                "text": {"type": "string", "description": "One sub-question, answerable from sources."},
+                "perspective": {"type": "string", "description": "Who asks it that way, e.g. a regulator, a practitioner, a skeptic."}
+              }
+            }
+          },
+          "left_out": {"type": "array", "maxItems": 6, "items": {"type": "string"}, "description": "What the research will not cover."},
+          "depth": {"type": "string", "enum": ["quick", "standard", "deep"]},
+          "clarifying_question": {"type": "string", "description": "At most one question, only when the request is ambiguous."}
+        }
+      }
+    },
+    {
+      "name": "research_wave",
+      "description": "Send research children out in parallel, one per assignment, after the user accepted the plan. Returns each child's findings and the coverage of every sub-question, with the claim ids to cite.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["assignments"],
+        "properties": {
+          "assignments": {
+            "type": "array", "minItems": 1, "maxItems": 4,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["sub_questions", "objective"],
+              "properties": {
+                "sub_questions": {"type": "array", "minItems": 1, "maxItems": 4, "items": {"type": "string"}, "description": "Sub-question ids from the plan, e.g. Q1."},
+                "objective": {"type": "string", "description": "What this child must establish."},
+                "boundaries": {"type": "string", "description": "What other children cover, so this one stays out of it."},
+                "source_hints": {"type": "string", "description": "Where good sources are likely, and what to avoid."}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "write_report",
+      "description": "Write the final report once the coverage says it may be written. Cite claims only as [C1] or [C1, C2]; Tamoz numbers the sources and adds the sources list and the gaps.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary", "body"],
+        "properties": {
+          "summary": {"type": "string", "description": "3 to 5 sentences answering the question."},
+          "body": {"type": "string", "description": "The report in markdown, a section per sub-question, every factual sentence citing claim ids."}
+        }
+      }
+    }
+  ],
+  "child": [
+    {
+      "name": "report_sources",
+      "description": "Finish your research: the status of each of your sub-questions and the claims that answer them, each quoting a page you read.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary", "findings"],
+        "properties": {
+          "summary": {"type": "string", "description": "What you found, in two or three sentences."},
+          "findings": {
+            "type": "array", "minItems": 1,
+            "items": {
+              "type": "object", "additionalProperties": false, "required": ["sub_question", "status", "claims"],
+              "properties": {
+                "sub_question": {"type": "string", "description": "The sub-question id, e.g. Q2."},
+                "status": {"type": "string", "enum": ["found", "conflicting", "not_found"]},
+                "note": {"type": "string"},
+                "claims": {
+                  "type": "array", "maxItems": 12,
+                  "items": {
+                    "type": "object", "additionalProperties": false, "required": ["claim", "page", "excerpt"],
+                    "properties": {
+                      "claim": {"type": "string"},
+                      "page": {"type": "string", "description": "The page ref, e.g. P3."},
+                      "excerpt": {"type": "string", "description": "20 to 400 characters copied exactly from that page."},
+                      "primary": {"type": "boolean", "description": "True only when the page is the original source."}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "web": [
+    {
+      "name": "web_search",
+      "backing": "mcp:websearch/search",
+      "description": "Search the web. Results are refs like S2-3 with a title, URL and snippet; read one with read_page.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["query"],
+        "properties": {
+          "query": {"type": "string", "maxLength": 400},
+          "max_results": {"type": "integer", "minimum": 1, "maximum": 10}
+        }
+      }
+    },
+    {
+      "name": "read_page",
+      "backing": "mcp:websearch/read_page",
+      "description": "Read one search result's page as text, by its ref (e.g. S2-3). Returns the page with a ref like P4 to cite.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ref"],
+        "properties": {
+          "ref": {"type": "string", "pattern": "^S[0-9]+-[0-9]+$"}
+        }
+      }
+    }
+  ]
+}

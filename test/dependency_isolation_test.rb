@@ -193,11 +193,13 @@ class DependencyIsolationTest < Minitest::Test
     assert_empty unexpected, unexpected.inspect
   end
 
-  def test_websearch_gemspec_declares_exactly_mcp_and_core
+  # nokogiri turns a page read into readable text; it is the only non-Tamoz runtime dependency the adapter adds.
+  def test_websearch_gemspec_declares_exactly_mcp_core_and_nokogiri
     spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-mcp-websearch").join("tamoz-mcp-websearch.gemspec").to_s)
 
     assert_equal(
       {
+        "nokogiri" => "~> 1.18",
         "tamoz-core" => "= 0.1.0.alpha.1",
         "tamoz-mcp" => "= 0.1.0.alpha.1"
       },

@@ -36,5 +36,19 @@
       "max_seconds": 300
     },
     "reviews_changes": true
+  },
+  "research": {
+    "summary": "Search the web and read pages to answer assigned sub-questions, reporting claims that quote the pages read.",
+    "prompt": "subagent_research.md",
+    "tools": [
+      "web_search",
+      "read_page"
+    ],
+    "loop_policy": {
+      "max_model_calls": 30,
+      "max_tool_calls": 40,
+      "max_seconds": 900
+    },
+    "research": true
   }
 }

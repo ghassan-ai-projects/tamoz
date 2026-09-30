@@ -9,8 +9,10 @@ module Tamoz
       SURFACES = Harness::PromptPack::SURFACES.keys.freeze
 
       # Operator settings for the work route; all of it is trusted configuration.
+      # `research` is nil for an ordinary turn, :lead for a deep-research turn, :child for a research subagent.
+      # `research_dir` is where research runs are written; `research_budgets` may only narrow the shipped budgets.
       Settings = Data.define(:surface, :persona, :preferences, :guidance_files, :guidance_bytes, :context_policy,
-                             :loop_policy) do
+                             :loop_policy, :research, :research_dir, :research_budgets) do
         def self.from(options)
           options = (options || {}).transform_keys(&:to_sym)
           surface = options.fetch(:surface, :cli).to_sym
@@ -23,22 +25,29 @@ module Tamoz
               guidance_files: Array(options.fetch(:guidance_files, [])),
               guidance_bytes: options.fetch(:guidance_bytes, 16_384),
               context_policy: ContextEngine::Policy.from_h(options.fetch(:context_policy, {})),
-              loop_policy: Harness::LoopPolicy.from_h(options.fetch(:loop_policy, {})))
+              loop_policy: Harness::LoopPolicy.from_h(options.fetch(:loop_policy, {})),
+              research: options[:research]&.to_sym, research_dir: options[:research_dir],
+              research_budgets: options[:research_budgets])
         end
       end
 
-      def initialize(configuration:)
+      # `research: :lead` views the same configuration as a deep-research turn.
+      def initialize(configuration:, research: nil)
         @configuration = configuration
+        @research = research
         @memo = {}
         freeze
       end
 
       # Built on first use: every session compiles every graph variant, and only a work turn needs these.
-      def settings = @memo[:settings] ||= Settings.from(@configuration.harness)
+      def settings
+        @memo[:settings] ||= Settings.from(@configuration.harness).then do |base|
+          @research ? base.with(research: @research, loop_policy: Harness::ResearchPack.loop_policy) : base
+        end
+      end
 
       def header
-        @memo[:header] ||= Harness::Header.build(tools: toolbox_schemas + delegate_schemas, model: model_name,
-                                                 surface: settings.surface,
+        @memo[:header] ||= Harness::Header.build(tools: surface_tools, model: model_name, surface: settings.surface,
                                                  persona: settings.persona, preferences: settings.preferences)
       end
 
@@ -71,7 +80,7 @@ module Tamoz
       # `carried`: the memory brief and the thread checkpoint, pinned after project guidance.
       def opening(task:, transcript:, previous_answer:, updates:, carried: {})
         transcript = transcript[0...-1] if transcript.last == { 'role' => 'user', 'text' => task }
-        entries = append([], 'runtime', runtime_text, pinned: true)
+        entries = method_pinned(append([], 'runtime', runtime_text, pinned: true))
         entries = append(entries, 'guidance', scrub(guidance.text), pinned: true, source: guidance.sources.join(' ')) if
           guidance
         entries = append(entries, 'memory', scrub(carried[:memory]), pinned: true) if carried[:memory]
@@ -104,11 +113,33 @@ module Tamoz
 
       private
 
-      def delegate_schemas
-        apps = @configuration.subagent_apps
-        return [] if apps.empty? || settings.surface == :subagent
+      # A research turn's method, pinned after the runtime snapshot; an ordinary turn pins nothing here.
+      def method_pinned(entries)
+        return entries unless settings.research == :lead
 
-        [Harness::PromptPack.delegate_tool(roles: apps.values.map(&:role))]
+        method = Harness::PromptPack.fetch('research_method')
+        append(entries, 'guidance', method, pinned: true, source: 'research method')
+      end
+
+      # A deep-research lead plans, sends waves and writes; a research child searches, reads and reports sources.
+      def surface_tools
+        case settings.research
+        when :lead then Harness::ResearchPack.tools(:lead)
+        when :child then web_schemas + Harness::ResearchPack.tools(:child)
+        else toolbox_schemas + delegate_schemas
+        end
+      end
+
+      def web_schemas
+        allowed = @configuration.capabilities.names(:action)
+        Harness::ResearchPack.web_tools(Harness::ResearchPack.web_backings.select { |_, id| allowed.include?(id) }.keys)
+      end
+
+      def delegate_schemas
+        roles = @configuration.subagent_apps.values.map(&:role).reject(&:research?)
+        return [] if roles.empty? || settings.surface == :subagent
+
+        [Harness::PromptPack.delegate_tool(roles:)]
       end
 
       def toolbox_schemas

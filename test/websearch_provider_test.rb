@@ -5,7 +5,7 @@ require 'tamoz/mcp/websearch'
 require 'pathname'
 
 # The operator-side adapter's gate and page rules, without a subprocess.
-load Pathname.new(__dir__).join('..', 'script', 'websearch_adapter').to_s
+load Pathname.new(__dir__).join('..', 'script', 'websearch_adapter').to_s unless defined?(WebsearchAdapter)
 
 # -- each case reads one adapter response from several sides.
 class WebsearchProviderTest < Minitest::Test

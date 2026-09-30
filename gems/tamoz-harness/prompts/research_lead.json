@@ -1,0 +1,7 @@
+{
+  "loop_policy": {
+    "max_model_calls": 40,
+    "max_tool_calls": 60,
+    "max_seconds": 10800
+  }
+}

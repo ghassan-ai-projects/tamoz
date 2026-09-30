@@ -348,6 +348,13 @@ module Tamoz
         deliver_turn({"task" => String(task)}, thread:, request_id:, owner_id:, emitter:, context:)
       end
 
+      # A deep-research turn on `question` (work routing only): the plan is shown before any search.
+      # :reek:LongParameterList -- the same turn identity start takes.
+      def research(question, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
+        deliver_turn({"task" => String(question), "research" => {"mode" => "lead"}},
+                     thread:, request_id:, owner_id:, emitter:, context:)
+      end
+
       def resume(answers, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
         deliver_turn(answers, thread:, request_id:, operation: :resume, owner_id:, emitter:, context:)

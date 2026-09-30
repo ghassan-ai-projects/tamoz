@@ -24,7 +24,9 @@ module Tamoz
       def digests
         Dir.children(DIRECTORY).sort.to_h do |file|
           [file,
-           Tamoz::Core.digest(DIGEST_DOMAIN, { 'file' => file, 'bytes' => File.read(File.join(DIRECTORY, file)) })]
+           Tamoz::Core.digest(DIGEST_DOMAIN,
+                              { 'file' => file,
+                                'bytes' => File.read(File.join(DIRECTORY, file), encoding: Encoding::UTF_8) })]
         end
       end
 

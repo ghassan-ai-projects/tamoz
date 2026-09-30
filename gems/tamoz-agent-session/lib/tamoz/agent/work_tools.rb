@@ -7,6 +7,8 @@ module Tamoz
     # The harness tools that never touch the workspace: update_plan (reviewed once per scope), recall_output,
     # report_findings, and the memory tools.
     # rubocop:disable Metrics/AbcSize -- one plan transition per call.
+    # :reek:RepeatedConditional :reek:TooManyInstanceVariables :reek:TooManyMethods -- each tool family routes on
+    # the call's name.
     class WorkTools
       MAX_PLAN_REVIEWS = 3
       # Answered here without the approval gate: none touches the workspace.
@@ -20,9 +22,23 @@ module Tamoz
         @work = work
         @memory = memory
         @delegation = WorkDelegation.new(services:, work:)
+        @research = WorkResearch.new(services:, work:, delegation: @delegation)
+        @web = WorkWeb.new(work:)
       end
 
+      attr_reader :web
+
       def delegate(state, context, call) = @delegation.call(state, context, call)
+
+      def research(state, context, call)
+        case call.name
+        when 'propose_research_plan' then @research.propose(state, context, call)
+        when 'research_wave' then @research.wave(state, context, call)
+        else finishing(state) { @research.write_report(state, context, call) }
+        end
+      end
+
+      def report_sources(state, call) = finishing(state) { @web.report_sources(state, call) }
 
       def direct(state, context, call)
         case call.name
@@ -69,8 +85,15 @@ module Tamoz
         Outcome.new(text: "Error: #{e.message}", update: {})
       end
 
-      # A grounded report ends the turn: its rendering is the answer; the proposals are not executed. It must be the
-      # step's last call, or the calls after it would never answer.
+      # A finishing report ends the turn, so it must be the step's last call, or the calls after it would never answer.
+      # :reek:UtilityFunction
+      def finishing(state)
+        return yield if state.fetch(:work_cursor) == state.fetch(:work_pending).length - 1
+
+        Outcome.new(text: 'Error: call it alone, as the last call of its step.', update: {})
+      end
+
+      # A grounded report ends the turn: its rendering is the answer; the proposals are not executed.
       def report_findings(state, call)
         unless state.fetch(:work_cursor) == state.fetch(:work_pending).length - 1
           return Outcome.new(text: 'Error: call report_findings alone, as the last call of its step.', update: {})

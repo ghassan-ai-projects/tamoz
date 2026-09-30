@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-09-28T18:03:31Z",
-  "manifest_requirements": 565,
+  "generated_at": "2026-09-30T07:35:37Z",
+  "manifest_requirements": 568,
   "named_cases_run": 297,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 15,
-    "pass": 535
+    "pass": 538
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -5728,6 +5728,54 @@
       "owner_signature": null
     },
     {
+      "id": "API-tamoz-research-Tamoz::Research",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-research-Tamoz::Research::Error",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research::Error",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-research-Tamoz::Research::VERSION",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Research::VERSION",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-research",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "API-tamoz-scheduler-Tamoz::Scheduler::ClockRollbackError",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -8912,7 +8960,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {

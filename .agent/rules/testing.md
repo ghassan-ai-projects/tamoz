@@ -66,3 +66,7 @@
   work-loop fixture gave every effect 0.2 s to go from prepared to started). On a loaded CI runner the
   recovery outlived its own lease and failed with `LeaseLostError`, on `main` as well as on branches. Give the
   recovering owner, and any test that does not wait for expiry, a normal lease (5 s).
+- **A digest over file text must read it with an explicit encoding.** `PromptPack.digests` used a bare `File.read`, so
+  the first non-ASCII prompt (`research_replies.json`) hashed differently under `LANG=C` and a UTF-8 locale: pins made
+  in one shell failed in `rake`'s UTF-8 run and passed alone. Read with `encoding: Encoding::UTF_8`, and generate pins
+  under the same locale the gate runs in.

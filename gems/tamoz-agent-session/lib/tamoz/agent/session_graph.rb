@@ -170,7 +170,7 @@ module Tamoz
           work_verified: false, work_checked: false, work_boundary: false, work_overflowed: false,
           work_force_reduce: false, work_exhausted: nil, work_started_ms: 0, work_mutation_count: 0,
           work_turn: nil, work_reminders: [], work_observations: nil, work_checkpoint: nil,
-          work_execution_id: nil
+          work_execution_id: nil, research: nil
         }.freeze
 
         def work_channels(builder)
