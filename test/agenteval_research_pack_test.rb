@@ -68,4 +68,18 @@ class AgentevalResearchPackTest < Minitest::Test
 
     assert_equal 'report', Pack.finished(@dir, question, 'fanout').fetch('status')
   end
+
+  # T3 with the real id list, not a test literal: a run named after an actual held-out question is refused.
+  def test_a_real_held_out_question_id_is_refused_as_a_tuning_input
+    held = Pack.questions('held_out').map { |question| question.fetch('id') }
+
+    error = assert_raises(ArgumentError) do
+      Tamoz::Agent::Improvement::ResearchBudgetTuner.new(
+        records: [{ 'run_id' => held.first, 'depth' => 'quick', 'stop_reason' => 'saturation', 'waves' => 2 }],
+        holdout_ids: held
+      )
+    end
+
+    assert_includes error.message, held.first
+  end
 end
