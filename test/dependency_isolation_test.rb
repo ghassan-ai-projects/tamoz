@@ -357,6 +357,28 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
+  # DESIGN §11: tamoz-research is pure rules over tamoz-core, and only the session (the turn), the improvement
+  # tuner (budget candidates) and the CLI (--research-budgets validation) may hold the edge.
+  def test_research_gemspec_declares_exactly_core
+    spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-research").join("tamoz-research.gemspec").to_s)
+
+    assert_equal(
+      { "tamoz-core" => "= 0.1.0.alpha.1" },
+      spec.runtime_dependencies.to_h { |dependency| [dependency.name, dependency.requirement.to_s] }
+    )
+  end
+
+  def test_only_the_named_gems_depend_on_research
+    allowed = %w[tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli]
+
+    GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner").each do |name, root|
+      next if allowed.include?(name)
+
+      spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+      refute_includes spec.runtime_dependencies.map(&:name), "tamoz-research", name
+    end
+  end
+
   # Audit F2: the injected-port boundary at the PACKAGE level too — no
   # production gemspec may depend on tamoz-agent except tamoz-agent's own
   # dependents (agent, tools). The tamoz-stream gemspec must stay
