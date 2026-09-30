@@ -71,6 +71,8 @@ module WebsearchAdapter
   # The operator gate refused; every tool answers it the same way.
   class RefusedGate < StandardError; end
 
+  OPEN_CIRCUIT = "the egress circuit is open; the operator clears it by restarting this server"
+
   @issued = {}
   @pages = {}
 
@@ -104,41 +106,48 @@ module WebsearchAdapter
 
     # One governed search: the operator gate, request hygiene, then the provider.
     def search_response(query, max_results)
-      policy, providers = gate
+      policy, providers, circuit = gate
       query = query.to_s
       return refusal("the query is credential-shaped") if W.credential_shaped_query?(query)
       bound = [policy.max_request_bytes, MAX_QUERY_BYTES].min
       return refusal("the query exceeds the request bound") if query.bytesize > bound
+      return refusal(OPEN_CIRCUIT) if circuit.open?
 
       count = max_results.is_a?(Integer) ? max_results.clamp(1, MAX_RESULTS) : 5
       results = recorded_web.search(query, count) { searcher(policy, providers).search(query, count) }
       results.each { |result| @issued[result.fetch("url")] = true }
       @issued.shift while @issued.length > ISSUED
+      circuit.record_success
       text_response(JSON.generate("results" => results))
     rescue RefusedGate => refused
       refusal(refused.message)
     rescue *REFUSED => error
+      @circuit&.record_failure
       refusal(reason(error))
     end
 
     # A page read: only a URL one of this process's searches returned, served once per URL.
     def read_page_response(url)
-      policy, providers = gate
+      policy, providers, circuit = gate
       url = url.to_s
       return refusal("read_page reads only a page a search on this server returned") unless @issued[url]
+      return refusal(OPEN_CIRCUIT) if circuit.open?
 
       page = @pages[url] ||= recorded_web.read(url) { reader(policy, providers).read(url) }
       @pages.shift while @pages.length > PAGE_CACHE
+      circuit.record_success
       text_response(fit(page, policy.max_response_bytes))
     rescue RefusedGate => refused
       refusal(refused.message)
     rescue *REFUSED => error
+      @circuit&.record_failure
       refusal(reason(error))
     end
 
     def reset!
       @issued = {}
       @pages = {}
+      @circuit = nil
     end
 
     private
@@ -147,7 +156,16 @@ module WebsearchAdapter
       policy = load_policy
       raise RefusedGate, "the operator grant #{GRANT_ENV} is not set" unless ENV[GRANT_ENV] == "1"
 
-      [policy, load_providers]
+      [policy, load_providers, egress_circuit(policy)]
+    end
+
+    # The declared egress circuit, enforced here where the failures happen: a session-side breaker never sees
+    # this process's refusals, which arrive as well-formed answers. The operator clears it by restarting the
+    # process — no in-process caller resets its own circuit.
+    def egress_circuit(policy)
+      @circuit ||= W::EgressCircuit.new(threshold: policy.circuit.fetch("threshold"),
+                                        scope_id: W::DEFAULT_SERVER_ID,
+                                        budget_breach: policy.circuit.fetch("budget_breach"))
     end
 
     def recorded_web

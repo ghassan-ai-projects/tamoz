@@ -15,10 +15,11 @@ class WebsearchProviderTest < Minitest::Test
     @saved = ENV.to_h.slice(*FLAGS)
     @dir = Dir.mktmpdir('tamoz-websearch-provider')
     @web = File.join(@dir, 'web.json')
-    File.write(@web, JSON.generate('pages' => [
+    @document = JSON.generate('pages' => [
       { 'url' => 'https://ssb.no/oslo', 'title' => "Oslo population #{'"é' * 300}", 'published' => '2025-02-01',
         'text' => "Oslo had 717,710 residents. #{"\"\\é\u0001" * 2000}" }
-    ]))
+    ])
+    File.write(@web, @document)
     ENV['TAMOZ_WEBSEARCH_GRANT'] = '1'
     ENV['TAMOZ_WEBSEARCH_EGRESS'] = JSON.generate(egress)
     ENV['TAMOZ_WEBSEARCH_PROVIDER'] = JSON.generate('search' => 'fixture', 'reader' => 'fixture', 'web' => @web)
@@ -75,6 +76,31 @@ class WebsearchProviderTest < Minitest::Test
 
     assert_includes text(WebsearchAdapter.search_response('Oslo', 1)), 'operator grant'
     assert_includes text(WebsearchAdapter.read_page_response('https://ssb.no/oslo')), 'operator grant'
+  end
+
+  # The declared egress circuit: three consecutive provider failures open it, and the refusal names the operator's
+  # way out — the session side never sees this process's refusals, so nobody else can feed the breaker.
+  def test_three_provider_failures_in_a_row_open_the_declared_circuit
+    File.write(@web, '{broken')
+    3.times { assert_predicate WebsearchAdapter.search_response('Oslo', 3), :error? }
+
+    refusal = WebsearchAdapter.search_response('Oslo', 3)
+
+    assert_includes text(refusal), 'circuit is open'
+  end
+
+  def test_a_success_between_failures_keeps_the_circuit_closed
+    File.write(@web, '{broken')
+    2.times { assert_predicate WebsearchAdapter.search_response('Oslo', 3), :error? }
+    File.write(@web, @document)
+
+    refute_predicate WebsearchAdapter.search_response('Oslo', 3), :error?
+
+    File.write(@web, '{broken')
+    refusal = WebsearchAdapter.search_response('Oslo', 3)
+
+    assert_predicate refusal, :error?
+    refute_includes text(refusal), 'circuit is open'
   end
 
   private
