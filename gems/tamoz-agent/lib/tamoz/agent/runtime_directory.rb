@@ -153,7 +153,7 @@ module Tamoz
         configured = source_settings("skills")["root"]
         return File.join(path, "skills") if configured.nil?
 
-        Tamoz::Skills.outside_workspace!(File.expand_path(configured, path), workspace_root)
+        Tamoz::Skills.disjoint!(File.expand_path(configured, path), workspace_root)
       end
 
       def stream_bounds

@@ -73,7 +73,13 @@ module Tamoz
       # resume or continue builds the same header and body without repeating the flags.
       def work_harness(options, thread_id)
         pin = File.join(resolve_session_dir(options), "#{thread_id}.harness.json")
-        return pinned_harness(pin, options[:subagents]) if File.exist?(pin)
+        if File.exist?(pin)
+          pinned = pinned_harness(pin, options[:subagents])
+          raise OptionParser::InvalidArgument, "this thread's skill was pinned at its first turn (#{pinned[:skill] || 'none'})" if
+            options[:skill] && options[:skill] != pinned[:skill]
+
+          return pinned
+        end
         raise OptionParser::InvalidArgument, '--subagents applies only to tamoz code and tamoz investigate' if
           options[:subagents] && !options[:work_routing]
         raise OptionParser::InvalidArgument, %q(--skill applies only to tamoz code and tamoz investigate) if

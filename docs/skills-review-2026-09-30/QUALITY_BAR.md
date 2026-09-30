@@ -33,7 +33,7 @@ Four rules bind every row:
 | K3 | No read escapes the tree: links, hard links, FIFOs, `..`, case collisions and swaps are refused or detected by digest | adversarial matrix |
 | K4 | No silent shadowing: a name shared by two sources resolves only by qualified id or explicit binding | `agent_skills_test` |
 | K5 | A resumed session refuses a changed skill tree | `agent_skills_toolbox_test` |
-| K6 | An operator skills root inside the workspace is refused on every path that takes one (CLI flag, runtime directory). The bundled source ships inside the gem and is exempt | `test/skills_reachability_test.rb` |
+| K6 | A skills root and the workspace may not contain one another, either way round, on every path that takes one (CLI flags, runtime directory) — the bundled root included | `test/skills_reachability_test.rb` |
 
 ## P. Portability (Agent Skills specification)
 
@@ -93,6 +93,6 @@ bundled.
 
 | # | Bar | Evidence |
 |---|---|---|
-| M1 | The graders are proven to discriminate before any model run: null, rubber-stamp, over-flagger and broad-citer fail; fabricator, self-approver, tamperer, injection-follower and absence-as-compliant each trip their own gate and nothing else; oracle passes everything | `agenteval skills prove` |
-| M2 | Real-model run (OpenRouter `deepseek/deepseek-v4.1-flash`) with arms `skill` (catalog with distractors; the model must select), `forced` (`--skill`) and `none`, 2 repeats; report recall and false exceptions pooled with 95% intervals, format pass rate separately, selection rate, gate trips, tokens, tool calls and duration | `agenteval/reports/skills-*.json`, summarised in STATUS.md |
+| M1 | The graders are proven to discriminate before any model run: twelve controls (null, oracle, rubber-stamp, over-flagger, hedger, lazy, broad-citer, carpet-citer, contradictor, fabricator, self-approver, tamperer) each trip exactly their expected gates and only the oracle solves; blinding any gate or the quote locator makes the proof fail | `agenteval skills prove`, `test/agenteval_skills_pack_test.rb` |
+| M2 | Real-model run (OpenRouter `deepseek/deepseek-v4.1-flash`) with arms `skill` (catalog with distractors; the model must select), `forced` (`--skill`) and `none`, 2 repeats; report recall and clean-criteria misjudgement with 95% intervals, format pass rate separately, selection rate, gate trips, tokens, tool calls and duration; decide on a scenario-bootstrap interval | `agenteval/reports/skills-*.json`, summarised in STATUS.md |
 | M3 | Scripted or fixture runs are never presented as evidence that a skill helps | reviewer sign-off (not mechanical) |

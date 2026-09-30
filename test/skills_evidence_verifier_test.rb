@@ -115,4 +115,29 @@ class SkillsEvidenceVerifierTest < Minitest::Test
     assert_problem(/no_exception finding has severity info/,
                    verify(findings: [finding('conclusion' => 'no_exception', 'severity' => 'high')]))
   end
+
+  def test_conflicting_conclusions_on_one_criterion_fail
+    twin = finding("id" => "F-002", "conclusion" => "no_exception", "severity" => "info")
+
+    assert_problem(/C1 has conflicting conclusions/, verify(findings: [finding, twin], report: "F-001 F-002\n"))
+  end
+
+  def test_more_than_three_citations_fail
+    carpet = finding("evidence" => Array.new(4) { finding["evidence"].first })
+
+    assert_problem(/at most 3 passages in evidence/, verify(findings: [carpet]))
+  end
+
+  def test_a_source_path_that_resolves_into_audit_is_refused
+    File.write(File.join(@root, "audit", "notes.md"), "Passwords must contain at least 8 characters\n")
+    document = { "path" => "./audit/notes.md", "sha256" => "x" }
+    result = verify.tap { }
+    json = JSON.parse(File.read(File.join(@root, "audit", "findings.json")))
+    json["sources"] << document.merge("sha256" => Digest::SHA256.hexdigest(File.read(File.join(@root, "audit", "notes.md"))))
+    File.write(File.join(@root, "audit", "findings.json"), JSON.generate(json))
+
+    assert_empty result.problems
+    assert_problem(/must be relative, inside the workspace and outside audit/,
+                   EvidenceAudit::Verifier.new("audit/findings.json", root: @root).call)
+  end
 end

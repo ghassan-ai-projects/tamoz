@@ -101,32 +101,32 @@ module Tamoz
         append(entries, 'user', scrub(task), pinned: true)
       end
 
-def scrub(text) = Tamoz::Core.scrub_secrets(text)
+      def scrub(text) = Tamoz::Core.scrub_secrets(text)
 
-# The catalog is shown exactly when load_skill is on the surface; a user-invoked skill follows it.
-def skill_entries(entries)
-  return entries unless skills?
+      # The catalog is shown exactly when load_skill is on the surface; a user-invoked skill follows it.
+      def skill_entries(entries)
+        return entries unless skills?
 
-  entries = append(entries, 'guidance', "#{SKILL_NOTE}\n#{toolbox.skill_catalog.render}", pinned: true,
+        entries = append(entries, 'guidance', "#{SKILL_NOTE}\n#{toolbox.skill_catalog.render}", pinned: true,
                                                                                            source: 'skills')
-  return entries unless settings.skill
+        return entries unless settings.skill
 
-  append(entries, 'guidance', toolbox.execute('load_skill', { 'skill' => settings.skill }), pinned: true,
+        append(entries, 'guidance', toolbox.execute('load_skill', { 'skill' => settings.skill }), pinned: true,
                                                                                          source: 'skill')
-end
+      end
 
-def skills? = header.tool_names.include?('load_skill')
+      def skills? = header.tool_names.include?('load_skill')
 
-# Provenance: which skill tree reached the model, and who chose it.
-def skill_loaded(reference, invoked_by:)
-  record = toolbox.skill_catalog.resolve(reference)
-  { 'event' => 'skill_loaded', 'skill' => record.id, 'tree_digest' => record.tree_digest,
-    'invoked_by' => invoked_by }
-end
+      # Provenance: which skill tree reached the model, and who chose it.
+      def skill_loaded(reference, invoked_by:)
+        record = toolbox.skill_catalog.resolve(reference)
+        { 'event' => 'skill_loaded', 'skill' => record.id, 'tree_digest' => record.tree_digest,
+          'invoked_by' => invoked_by }
+      end
 
-def opening_trace = settings.skill && skills? ? [skill_loaded(settings.skill, invoked_by: 'user')] : []
+      def opening_trace = settings.skill && skills? ? [skill_loaded(settings.skill, invoked_by: 'user')] : []
 
-def toolbox = @configuration.toolbox
+      def toolbox = @configuration.toolbox
 
       def thread_checkpoint(summary) = ContextEngine::Compaction.checkpoint_text(summary)
 

@@ -15,6 +15,7 @@ module EvidenceAudit
   STATUSES = %w[proposed accepted rejected needs_more_evidence].freeze
   MAX_SPAN = 10
   MIN_QUOTE = 20
+  MAX_CITATIONS = 3
   FINDING_ID = /\AF-\d{3}\z/
 
   def self.normalize(text) = text.to_s.gsub(/\s+/, " ").strip
@@ -77,6 +78,7 @@ module EvidenceAudit
       findings.each { |finding| check_finding(finding, sources, criteria) }
       covered = findings.filter_map { |finding| finding["criterion"] if finding.is_a?(Hash) }
       (criteria - covered).each { |id| problem("criterion #{id} has no finding") }
+      check_consistency(findings)
       check_report(ids.compact)
     end
 
@@ -121,6 +123,10 @@ module EvidenceAudit
       check_fields(id, finding)
       evidence = finding["evidence"]
       problem("#{id}: evidence must cite at least one passage") unless evidence.is_a?(Array) && !evidence.empty?
+      %w[evidence counter_evidence].each do |key|
+        count = Array(finding[key]).length
+        problem("#{id}: cite at most #{MAX_CITATIONS} passages in #{key}, not #{count}") if count > MAX_CITATIONS
+      end
       Array(evidence).each_with_index { |citation, index| check_citation(id, "evidence[#{index}]", citation, sources) }
       Array(finding["counter_evidence"]).each_with_index do |citation, index|
         check_citation(id, "counter_evidence[#{index}]", citation, sources)
@@ -128,7 +134,15 @@ module EvidenceAudit
       check_review(id, finding["review"])
     end
 
-    def check_fields(id, finding)
+# One criterion, one conclusion: a finding cannot hedge by concluding both ways.
+def check_consistency(findings)
+  findings.select { |finding| finding.is_a?(Hash) }.group_by { |finding| finding["criterion"] }.each do |criterion, group|
+    conclusions = group.map { |finding| finding["conclusion"] }.uniq
+    problem("criterion #{criterion} has conflicting conclusions: #{conclusions.join(', ')}") if conclusions.length > 1
+  end
+end
+
+def check_fields(id, finding)
       %w[title statement reasoning].each { |key| problem("#{id}: #{key} is empty") unless present?(finding[key]) }
       conclusion = finding["conclusion"]
       problem("#{id}: conclusion must be one of #{CONCLUSIONS.join(', ')}") unless CONCLUSIONS.include?(conclusion)
@@ -197,7 +211,9 @@ module EvidenceAudit
     end
 
     def safe_path?(path, what)
-      unsafe = path.start_with?("/") || path.split("/").include?("..") || path.start_with?("audit/")
+      normalized = File.expand_path(path, @root).delete_prefix("#{@root}/")
+      unsafe = path.start_with?("/") || path.split("/").include?("..") || normalized.start_with?("audit/") ||
+               normalized != path
       problem("#{what} path #{path} must be relative, inside the workspace and outside audit/") if unsafe
       !unsafe
     end

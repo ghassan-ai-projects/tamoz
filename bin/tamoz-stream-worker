@@ -99,7 +99,7 @@ caller = memory.caller(
 )
 # P5: the operator-approved skill source — a JSON map {name => rendered
 # text}; when unset, ANY episode requesting a skill ref fails closed at
-# build_frame (the production compiler seam is Tamoz::Tools::Skills over the
+# build_frame (the production compiler seam is Tamoz::Skills snapshot over the
 # operator directory; its Snapshot records map to this map).
 skills_source = JSON.parse(File.read(options.fetch(:skills_source))) if options.key?(:skills_source)
 nodes = Tamoz::Agent::EpisodeNodes.new(

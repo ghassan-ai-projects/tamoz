@@ -109,25 +109,28 @@ module Tamoz
     # :reek:BooleanParameter :reek:ControlParameter — `bundled` is the operator's on/off switch itself.
     def operator_snapshot(root: nil, workspace_root: nil, bundled: false)
       sources = []
-      sources << SkillSource.new(id: "bundled", root: BUNDLED_ROOT, trust: "bundled") if bundled
+      sources << SkillSource.new(id: "bundled", root: disjoint!(BUNDLED_ROOT, workspace_root), trust: "bundled") if bundled
       if root
-        sources << SkillSource.new(id: "operator", root: outside_workspace!(root, workspace_root),
+        sources << SkillSource.new(id: "operator", root: disjoint!(root, workspace_root),
                                    trust: "operator", precedence: 1)
       end
       sources.empty? ? empty : compile(sources:)
     end
 
-    # A checkout the agent can write must not be able to write its own instructions.
-    def outside_workspace!(root, workspace_root)
+    # A checkout the agent can write must not be able to write its own instructions: the skills root and the
+    # workspace may not contain one another, whichever way round.
+    def disjoint!(root, workspace_root)
       resolved = real_path(root)
       return resolved unless workspace_root
 
       workspace = real_path(workspace_root)
-      return resolved unless resolved == workspace || resolved.start_with?("#{workspace}#{File::SEPARATOR}")
+      return resolved unless within?(resolved, workspace) || within?(workspace, resolved)
 
-      raise Error, "skills root #{resolved} is inside the workspace; " \
+      raise Error, "skills root #{resolved} overlaps the workspace #{workspace}; " \
                    "skills are instructions and must live outside the tree being worked on"
     end
+
+    def within?(path, directory) = path == directory || path.start_with?("#{directory}#{File::SEPARATOR}")
 
     # The deepest existing ancestor is resolved, so a root that does not exist yet still
     # compares under the same symlinks as the workspace (/var vs /private/var).
@@ -259,14 +262,20 @@ module Tamoz
         "source: #{record.source_id} (trust: #{record.source_trust})",
         "tree_digest: #{record.tree_digest}",
         "declared-risk: #{record.declared_risk} (author-declared; not a Tamoz classification)",
+        "effective_tools: #{format_list(effective)}",
+        "resources: #{format_list(resources)}"
+      ].join("\n")
+      "#{header}\n#{fence(record, "#{author_fields(record)}#{record.body}")}"
+    end
+
+    # Everything the author wrote stays inside the fence, including the frontmatter fields.
+    def author_fields(record)
+      [
         record.version ? "version: #{record.version}" : nil,
         record.license ? "license: #{record.license}" : nil,
         record.compatibility ? "compatibility: #{record.compatibility}" : nil,
-        "requested_capabilities: #{format_list(record.requested_capabilities)}",
-        "effective_tools: #{format_list(effective)}",
-        "resources: #{format_list(resources)}"
-      ].compact.join("\n")
-      "#{header}\n#{fence(record, record.body)}"
+        "requested_capabilities: #{format_list(record.requested_capabilities)}"
+      ].compact.map { |line| "#{line}\n" }.join
     end
 
     def render_resource(record, path, content)

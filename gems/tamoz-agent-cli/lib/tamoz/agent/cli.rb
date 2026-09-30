@@ -641,7 +641,8 @@ module Tamoz
       # record never disagrees with the run.
       def build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:, memory: nil)
         engine, owner, = memory
-        toolbox.skill_catalog.resolve(options[:skill]) if options[:skill]
+        harness = work_harness(options, thread_id)
+        require_skill!(toolbox, harness[:skill])
         Tamoz::Agent::Session.new(
           memory: engine,
           memory_owner: owner,
@@ -657,8 +658,18 @@ module Tamoz
           artifact_store: adapter.bind_artifact_store(tenant: "session:#{thread_id}"),
           artifact_tenant: "session:#{thread_id}",
           routing: durable_routing(options),
-          harness: work_harness(options, thread_id)
+          harness:
         )
+      end
+
+      # A thread's invoked skill must load now, not fail or vanish at its first model call.
+      def require_skill!(toolbox, skill)
+        return unless skill
+        unless toolbox.names.include?("load_skill")
+          raise ArgumentError, "--skill #{skill} needs --skills DIR or --bundled-skills, and a profile that allows load_skill"
+        end
+
+        toolbox.skill_catalog.resolve(skill)
       end
 
       # Kept apart from one_shot_routing on purpose: a durable session ignores
@@ -710,13 +721,18 @@ module Tamoz
       # §5.2: the profile is the capability authority; the toolbox is derived
       # from it wholesale so its catalog digest matches the pinned value.
       def build_profile_toolbox(profile, options)
+        skills = skills_snapshot(options, profile.canonical_root)
+        if skills.empty? && profile.tools_allowed.include?("load_skill")
+          raise ArgumentError, "profile #{profile.profile_id} allows load_skill; pass --skills DIR or --bundled-skills"
+        end
+
         Tamoz::Agent::Toolbox.new(
           root: profile.canonical_root,
           allow_changes: profile.allow_changes?,
           checks: profile.checks.transform_values { |check| check.fetch("argv") },
           check_safeties: profile.checks.transform_values { |check| check.fetch("safety").to_sym },
           allowed_tools: profile.tools_allowed,
-          skills: skills_snapshot(options, profile.canonical_root)
+          skills:
         )
       end
 

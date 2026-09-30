@@ -52,6 +52,22 @@ class CliSkillsCommandTest < Minitest::Test
     status, _, err = tamoz('--skills', inside, 'skills', 'list')
 
     assert_equal 1, status
-    assert_match(/inside the workspace/, err)
+    assert_match(/overlaps the workspace/, err)
+  end
+
+  def test_an_invoked_skill_must_load_before_the_first_model_call
+    sessions = File.join(@dir, "sessions")
+    FileUtils.mkdir_p(sessions, mode: 0o700)
+    env = { "TAMOZ_PROVIDER" => "deepseek", "TAMOZ_MODEL" => "deepseek-chat", "DEEPSEEK_API_KEY" => "unused" }
+    run = lambda do |*flags|
+      err = StringIO.new
+      status = Tamoz::Agent::CLI.run(["--root", @workspace, "--session-dir", sessions, "--allow-changes", *flags,
+                                      "code", "task"], out: StringIO.new, err:, env:)
+      [status, err.string]
+    end
+
+    refute_equal 0, run.call("--skill", "evidence-audit").first
+    assert_match(/needs --skills DIR or --bundled-skills/, run.call("--skill", "evidence-audit").last)
+    assert_match(/skill_unknown/, run.call("--bundled-skills", "--skill", "nope").last)
   end
 end

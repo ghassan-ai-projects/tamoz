@@ -175,7 +175,7 @@ class AgentWorkerTest < Minitest::Test
       status = rt.cli(%w[status --json])
 
       assert_equal 1, status
-      assert_match(/inside the workspace/, rt.err)
+      assert_match(/overlaps the workspace/, rt.err)
     end
   end
 

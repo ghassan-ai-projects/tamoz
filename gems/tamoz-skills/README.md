@@ -11,8 +11,8 @@ The facade is the module `Tamoz::Skills`; other gems never name its inner classe
 
 - `compile(sources:, bindings:, limits:)`: compile skill sources into an immutable `SkillSnapshot`.
 - `operator_snapshot(root:, workspace_root:, bundled:)`: the snapshot an operator configured —
-  the skills Tamoz ships (`bundled_root`), one operator directory, or both. An operator root
-  inside the workspace is refused (`outside_workspace!`).
+  the skills Tamoz ships (`bundled_root`), one operator directory, or both. A skills root and the
+  workspace may not contain one another (`disjoint!`).
 - `empty`: the snapshot when no skills are configured.
 - `Catalog.new(snapshot)`: resolve a name and render the catalog the model sees.
 - `render_load`, `read_resource`, `render_resource`: what `load_skill` and `read_skill_resource`
