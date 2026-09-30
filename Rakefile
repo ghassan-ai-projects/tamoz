@@ -54,6 +54,7 @@ SLOW_TESTS = %w[
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
+  test/research_durability_test.rb
   test/agenteval_subagent_pack_test.rb
   test/agenteval_topology_pack_test.rb
   test/sqlite_convergence_probe_test.rb

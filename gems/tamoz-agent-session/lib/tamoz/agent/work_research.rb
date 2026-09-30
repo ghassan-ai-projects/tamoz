@@ -28,8 +28,8 @@ module Tamoz
 
       def propose(state, context, call)
         research = state.fetch(:research)
-        return outcome('Error: the research is under way; the plan can no longer change.') unless
-          research.fetch('children').empty?
+        return outcome('Error: the research is under way; the plan can no longer change.') if
+          research['accepted'] || !research.fetch('children').empty?
 
         brief = Tamoz::Research.brief(call.arguments, budgets:)
         reply = Tamoz.interrupt(checkpoint(state, brief), context).to_s.strip

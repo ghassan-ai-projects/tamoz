@@ -11,7 +11,7 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | P1 | met | `research_spec_test`: a wave before an accepted plan is refused with zero web calls; the lead has no web tool |
 | P2 | met | an edit in words reaches the lead; the revised plan is shown again; children get only the revised sub-questions |
 | P3 | met | "stop" ends the turn `cancelled_by_user`, nothing searched, no files |
-| P4 | pending (R6 kill test) | — |
+| P4 | met | `test/research_durability_test.rb`: a real SIGKILL at the checkpoint leaves the pause durable; the answer on a new request after the restart resumes the same turn, with no second plan question. Red at HEAD: the resumed turn re-proposed and paused again |
 | P5 | met | one checkpoint on both surfaces: `tamoz deep-research` asks on the terminal (`test/agent_cli_research_test.rb`), `/research` in chat pauses on the same plan (`test/comms_gateway_test.rb`); a paused CLI thread resumes with `tamoz resume <id> --answer go` |
 | B1 | met | the sources list is generated from the ledger; a URL written into the body is never listed |
 | B2 | met | a made-up excerpt is refused until the child quotes the page (`research_spec_test`, `research_test`) |
@@ -27,11 +27,11 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | C4 | met | a child's searches and page reads are capped at its share; failed calls still spend it |
 | C5 | met | children run in batches of the route's pinned concurrency minus one (`WorkResearch.batch_for`, `run_inputs`) |
 | C6 | met | a page is fetched once per adapter process (`test/websearch_provider_test.rb#test_a_page_is_fetched_once_and_cut_to_the_output_budget`) |
-| C7 | pending | — |
+| C7 | met | `test/research_durability_test.rb`: a SIGKILL with a model call in flight; the resumed run records no work for a step the crashed run had already committed, and only the one in-flight call resolves |
 | I1 | met | the plan text and the reply carry no role, tool, wave, ref, token or hash words |
 | I2 | met | report shape: summary, findings, disagreements, gaps and limits, generated sources (`research_ledger_test`) |
-| I3 | partly met | the run folder is written through an idempotent journaled effect; the kill test is R6 |
-| T1 | met | `run.json` carries the run record (`research_ledger_test`, `research_spec_test`) |
+| I3 | met | the report and `run.json` are written through one idempotent journaled effect; the kill tests show a resumed run rewrites nothing the crashed run committed |
+| T1 | not met | `run.json` carries the run record, but the two tests cited before asserted only `plan_edits` — a proxy. Against DESIGN §9 it is missing six fields: question class, tokens, wall time, claims each wave added, verifier support rate, owner's verdict. `run_record` (`gems/tamoz-research/lib/tamoz/research.rb:78`) writes the other seven. R9 builds the rest |
 | T2–T3 | pending (R9) | — |
 | R1–R6 | pending (real-model) | — |
 
@@ -67,7 +67,8 @@ Parent commit: `8d06c4e7` (branch `deep-research`). enola baseline pinned at R0.
 | R3 | `1f5023a4` | `tamoz-research` gem: budgets, plan, waves, web refs, sources with the excerpt check, ledger and stop rule, report, run folder; 29 facade tests; reviewed, 15 review findings fixed |
 | R2 | `1c932e1e` | Brave search and direct page reads as named adapters; `http` provider removed; egress public reach; `nokogiri` extraction; reviewed, 10 findings fixed (2 security: cross-host provider header, unbounded body) |
 | R4 | `d0d07d02` | the research turn: plan checkpoint, waves, child web tools, report on disk; `Session#research`; 18 spec rows; reviewed twice, all findings fixed. Also: `PromptPack.digests` now reads UTF-8 (a locale bug the first non-ASCII prompt exposed), and the requirements manifest/audit rows R3 missed |
-| R5 | (this commit) | one interface: `tamoz deep-research "<question>"` and `/research <question>` in chat; web tools approved as network reads in `base.yaml`; report folder falls back to the workspace's `research/`; user guide `documentation/guides/deep-research.md`; reviewed, all findings fixed |
+| R5 | `a777362d` | one interface: `tamoz deep-research "<question>"` and `/research <question>` in chat; web tools approved as network reads in `base.yaml`; report folder falls back to the workspace's `research/`; user guide `documentation/guides/deep-research.md`; reviewed, all findings fixed |
+| R6 | (this commit) | durability: a killed research turn resumes its accepted plan instead of asking again. Two real defects found by the kill tests and fixed at the seam: the accepted plan, brief and child records were re-opened fresh at intake (not carried like `work_plan`/`work_checkpoint`), and `propose_research_plan` guarded on "no children" rather than "not accepted", so a resumed turn re-proposed and paused a second time. `test/research_durability_test.rb` (real SIGKILL, forked process, recovery in a new process) is red at the parent for both rows. Also: `research_dir` falls back to the workspace |
 
 ## Known limits (not fixed; reported)
 

@@ -106,6 +106,34 @@ module ResearchSpec
 
   def start_research(session) = session.research(QUESTION, thread: 'research', request_id: 'r1')
 
+  # The same session builder the in-process suite uses, over a caller-supplied adapter and root: a kill test builds
+  # one session per process against one store.
+  def research_session(model:, root:, adapter:, web:, out:)
+    subagent_session(model:, root:, adapter:, harness: { research_dir: out }, mcp: web)
+  end
+
+  # A durable replay of a request that never finished: the same request id, the same thread.
+  def recover_research(session, request_id: 'r1')
+    session.recover(thread: 'research', request_id:)
+  end
+
+  def paused_plan(session) = session.view(thread: 'research').interrupts.first
+
+  # Answers the plan as a NEW request (the user's reply after a restart), not a resume of the paused one.
+  def answer_plan(session, text = 'go', request_id: "answer-#{text.hash.abs}")
+    task_id = paused_plan(session).task_id
+    session.resume({ task_id => { 0 => text } }, thread: 'research', request_id:)
+  end
+
+  # A scripted turn that dies of SIGKILL when the model reaches it. Usable wherever a turn goes, so the kill lands
+  # inside the turn the caller names; the caller's recovery half then runs in a fresh process.
+  def kill_here
+    lambda do |_messages|
+      Process.kill('KILL', Process.pid)
+      sleep 5
+    end
+  end
+
   # Answers the paused plan with the user's reply; returns the outcome.
   def reply(session, text, request_id: "reply-#{text.hash.abs}")
     task_id = session.view(thread: 'research').interrupts.first.task_id

@@ -8,6 +8,8 @@ module Tamoz
     module WorkResearchState
       UNAVAILABLE = 'Deep research is not available here: it needs the websearch source with search and read_page ' \
                     'admitted as read-only tools.'
+      # The turn input owns these; a carried state may never overwrite them.
+      CARRIED_NEVER = %w[mode sub_questions].freeze
 
       module_function
 
@@ -22,6 +24,16 @@ module Tamoz
                .merge('hits' => {}, 'pages' => {}, 'search_count' => 0, 'read_count' => 0)
         else raise ConfigurationError, "unknown research mode #{input['mode'].inspect}"
         end
+      end
+
+      # `input` is the turn's `research` input: nil, {'mode' => 'lead'}, or a child's assignment. `carried` is the
+      # previous turn's state of the same mode, when there is one: an accepted plan and the refs a child already
+      # earned survive a kill, so the resumed turn repeats no search, page read or model call.
+      def resumed(input, carried)
+        fresh = opened(input)
+        return fresh unless fresh && carried
+
+        fresh.merge(carried.slice(*fresh.keys) - CARRIED_NEVER)
       end
 
       def unavailable(base)
