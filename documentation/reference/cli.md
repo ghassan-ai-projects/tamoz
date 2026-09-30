@@ -39,6 +39,7 @@ on that thread.
 | `--work-routing` | Serve worker and chat turns with the tool-calling work loop |
 | `--guidance FILE` | Project guidance file for the work loop, e.g. `AGENTS.md` (repeatable, workspace root only) |
 | `--check NAME=COMMAND` | Configure a named verification command |
+| `--research-budgets FILE` | Narrow deep-research budgets for the turn from a JSON override — it may only lower the shipped ceilings and depth defaults, and is validated before anything runs |
 | `--json` | Emit newline-delimited JSON events |
 | `--non-interactive` | Fail instead of prompting |
 | `--version` | Print the Tamoz version |
@@ -122,6 +123,7 @@ Work an operator runs against the runtime directory.
 | `/new` | Starts a fresh conversation; earlier messages are no longer used. |
 | `/status [r<ref>] [--diagnostic]` | One plain sentence (working, queued, waiting for Approve/Deny, stopping, nothing running); `--diagnostic` prints every state axis. |
 | `/cancel [r<ref>]` | Stops every open message in the conversation (or one), replies "Stopping…", and the turn ends with "Stopped." at its next step. |
+| `/research <question>` | Starts a deep-research turn: it shows its plan and waits for your reply ("go", changes in words, or "stop"), then researches and writes `report.md`, replying with the summary and the path. |
 | `/start <code>` | Pairing: shows the code to read to the operator, or the greeting once paired. |
 
 ### Queue verbs
