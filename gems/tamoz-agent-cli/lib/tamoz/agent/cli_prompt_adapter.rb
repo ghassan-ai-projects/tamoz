@@ -20,11 +20,18 @@ module Tamoz
           @err = err
         end
 
+        # The two-line banner naming the tool and what it would do; the event
+        # render, the pre-prompt echo and the prompt itself all show it.
+        def self.approval_banner(err, tool, preview)
+          err.puts "Approval required for #{tool}:"
+          err.puts preview
+        end
+
         # :reek:TooManyStatements :reek:RepeatedConditional :reek:NilCheck --
         # the approval loop is a stateful read-validate-retry loop; the nil-check
         # at the loop head is the EOF-aborts-prompt contract.
         def approve_tool(descriptor)
-          @err.puts "Approval required for #{descriptor['tool']}:\n#{descriptor['preview']}"
+          self.class.approval_banner(@err, descriptor['tool'], descriptor['preview'])
           approve(descriptor['tool'])
         end
 

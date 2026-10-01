@@ -66,8 +66,7 @@ module Tamoz
         def render_prompt(descriptor)
           case descriptor['kind']
           when 'approve_tool'
-            @err.puts "Approval required for #{descriptor['tool']}:"
-            @err.puts descriptor['preview']
+            PromptAdapter.approval_banner(@err, descriptor['tool'], descriptor['preview'])
           when 'clarify'
             @err.puts descriptor['question']
           end

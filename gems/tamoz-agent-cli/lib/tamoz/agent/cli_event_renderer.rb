@@ -78,8 +78,7 @@ module Tamoz
         def render_approval_request(data)
           return unless data['verdict'] == 'ask'
 
-          @err.puts "Approval required for #{data.fetch('tool')}:"
-          @err.puts data.fetch('preview')
+          PromptAdapter.approval_banner(@err, data.fetch('tool'), data.fetch('preview'))
         end
 
         def render_healing_assessment(data)
