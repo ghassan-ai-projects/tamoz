@@ -349,6 +349,17 @@ class MemoryTreatmentProfileTest < Minitest::Test
     end
   end
 
+  def test_the_holdout_record_lands_through_atomic_file
+    holdout = nil
+    writes = atomic_writes do
+      holdout = Tamoz::Evals::Harness::MemoryHoldout.create(record_id: "wis.holdout", content: {"strategy" => "x"})
+    end
+
+    assert_equal [[:replace, holdout.path.to_s, 0o600]], writes
+  ensure
+    holdout&.cleanup
+  end
+
   def test_auditor_counts_memory_recalls_sensitive_and_unauthorized
     # DR-3: AgentRunAudit gains the memory event class + hard-zero counters
     # (one auditor, one report domain). The scorecard's runs never emit memory

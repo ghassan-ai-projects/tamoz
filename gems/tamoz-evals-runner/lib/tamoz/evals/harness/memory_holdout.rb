@@ -21,8 +21,7 @@ module Tamoz
           directory = Dir.mktmpdir("tamoz-memory-holdout")
           File.chmod(DIRECTORY_MODE, directory)
           path = File.join(directory, "holdout.record.json")
-          File.write(path, "#{CanonicalJSON.dump(content)}\n", encoding: Encoding::UTF_8)
-          File.chmod(FILE_MODE, path)
+          Tamoz::Core::AtomicFile.replace(path, "#{CanonicalJSON.dump(content)}\n", mode: FILE_MODE)
           instance = new(directory:, record_id:)
           return instance unless block_given?
 
