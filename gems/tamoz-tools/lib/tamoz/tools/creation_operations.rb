@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 require 'digest'
-require 'tempfile'
 
 module Tamoz
   module Tools
     # Creates new files through the no-overwrite publication boundary.
     # :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:LongParameterList
     # :reek:TooManyStatements :reek:UncommunicativeVariableName
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     class CreationOperations
       def initialize(toolbox)
         @toolbox = toolbox
@@ -74,6 +72,5 @@ module Tamoz
         TEXT
       end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
   end
 end

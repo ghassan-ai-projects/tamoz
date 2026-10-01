@@ -4,32 +4,27 @@ require 'tempfile'
 
 module Tamoz
   module Core
-    # Writes a file so a reader sees the old bytes or the new ones, never a torn file: a temp file in the target's
-    # directory is written and fsync'd, then renamed over the target (`replace`) or hard-linked to a name that must
-    # not exist (`create`), and the directory is fsync'd so the new name survives a crash. It raises the
-    # SystemCallError it meets; callers name the failure in their own terms.
-    #
-    #   Tamoz::Core::AtomicFile.replace('notes.txt', "new\n", mode: 0o644)
+    # A file write a reader sees whole or not at all: temp file, fsync, rename or link, fsync the directory.
     module AtomicFile
       module_function
 
-      # The temp name keeps Tempfile's `<prefix>YYYYMMDD-pid-rand.tmp` shape, which a staging reaper can recognize.
       def replace(path, bytes, mode: nil, prefix: '.tamoz-')
         directory = File.dirname(path.to_s)
         temporary = staged(directory, bytes, mode:, prefix:)
         File.rename(temporary.path, path.to_s)
+        discard(temporary)
         fsync_directory(directory)
       ensure
-        temporary.close! if temporary && !(temporary.closed? && !File.exist?(temporary.path))
+        discard(temporary)
       end
 
-      # Raises Errno::EEXIST when the name exists. `before_publish` runs after the bytes are durable and before the
-      # name appears, so a caller can recheck the parent at the last moment.
+      # Raises Errno::EEXIST when the name exists; `before_publish` runs once the bytes are durable.
       def create(path, bytes, mode:, prefix: '.tamoz-create-', before_publish: nil)
         directory = File.dirname(path.to_s)
         temporary = staged(directory, bytes, mode:, prefix:)
         before_publish&.call
         File.link(temporary.path, path.to_s)
+        discard(temporary)
         fsync_directory(directory)
       ensure
         discard(temporary)
@@ -42,13 +37,13 @@ module Tamoz
         nil
       end
 
+      # `ensure`, not `rescue`: an interrupt or a killed thread mid-write must not leave a temp file behind.
       def staged(directory, bytes, mode:, prefix:)
         temporary = Tempfile.new([prefix, '.tmp'], directory, binmode: true)
         write_durably(temporary, bytes, mode)
-        temporary
-      rescue StandardError
-        discard(temporary)
-        raise
+        written = temporary
+      ensure
+        discard(temporary) unless written
       end
 
       def write_durably(temporary, bytes, mode)
