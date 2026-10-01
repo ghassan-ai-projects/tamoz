@@ -26,6 +26,13 @@ module Tamoz
       # :reek:MissingSafeMethod — `scan!` is a refusal that raises; there is no
       # useful predicate twin for "this document contains a secret".
       class ContentScanner
+        def self.classify(field, value)
+          return :secret if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+          return :candidate_secret if ENTROPY_PATTERN.match?(value) && !ENTROPY_EXEMPT_KEYS.include?(field.to_s)
+
+          :none
+        end
+
         def self.call(value, path, key_path = [])
           new(path).scan!(value, key_path)
         end
@@ -65,22 +72,12 @@ module Tamoz
             raise ValidationError,
                   "#{@path}: interpolation is not allowed (at #{key_path.join('.').inspect})"
           end
-          if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+          case self.class.classify(key_path.last, value)
+          when :secret
             raise ValidationError, "#{@path}: embedded secret material is not allowed"
+          when :candidate_secret
+            raise ValidationError, "#{@path}: high-entropy value rejected as candidate secret"
           end
-
-          refuse_high_entropy!(value, key_path.last)
-        end
-
-        # A last-resort heuristic for credentials that match no known vendor
-        # prefix. Fields whose legitimate values are high-entropy — digests and
-        # the like — are exempt by key name, which is why the key path is carried
-        # down the walk at all.
-        def refuse_high_entropy!(value, key)
-          return unless ENTROPY_PATTERN.match?(value)
-          return if ENTROPY_EXEMPT_KEYS.include?(key.to_s)
-
-          raise ValidationError, "#{@path}: high-entropy value rejected as candidate secret"
         end
       end
     end

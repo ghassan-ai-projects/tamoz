@@ -184,11 +184,11 @@ module Tamoz
       def peek_session_record(options, thread_id)
         require 'tamoz/sqlite'
 
-        path = File.join(resolve_session_dir(options), "#{thread_id}.sqlite3")
+        path = File.join(@sessions.resolve_session_dir(options), "#{thread_id}.sqlite3")
         return nil unless File.file?(path)
 
         adapter = Tamoz::SQLite::Adapter.new(
-          path:, limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
+          path:, limits: Tamoz::SQLite::Limits.new(lease_ttl: @sessions.lease_ttl)
         )
         begin
           dummy_model = Object.new

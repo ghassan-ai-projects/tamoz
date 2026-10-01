@@ -91,6 +91,25 @@ class GraphDurableRunnerTest < Minitest::Test
 
   def request(**overrides) = RequestRecord.new(**REQUEST_FIELDS, **overrides)
 
+  def test_stale_failure_reads_the_typed_terminal_payload
+    stale = request(status: :failed, terminal_error: { 'graph_status' => 'failed', 'reason' => 'superseded' })
+
+    assert_predicate stale, :stale_failure?
+    refute_predicate request(status: :failed, terminal_error: nil), :stale_failure?
+  end
+
+  def test_ordinary_run_failures_are_not_stale_failures
+    wrong_class = request(status: :failed, terminal_error: { 'error_class' => 'RuntimeError' })
+
+    refute_predicate wrong_class, :stale_failure?
+    completed = request(status: :completed, terminal_error: { 'graph_status' => 'failed', 'reason' => 'x' })
+
+    refute_predicate completed, :stale_failure?
+    empty_reason = request(status: :failed, terminal_error: { 'graph_status' => 'failed', 'reason' => '' })
+
+    refute_predicate empty_reason, :stale_failure?
+  end
+
   def definition
     Tamoz.graph(name: 'runner', version: '1') do
       state :count, default: 0

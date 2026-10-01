@@ -27,6 +27,16 @@ module Tamoz
       def terminal?
         TERMINAL_STATUSES.include?(status)
       end
+
+      def stale_failure?
+        status == :failed && terminal_error.is_a?(Hash) &&
+          terminal_error.fetch('graph_status', nil) == 'failed' &&
+          !terminal_error['reason'].to_s.empty?
+      end
+
+      def terminal_reason
+        terminal_error.fetch('reason') if terminal_error.is_a?(Hash)
+      end
     end
   end
 end

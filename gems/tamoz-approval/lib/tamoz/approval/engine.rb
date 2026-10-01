@@ -100,6 +100,10 @@ module Tamoz
         end
       end
 
+      def holds_decision?(decision_id)
+        !decision_log.lookup(decision_id).nil?
+      end
+
       def simulate(request)
         Evaluator.new(policy_for(request.session_id)).evaluate(request)
       end

@@ -11,9 +11,8 @@ a tool's tier or a rule is a data edit, not a code change.
 - `Tamoz::Approval::Request`, `Decision`, `GrantOffer`, `Grant` — immutable values.
 - `Tamoz::Approval::Error` and its concrete subclasses — the approval error taxonomy.
 - `Tamoz::Approval::Answer.parse` — the one shared answer vocabulary.
-
-Later phases add `Tamoz::Approval::Engine`, `Tamoz::Approval::PolicyDocument`, and
-`policy/*.yaml`.
+- `Tamoz::Approval::Engine` — decides, resolves and remembers approvals;
+  `holds_decision?` says whether this process's engine made an ask.
 
 ## Dependency direction
 

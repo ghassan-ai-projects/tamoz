@@ -21,7 +21,7 @@ module Tamoz
 
         settings = directory.source_settings('memory')
         [Memory::Engine.open(path: File.join(session_dir, MEMORY_FILE), tenant: settings['tenant'] || 'default',
-                             lease_ttl:),
+                             lease_ttl: @sessions.lease_ttl),
          settings['owner'] || 'operator']
       end
 
@@ -36,7 +36,7 @@ module Tamoz
       def cmd_memory(options, argv)
         action = argv.shift
         require 'tamoz/sqlite'
-        engine, owner = open_memory(options, provision_private_session_dir!(options))
+        engine, owner = open_memory(options, @sessions.provision_session_dir!(options))
         unless engine
           @err.puts 'tamoz: sources.memory is not enabled in the runtime config (--runtime-dir)'
           return 1
@@ -91,7 +91,7 @@ module Tamoz
       end
 
       def consolidate_memory(access, options)
-        results = access.consolidate(model: build_model(options), context: consolidation_context,
+        results = access.consolidate(model: @models.build(options), context: consolidation_context,
                                      limit: MAX_CONSOLIDATION_GROUPS)
         0.tap { @out.puts JSON.pretty_generate('groups' => results.length, 'results' => results) }
       end

@@ -90,9 +90,9 @@ class AgentProfileMachineryTest < Minitest::Test
       matrix.each do |cli_model, cli_provider, env_model, env_provider, expected|
         options = {model: cli_model, provider: cli_provider}
         env = {"TAMOZ_MODEL" => env_model, "TAMOZ_PROVIDER" => env_provider}.compact
-        cli = new_cli(env:)
+        models = model_builder(env:)
 
-        resolved = cli.send(:resolve_profile_roles, profile, options)
+        resolved = models.resolve_profile_roles(profile, options)
         primary = resolved.fetch("primary")
         writer = resolved.fetch("writer")
         assert_equal({"provider" => expected[1], "model" => expected[0]}, primary,
@@ -102,7 +102,7 @@ class AgentProfileMachineryTest < Minitest::Test
         assert_equal({"provider" => "openai", "model" => "role-writer"}, writer)
 
         # build_model consumes the SAME tuple for the role side of its precedence.
-        built = cli.send(:build_model, options, profile:)
+        built = models.build(options, profile:)
         assert_equal expected[0], built.model
         assert_equal expected[1], built.provider.to_s
       end
@@ -151,13 +151,13 @@ class AgentProfileMachineryTest < Minitest::Test
   # refusal cites the failing role.
   def test_secret_shaped_override_never_enters_profile_roles
     profile = load_profile("primary" => {"provider" => "ollama", "model" => "gpt-5"})
-    cli = new_cli(env: {})
+    models = model_builder(env: {})
 
     assert_raises(ProfilePolicyError) do
-      cli.send(:resolve_profile_roles, profile, {model: "sk-ant-abcdefghijklmnopqrstuvwxyz123456"})
+      models.resolve_profile_roles(profile, {model: "sk-ant-abcdefghijklmnopqrstuvwxyz123456"})
     end
     error = assert_raises(ProfilePolicyError) do
-      cli.send(:resolve_profile_roles, profile, {provider: "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0"})
+      models.resolve_profile_roles(profile, {provider: "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0"})
     end
     assert_match(/primary/, error.message)
 
@@ -188,13 +188,13 @@ class AgentProfileMachineryTest < Minitest::Test
   # per the cited predicates, and the refusal explains the entropy floor.
   def test_env_secret_gate_distinguishes_normal_ids_from_high_entropy
     profile = load_profile("primary" => {"provider" => "ollama", "model" => "gpt-5"})
-    cli = new_cli(env: {})
+    models = model_builder(env: {})
 
-    resolved = cli.send(:resolve_profile_roles, profile, {model: "google/gemini-2.5-pro"})
+    resolved = models.resolve_profile_roles(profile, {model: "google/gemini-2.5-pro"})
     assert_equal "google/gemini-2.5-pro", resolved.fetch("primary").fetch("model")
 
     error = assert_raises(ProfilePolicyError) do
-      cli.send(:resolve_profile_roles, profile, {model: "aZ9+xK0L1mN2oP3qR4sT5uV6wX7yZ8aB9cD0eF1gH2iJ3k"})
+      models.resolve_profile_roles(profile, {model: "aZ9+xK0L1mN2oP3qR4sT5uV6wX7yZ8aB9cD0eF1gH2iJ3k"})
     end
     assert_match(/high-entropy/, error.message)
     assert_match(/--model/, error.message)
@@ -276,9 +276,9 @@ class AgentProfileMachineryTest < Minitest::Test
         assert_match(/TAMOZ_DOES_NOT_EXIST_XYZ/, err.string)
 
         # The typed class is what propagates out of build_model at the boundary.
-        cli = new_cli(env: {"TAMOZ_CONFIG_HOME" => config_home})
+        models = model_builder(env: {"TAMOZ_CONFIG_HOME" => config_home})
         assert_raises(ProfileRoleUnavailableError) do
-          cli.send(:build_model, {}, profile: Profile.preview(broken))
+          models.build({}, profile: Profile.preview(broken))
         end
       end
 
@@ -318,9 +318,9 @@ class AgentProfileMachineryTest < Minitest::Test
         assert_equal 1, status
         assert_match(/TAMOZ_DOES_NOT_EXIST_XYZ/, err.string)
 
-        cli = new_cli(env: {"TAMOZ_CONFIG_HOME" => config_home})
+        models = model_builder(env: {"TAMOZ_CONFIG_HOME" => config_home})
         assert_raises(ProfileRoleUnavailableError) do
-          cli.send(:build_model, {}, profile: Profile.preview(broken))
+          models.build({}, profile: Profile.preview(broken))
         end
       end
 
@@ -872,9 +872,9 @@ class AgentProfileMachineryTest < Minitest::Test
       captured = []
       ref_key = ->(kwargs) { kwargs.fetch(:environment).fetch("TAMOZ_OPENAI_API_KEY") }
       stub_model_factory(captured, select: ref_key) do
-        cli = new_cli(env: {"TAMOZ_OPENAI_API_KEY" => "sk-ref-value",
+        models = model_builder(env: {"TAMOZ_OPENAI_API_KEY" => "sk-ref-value",
                             "OPENAI_API_KEY" => "sk-generic-value"})
-        built = cli.send(:build_model, {assume_model_exists: true}, profile: pinned)
+        built = models.build({assume_model_exists: true}, profile: pinned)
         assert built
       end
       assert_equal "sk-ref-value", captured[0],
@@ -990,8 +990,8 @@ class AgentProfileMachineryTest < Minitest::Test
 
   # --- helpers ---------------------------------------------------------------
 
-  def new_cli(env: {}, out: StringIO.new, err: StringIO.new)
-    Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:)
+  def model_builder(env:)
+    Tamoz::Agent::CLI::ModelBuilder.new(env:)
   end
 
   # Replaces the factory for the duration of the block, appending one entry per

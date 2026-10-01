@@ -685,8 +685,8 @@ module Tamoz
         directory = RuntimeDirectory.resolve(path: options[:runtime_dir], env: @env)
         runtime = WorkerRuntime.open(
           directory,
-          model_factory: ->(profile:) { build_model(options, profile:) },
-          lease_ttl: lease_ttl,
+          model_factory: ->(profile:) { @models.build(options, profile:) },
+          lease_ttl: @sessions.lease_ttl,
           routing: worker_routing(options),
           harness: worker_harness(options)
         )

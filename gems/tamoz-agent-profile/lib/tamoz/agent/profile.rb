@@ -304,6 +304,10 @@ module Tamoz
         digest
       end
 
+      def self.secret_shape(field, value)
+        ContentScanner.classify(field, value)
+      end
+
       def self.build_synthetic_document(hash)
         synthetic = {
           "profile" => {

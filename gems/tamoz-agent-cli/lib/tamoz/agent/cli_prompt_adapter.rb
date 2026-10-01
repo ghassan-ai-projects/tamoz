@@ -2,8 +2,7 @@
 
 # Tamoz::Agent::CLI::PromptAdapter — the interactive approval/clarify seam
 # (Q3 slice 2). Owns the prompt LOOPS that read operator answers from input
-# and write prompts to err. The CLI owns the answer POLICY (answer_for,
-# map_answer, non-interactive routing) and delegates the mechanics here.
+# and write prompts to err. InterruptAnswers owns the answer policy.
 # Prompt text is a stable user-facing contract: byte-identical output.
 module Tamoz
   module Agent
@@ -20,12 +19,17 @@ module Tamoz
           @err = err
         end
 
+        def self.approval_banner(err, tool, preview)
+          err.puts "Approval required for #{tool}:"
+          err.puts preview
+        end
+
         # :reek:TooManyStatements :reek:RepeatedConditional :reek:NilCheck --
         # the approval loop is a stateful read-validate-retry loop; the nil-check
         # at the loop head is the EOF-aborts-prompt contract.
         def approve_tool(descriptor)
           tool = descriptor['tool']
-          @err.puts "Approval required for #{tool}:\n#{descriptor['preview']}"
+          self.class.approval_banner(@err, tool, descriptor['preview'])
           loop do
             line = read_line("Approve #{tool}? [y/N/?] ")
             return nil if line.nil?

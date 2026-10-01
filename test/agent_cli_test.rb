@@ -237,6 +237,24 @@ class AgentCLITest < Minitest::Test
   # `continue` drives a paused thread forward with no new input. Without a test
   # the verb could stop resolving its thread, or silently start a second turn,
   # and nothing in the corpus would notice.
+  def test_one_shot_operator_approval_applies_the_change
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "app.rb"), "value = 1\n")
+      digest = Digest::SHA256.hexdigest("value = 1\n")
+      err = StringIO.new
+
+      status = run_cli(
+        ["set value to 2"],
+        workspace:, session_dir:, input: StringIO.new("a\n"), err:, factory: repair_factory(digest),
+        checks: {"answer" => check_argv}
+      )
+
+      assert_equal 0, status
+      assert_match(%r{Approve \S+ \[a/approve, d/deny\]\? }, err.string)
+      assert_equal "value = 2\n", File.read(File.join(workspace, "app.rb"))
+    end
+  end
+
   def test_continue_advances_a_paused_thread_without_new_input
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "app.rb"), "value = 1\n")
@@ -918,6 +936,21 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  def test_turn_stream_reports_a_bounded_failure_and_keeps_the_conflict_as_cause
+    out = StringIO.new
+    err = StringIO.new
+    operator = Tamoz::Agent::CLI::Operator.new(out:, err:, events: Tamoz::Agent::CLI::EventRenderer.new(out:, err:),
+                                               prompts: nil, approvals: nil, cancellation: nil)
+    stream = Tamoz::Agent::CLI::TurnStream.new(operator, json: false)
+
+    error = assert_raises(Tamoz::Agent::Error) do
+      stream.run(thread_id: 't1', request_id: 'r1') { raise Tamoz::CheckpointConflictError, 'conflict' }
+    end
+
+    assert_equal Tamoz::Agent::CLI::TurnStream::FAILURE_MESSAGE, error.message
+    assert_instance_of Tamoz::CheckpointConflictError, error.cause
+  end
+
   def test_unexpected_error_propagates_instead_of_clean_exit
     out = StringIO.new
     err = StringIO.new
@@ -966,36 +999,31 @@ class AgentCLITest < Minitest::Test
     assert_match(/duplicate check/, err.string)
   end
 
-  # --- Interactive answer vocabulary (map_answer contract) ---
-  # The words an operator types at an approval/clarify/resolve prompt are a
-  # stable user-facing contract. These pin the mapping through the CLI's own
-  # private seam (send) because the vocabulary is exactly what a full-flow test
-  # would exercise, at a fraction of the fixture cost.
 
   def test_approve_tool_answer_vocabulary
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+    answers = Tamoz::Agent::CLI::InterruptAnswers
 
-    assert cli.send(:map_answer, "approve_tool", "y")
-    assert cli.send(:map_answer, "approve_tool", "yes")
-    assert cli.send(:map_answer, "approve_tool", "a")
-    assert cli.send(:map_answer, "approve_tool", "approve")
-    refute cli.send(:map_answer, "approve_tool", "n")
-    refute cli.send(:map_answer, "approve_tool", "deny")
-    assert_raises(ArgumentError) { cli.send(:map_answer, "approve_tool", "maybe") }
+    assert answers.parse("approve_tool", "y")
+    assert answers.parse("approve_tool", "yes")
+    assert answers.parse("approve_tool", "a")
+    assert answers.parse("approve_tool", "approve")
+    refute answers.parse("approve_tool", "n")
+    refute answers.parse("approve_tool", "deny")
+    assert_raises(ArgumentError) { answers.parse("approve_tool", "maybe") }
   end
 
   def test_resolve_effect_answer_vocabulary
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+    answers = Tamoz::Agent::CLI::InterruptAnswers
 
     %w[fixed approve ok succeeded yes].each do |word|
-      assert_equal :succeeded, cli.send(:map_answer, "resolve_effect", word), word
+      assert_equal :succeeded, answers.parse("resolve_effect", word), word
     end
     %w[skipped deny no abandoned].each do |word|
-      assert_equal :abandoned, cli.send(:map_answer, "resolve_effect", word), word
+      assert_equal :abandoned, answers.parse("resolve_effect", word), word
     end
-    assert_equal :failed, cli.send(:map_answer, "resolve_effect", "failed")
-    assert_equal :unknown, cli.send(:map_answer, "resolve_effect", "?")
-    assert_raises(ArgumentError) { cli.send(:map_answer, "resolve_effect", "maybe") }
+    assert_equal :failed, answers.parse("resolve_effect", "failed")
+    assert_equal :unknown, answers.parse("resolve_effect", "?")
+    assert_raises(ArgumentError) { answers.parse("resolve_effect", "maybe") }
   end
 
   # --- Milestone facts on the CLI ---
