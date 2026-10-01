@@ -351,10 +351,7 @@ module Tamoz
                   "SQLite convergence stale-fail state is inconsistent"
           end
           if classification == "new"
-            unless request.terminal_error.is_a?(Hash) &&
-                   request.terminal_error.fetch("graph_status") == "failed" &&
-                   !request.terminal_error.fetch("reason").to_s.empty? &&
-                   request.execution_id
+            unless request.stale_failure? && request.execution_id
               raise ExecutionError,
                     "SQLite convergence stale-fail state is inconsistent"
             end

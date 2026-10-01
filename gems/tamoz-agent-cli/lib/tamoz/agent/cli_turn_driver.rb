@@ -136,7 +136,7 @@ module Tamoz
           advanced = @stream.run(thread_id: @thread_id, request_id: SecureRandom.uuid) do |context|
             @session.app.durable_runner.run_next(thread: @thread_id, owner_id: @owner_id, context:)
           end
-          render_request_terminal_failure(advanced) if advanced && stale_request_failure?(advanced)
+          render_request_terminal_failure(advanced) if advanced&.stale_failure?
           advanced
         end
 
@@ -155,19 +155,11 @@ module Tamoz
           exit_for_view(view)
         end
 
-        # A stale-fail carries the typed terminal payload DR-4 writes (graph_status
-        # failed + a reason); ordinary run failures carry no reason.
-        def stale_request_failure?(request)
-          error = request.terminal_error
-          request.status == :failed && error.is_a?(Hash) && error.fetch('graph_status', nil) == 'failed' &&
-            !error['reason'].to_s.empty?
-        end
-
         # A `deliver` inside session.resume/start/continue can terminal-fail a
         # stale request the drain loop never sees; each is rendered once.
         def render_pending_stale_failures
           @session.app.durable_runner.history(thread: @thread_id).each do |request|
-            next unless stale_request_failure?(request)
+            next unless request.stale_failure?
             next if @rendered_stale_request_ids.key?(request.request_id)
 
             render_request_terminal_failure(request)
