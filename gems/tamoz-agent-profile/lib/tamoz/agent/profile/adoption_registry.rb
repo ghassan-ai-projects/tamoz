@@ -48,9 +48,7 @@ module Tamoz
         private
 
         def write(updated)
-          directory = File.dirname(@path)
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          File.chmod(0o700, directory)
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
           Tamoz::Core::AtomicFile.replace(@path, Psych.dump(updated), mode: 0o600)
         end
 
