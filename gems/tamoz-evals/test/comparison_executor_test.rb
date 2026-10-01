@@ -40,6 +40,20 @@ class ComparisonExecutorTest < Minitest::Test
     end
   end
 
+  def test_the_report_lands_through_atomic_file
+    Dir.mktmpdir('benchmark-cells') do |directory|
+      root = Pathname.new(directory)
+      executor = Tamoz::Evals::Benchmark::ComparisonExecutor.new(
+        manifest: write_synthetic_run(root), protocol:, artifact_base: root
+      )
+      report_path = root.join('report.json')
+
+      writes = atomic_writes { executor.write(report_path) }
+
+      assert_equal [[:replace, report_path.to_s, nil]], writes
+    end
+  end
+
   def test_cli_refuses_a_run_without_controls_and_does_not_write_a_report
     Dir.mktmpdir('benchmark-cells-refusal') do |directory|
       root = Pathname.new(directory)
