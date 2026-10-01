@@ -46,14 +46,20 @@ class CliSkillsCommandTest < Minitest::Test
     assert_equal File.join(Tamoz::Skills.bundled_root, 'evidence-audit'), out.strip
   end
 
-  def test_an_operator_skills_root_inside_the_workspace_is_refused
-    inside = File.join(@workspace, 'skills')
-    FileUtils.mkdir_p(inside)
-    status, _, err = tamoz('--skills', inside, 'skills', 'list')
+def test_an_operator_skills_root_inside_the_workspace_is_refused_for_a_session
+  inside = File.join(@workspace, 'skills')
+  FileUtils.mkdir_p(inside)
+  sessions = File.join(@dir, 'sessions')
+  FileUtils.mkdir_p(sessions, mode: 0o700)
+  err = StringIO.new
+  status = Tamoz::Agent::CLI.run(['--root', @workspace, '--session-dir', sessions, '--skills', inside, '--allow-changes',
+                                  'code', 'task'], out: StringIO.new, err:,
+                                 env: { 'TAMOZ_PROVIDER' => 'deepseek', 'TAMOZ_MODEL' => 'deepseek-chat', 'DEEPSEEK_API_KEY' => 'unused' })
 
-    assert_equal 1, status
-    assert_match(/overlaps the workspace/, err)
-  end
+  refute_equal 0, status
+  assert_match(/overlaps the workspace/, err.string)
+  assert_equal 0, tamoz('--skills', inside, 'skills', 'list').first, 'a read-only view is not a session'
+end
 
   def test_an_invoked_skill_must_load_before_the_first_model_call
     sessions = File.join(@dir, "sessions")

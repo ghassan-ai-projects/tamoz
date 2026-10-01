@@ -24,7 +24,7 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |
-| `tamoz-skills` | Portable Agent Skills: the inert compiler, the catalog, content-addressed identity | `tamoz-core` |
+| `tamoz-skills` | Portable Agent Skills: the inert compiler, the catalog, content-addressed identity, the authoring bar, staged candidates, and the bundled `evidence-audit` and `skill-authoring` skills | `tamoz-core` |
 | `tamoz-tools` | The workspace toolbox, the skill tools, the capability host | `tamoz-core`, `tamoz-skills` |
 | `tamoz-context-engine` | Context-window management for agent loops: frozen request header, append-only surface, spill, pruner, compaction, cache accounting | `tamoz-core` |
 | `tamoz-harness` | The coding-harness protocol: prompt pack, persona and preferences, project guidance, living plan, tool-call parsing, loop budgets, finish contract | `tamoz-context-engine`, `tamoz-core` |
@@ -93,10 +93,13 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
 - **One sealed capability host.** Local tools, skills, MCP servers and websearch
   register as four built-in sources at session construction and are then sealed.
   The authority intersection is computed once from policy; content never grants.
-- **Evaluated skills, governed MCP, three-layer memory, bounded self-healing,
+- **Portable skills, governed MCP, three-layer memory, bounded self-healing,
   durable scheduling, and the supervised episode worker** (gRPC EpisodeWorker
   for the stream runtime, with evidence pull, the learning loop, and approval
-  relay on the reverse channel).
+  relay on the reverse channel). Skills follow the open Agent Skills format and
+  grant no authority; `tamoz skills list|check|show|new|create|promote` manages
+  them, and a drafted skill is installed only on a named person's approval
+  ([guide](documentation/guides/agent-operator.md)).
 
 ## Quick start
 

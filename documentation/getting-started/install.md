@@ -151,7 +151,7 @@ The interactive subcommands drive one thread while you watch it.
 | `investigate` | Start a read-only investigation turn: the operator's probes (`sources.probes`), then a findings report whose every finding cites a probe that answered; proposals are not executed |
 | `deep-research` | Research a question on the web: Tamoz shows a research plan first, then research subagents search and read pages, and a cited report is saved in the workspace's `research/` |
 | `probes` | Validate and list the operator's probe catalog without starting any MCP server |
-| `skills` | List, show, check against the authoring bar, or locate the skills `--skills DIR` and `--bundled-skills` load; `new` scaffolds a skill, `create --from-session` drafts one from a verified thread, `promote` installs a staged candidate on a named person's approval |
+| `skills` | List, show, check against the authoring bar, or locate (`path`) the skills that `--skills DIR` and `--bundled-skills` load; `new` scaffolds a skill, `create --from-session` drafts one from a verified thread, `promote` installs a staged candidate on a named person's approval. `--skill NAME` on `code` / `investigate` loads one before the first model call. See [the operator guide](../guides/agent-operator.md) |
 | `memory` | List, show, forget, or consolidate what durable memory holds for this workspace (needs `sources.memory` in the runtime config) |
 | `resume` | Answer the approvals or questions a paused thread is waiting on |
 | `continue` | Drive a paused thread forward without new input |
@@ -260,6 +260,7 @@ sources:
   skills:
     enabled: true
     root: skills          # relative to the runtime directory
+    bundled: true         # also load the skills Tamoz ships
   memory:
     enabled: true
     tenant: acme

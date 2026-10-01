@@ -14,7 +14,8 @@ module Tamoz
         action = argv.shift || 'list'
         return author_skill(action, options, argv) if %w[new create promote].include?(action)
 
-        snapshot = skills_snapshot(options, options[:root])
+        # Read-only views: nothing here reaches a session, so the workspace rule does not apply.
+        snapshot = skills_snapshot(options, nil)
         case action
         when 'list' then list_skills(snapshot, options)
         when 'check' then check_skills(snapshot)

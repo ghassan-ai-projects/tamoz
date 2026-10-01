@@ -289,7 +289,92 @@ itself. If websearch is disabled or unavailable, Tamoz must say that it cannot
 verify a current internet fact rather than pretending local filesystem evidence
 is sufficient.
 
-## 6. Telegram gateway
+## 6. Skills
+
+A skill is a directory with a `SKILL.md` and optional `references/`, `assets/` and
+`scripts/`. It is instructions the agent may load, not a tool, a grant or a policy:
+loading one executes nothing and widens no authority. Only the operator turns skills
+on, and the skills directory must not contain the workspace or sit inside it (either
+direction is refused before the turn starts). Design: [`../design/skills.md`](../design/skills.md).
+
+On the command line, `--skills DIR` loads your directory and `--bundled-skills` loads
+the two skills Tamoz ships (`evidence-audit`, `skill-authoring`). They apply to the
+work-loop commands (`tamoz code`, `tamoz investigate`); the catalog is shown to the
+model only when `load_skill` is offered, and with a profile the profile must allow
+`load_skill` (and `read_skill_resource` for references). `--skill NAME` loads one skill
+before the first model call and pins it to the thread:
+
+```bash
+rbenv exec bundle exec tamoz --root "$WORKSPACE" --bundled-skills --skill evidence-audit \
+  code "Audit the documents in this folder against criteria.md"
+```
+
+In chat, enable the source in the runtime `config.yaml`; `root` defaults to `skills/` in
+the runtime directory, and `bundled: true` adds the shipped skills:
+
+```yaml
+sources:
+  skills:
+    enabled: true
+    root: /home/me/tamoz-skills   # outside the workspace
+    bundled: true
+```
+
+`tamoz telegram setup` adds `load_skill` and `read_skill_resource` to the chat profile
+when the enabled source holds at least one skill. For any other profile, add the two
+tools and re-pin its catalog digests.
+
+Look before you run:
+
+```bash
+rbenv exec bundle exec tamoz --skills "$SKILLS" --bundled-skills skills list    # add --json for scripts
+rbenv exec bundle exec tamoz --skills "$SKILLS" skills check    # authoring bar; non-zero when a skill falls short
+rbenv exec bundle exec tamoz --skills "$SKILLS" skills show NAME
+rbenv exec bundle exec tamoz --bundled-skills skills path NAME  # the skill's directory
+```
+
+`list` also prints rejected skills with the reason, so a skill that never appears is
+explained rather than silent. `show` prints the tree digest, resources and body.
+
+**Evidence audit.** The `evidence-audit` skill makes every finding cite a file, line
+range and verbatim quote. Its verifier, `scripts/verify_findings.rb`, proves the quotes
+are really in the cited files; wire it as a named check so the turn is not done until it
+passes:
+
+```bash
+rbenv exec bundle exec tamoz --root "$WORKSPACE" --bundled-skills --skill evidence-audit \
+  --allow-changes \
+  --check "evidence=ruby $(rbenv exec bundle exec tamoz --bundled-skills skills path evidence-audit)/scripts/verify_findings.rb audit/findings.json" \
+  code "Audit the documents against criteria.md"
+```
+
+The agent writes `audit/findings.json` and `audit/REPORT.md` with every finding
+`proposed`. A verified quote shows the words exist, not that the conclusion follows. A
+person then opens the cited lines, records a decision per finding, and re-runs the
+verifier as `ruby .../verify_findings.rb --reviewed audit/findings.json`, which checks
+that each decided finding names its reviewer. The agent never approves its own findings.
+
+**Creating and promoting a skill.** Authored skills are candidates a person approves:
+
+```bash
+rbenv exec bundle exec tamoz skills new my-skill --dir "$SKILLS"          # scaffold that meets the bar
+rbenv exec bundle exec tamoz --session-dir "$SESS" skills create my-skill --from-session THREAD
+rbenv exec bundle exec tamoz --skills "$SKILLS" skills promote /path/to/draft/my-skill --approver alice
+```
+
+`create` needs a model provider; it drafts from a thread that finished verified, into a private staging directory
+outside every skills root, and stages it only if it meets the authoring bar. `promote`
+refuses the creator as approver, refuses a draft that changed after staging, installs
+exactly the approved files, keeps any previous version in `.retired/`, and records the
+decision in `.promotions.jsonl`. Review the draft before promoting it; the approver name
+is a record, the digest is the gate.
+
+To measure the evidence-audit skill, run `rake agenteval:skills:prove` (offline, no model
+calls), then `rake agenteval:skills:run` (real model). `agenteval/bin/agenteval skills
+optimize` rewrites only that skill's `SKILL.md`, keeps a rewrite only if it wins on
+held-out scenarios, and stages it for `tamoz skills promote`.
+
+## 7. Telegram gateway
 
 For one bot on one machine, `tamoz telegram setup` pairs it and `tamoz telegram
 start --env-file .env` runs the gateway and a `--work-routing` worker together;
@@ -316,7 +401,7 @@ the process with a named error so a supervisor can alert or restart it. The
 full walkthrough — creating the bot, the allowlist, the config, and the
 approval flow — is in [`telegram.md`](telegram.md).
 
-## 7. Debugging checklist
+## 8. Debugging checklist
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json
@@ -332,8 +417,9 @@ Check, in order:
 4. `capability_sources` versus `capability_catalog`;
 5. MCP transport, endpoint/command permissions, and working directory;
 6. websearch grant, provider JSON, egress JSON, and exact allowlisted host;
-7. Telegram doctor output, token, webhook conflict, and `comms list --json`;
-8. `status --json` for a durable approval or budget pause.
+7. skills: `tamoz skills list` shows rejections, and the skills root does not overlap the workspace;
+8. Telegram doctor output, token, webhook conflict, and `comms list --json`;
+9. `status --json` for a durable approval or budget pause.
 
 ## Next reads
 
