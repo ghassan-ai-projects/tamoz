@@ -34,6 +34,18 @@ class ScoreboardTest < Minitest::Test
     end
   end
 
+  def test_append_lands_the_scoreboard_through_atomic_file
+    Dir.mktmpdir('scoreboard') do |directory|
+      path = Pathname.new(directory).join('scoreboard.json')
+      writes = atomic_writes do
+        SCOREBOARD.append(manifest: manifest(artifact_root: 'real-provider/2026-08-21T120000Z-run'),
+                          report:, scoreboard_path: path)
+      end
+
+      assert_equal [[:replace, path.to_s, nil]], writes
+    end
+  end
+
   def test_append_is_idempotent_and_preserves_the_existing_prefix
     Dir.mktmpdir('scoreboard') do |directory|
       path = Pathname.new(directory).join('scoreboard.json')

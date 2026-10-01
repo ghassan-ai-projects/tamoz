@@ -115,6 +115,22 @@ class AgentProfileAdoptionSeamsTest < Minitest::Test
     assert_equal before, File.read(@path)
   end
 
+  def test_activate_refuses_a_loose_directory_instead_of_repairing_it
+    write_registry({ 'schema_version' => 1, 'activated' => {} })
+    File.chmod(0o755, File.dirname(@path))
+
+    assert_raises(Profile::PermissionError) { registry.activate('p', DIGEST) }
+    assert_equal 0o755, File.stat(File.dirname(@path)).mode & 0o777
+    refute_path_exists "#{@path}.lock"
+  end
+
+  def test_concurrent_activations_each_land
+    digests = Array.new(8) { |index| "sha256:#{index.to_s * 64}" }
+    Array.new(8) { |index| Thread.new { registry.activate('p', digests.fetch(index)) } }.each(&:join)
+
+    assert_equal digests.sort, registry.digests('p').sort
+  end
+
   # --- activate's write contract ---------------------------------------------
 
   def test_activate_creates_an_owner_only_registry
@@ -123,6 +139,22 @@ class AgentProfileAdoptionSeamsTest < Minitest::Test
     assert_equal 0o600, File.stat(@path).mode & 0o777
     assert_equal 0o700, File.stat(File.dirname(@path)).mode & 0o777
     assert registry.activated?('p', DIGEST)
+  end
+
+  def test_activate_replaces_the_registry_only_while_holding_its_lock
+    held = lock_held_during_atomic_writes("#{@path}.lock") { registry.activate('p', DIGEST) }
+
+    assert_equal [true], held
+  end
+
+  def test_activate_swaps_the_registry_file_instead_of_truncating_it
+    registry.activate('p', DIGEST)
+    inode = File.stat(@path).ino
+
+    registry.activate('q', OTHER_DIGEST)
+
+    refute_equal inode, File.stat(@path).ino
+    assert_empty Dir.children(File.dirname(@path)).grep(/\.tmp\z/)
   end
 
   def test_activate_is_idempotent_and_preserves_other_profiles

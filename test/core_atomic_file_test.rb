@@ -21,6 +21,13 @@ class CoreAtomicFileTest < Minitest::Test
     assert_empty leftovers
   end
 
+  def test_the_default_mode_is_what_a_plain_write_creates
+    File.write(path('plain.txt'), "x\n")
+    AtomicFile.replace(path, "x\n", mode: AtomicFile::DEFAULT_MODE)
+
+    assert_equal File.stat(path('plain.txt')).mode & 0o777, File.stat(path).mode & 0o777
+  end
+
   def test_create_refuses_an_existing_name_and_leaves_it_untouched
     File.write(path, "keep\n")
 

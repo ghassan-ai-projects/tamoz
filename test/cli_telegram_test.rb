@@ -51,6 +51,19 @@ class CliTelegramTest < Minitest::Test
     end
   end
 
+  def test_setup_lands_the_secret_bearing_files_through_atomic_file
+    with_dirs do |runtime, workspace|
+      setup = %W[telegram setup --workspace #{workspace} --owner #{OWNER}]
+      writes = atomic_writes { cli(runtime, setup, bot: Bot.new([])) }
+
+      replaced = writes.select { |operation, _path, _mode| operation == :replace }
+
+      assert_equal [File.join(runtime, 'config.yaml'), File.join(runtime, 'profiles', 'telegram.yaml')],
+                   replaced.map { |_operation, path, _mode| path }.sort
+      assert_equal [0o600], replaced.map { |_operation, _path, mode| mode }.uniq
+    end
+  end
+
   def test_setup_does_not_pair_a_sender_the_operator_rejects
     with_dirs do |runtime, workspace|
       bot = Bot.new([{ 'update_id' => 5, 'message' => { 'chat' => { 'id' => 42, 'type' => 'private' },

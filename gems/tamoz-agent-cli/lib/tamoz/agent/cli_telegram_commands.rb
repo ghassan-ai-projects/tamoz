@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'json'
 require 'optparse'
 require 'psych'
@@ -103,7 +102,7 @@ module Tamoz
                       RuntimeDirectory.create!(path, workspace:)
                     end
         # A runtime directory can predate its profiles directory; setup writes into it.
-        FileUtils.mkdir_p(directory.profiles_path, mode: 0o700)
+        Tamoz::Core::PrivateDirectory.secure(directory.profiles_path)
         explicit ? rewrite_workspace_root(directory, workspace) : directory
       end
 
@@ -218,8 +217,7 @@ module Tamoz
       end
 
       def write_private(path, text)
-        File.write(path, text)
-        File.chmod(0o600, path)
+        Tamoz::Core::AtomicFile.replace(path, text, mode: 0o600)
       end
 
       # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
@@ -366,7 +364,7 @@ module Tamoz
                           'GEM_PATH' => Gem.path.join(File::PATH_SEPARATOR),
                           'LANG' => 'en_US.UTF-8', 'LC_ALL' => 'en_US.UTF-8')
         logs = File.join(directory.path, 'logs')
-        FileUtils.mkdir_p(logs, mode: 0o700)
+        Tamoz::Core::PrivateDirectory.secure(logs)
         runtime_dir = directory.path
         children = {}
         begin

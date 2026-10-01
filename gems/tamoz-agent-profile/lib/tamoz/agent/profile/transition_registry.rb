@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'psych'
 require 'time'
 
@@ -168,24 +167,12 @@ module Tamoz
         private
 
         # The registry's single write critical section. flock is advisory but the
-        # only writers are the two paths through this class, so both serialize
-        # here; flock releases when the descriptor closes (including process
-        # death), so a killed writer can never leave the registry wedged.
-        #
-        # :reek:TooManyStatements — directory setup, lock acquisition, the
-        # permission check and the release are one indivisible protocol.
+        # only writers are the two paths through this class, so both serialize here.
         def with_registry_lock
-          directory = File.dirname(@path)
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          File.chmod(0o700, directory)
-          File.open("#{@path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
-            lock.flock(File::LOCK_EX)
-            begin
-              Profile.verify_permissions!(@path) if File.exist?(@path)
-              yield
-            ensure
-              lock.flock(File::LOCK_UN)
-            end
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
+          Tamoz::Core::FileLock.exclusive("#{@path}.lock") do
+            Profile.verify_permissions!(@path) if File.exist?(@path)
+            yield
           end
         end
 
@@ -193,8 +180,9 @@ module Tamoz
         # migration step, stated): a v1 file that is recorded onto or consumed
         # from is upgraded in place; v1 files are never rewritten by a mere read.
         def write_document(document)
-          File.write(@path, Psych.dump(document.merge('schema_version' => REGISTRY_SCHEMA_VERSION)))
-          File.chmod(0o600, @path)
+          Tamoz::Core::AtomicFile.replace(
+            @path, Psych.dump(document.merge('schema_version' => REGISTRY_SCHEMA_VERSION)), mode: 0o600
+          )
         end
 
         # :reek:TooManyStatements :reek:MissingSafeMethod — the bang is the

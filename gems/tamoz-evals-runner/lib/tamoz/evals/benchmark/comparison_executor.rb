@@ -2,7 +2,6 @@
 
 require 'fileutils'
 require 'json'
-require 'tempfile'
 
 module Tamoz
   module Evals
@@ -42,13 +41,7 @@ module Tamoz
           report = build
           path = File.expand_path(report_out)
           FileUtils.mkdir_p(File.dirname(path))
-          Tempfile.create(['.benchmark-openclaw-cells-', '.tmp'], File.dirname(path)) do |temporary|
-            temporary.write("#{CanonicalJSON.dump(report)}\n")
-            temporary.flush
-            temporary.fsync
-            temporary.close
-            File.rename(temporary.path, path)
-          end
+          Tamoz::Core::AtomicFile.replace(path, "#{CanonicalJSON.dump(report)}\n", prefix: '.benchmark-openclaw-cells-')
           report
         end
 

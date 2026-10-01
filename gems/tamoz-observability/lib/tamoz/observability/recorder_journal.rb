@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'json'
 
 module Tamoz
@@ -48,7 +47,7 @@ module Tamoz
           @drops = Hash.new(0)
           @io = nil
           @io_bytes = 0
-          prepare_directory(@directory)
+          Tamoz::Core::PrivateDirectory.secure(@directory)
           super(lanes: { reserved: @reserved_size, bulk: @queue_size },
                 batch_size: @queue_size + @reserved_size,
                 interval: @flush_interval)
@@ -232,11 +231,6 @@ module Tamoz
           @role = normalize_role(role)
           @path = File.join(@directory, "#{@role}-#{Integer(pid)}.ndjson")
           @health_path = "#{@path}.health.json"
-        end
-
-        def prepare_directory(directory)
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          File.chmod(0o700, directory)
         end
 
         # File-system reads and inventory are stateless queries over the journal

@@ -43,11 +43,7 @@ module Tamoz
 
         def build
           FileUtils.mkdir_p(File.join(@train_root, "trajectories"))
-          FileUtils.mkdir_p(@holdout_root)
-          FileUtils.mkdir_p(@evaluator_root)
-          File.chmod(DIRECTORY_MODE, @protected_root)
-          File.chmod(DIRECTORY_MODE, @holdout_root)
-          File.chmod(DIRECTORY_MODE, @evaluator_root)
+          [@protected_root, @holdout_root, @evaluator_root].each { |root| Tamoz::Core::PrivateDirectory.secure(root) }
           write_train_trajectories
           write_holdout_partition
           self
@@ -107,8 +103,7 @@ module Tamoz
         end
 
         def write_corpus_file(path, value)
-          File.write(path, "#{CanonicalJSON.dump(value)}\n", encoding: Encoding::UTF_8)
-          File.chmod(FILE_MODE, path)
+          Tamoz::Core::AtomicFile.replace(path, "#{CanonicalJSON.dump(value)}\n", mode: FILE_MODE)
         end
 
         def write_train_trajectories

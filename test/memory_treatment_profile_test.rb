@@ -178,6 +178,19 @@ class MemoryTreatmentProfileTest < Minitest::Test
     end
   end
 
+  def test_seeding_lands_the_index_and_vault_through_atomic_file
+    artifact = CORPUS.cases.find { |entry| entry["case_id"] == "agent.memory.recall-requirement" }
+    fixtures = artifact["treatments"].fetch("seed").fetch("fixtures")
+
+    Dir.mktmpdir("tamoz-seed") do |root|
+      directory = File.join(root, "store")
+      writes = atomic_writes { STORE.seed(File.join(directory, "store.json"), fixtures) }
+
+      assert_equal [[:replace, File.join(directory, STORE::INDEX_FILE), 0o600],
+                    [:replace, File.join(directory, STORE::VAULT_FILE), 0o600]], writes
+    end
+  end
+
   def test_store_isolation_detects_contamination
     # E7: one store file per (case, treatment) cell; a foreign record leaking
     # into a cell's store fails the seed-digest assertion and the cell is a
@@ -334,6 +347,17 @@ class MemoryTreatmentProfileTest < Minitest::Test
         assert holdout.outside?(root)
       end
     end
+  end
+
+  def test_the_holdout_record_lands_through_atomic_file
+    holdout = nil
+    writes = atomic_writes do
+      holdout = Tamoz::Evals::Harness::MemoryHoldout.create(record_id: "wis.holdout", content: {"strategy" => "x"})
+    end
+
+    assert_equal [[:replace, holdout.path.to_s, 0o600]], writes
+  ensure
+    holdout&.cleanup
   end
 
   def test_auditor_counts_memory_recalls_sensitive_and_unauthorized

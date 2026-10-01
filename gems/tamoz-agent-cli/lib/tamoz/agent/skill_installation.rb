@@ -31,7 +31,7 @@ module Tamoz
       # because create_file never makes parents.
       def self.draft_workspace(session_dir, label, name, trajectory)
         workspace = File.join(session_dir, 'skill-drafts', label)
-        FileUtils.mkdir_p(File.join(workspace, name, 'references'), mode: 0o700)
+        Tamoz::Core::PrivateDirectory.secure(File.join(workspace, name, 'references'))
         File.write(File.join(workspace, 'trajectory.md'), trajectory)
         workspace
       end

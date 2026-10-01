@@ -18,16 +18,13 @@ module Tamoz
         end
 
         def charge!
-          File.open(@path, File::RDWR) do |file|
-            file.flock(File::LOCK_EX)
-            ledger = JSON.parse(file.read)
+          Tamoz::Core::FileLock.exclusive("#{@path}.lock") do
+            ledger = JSON.parse(File.read(@path))
             raise Exhausted, "the search budget of #{ledger.fetch('cap')} requests is spent" if
               ledger.fetch('used') >= ledger.fetch('cap')
 
             ledger['used'] += 1
-            file.rewind
-            file.write(JSON.generate(ledger))
-            file.truncate(file.pos)
+            Tamoz::Core::AtomicFile.replace(@path, JSON.generate(ledger), mode: File.stat(@path).mode & 0o777)
           end
         end
       end
@@ -61,8 +58,7 @@ module Tamoz
           return JSON.parse(File.read(path)) if File.exist?(path)
 
           value = yield
-          File.write("#{path}.partial", JSON.generate(value))
-          File.rename("#{path}.partial", path)
+          Tamoz::Core::AtomicFile.replace(path, JSON.generate(value), mode: Tamoz::Core::AtomicFile::DEFAULT_MODE)
           value
         end
       end

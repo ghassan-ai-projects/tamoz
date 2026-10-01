@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'psych'
 
 module Tamoz
@@ -13,6 +12,8 @@ module Tamoz
       # This class owns STORAGE — where the file is, that it stays owner-only, and
       # how an activation is appended. Whether the bytes it reads may be believed
       # is AdoptionDocument's question.
+      #
+      # :reek:DataClump — activated?, activate and append each act on one (profile_id, digest) pair.
       class AdoptionRegistry
         REGISTRY_SCHEMA_VERSION = AdoptionDocument::SCHEMA_VERSION
 
@@ -33,10 +34,17 @@ module Tamoz
           document.fetch('activated').fetch(profile_id, [])
         end
 
-        # `document` verifies permissions and yields the empty document when no
-        # registry exists yet, so a registry someone else can read raises here
-        # before anything is written.
+        # A registry or directory someone else can read is refused before anything is
+        # changed; the lock keeps two processes activating at once from losing a digest.
         def activate(profile_id, digest)
+          Profile.verify_permissions!(@path) if File.exist?(@path)
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
+          Tamoz::Core::FileLock.exclusive("#{@path}.lock") { append(profile_id, digest) }
+        end
+
+        private
+
+        def append(profile_id, digest)
           current = document
           activated = current.fetch('activated')
           list = activated.fetch(profile_id, [])
@@ -45,14 +53,8 @@ module Tamoz
           write(current.merge('activated' => activated.merge(profile_id => list + [digest])))
         end
 
-        private
-
         def write(updated)
-          directory = File.dirname(@path)
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          File.chmod(0o700, directory)
-          File.write(@path, Psych.dump(updated))
-          File.chmod(0o600, @path)
+          Tamoz::Core::AtomicFile.replace(@path, Psych.dump(updated), mode: 0o600)
         end
 
         # :reek:TooManyStatements — read, verify, parse, validate, normalize is

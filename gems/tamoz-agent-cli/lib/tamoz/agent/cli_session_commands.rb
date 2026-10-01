@@ -94,7 +94,7 @@ module Tamoz
         settings[:subagents] = options[:subagents] if options[:subagents]
         settings[:skill] = options[:skill] if options[:skill]
         settings[:research_budgets] = options[:research_budgets] if options[:research_budgets]
-        File.write(pin, JSON.generate(settings.except(:surface)), perm: 0o600)
+        Tamoz::Core::AtomicFile.replace(pin, JSON.generate(settings.except(:surface)), mode: 0o600)
         settings
       end
 

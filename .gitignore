@@ -83,6 +83,8 @@ agenteval/tmp/
 # Per-trial durable session stores. The adapter pins these here so a run never writes
 # threads into the operator's live store; they are run output, not harness source.
 agenteval/sessions/
+# The search ledger's flock sidecar; the ledger itself (brave_ledger.json) is tracked.
+agenteval/research/*.lock
 
 # SQLite WAL sidecars from test runs (tracked fixture DBs opened by tests)
 *.sqlite3-shm

@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "psych"
-require "fileutils"
 
 require "tamoz/comms"
 
@@ -225,11 +224,8 @@ module Tamoz
         end
 
         def ensure_private_runtime_directories!(path)
-          FileUtils.mkdir_p(path, mode: 0o700)
-          File.chmod(0o700, path)
-          profiles_path = File.join(path, PROFILES_DIR)
-          FileUtils.mkdir_p(profiles_path, mode: 0o700)
-          File.chmod(0o700, profiles_path)
+          Tamoz::Core::PrivateDirectory.secure(path)
+          Tamoz::Core::PrivateDirectory.secure(File.join(path, PROFILES_DIR))
         end
 
         def write_default_config!(path, workspace:)
@@ -239,9 +235,9 @@ module Tamoz
             "sources" => {},
             "channels" => {}
           }
-          config_path = config_path(path)
-          File.write(config_path, Psych.dump(document))
-          File.chmod(0o600, config_path)
+          Tamoz::Core::AtomicFile.create(config_path(path), Psych.dump(document), mode: 0o600)
+        rescue Errno::EEXIST
+          nil
         end
 
         def read_config_document(config_path)
@@ -257,16 +253,12 @@ module Tamoz
 
         def backup_config!(config_path)
           backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}"
-          FileUtils.cp(config_path, backup)
-          File.chmod(0o600, backup)
+          Tamoz::Core::AtomicFile.create(backup, File.binread(config_path), mode: 0o600)
           backup
         end
 
         def write_migrated_config!(config_path, document)
-          temp = "#{config_path}.tmp-#{Process.pid}"
-          File.write(temp, Psych.dump(document))
-          File.chmod(0o600, temp)
-          File.rename(temp, config_path)
+          Tamoz::Core::AtomicFile.replace(config_path, Psych.dump(document), mode: 0o600)
         end
 
         def validate_schema_version!(document)
