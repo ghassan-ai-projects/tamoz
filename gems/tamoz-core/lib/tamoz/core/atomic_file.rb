@@ -6,6 +6,10 @@ module Tamoz
   module Core
     # A file write a reader sees whole or not at all: temp file, fsync, rename or link, fsync the directory.
     module AtomicFile
+      # What a plain File.write creates. Read once: File.umask clears and restores the process umask, so reading
+      # it per write races with every other thread that creates a file.
+      DEFAULT_MODE = 0o666 & ~File.umask
+
       module_function
 
       def replace(path, bytes, mode: nil, prefix: '.tamoz-')

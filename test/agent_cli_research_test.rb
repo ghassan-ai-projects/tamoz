@@ -98,7 +98,7 @@ class AgentCliResearchTest < Minitest::Test
 
   private
 
-  def assert_replaced(writes, path, mode = 0o666 & ~File.umask)
+  def assert_replaced(writes, path, mode = Tamoz::Core::AtomicFile::DEFAULT_MODE)
     published = writes.map { |operation, written, written_mode| [operation, File.realpath(written), written_mode] }
 
     assert_includes published, [:replace, File.realpath(path), mode]

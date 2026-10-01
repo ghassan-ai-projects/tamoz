@@ -59,7 +59,7 @@ module Tamoz
           return JSON.parse(File.read(path)) if File.exist?(path)
 
           value = yield
-          Tamoz::Core::AtomicFile.replace(path, JSON.generate(value), mode: 0o666 & ~File.umask)
+          Tamoz::Core::AtomicFile.replace(path, JSON.generate(value), mode: Tamoz::Core::AtomicFile::DEFAULT_MODE)
           value
         end
       end
