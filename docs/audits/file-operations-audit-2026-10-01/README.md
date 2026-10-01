@@ -21,7 +21,7 @@ the surrounding code, not just the scanner output. It was acted on afterwards: s
   `FileUtils.*`, `Tempfile.*`, `Dir.mkdir/mktmpdir`, `Logger.new`, `CSV.*`,
   `Zlib::GzipWriter`/`Marshal`, plus `flush`/`fsync` markers to surface
   hand-rolled durability.
-- Raw evidence: [inventory.json](inventory.json) (every hit with file, line, call).
+- The raw hit list (2,606 rows of file, line, call) is not kept; the tables below carry the conclusions.
   A parenthesized call is a `method_add_arg` node in Ruby 3.3's Ripper, not
   `command_call` — a scanner that only walks `command_call` sees almost nothing.
 
