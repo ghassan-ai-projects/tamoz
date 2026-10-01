@@ -242,14 +242,7 @@ module Tamoz
         def write_atomic(path, bytes)
           raise SchemaError, 'comms artifact exceeds the size limit' if bytes.bytesize > MAX_ARTIFACT_BYTES
 
-          Tempfile.create([".comms-", '.tmp'], path.dirname) do |temporary|
-            temporary.write(bytes)
-            temporary.flush
-            temporary.fsync
-            temporary.close
-            File.rename(temporary.path, path)
-            File.chmod(0o644, path)
-          end
+          Tamoz::Core::AtomicFile.replace(path, bytes, mode: 0o644, prefix: '.comms-')
         end
 
         # ---------------------------------------------------------- drives
