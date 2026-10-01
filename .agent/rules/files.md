@@ -10,11 +10,12 @@
 - **An owner-only directory is `Tamoz::Core::PrivateDirectory.secure`**, not `mkdir_p(mode:)` + `chmod 0o700`:
   `mkdir_p`'s mode only applies to directories it creates, so a pre-existing loose one stayed loose.
 - **Rename swaps the inode, so a `flock` on the data file stops serializing.** Lock a dedicated `.lock`
-  file, as `TransitionRegistry` and `SearchLedger#charge!` do.
+  file through `Tamoz::Core::FileLock.exclusive`, as the adoption and transition registries and
+  `SearchLedger#charge!` do; the read-modify-write belongs inside the lock.
 - **A config backup is a create, not a copy:** `FileUtils.cp` then `chmod` exposes the bytes at the umask.
 - **Not every write is durable state.** `RecorderJournal#persist_health` runs per dropped signal on the
   producer's thread; a four-fsync replace there stalls the overload path. Check the call frequency first.
-- **The sanctioned exceptions are named in `test/atomic_file_boundary_test.rb`**: the SQLite backup, log
+- **The sanctioned exceptions are named in `test/file_facades_boundary_test.rb`**: the SQLite backup, log
   rotation, the skill directory swap. Add a file there only with the reason; the test fails when an
   exemption goes stale.
 - **A conversion test asserts the call, not the bytes.** `atomic_writes { ... }` (test_helper) records what

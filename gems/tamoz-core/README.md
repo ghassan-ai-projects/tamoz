@@ -31,7 +31,8 @@ or model behavior.
 
 ## File writes
 
-Other gems write files only through two facades here: `Tamoz::Core::AtomicFile`
-(`replace` and `create`: a write a reader sees whole or not at all, with the mode set before it is
-published) and `Tamoz::Core::PrivateDirectory.secure` (an owner-only directory, created or pre-existing).
-`test/atomic_file_boundary_test.rb` names the few sanctioned exceptions.
+Other gems write files only through three facades here: `Tamoz::Core::AtomicFile` (`replace` and
+`create`: a write a reader sees whole or not at all, with the mode set before it is published),
+`Tamoz::Core::PrivateDirectory.secure` (an owner-only directory, created or pre-existing) and
+`Tamoz::Core::FileLock.exclusive` (an advisory lock on a dedicated lock file).
+`test/file_facades_boundary_test.rb` names the few sanctioned exceptions.
