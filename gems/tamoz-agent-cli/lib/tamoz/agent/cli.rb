@@ -216,33 +216,20 @@ module Tamoz
       def build_list_session(adapter, options) = @sessions.build_list_session(adapter, options)
 
       def run_durable(options, thread_id, read_only: false, profile: nil, request_id: nil)
-        # Deferred: tamoz/agent must not load the adapter package at require time
-        # (dependency isolation), only when a durable subcommand actually runs.
-        require "tamoz/sqlite"
-
-        session_dir = @sessions.provision_session_dir!(options)
-        model = read_only ? @sessions.read_only_model : @models.build(options, profile:)
-        toolbox = @sessions.build_toolbox(options, profile:)
-        adapter = @sessions.build_adapter(session_dir, thread_id)
-        mcp = nil
-        memory = nil
-        begin
-          # A read-only command (show/usage/context) only reads the durable store:
-          # it must not spawn MCP subprocesses or open memory.
-          mcp = @sessions.build_mcp_source(options, profile:) unless read_only
-          memory = open_memory(options, session_dir) unless read_only
-          @approval_engine = @sessions.build_approvals(options)
-          parts = SessionBuilder::Parts.new(model:, toolbox:, adapter:, mcp:, memory:, approvals: @approval_engine,
-                                            harness: work_harness(options, thread_id))
-          session = @sessions.build_session(parts, options:, thread_id:, profile:)
-          install_signal_handlers do
+        install_signal_handlers do
+          @sessions.assemble(options, thread_id, read_only:, profile:,
+                                                 openers: run_openers(options, thread_id)) do |parts, session|
+            @approval_engine = parts.approvals
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
           end
-        ensure
-          mcp&.close
-          memory&.first&.close
-          adapter.close unless read_only
         end
+      end
+
+      # Both openers are lazy: the work harness pins into the session dir, so it
+      # runs after the builder provisions it.
+      def run_openers(options, thread_id)
+        { harness: -> { work_harness(options, thread_id) },
+          memory: ->(dir) { open_memory(options, dir) } }
       end
 
       def provision_private_session_dir!(options) = @sessions.provision_session_dir!(options)

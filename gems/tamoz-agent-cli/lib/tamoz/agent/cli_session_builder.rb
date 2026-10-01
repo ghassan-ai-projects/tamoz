@@ -99,6 +99,32 @@ module Tamoz
           engine
         end
 
+        # Assembles one durable run, yields the parts and the session while
+        # everything it opened is live, and closes it all afterwards. The memory
+        # opener stays with the CLI (it owns the memory wiring); a read-only
+        # command opens neither MCP nor memory.
+        def assemble(options, thread_id, read_only:, profile:, openers:)
+          # Deferred: tamoz/agent must not load the adapter package at require time
+          # (dependency isolation), only when a durable subcommand actually runs.
+          require 'tamoz/sqlite'
+
+          session_dir = provision_session_dir!(options)
+          model = read_only ? read_only_model : @models.build(options, profile:)
+          toolbox = build_toolbox(options, profile:)
+          adapter = build_adapter(session_dir, thread_id)
+          mcp = nil
+          memory = nil
+          begin
+            mcp = build_mcp_source(options, profile:) unless read_only
+            memory = openers[:memory].call(session_dir) unless read_only
+            parts = Parts.new(model:, toolbox:, adapter:, mcp:, memory:, approvals: build_approvals(options),
+                              harness: openers[:harness].call)
+            yield parts, build_session(parts, options:, thread_id:, profile:)
+          ensure
+            close_run_resources(mcp, memory, read_only:, adapter:)
+          end
+        end
+
         # DR-5 D1 (RC5): the session record carries the same post-override role
         # resolution the model was built from, so the record never disagrees with the run.
         def build_session(parts, options:, thread_id:, profile:)
@@ -124,6 +150,12 @@ module Tamoz
         end
 
         private
+
+        def close_run_resources(mcp, memory, read_only:, adapter:)
+          mcp&.close
+          memory&.first&.close
+          adapter.close unless read_only
+        end
 
         # §5.2: the profile is the capability authority; the toolbox is derived
         # from it wholesale so its catalog digest matches the pinned value.
