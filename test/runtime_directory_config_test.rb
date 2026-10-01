@@ -69,6 +69,14 @@ class RuntimeDirectoryConfigTest < Minitest::Test
     end
   end
 
+  def test_config_migrate_lands_the_new_config_through_atomic_file
+    with_schema_one_directory do |runtime_dir, config_path, _workspace|
+      calls = atomic_writes { cli(['--runtime-dir', runtime_dir, 'config', 'migrate']) }
+
+      assert_equal [[:replace, config_path, 0o600]], calls
+    end
+  end
+
   def test_config_migrate_is_idempotent_and_never_writes_twice
     with_schema_one_directory do |runtime_dir, config_path, _workspace|
       status, = cli(['--runtime-dir', runtime_dir, 'config', 'migrate'])

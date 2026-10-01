@@ -80,6 +80,32 @@ module ArtifactHelpers
   end
 end
 
+module AtomicWrites
+  Recorder = Module.new do
+    def replace(path, bytes, **) = AtomicWrites.note(:replace, path, **) { super }
+    def create(path, bytes, **, &) = AtomicWrites.note(:create, path, **) { super }
+  end
+  Tamoz::Core::AtomicFile.singleton_class.prepend(Recorder)
+
+  class << self
+    attr_accessor :log
+
+    def note(operation, path, mode: nil, **)
+      log&.push([operation, path.to_s, mode])
+      yield
+    end
+  end
+
+  def atomic_writes
+    AtomicWrites.log = []
+    yield
+    AtomicWrites.log
+  ensure
+    AtomicWrites.log = nil
+  end
+end
+
 class Minitest::Test
   include ArtifactHelpers
+  include AtomicWrites
 end

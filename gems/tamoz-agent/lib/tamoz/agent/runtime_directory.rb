@@ -263,10 +263,7 @@ module Tamoz
         end
 
         def write_migrated_config!(config_path, document)
-          temp = "#{config_path}.tmp-#{Process.pid}"
-          File.write(temp, Psych.dump(document))
-          File.chmod(0o600, temp)
-          File.rename(temp, config_path)
+          Tamoz::Core::AtomicFile.replace(config_path, Psych.dump(document), mode: 0o600)
         end
 
         def validate_schema_version!(document)
