@@ -8,7 +8,7 @@ module Tamoz
         def initialize(out:, err:, input:, events:, models:)
           @out = out
           @err = err
-          @input = input
+          @prompts = PromptAdapter.new(input:, err:)
           @events = events
           @models = models
         end
@@ -46,9 +46,7 @@ module Tamoz
         end
 
         def approve(tool:, **)
-          @err.print "Approve #{tool} [a/approve, d/deny]? "
-          @err.flush
-          Tamoz::Approval::Answer.parse(@input.gets.to_s)
+          @prompts.approve(tool)
         end
       end
     end

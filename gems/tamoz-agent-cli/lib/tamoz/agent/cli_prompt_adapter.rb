@@ -24,8 +24,12 @@ module Tamoz
         # the approval loop is a stateful read-validate-retry loop; the nil-check
         # at the loop head is the EOF-aborts-prompt contract.
         def approve_tool(descriptor)
-          tool = descriptor['tool']
-          @err.puts "Approval required for #{tool}:\n#{descriptor['preview']}"
+          @err.puts "Approval required for #{descriptor['tool']}:\n#{descriptor['preview']}"
+          approve(descriptor['tool'])
+        end
+
+        # The bare-tool ask: the one-shot runtime passes a name, not a descriptor.
+        def approve(tool)
           loop do
             line = read_line("Approve #{tool}? [y/N/?] ")
             return nil if line.nil?
