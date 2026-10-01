@@ -111,7 +111,7 @@ module Tamoz
         def answer_interrupts(view, resume_options)
           return :waiting if view.interrupts.empty?
 
-          answers = @answers.collect(current_view, resume_options)
+          answers = @answers.collect(view, resume_options)
           return :waiting if answers.nil?
 
           resume_with(answers, SecureRandom.uuid)
