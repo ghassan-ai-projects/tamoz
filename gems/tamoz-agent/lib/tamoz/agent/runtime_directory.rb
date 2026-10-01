@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "psych"
-require "fileutils"
 
 require "tamoz/comms"
 
