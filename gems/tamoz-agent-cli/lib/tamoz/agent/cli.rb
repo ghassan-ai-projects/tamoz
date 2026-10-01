@@ -210,10 +210,6 @@ module Tamoz
         turn_driver(session, thread_id: tracked_request.thread_id, owner_id: nil, options: {}).queued?(tracked_request)
       end
 
-      def emit_follow_up_queued(thread_id, _tracked_request, view, options:)
-        turn_driver(nil, thread_id:, owner_id: nil, options:).report_queued(view)
-      end
-
       def map_answer(kind, raw) = InterruptAnswers.parse(kind, raw)
 
       def build_list_session(adapter, options) = @sessions.build_list_session(adapter, options)

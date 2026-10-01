@@ -224,10 +224,10 @@ module Tamoz
           session.verify_skill_binding!(thread: thread_id)
           request = submit_follow_up(session, task, thread_id, request_id)
           view = drain_to_terminal(session, thread_id:, owner_id:, options:, tracked_request: request)
-          if tracked_request_queued?(session, request)
-            emit_follow_up_queued(thread_id, request, view, options:)
-            return CLI::EXIT_PAUSED
-          end
+          # The drain already reported the queued state; this re-check only
+          # picks the exit code.
+          return CLI::EXIT_PAUSED if tracked_request_queued?(session, request)
+
           exit_for_view(view)
         end
       end

@@ -947,6 +947,22 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
+  def test_drain_reports_a_queued_follow_up_exactly_once
+    queued_request = Struct.new(:status, :request_id, :thread_id).new(:queued, "request.behind", "thread.queued")
+    runner = Struct.new(:queued_request) do
+      def fetch(thread:, request_id:) = queued_request
+      def history(thread:) = []
+    end.new(queued_request)
+    session = FakeSession.new(Struct.new(:durable_runner).new(runner), status: :running, interrupts: [])
+    out = StringIO.new
+    err = StringIO.new
+    driver = turn_driver(session, "thread.queued", out:, err:)
+
+    driver.drain(tracked_request: queued_request)
+
+    assert_equal 1, err.string.scan("Follow-up queued behind request").length
+  end
+
   private
 
   View = Struct.new(
