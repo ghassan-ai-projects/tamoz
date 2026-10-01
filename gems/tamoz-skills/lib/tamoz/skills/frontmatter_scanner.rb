@@ -2,18 +2,25 @@
 
 module Tamoz
   module Skills
-    # Refuses unsafe YAML constructs before frontmatter is materialized.
-    # :reek:MissingSafeMethod — each bang is a validation boundary that raises
-    # the existing `Rejected` error; a predicate twin would duplicate parsing.
-    # :reek:TooManyStatements — parser callbacks must update their mapping
-    # frame in event order so duplicate keys are rejected before safe_load.
-    # :reek:FeatureEnvy — scalar validation necessarily examines parser values.
-    # :reek:DataClump — callback signatures are fixed by Psych::Handler.
-    # :reek:LongParameterList — callback signatures are fixed by Psych::Handler.
-    # :reek:DuplicateMethodCall — frame[2] is read before and flipped after the
-    # current event; caching it would not clarify the state transition.
-    # :reek:UncommunicativeVariableName — RuboCop requires `e` for rescued errors.
+    # Refuses YAML aliases, non-core tags and duplicate keys from the parser's events, before anything is
+    # materialized. The callback signatures are Psych::Handler's.
     class FrontmatterScanner < Psych::Handler
+      # A mapping being read: its keys so far, and whether the next scalar is a key.
+      class MappingFrame
+        def initialize
+          @keys = []
+          @expecting_key = true
+        end
+
+        # Returns false when `key` repeats one already seen.
+        def accept(key)
+          fresh = !(@expecting_key && key && @keys.include?(key))
+          @keys << key if @expecting_key && key
+          @expecting_key = !@expecting_key
+          fresh
+        end
+      end
+
       def initialize(text, label)
         super()
         @text = text
@@ -27,46 +34,37 @@ module Tamoz
         reject!('skill_frontmatter_invalid', "invalid YAML: #{e.problem}")
       end
 
-      # Psych owns this six-argument callback contract.
       def scalar(value, _anchor, tag, _plain, _quoted, _style) # rubocop:disable Metrics/ParameterLists
         check_tag!(tag)
-        note_slot(value)
+        note(value)
       end
 
-      define_method(:alias) do |_anchor|
-        reject!('skill_frontmatter_alias', 'YAML aliases are not allowed')
-      end
+      define_method(:alias) { |_anchor| reject!('skill_frontmatter_alias', 'YAML aliases are not allowed') }
 
       def start_mapping(_anchor, tag, _implicit, _style)
-        check_tag!(tag)
-        note_slot(nil)
-        @stack << [:mapping, [], true]
+        push_frame(tag, MappingFrame.new)
+      end
+
+      def start_sequence(_anchor, tag, _implicit, _style)
+        push_frame(tag, :sequence)
       end
 
       def end_mapping = @stack.pop
-
-      def start_sequence(_anchor, tag, _implicit, _style)
-        check_tag!(tag)
-        note_slot(nil)
-        @stack << [:sequence]
-      end
-
       def end_sequence = @stack.pop
 
       private
 
-      def note_slot(key)
-        frame = @stack.last
-        return unless frame && frame[0] == :mapping
-
-        note_mapping_key!(frame, key) if frame[2]
-        frame[2] = !frame[2]
+      def push_frame(tag, frame)
+        check_tag!(tag)
+        note(nil)
+        @stack << frame
       end
 
-      def note_mapping_key!(frame, key)
-        keys = frame[1]
-        reject!('skill_frontmatter_duplicate_key', 'duplicate key') if key && keys.include?(key)
-        keys << key if key
+      def note(key)
+        frame = @stack.last
+        return unless frame.is_a?(MappingFrame)
+
+        reject!('skill_frontmatter_duplicate_key', 'duplicate key') unless frame.accept(key)
       end
 
       def check_tag!(tag)
@@ -75,9 +73,7 @@ module Tamoz
         reject!('skill_frontmatter_tag', 'YAML tags are not allowed')
       end
 
-      def reject!(code, detail)
-        raise Rejected.new(code, @label, detail)
-      end
+      def reject!(code, detail) = raise(Rejected.new(code, @label, detail))
     end
   end
 end

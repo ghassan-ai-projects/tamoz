@@ -2,28 +2,14 @@
 
 module Tamoz
   module Skills
-    # Parses and validates a skill manifest's YAML frontmatter.
-    # :reek:MissingSafeMethod — validators raise the existing `Rejected` error;
-    # predicate twins would allow callers to ignore invalid frontmatter.
-    # :reek:ControlParameter — `required:` is part of the existing field-schema
-    # call and preserves which absent field is rejected first.
-    # :reek:FeatureEnvy — field validators necessarily inspect candidate values.
-    # :reek:LongParameterList — `string!` carries the field, its schema name,
-    # presence policy, and byte limit; bundling these fixed rules adds no value.
-    # :reek:NilCheck — nil means an optional field is absent in this wire format.
-    # :reek:RepeatedConditional — three independent optional fields share that
-    # wire-format meaning; centralizing it would obscure their distinct defaults.
-    # :reek:TooManyStatements — each validator is one ordered refusal gauntlet.
-    # :reek:TooManyMethods — the methods are the manifest's distinct field rules;
-    # moving them again would fragment one parser without another consumer.
-    # :reek:UncommunicativeVariableName — RuboCop requires `e` for rescued errors.
-    # :reek:UtilityFunction — pure shape predicates belong beside the refusal
-    # methods that name their stable error contracts.
+    # A SKILL.md's YAML frontmatter, read in two passes: the scanner refuses aliases, tags and duplicate keys from
+    # parser events; then `safe_load` with no permitted classes builds plain data, field by field validated.
     class Frontmatter
       PORTABLE_KEYS = %w[name description license compatibility metadata allowed-tools].freeze
       KNOWN_EXTENSIONS = %w[tamoz.risk tamoz.eval-suite].freeze
       # Whitespace (the spec) or commas (Claude Code) separate tools; a scope in parentheses may hold spaces.
       TOOL_TOKEN = /[^\s,(]+(?:\([^)]*\))?/
+      CONTROL_CHARACTERS = /[\x00-\x08\x0B-\x1F\x7F]/
 
       def initialize(text, label, limits)
         @text = text
@@ -32,150 +18,122 @@ module Tamoz
       end
 
       def call
-        scan!
+        FrontmatterScanner.new(@text, @label).call
         data = parse
-        unless data.is_a?(Hash) && data.keys.all?(String)
-          reject!('skill_frontmatter_invalid', 'frontmatter must be a mapping with string keys')
-        end
-
-        {
-          'name' => string!(data, 'name', required: true, limit: 64),
-          'description' => description(data),
-          'license' => string!(data, 'license', required: false, limit: 128),
-          'compatibility' => string!(data, 'compatibility', required: false,
-                                                        limit: @limits.fetch(:max_compatibility_chars)),
-          'metadata' => metadata(data),
-          'allowed-tools' => requested_capabilities(data),
-          'extra' => extra(data),
-          'raw' => data
-        }
+        { 'name' => name(data), 'description' => description(data),
+          'license' => optional_string(data, 'license', 128),
+          'compatibility' => optional_string(data, 'compatibility', @limits.fetch(:max_compatibility_chars)),
+          'metadata' => metadata(data), 'allowed-tools' => requested_tools(data), 'extra' => extra(data),
+          'raw' => data }
       end
 
       private
 
-      # Pass one: reject the load-time execution vectors before a data model
-      # exists. Skills allow *zero* aliases (profiles allow 32) because a skill has
-      # no legitimate use for indirection.
-      def scan!
-        FrontmatterScanner.new(@text, @label).call
-      end
-
-      # Pass two. An empty permitted-class list cannot materialize a non-core
-      # object; `aliases: false` is belt to pass one's braces.
       def parse
-        Psych.safe_load(@text, permitted_classes: [], permitted_symbols: [], aliases: false)
+        data = Psych.safe_load(@text, permitted_classes: [], permitted_symbols: [], aliases: false)
+        return data if data.is_a?(Hash) && data.keys.all?(String)
+
+        reject!('skill_frontmatter_invalid', 'frontmatter must be a mapping with string keys')
       rescue Psych::Exception => e
         reject!('skill_frontmatter_invalid', "invalid YAML: #{e.class}")
       end
 
+      def name(data)
+        value = required_string(data, 'name', 64)
+        reject!('skill_name_invalid', 'name is not a valid skill name') unless NAME_PATTERN.match?(value)
+        value
+      end
+
       def description(data)
-        value = string!(data, 'description', required: true, limit: @limits.fetch(:max_description_chars))
-        if value.match?(/[\x00-\x08\x0B-\x1F\x7F]/)
-          reject!('skill_description_invalid', 'description contains control characters')
+        value = required_string(data, 'description', @limits.fetch(:max_description_chars))
+        if value.match?(CONTROL_CHARACTERS)
+          reject!('skill_description_invalid',
+                  'description contains control characters')
         end
-
         value
       end
 
-      def string!(data, key, required:, limit:)
+      def required_string(data, key, limit)
+        reject!('skill_field_invalid', "#{key} is required") if data[key].nil?
+        optional_string(data, key, limit)
+      end
+
+      def optional_string(data, key, limit)
         value = data[key]
-        if value.nil?
-          reject!('skill_field_invalid', "#{key} is required") if required
-          return nil
-        end
-        unless valid_string?(value, limit)
-          reject!('skill_field_invalid', "#{key} must be a string of at most #{limit} characters")
-        end
-        reject!('skill_name_invalid', 'name is not a valid skill name') if key == 'name' && !NAME_PATTERN.match?(value)
+        return nil if value.nil?
+        return value if value.is_a?(String) && !value.empty? && value.length <= limit && clean?(value)
 
-        value
-      end
-
-      def valid_string?(value, limit)
-        value.is_a?(String) && !value.empty? && value.length <= limit &&
-          value.valid_encoding? && !value.include?("\0")
+        reject!('skill_field_invalid', "#{key} must be a string of at most #{limit} characters")
       end
 
       def metadata(data)
-        value = data.fetch('metadata', {})
-        return {} if value.nil?
-
+        value = data.fetch('metadata', {}) || {}
         unless value.is_a?(Hash) && value.length <= @limits.fetch(:max_metadata_pairs)
           reject!('skill_metadata_invalid', 'metadata must be a mapping of at most 32 pairs')
         end
 
-        value.each { |key, entry| validate_metadata_pair!(key, entry) }
-        value
+        value.each { |key, entry| check_metadata_pair!(key, entry) }
       end
 
-      def validate_metadata_pair!(key, entry)
-        reject!('skill_metadata_invalid', 'invalid metadata key') unless valid_metadata_key?(key)
-        reject!('skill_metadata_invalid', 'metadata values must be short strings') unless valid_metadata_value?(entry)
-        return unless key.start_with?('tamoz.')
-
-        unless KNOWN_EXTENSIONS.include?(key)
-          reject!('skill_metadata_unknown_extension', "unknown extension key #{key}")
+      def check_metadata_pair!(key, entry)
+        unless key.is_a?(String) && METADATA_KEY_PATTERN.match?(key)
+          reject!('skill_metadata_invalid',
+                  'invalid metadata key')
         end
-        return unless key == 'tamoz.risk'
-        return if DECLARED_RISKS.include?(entry)
+        unless entry.is_a?(String) && entry.bytesize <= @limits.fetch(:max_metadata_value_bytes) && clean?(entry)
+          reject!('skill_metadata_invalid', 'metadata values must be short strings')
+        end
+        check_extension!(key, entry) if key.start_with?('tamoz.')
+      end
+
+      def check_extension!(key, entry)
+        unless KNOWN_EXTENSIONS.include?(key)
+          reject!('skill_metadata_unknown_extension',
+                  "unknown extension key #{key}")
+        end
+        return unless key == 'tamoz.risk' && !DECLARED_RISKS.include?(entry)
 
         reject!('skill_metadata_invalid', "tamoz.risk must be one of #{DECLARED_RISKS.join(', ')}")
       end
 
-      def valid_metadata_key?(key)
-        key.is_a?(String) && METADATA_KEY_PATTERN.match?(key)
-      end
-
-      def valid_metadata_value?(entry)
-        entry.is_a?(String) && entry.bytesize <= @limits.fetch(:max_metadata_value_bytes) &&
-          entry.valid_encoding? && !entry.include?("\0")
-      end
-
-      # The author's requested upper bound and nothing else. It is recorded and
-      # rendered; it never reaches Toolbox's tool set.
-      def requested_capabilities(data)
+      # The author's requested upper bound: recorded and rendered, never part of any tool set.
+      def requested_tools(data)
         value = data['allowed-tools']
         return [] if value.nil?
 
-        list = requested_list(value)
-        reject!('skill_field_invalid', 'allowed-tools entries must be tool names') unless valid_requested_list?(list)
-
+        list = tool_list(value)
+        unless list.length <= @limits.fetch(:max_requested_capabilities) &&
+               list.all? { |tool| tool.is_a?(String) && TOOL_PATTERN.match?(tool) }
+          reject!('skill_field_invalid', 'allowed-tools entries must be tool names')
+        end
         list.uniq.sort
       end
 
-      def requested_list(value)
-        case value
-        when String then value.scan(TOOL_TOKEN)
-        when Array then value
-        else reject!('skill_field_invalid', 'allowed-tools must be a list or comma-separated string')
-        end
+      def tool_list(value)
+        return value.scan(TOOL_TOKEN) if value.is_a?(String)
+        return value if value.is_a?(Array)
+
+        reject!('skill_field_invalid', 'allowed-tools must be a list or comma-separated string')
       end
 
-      def valid_requested_list?(list)
-        list.length <= @limits.fetch(:max_requested_capabilities) &&
-          list.all? { |name| name.is_a?(String) && TOOL_PATTERN.match?(name) }
-      end
-
-      # Unknown portable fields are retained for round-trip compatibility and
-      # ignored for authority (SKILLS_DESIGN §2).
+      # Unknown portable fields are kept for round-trips and ignored for authority.
       def extra(data)
         unknown = data.except(*PORTABLE_KEYS)
         if unknown.length > @limits.fetch(:max_extra_keys)
-          reject!('skill_field_invalid', 'too many unknown frontmatter fields')
+          reject!('skill_field_invalid',
+                  'too many unknown frontmatter fields')
         end
-        serialized = JSON.generate(Skills.canonical(unknown))
-        if serialized.bytesize > @limits.fetch(:max_extra_bytes)
+        if JSON.generate(Skills.canonical(unknown)).bytesize > @limits.fetch(:max_extra_bytes)
           reject!('skill_extra_bytes_exceeded', 'unknown frontmatter fields exceed the byte limit')
         end
-
         unknown
       rescue JSON::GeneratorError
         reject!('skill_field_invalid', 'unknown frontmatter fields are not serializable')
       end
 
-      def reject!(code, detail)
-        raise Rejected.new(code, @label, detail)
-      end
+      def clean?(value) = value.valid_encoding? && !value.include?("\0")
+
+      def reject!(code, detail) = raise(Rejected.new(code, @label, detail))
     end
   end
 end

@@ -2,16 +2,8 @@
 
 module Tamoz
   module Skills
-    # =========================================================================
-    # Snapshot construction
-    # =========================================================================
-    # Assembling a compiled skill set into the immutable snapshot a session
-    # pins, plus the canonical digest that identifies it.
-    #
-    # :reek:LongParameterList — `build` and `catalog_digest` take the five
-    # parts a snapshot IS (skills, rejections, bindings, sources, limits).
-    # Bundling them into a carrier would only rename the list, and the digest
-    # is computed over exactly these five, so the signature is the contract.
+    # Assembles compiled skills into the immutable snapshot a session pins, with the digest that identifies it.
+    # :reek:LongParameterList -- the five parts a snapshot is are exactly what its digest covers.
     module Snapshot
       module_function
 

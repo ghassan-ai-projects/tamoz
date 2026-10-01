@@ -22,7 +22,7 @@ module Tamoz
           text.bytesize > MAX_CATALOG_DESCRIPTION_BYTES
         return nil if TRIGGER.match?(text)
 
-        "Q1: the description does not say when to use the skill (\"Use when ...\")"
+        'Q1: the description does not say when to use the skill ("Use when ...")'
       end
 
       def body_length(record)
@@ -31,7 +31,9 @@ module Tamoz
       end
 
       def dangling(record)
-        (mentioned(record) - record.resource_index.keys).map { |path| "Q3: the body mentions #{path}, which the skill does not ship" }
+        (mentioned(record) - record.resource_index.keys).map do |path|
+          "Q3: the body mentions #{path}, which the skill does not ship"
+        end
       end
 
       def orphans(record)
@@ -40,12 +42,12 @@ module Tamoz
       end
 
       def risk(record)
-        "Q5: metadata tamoz.risk is not declared" unless record.metadata.key?("tamoz.risk")
+        'Q5: metadata tamoz.risk is not declared' unless record.metadata.key?('tamoz.risk')
       end
 
       def mentioned(record)
         body = record.body
-        links = body.scan(LINK).flatten.reject { |target| target.include?("://") }
+        links = body.scan(LINK).flatten.reject { |target| target.include?('://') }
         (links + body.scan(AREA_PATH)).uniq
       end
     end

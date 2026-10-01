@@ -6,8 +6,8 @@ module Tamoz
     # Pure: it reads and compiles, and leaves every write to its caller (ADR-034: generated skills never approve
     # themselves; the manifest is an operator file, so the digest pin is the gate and the names are a record).
     module Candidates
-      MANIFEST_SUFFIX = ".candidate.json"
-      TEMPLATE = File.read(File.expand_path("../../../data/skill-template.md", __dir__)).freeze
+      MANIFEST_SUFFIX = '.candidate.json'
+      TEMPLATE = File.read(File.expand_path('../../../data/skill-template.md', __dir__)).freeze
 
       module_function
 
@@ -15,18 +15,18 @@ module Tamoz
       def manifest(directory, created_by:, source:)
         record = compile(directory)
         require_bar!(record)
-        { "name" => record.name, "tree_digest" => record.tree_digest, "description" => record.description,
-          "created_by" => String(created_by), "source" => String(source) }
+        { 'name' => record.name, 'tree_digest' => record.tree_digest, 'description' => record.description,
+          'created_by' => String(created_by), 'source' => String(source) }
       end
 
       # The record to install, when this approver may install this staged draft exactly as staged.
       def approve(directory, manifest:, approver:)
         approver = String(approver).strip
-        raise Error, "the approving person must be named" if approver.empty?
-        raise Error, "#{approver} created this candidate and cannot approve it" if approver == manifest["created_by"]
+        raise Error, 'the approving person must be named' if approver.empty?
+        raise Error, "#{approver} created this candidate and cannot approve it" if approver == manifest['created_by']
 
         record = compile(directory)
-        raise Error, "the candidate changed after it was staged" unless record.tree_digest == manifest["tree_digest"]
+        raise Error, 'the candidate changed after it was staged' unless record.tree_digest == manifest['tree_digest']
 
         require_bar!(record)
         record
@@ -41,7 +41,8 @@ module Tamoz
       def compile(directory)
         path = File.expand_path(directory)
         name = File.basename(path)
-        snapshot = Skills.compile(sources: [SkillSource.new(id: "candidate", root: File.dirname(path), trust: "workspace")])
+        snapshot = Skills.compile(sources: [SkillSource.new(id: 'candidate', root: File.dirname(path),
+                                                            trust: 'workspace')])
         record = snapshot.records["candidate/#{name}"]
         return record if record
 

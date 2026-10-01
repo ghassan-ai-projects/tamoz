@@ -394,9 +394,9 @@ class AgentSkillsAdversarialTest < Minitest::Test
       refute_match pattern, code, "tamoz-skills must not contain #{label}"
     end
 
-    requires = code.lines.grep(/^\s*require\b/).map(&:strip).uniq
+    requires = code.scan(/^\s*require\s+['"]([^'"]+)['"]/).flatten.uniq
 
-    assert_equal ['require "digest"', 'require "json"', 'require "psych"', 'require "tamoz/core"'], requires.sort
+    assert_equal %w[digest json psych tamoz/core], requires.sort
   end
 
   # A-13b: behavioural. TracePoint can actually observe these calls, so this test
