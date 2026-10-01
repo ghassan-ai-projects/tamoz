@@ -61,8 +61,7 @@ module Tamoz
           return JSON.parse(File.read(path)) if File.exist?(path)
 
           value = yield
-          File.write("#{path}.partial", JSON.generate(value))
-          File.rename("#{path}.partial", path)
+          Tamoz::Core::AtomicFile.replace(path, JSON.generate(value), mode: 0o644)
           value
         end
       end

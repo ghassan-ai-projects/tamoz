@@ -39,6 +39,15 @@ class WebsearchRecordedWebTest < Minitest::Test
     end
   end
 
+  def test_a_recorded_answer_lands_through_atomic_file
+    Dir.mktmpdir do |dir|
+      web = W::RecordedWeb.new(dir: File.join(dir, 'cache'))
+      writes = atomic_writes { web.read('https://a.example/') { { 'text' => 'page' } } }
+
+      assert_equal [[:replace, Dir[File.join(dir, 'cache', 'page-*.json')].first, 0o644]], writes
+    end
+  end
+
   def test_the_adapter_refuses_a_live_search_once_the_cap_is_spent_but_serves_a_recorded_one
     Dir.mktmpdir do |dir|
       with_fixture_web do
