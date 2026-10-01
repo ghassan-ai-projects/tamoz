@@ -60,7 +60,7 @@ module Tamoz
 
       private
 
-      def render_final_view(view, options:)
+      def render_final_view(view, options:, stream_error: nil)
         if options[:json]
           emit_cli_event('cli.session', {
             'thread_id' => view.thread_id,
@@ -69,16 +69,16 @@ module Tamoz
             **projection_fields(view)
           })
         else
-          render_final_view_human(view)
+          render_final_view_human(view, stream_error)
         end
       end
 
-      def render_final_view_human(view)
+      def render_final_view_human(view, stream_error)
         case view.status
         when :completed then render_verification(view)
         when :failed
-          failure = if @stream_error
-                      "tamoz: session failed: #{@stream_error}"
+          failure = if stream_error
+                      "tamoz: session failed: #{stream_error}"
                     else
                       'tamoz: session failed before verified completion'
                     end

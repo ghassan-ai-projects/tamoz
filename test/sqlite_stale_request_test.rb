@@ -862,19 +862,8 @@ class SQLiteStaleRequestTest < Minitest::Test
       fake = FakeSession.new(app, status: :paused, interrupts: [])
       out = StringIO.new
       err = StringIO.new
-      cli = Tamoz::Agent::CLI.new(
-        out:,
-        err:,
-        input: StringIO.new,
-        env: {}
-      )
-      cli.send(
-        :drain_to_terminal,
-        fake,
-        thread_id: thread,
-        owner_id: "owner.cli",
-        options: {}
-      )
+      driver = turn_driver(fake, thread, out:, err:)
+      driver.drain
 
       assert_match(/stale resume request request\.stale/, err.string)
       assert_match(/does not match an outstanding task\/call index/, err.string)
@@ -905,32 +894,15 @@ class SQLiteStaleRequestTest < Minitest::Test
       fake = FakeSession.new(app, status: :paused, interrupts: [])
       out = StringIO.new
       err = StringIO.new
-      cli = Tamoz::Agent::CLI.new(
-        out:,
-        err:,
-        input: StringIO.new,
-        env: {}
-      )
-      cli.send(
-        :drain_to_terminal,
-        fake,
-        thread_id: thread,
-        owner_id: "owner.cli",
-        options: {}
-      )
+      driver = turn_driver(fake, thread, out:, err:)
+      driver.drain
 
       assert_match(/stale resume request request\.stale/, err.string)
       assert_match(/does not match an outstanding task\/call index/, err.string)
       # Rendering is once per request id: a second drain renders nothing new.
       err.rewind
       err.truncate(0)
-      cli.send(
-        :drain_to_terminal,
-        fake,
-        thread_id: thread,
-        owner_id: "owner.cli2",
-        options: {}
-      )
+      driver.drain
       assert_empty err.string
       assert_empty fake.resume_calls
     end
@@ -1019,6 +991,12 @@ class SQLiteStaleRequestTest < Minitest::Test
       @continue_calls << request_id
       nil
     end
+  end
+
+  def turn_driver(session, thread, out:, err:)
+    operator = Tamoz::Agent::CLI::Operator.new(out:, err:, events: Tamoz::Agent::CLI::EventRenderer.new(out:, err:),
+                                               prompts: nil, approvals: nil, cancellation: nil)
+    Tamoz::Agent::CLI::TurnDriver.new(session, thread_id: thread, owner_id: "owner.cli", options: {}, operator:)
   end
 
   def with_runner(definition)

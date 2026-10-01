@@ -284,13 +284,7 @@ module RunnerInputs
         end
       end
 
-      Tamoz::Agent::CLI.prepend(Module.new do
-        def build_model(_options, profile: nil)
-          TamozInputFileModel.new
-        end
-      end)
-
-      exit Tamoz::Agent::CLI.run
+      exit Tamoz::Agent::CLI.run(ARGV, model_factory: ->(_options) { TamozInputFileModel.new })
     RUBY
   end
 
