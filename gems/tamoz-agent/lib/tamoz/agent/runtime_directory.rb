@@ -225,11 +225,8 @@ module Tamoz
         end
 
         def ensure_private_runtime_directories!(path)
-          FileUtils.mkdir_p(path, mode: 0o700)
-          File.chmod(0o700, path)
-          profiles_path = File.join(path, PROFILES_DIR)
-          FileUtils.mkdir_p(profiles_path, mode: 0o700)
-          File.chmod(0o700, profiles_path)
+          Tamoz::Core::PrivateDirectory.secure(path)
+          Tamoz::Core::PrivateDirectory.secure(File.join(path, PROFILES_DIR))
         end
 
         def write_default_config!(path, workspace:)
