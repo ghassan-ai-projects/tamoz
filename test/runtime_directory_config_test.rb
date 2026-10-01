@@ -77,6 +77,23 @@ class RuntimeDirectoryConfigTest < Minitest::Test
     end
   end
 
+  def test_create_publishes_the_default_config_once_through_atomic_file
+    Dir.mktmpdir('tamoz-config') do |directory|
+      runtime_dir = File.join(directory, 'runtime')
+      workspace = File.join(directory, 'workspace')
+      FileUtils.mkdir_p(workspace)
+
+      calls = atomic_writes { RuntimeDirectory.create!(runtime_dir, workspace:) }
+      config_path = File.join(runtime_dir, 'config.yaml')
+      before = File.read(config_path)
+      again = atomic_writes { RuntimeDirectory.create!(runtime_dir, workspace: File.join(directory, 'other')) }
+
+      assert_equal [[:create, config_path, 0o600]], calls
+      assert_equal [[:create, config_path, 0o600]], again
+      assert_equal before, File.read(config_path)
+    end
+  end
+
   def test_config_migrate_is_idempotent_and_never_writes_twice
     with_schema_one_directory do |runtime_dir, config_path, _workspace|
       status, = cli(['--runtime-dir', runtime_dir, 'config', 'migrate'])

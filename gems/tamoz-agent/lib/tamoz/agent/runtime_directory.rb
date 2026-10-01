@@ -63,7 +63,7 @@ module Tamoz
       # runs unattended.
       def self.create!(path, workspace:)
         ensure_private_runtime_directories!(path)
-        write_default_config!(path, workspace:) unless File.exist?(config_path(path))
+        write_default_config!(path, workspace:)
         new(path)
       end
 
@@ -239,9 +239,9 @@ module Tamoz
             "sources" => {},
             "channels" => {}
           }
-          config_path = config_path(path)
-          File.write(config_path, Psych.dump(document))
-          File.chmod(0o600, config_path)
+          Tamoz::Core::AtomicFile.create(config_path(path), Psych.dump(document), mode: 0o600)
+        rescue Errno::EEXIST
+          nil
         end
 
         def read_config_document(config_path)
