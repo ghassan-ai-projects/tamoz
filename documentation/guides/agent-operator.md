@@ -316,7 +316,7 @@ the runtime directory, and `bundled: true` adds the shipped skills:
 sources:
   skills:
     enabled: true
-    root: /home/me/tamoz-skills   # outside the workspace
+    root: ~/tamoz-skills   # outside the workspace
     bundled: true
 ```
 
