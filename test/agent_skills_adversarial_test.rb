@@ -396,7 +396,7 @@ class AgentSkillsAdversarialTest < Minitest::Test
 
     requires = code.lines.grep(/^\s*require\b/).map(&:strip).uniq
 
-    assert_equal ['require "digest"', 'require "fileutils"', 'require "json"', 'require "psych"', 'require "tamoz/core"', 'require "time"'], requires.sort
+    assert_equal ['require "digest"', 'require "json"', 'require "psych"', 'require "tamoz/core"'], requires.sort
   end
 
   # A-13b: behavioural. TracePoint can actually observe these calls, so this test

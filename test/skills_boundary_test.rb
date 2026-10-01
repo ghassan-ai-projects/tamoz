@@ -6,7 +6,8 @@ require_relative 'test_helper'
 class SkillsBoundaryTest < Minitest::Test
   OWNER = 'gems/tamoz-skills/'
   INNER_CONSTANT = /Tamoz::Skills::(?:Compiler|Walk|Frontmatter|FrontmatterScanner|Rejected)\b/
-  ALLOWED_REQUIRES = %w[digest fileutils json psych time tamoz/core].freeze
+  WRITE = /\b(?:FileUtils\.|File\.(?:write|binwrite|rename|delete|unlink|symlink|chmod)|Dir\.(?:mkdir|rmdir)|IO\.write)/
+  ALLOWED_REQUIRES = %w[digest json psych tamoz/core].freeze
 
   def test_no_file_outside_the_gem_names_an_inner_constant
     leaks = (production_files + test_files).reject { |path| path.start_with?(OWNER) }
@@ -28,6 +29,13 @@ class SkillsBoundaryTest < Minitest::Test
 
     assert_empty requires.uniq - ALLOWED_REQUIRES
   end
+
+# The gem reads and compiles; installing, staging and scaffolding write through their caller.
+def test_the_gem_writes_nothing
+  writes = gem_files.flat_map { |path| matches(path, WRITE) }
+
+  assert_empty writes
+end
 
   def test_every_gem_that_names_the_facade_declares_it
     GEM_ROOTS.each do |name, root|

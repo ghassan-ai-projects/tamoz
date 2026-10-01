@@ -15,13 +15,13 @@ class SkillsCandidatesTest < Minitest::Test
   def teardown = FileUtils.remove_entry(@dir)
 
   def draft(name = 'tidy-notes')
-    directory = Tamoz::Skills.scaffold(name, @drafts)
-    Tamoz::Skills.stage_candidate(directory, created_by: 'tamoz.skill-creator', source: 'session:t1')
+    directory = Tamoz::Agent::SkillInstallation.scaffold(name, @drafts)
+    Tamoz::Agent::SkillInstallation.stage(directory, created_by: 'tamoz.skill-creator', source: 'session:t1')
     directory
   end
 
   def install(directory, approver: 'dana')
-    Tamoz::Skills.install_candidate(directory, skills_root: @skills, approver:)
+    Tamoz::Agent::SkillInstallation.new(@skills).install(directory, approver:)
   end
 
   def installed = Tamoz::Skills.operator_snapshot(root: @skills).records
@@ -56,11 +56,11 @@ class SkillsCandidatesTest < Minitest::Test
   end
 
   def test_a_candidate_below_the_bar_cannot_be_staged
-    directory = Tamoz::Skills.scaffold('vague', @drafts)
+    directory = Tamoz::Agent::SkillInstallation.scaffold('vague', @drafts)
     path = File.join(directory, 'SKILL.md')
     File.write(path, File.read(path).sub('Use when the task needs exactly that.', 'Helps.'))
 
-    error = assert_raises(Tamoz::Skills::Error) { Tamoz::Skills.stage_candidate(directory, created_by: 'x', source: 'y') }
+    error = assert_raises(Tamoz::Skills::Error) { Tamoz::Agent::SkillInstallation.stage(directory, created_by: 'x', source: 'y') }
 
     assert_match(/Q1/, error.message)
   end
@@ -68,9 +68,9 @@ class SkillsCandidatesTest < Minitest::Test
   def test_a_new_version_replaces_the_old_which_is_kept_aside
     install(draft)
     second = File.join(@dir, 'drafts2')
-    directory = Tamoz::Skills.scaffold('tidy-notes', second)
+    directory = Tamoz::Agent::SkillInstallation.scaffold('tidy-notes', second)
     File.write(File.join(directory, 'SKILL.md'), File.read(File.join(directory, 'SKILL.md')).sub('# tidy-notes', '# tidy-notes v2'))
-    Tamoz::Skills.stage_candidate(directory, created_by: 'tamoz.skill-optimizer', source: 'optimizer:r1')
+    Tamoz::Agent::SkillInstallation.stage(directory, created_by: 'tamoz.skill-optimizer', source: 'optimizer:r1')
     entry = install(directory)
 
     assert_includes installed.fetch('operator/tidy-notes').body, 'tidy-notes v2'

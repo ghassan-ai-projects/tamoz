@@ -13,7 +13,7 @@ TamozGemspec.build(
   dependencies: [
     ['tamoz-core', "= #{Tamoz::Skills::VERSION}"]
   ],
-  runtime_contracts: ['skills/**/*']
+  runtime_contracts: ['skills/**/*', 'data/*.md']
 ).tap do |spec|
   # TamozGemspec.build already sets this range; restated where RuboCop's Gemspec cop can see it.
   spec.required_ruby_version = Gem::Requirement.new('>= 3.3', '< 5.0')

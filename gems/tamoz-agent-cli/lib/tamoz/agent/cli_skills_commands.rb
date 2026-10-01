@@ -85,7 +85,7 @@ module Tamoz
       end
 
       def new_skill(name, parent)
-        @out.puts Tamoz::Skills.scaffold(name, parent)
+        @out.puts SkillInstallation.scaffold(name, parent)
         0
       end
 
@@ -113,7 +113,7 @@ module Tamoz
 
         references = File.join(workspace, name, 'references')
         Dir.rmdir(references) if Dir.exist?(references) && Dir.empty?(references)
-        manifest = Tamoz::Skills.stage_candidate(File.join(workspace, name), created_by: 'tamoz.skill-creator',
+        manifest = SkillInstallation.stage(File.join(workspace, name), created_by: 'tamoz.skill-creator',
                                                                                 source: "session:#{thread}")
         @out.puts "staged candidate #{manifest['name']} #{manifest['tree_digest']}"
         @out.puts "review #{File.join(workspace, name)}, then: tamoz skills promote #{File.join(workspace, name)} " \
@@ -170,7 +170,7 @@ module Tamoz
         raise OptionParser::MissingArgument, 'skills promote CANDIDATE_DIR --skills DIR' unless options[:skills_dir]
         raise ArgumentError, "skills root #{options[:skills_dir]} does not exist" unless File.directory?(options[:skills_dir])
 
-        entry = Tamoz::Skills.install_candidate(candidate, skills_root: options[:skills_dir], approver:)
+        entry = SkillInstallation.new(options[:skills_dir]).install(candidate, approver: approver.to_s)
         @out.puts "installed #{entry['name']} #{entry['tree_digest']}, approved by #{entry['approver']}" \
                   "#{entry['retired'] ? "; previous version kept in #{entry['retired']}" : ''}"
         0

@@ -20,12 +20,15 @@ The facade is the module `Tamoz::Skills`; other gems never name its inner classe
   and `read_skill_resource` return, fenced as untrusted author content. `scripts/` is indexed
   for identity and never readable.
 - `lint(record)`: the authoring bar (Q1–Q5); one line per issue, empty means it is met.
-- `scaffold(name, parent)`: write a new skill directory that meets the bar.
-- `stage_candidate(directory, created_by:, source:)`: pin a drafted skill that meets the bar by
-  its tree digest in `<directory>.candidate.json`.
-- `install_candidate(directory, skills_root:, approver:)`: install a staged candidate for a
-  named approver other than its creator; refuses a changed tree, keeps the previous version
-  in `.retired/`, logs to `.promotions.jsonl`.
+- `scaffold(name)`: the text of a new skill that meets the bar, from `data/skill-template.md`.
+- `candidate_manifest(directory, created_by:, source:)`: the manifest pinning a drafted skill by
+  its tree digest, when it meets the bar; `manifest_path(directory)` says where it belongs.
+- `approve_candidate(directory, manifest:, approver:)`: the record to install, when a named
+  approver other than its creator installs it exactly as staged; `candidate_record(directory)`
+  compiles one skill directory.
+- The gem writes nothing (`test/skills_boundary_test.rb`). The operator's writes (scaffolding,
+  staging, and installing with `.retired/` and `.promotions.jsonl`) are
+  `Tamoz::Agent::SkillInstallation` in `tamoz-agent-cli`.
 - Value types: `SkillSource`, `SkillRecord`, `SkillResource`, `SkillSnapshot`, `SkillCollision`,
   `SkillRejection`, and `Error`; constants `LIMITS` and `NAME_PATTERN`.
 

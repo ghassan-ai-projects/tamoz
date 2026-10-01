@@ -86,7 +86,7 @@ end
     directory = out.strip
 
     assert_equal 0, status
-    Tamoz::Skills.stage_candidate(directory, created_by: 'tamoz.skill-creator', source: 'test')
+    Tamoz::Agent::SkillInstallation.stage(directory, created_by: 'tamoz.skill-creator', source: 'test')
     refused, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'tamoz.skill-creator')
     promoted, promote_out, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'dana')
     shown, show_out, = tamoz('--skills', installed, 'skills', 'show', 'tidy-notes')

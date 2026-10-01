@@ -53,7 +53,8 @@ module Agenteval
                         best_dir:, heldout:)
         end
 
-        candidate = Tamoz::Skills.stage_candidate(best_dir, created_by: CREATOR, source: "optimizer:#{@train.join(',')}")
+        candidate = Tamoz::Skills.candidate_manifest(best_dir, created_by: CREATOR, source: "optimizer:#{@train.join(',')}")
+        File.write(Tamoz::Skills.manifest_path(best_dir), JSON.pretty_generate(candidate))
         finish(true, "staged", baseline, scored, best_dir:, heldout:, candidate:)
       end
 

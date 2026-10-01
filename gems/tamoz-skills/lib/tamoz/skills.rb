@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
 require "digest"
-require "fileutils"
 require "json"
 require "psych"
-require "time"
 require "tamoz/core"
 
 require_relative "skills/version"
@@ -106,9 +104,11 @@ module Tamoz
 
     def lint(record) = Lint.call(record)
 
-    def scaffold(name, parent) = Candidates.scaffold(name, parent)
-    def stage_candidate(directory, created_by:, source:) = Candidates.stage(directory, created_by:, source:)
-    def install_candidate(directory, skills_root:, approver:) = Candidates.install(directory, skills_root:, approver:)
+    def scaffold(name) = Candidates.scaffold(name)
+    def candidate_manifest(directory, created_by:, source:) = Candidates.manifest(directory, created_by:, source:)
+    def approve_candidate(directory, manifest:, approver:) = Candidates.approve(directory, manifest:, approver:)
+    def candidate_record(directory) = Candidates.compile(directory)
+    def manifest_path(directory) = Candidates.manifest_path(directory)
 
     def bundled_root = BUNDLED_ROOT
 
