@@ -86,6 +86,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Skills.compile" => {},
           "Tamoz::Skills.digest_of" => {},
           "Tamoz::Skills.empty" => {},
+          "Tamoz::Skills.install_candidate" => {},
           "Tamoz::Skills.lint" => {},
           "Tamoz::Skills.operator_snapshot" => {},
           "Tamoz::Skills.disjoint!" => {},
@@ -93,6 +94,8 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Skills.read_resource_entry!" => {},
           "Tamoz::Skills.render_load" => {},
           "Tamoz::Skills.render_resource" => {},
+          "Tamoz::Skills.scaffold" => {},
+          "Tamoz::Skills.stage_candidate" => {},
           "Tamoz::Skills::VERSION" => {}
         },
         "tamoz-research" => {

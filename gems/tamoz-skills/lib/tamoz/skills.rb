@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
 require "digest"
+require "fileutils"
 require "json"
 require "psych"
+require "time"
 require "tamoz/core"
 
 require_relative "skills/version"
+require_relative "skills/candidates"
 require_relative "skills/catalog"
 require_relative "skills/compiler"
 require_relative "skills/frontmatter_scanner"
@@ -93,7 +96,7 @@ module Tamoz
 
     BUNDLED_ROOT = File.expand_path("../../skills", __dir__).freeze
 
-    private_constant :Compiler, :Frontmatter, :FrontmatterScanner, :Lint, :Rejected, :Walk
+    private_constant :Candidates, :Compiler, :Frontmatter, :FrontmatterScanner, :Lint, :Rejected, :Walk
 
     module_function
 
@@ -102,6 +105,10 @@ module Tamoz
     def empty = EMPTY
 
     def lint(record) = Lint.call(record)
+
+    def scaffold(name, parent) = Candidates.scaffold(name, parent)
+    def stage_candidate(directory, created_by:, source:) = Candidates.stage(directory, created_by:, source:)
+    def install_candidate(directory, skills_root:, approver:) = Candidates.install(directory, skills_root:, approver:)
 
     def bundled_root = BUNDLED_ROOT
 

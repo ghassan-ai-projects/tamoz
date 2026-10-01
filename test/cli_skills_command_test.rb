@@ -70,4 +70,34 @@ class CliSkillsCommandTest < Minitest::Test
     assert_match(/needs --skills DIR or --bundled-skills/, run.call("--skill", "evidence-audit").last)
     assert_match(/skill_unknown/, run.call("--bundled-skills", "--skill", "nope").last)
   end
+
+  def test_new_show_and_promote_author_a_skill_through_a_named_person
+    drafts = File.join(@dir, 'drafts')
+    FileUtils.mkdir_p(drafts)
+    installed = File.join(@dir, 'installed')
+    FileUtils.mkdir_p(installed)
+    status, out, = tamoz('skills', 'new', 'tidy-notes', '--dir', drafts)
+    directory = out.strip
+
+    assert_equal 0, status
+    Tamoz::Skills.stage_candidate(directory, created_by: 'tamoz.skill-creator', source: 'test')
+    refused, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'tamoz.skill-creator')
+    promoted, promote_out, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'dana')
+    shown, show_out, = tamoz('--skills', installed, 'skills', 'show', 'tidy-notes')
+
+    refute_equal 0, refused
+    assert_equal 0, promoted
+    assert_match(/installed tidy-notes sha256:\h{64}, approved by dana/, promote_out)
+    assert_equal 0, shown
+    assert_includes show_out, 'authoring bar: met'
+  end
+
+  def test_create_refuses_a_thread_that_did_not_finish_verified
+    sessions = File.join(@dir, 'sessions')
+    FileUtils.mkdir_p(sessions, mode: 0o700)
+    status, _, err = tamoz('--session-dir', sessions, 'skills', 'create', 'x', '--from-session', 'missing')
+
+    refute_equal 0, status
+    refute_empty err
+  end
 end

@@ -192,23 +192,23 @@ module Agenteval
     # ---- real Tamoz -----------------------------------------------------------
 
     # One operator directory holding the skill and the distractors, so every catalog entry carries the same label.
-    def catalog_dir(root)
+    def catalog_dir(root, skill_dir = SKILL_DIR)
       dir = File.join(root, "operator-skills")
       FileUtils.mkdir_p(dir)
-      FileUtils.cp_r(SKILL_DIR, dir)
+      FileUtils.cp_r(skill_dir, File.join(dir, "evidence-audit"))
       Dir[File.join(DISTRACTORS, "*")].each { |skill| FileUtils.cp_r(skill, dir) }
       dir
     end
 
-    def arm_flags(arm, root)
+    def arm_flags(arm, root, skill_dir = SKILL_DIR)
       case arm
-      when "skill" then ["--skills", catalog_dir(root)]
-      when "forced" then ["--skills", catalog_dir(root), "--skill", "evidence-audit"]
+      when "skill" then ["--skills", catalog_dir(root, skill_dir)]
+      when "forced" then ["--skills", catalog_dir(root, skill_dir), "--skill", "evidence-audit"]
       else []
       end
     end
 
-    def tamoz_agent(scenario, arm, budget:)
+    def tamoz_agent(scenario, arm, budget:, skill_dir: SKILL_DIR)
       tamoz_root = File.expand_path("..", Agenteval::ROOT)
       env = { "LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8" }.merge(TamozCode.environment(tamoz_root, nil))
                                                                     .merge(model_env(tamoz_root))
@@ -218,7 +218,7 @@ module Agenteval
         thread = "audit-#{scenario.id.downcase}"
         argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", workspace, "--session-dir", sessions,
                 "--session", thread, "--allow-changes", "--check", "verify=ruby #{VERIFIER} audit/findings.json",
-                *arm_flags(arm, root), "code", PROMPT]
+                *arm_flags(arm, root, skill_dir), "code", PROMPT]
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         output, status = MemoryPack.capture(env, argv, workspace, budget)
         run = { "exit_code" => status, "answer_tail" => output.to_s.lines.last(3).join.strip[0, 300],
@@ -260,7 +260,7 @@ module Agenteval
 
     # Arm order rotates from trial to trial so provider drift hits every arm alike; each trial is appended to
     # `partial` as soon as it ends.
-    def run(arms:, repeat:, budget:, only: nil, partial: nil, keep_root: nil)
+    def run(arms:, repeat:, budget:, only: nil, partial: nil, keep_root: nil, skill_dir: SKILL_DIR)
       selected = scenarios.select { |scenario| only.nil? || only.include?(scenario.id) }
       turn = 0
       failures = 0
@@ -270,7 +270,7 @@ module Agenteval
           turn += 1
           order.map do |arm|
             keep = keep_root && File.join(keep_root, "#{scenario.id}-#{arm}-#{index}")
-            row = trial(scenario, arm:, trial: index, keep:) { |workspace, root| tamoz_agent(scenario, arm, budget:).call(workspace, root) }
+            row = trial(scenario, arm:, trial: index, keep:) { |workspace, root| tamoz_agent(scenario, arm, budget:, skill_dir:).call(workspace, root) }
             File.open(partial, "a") { |file| file.puts(JSON.generate(row)) } if partial
             failures = row["provider_failure"] ? failures + 1 : 0
             raise ProviderUnavailable, "provider refused #{failures} trials in a row (#{row['provider_failure']})" if

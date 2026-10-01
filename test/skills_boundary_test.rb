@@ -6,7 +6,7 @@ require_relative 'test_helper'
 class SkillsBoundaryTest < Minitest::Test
   OWNER = 'gems/tamoz-skills/'
   INNER_CONSTANT = /Tamoz::Skills::(?:Compiler|Walk|Frontmatter|FrontmatterScanner|Rejected)\b/
-  ALLOWED_REQUIRES = %w[digest json psych tamoz/core].freeze
+  ALLOWED_REQUIRES = %w[digest fileutils json psych time tamoz/core].freeze
 
   def test_no_file_outside_the_gem_names_an_inner_constant
     leaks = (production_files + test_files).reject { |path| path.start_with?(OWNER) }
