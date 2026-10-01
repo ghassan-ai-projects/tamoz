@@ -11,8 +11,8 @@ module Tamoz
       module_function
 
       def secure(path)
-        FileUtils.mkdir_p(path.to_s, mode: MODE)
-        File.chmod(MODE, path.to_s)
+        FileUtils.mkdir_p(path, mode: MODE)
+        File.chmod(MODE, path)
         path
       end
     end
