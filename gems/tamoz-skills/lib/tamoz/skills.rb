@@ -8,12 +8,16 @@ require "tamoz/core"
 require_relative "skills/version"
 require_relative "skills/candidates"
 require_relative "skills/catalog"
+require_relative "skills/collisions"
 require_relative "skills/compiler"
+require_relative "skills/disk"
 require_relative "skills/frontmatter_scanner"
 require_relative "skills/frontmatter"
 require_relative "skills/lint"
+require_relative "skills/manifest"
 require_relative "skills/walk"
 require_relative "skills/snapshot"
+require_relative "skills/tree"
 require_relative "skills/values"
 
 module Tamoz
@@ -94,7 +98,8 @@ module Tamoz
 
     BUNDLED_ROOT = File.expand_path("../../skills", __dir__).freeze
 
-    private_constant :Candidates, :Compiler, :Frontmatter, :FrontmatterScanner, :Lint, :Rejected, :Walk
+    private_constant :Candidates, :Collisions, :Compiler, :Disk, :Frontmatter, :FrontmatterScanner, :Lint, :Manifest,
+                     :Rejected, :Tree, :Walk
 
     module_function
 

@@ -82,6 +82,8 @@ module Tamoz
         super(detail ? "#{@code}: #{detail}" : @code)
       end
 
+      def rejection(source_id) = SkillRejection.new(source_id:, entry:, code:, detail:)
+
       def detail
         text = message.sub(/\A#{Regexp.escape(@code)}: ?/, '')
         text.empty? ? @code : text.byteslice(0, MAX_DETAIL_BYTES).scrub

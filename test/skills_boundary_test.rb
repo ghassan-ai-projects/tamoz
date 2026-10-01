@@ -5,7 +5,7 @@ require_relative 'test_helper'
 # tamoz-skills is reached only through its facade: the Tamoz::Skills functions and its value types.
 class SkillsBoundaryTest < Minitest::Test
   OWNER = 'gems/tamoz-skills/'
-  INNER_CONSTANT = /Tamoz::Skills::(?:Compiler|Walk|Frontmatter|FrontmatterScanner|Rejected)\b/
+  INNER_CONSTANT = /Tamoz::Skills::(?:Candidates|Collisions|Compiler|Disk|Frontmatter|FrontmatterScanner|Lint|Manifest|Rejected|Walk)\b/
   WRITE = /\b(?:FileUtils\.|File\.(?:write|binwrite|rename|delete|unlink|symlink|chmod)|Dir\.(?:mkdir|rmdir)|IO\.write)/
   ALLOWED_REQUIRES = %w[digest json psych tamoz/core].freeze
 
@@ -19,7 +19,7 @@ class SkillsBoundaryTest < Minitest::Test
   def test_the_inner_constants_are_private
     public_names = Tamoz::Skills.constants
 
-    %i[Compiler Walk Frontmatter FrontmatterScanner Rejected].each { |name| refute_includes public_names, name }
+    %i[Candidates Collisions Compiler Disk Frontmatter FrontmatterScanner Lint Manifest Rejected Walk].each { |name| refute_includes public_names, name }
   end
 
   def test_the_gem_requires_only_core_and_the_stdlib
