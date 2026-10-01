@@ -3,7 +3,6 @@
 require 'fileutils'
 require 'json'
 require 'pathname'
-require 'tempfile'
 
 module Tamoz
   module Evals
@@ -525,13 +524,7 @@ module Tamoz
         def write(document)
           bytes = "#{CanonicalJSON.dump(document)}\n"
           FileUtils.mkdir_p(@scoreboard_path.dirname)
-          Tempfile.create([".#{@scoreboard_path.basename}-", '.tmp'], @scoreboard_path.dirname) do |temporary|
-            temporary.write(bytes)
-            temporary.flush
-            temporary.fsync
-            temporary.close
-            File.rename(temporary.path, @scoreboard_path)
-          end
+          Tamoz::Core::AtomicFile.replace(@scoreboard_path, bytes, prefix: ".#{@scoreboard_path.basename}-")
         end
       end
       # rubocop:enable Metrics/ClassLength
