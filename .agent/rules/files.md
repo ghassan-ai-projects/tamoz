@@ -11,3 +11,6 @@
   exemption goes stale.
 - **A conversion test asserts the call, not the bytes.** `atomic_writes { ... }` (test_helper) records what
   AtomicFile published; a before/after byte check passes on the old code too.
+- **Not every write is durable state.** `RecorderJournal#persist_health` runs per dropped signal on the
+  producer's thread; a four-fsync replace there stalls the overload path. Check the call frequency first.
+- **`Tempfile` is 0600, the old `File.write` honoured the umask.** Pass `0o666 & ~File.umask` to keep it.

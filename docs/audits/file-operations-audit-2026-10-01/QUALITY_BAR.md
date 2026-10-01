@@ -6,7 +6,9 @@ every line below holds; otherwise loop.
 
 ## Verdict on the audit's claims
 
-All 18 sites were re-read against the code. Findings 1-17 are accurate and convert.
+All 18 sites were re-read against the code. Findings 1-12 and 14-17 are accurate and convert.
+Finding 13 (`persist_health`) is rejected after review: it runs on every dropped signal on the emitter's
+thread, so atomic replace would add four fsyncs exactly when the queue is full.
 Finding 18 (`skill_installation.rb` scaffold/stage writes) is rejected: plain creation into
 a fresh per-run directory, no mode requirement, so AtomicFile adds machinery and no property.
 The "third facade method" idea (publish a staged file) is rejected: one caller (SQLite backup),
