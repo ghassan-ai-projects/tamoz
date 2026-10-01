@@ -196,7 +196,7 @@ module Agenteval
       end.parse!(argv)
       staging = File.join(Agenteval::ROOT, "sessions", "skills-optimizer", Time.now.utc.strftime("%Y%m%dT%H%M%S"))
       FileUtils.mkdir_p(staging)
-      result = SkillsPack::Optimizer.new(propose: SkillsPack::Optimizer.proposer, evaluate: SkillsPack::Optimizer.evaluator,
+      result = SkillsPack::Optimizer.new(propose: SkillsPack::Optimizer.proposer, evaluate: SkillsPack::Optimizer.evaluator(partial: File.join(staging, "trials.jsonl")),
                                          variants: options[:variants], staging:).call
       document = result.to_h.transform_keys(&:to_s).merge("model" => SkillsPack.model_route.join("/"))
       File.write(options[:out], JSON.pretty_generate(document)) if options[:out]

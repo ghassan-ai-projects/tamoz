@@ -86,3 +86,14 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
     end
   end
 end
+
+# The optimizer runs as `agenteval skills optimize`, in a process the test helper did not prepare.
+class AgentevalSkillsOptimizerLoadTest < Minitest::Test
+  def test_the_optimizer_loads_what_it_uses_in_a_fresh_process
+    script = 'require_relative "agenteval/skills/optimizer"; print Tamoz::Skills.respond_to?(:lint) && Tamoz::Skills::Error.name'
+    out, err, status = Open3.capture3(RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', '-e', script, chdir: ROOT.to_s)
+
+    assert status.success?, err
+    assert_equal 'Tamoz::Skills::Error', out
+  end
+end

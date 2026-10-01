@@ -5,6 +5,7 @@ require "json"
 require "net/http"
 require "time"
 require "tmpdir"
+require "tamoz/skills"
 require_relative "pack"
 
 module Agenteval
@@ -152,9 +153,9 @@ module Agenteval
       end
 
       # The real evaluator: the pack's forced arm, one repeat, on the given skill directory.
-      def self.evaluator(budget: 600)
+      def self.evaluator(budget: 600, partial: nil)
         lambda do |skill_dir, ids|
-          SkillsPack.run(arms: %w[forced], repeat: 1, budget:, only: ids, skill_dir:).fetch("rows")
+          SkillsPack.run(arms: %w[forced], repeat: 1, budget:, only: ids, skill_dir:, partial:).fetch("rows")
         end
       end
     end
