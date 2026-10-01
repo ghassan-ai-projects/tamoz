@@ -216,12 +216,10 @@ module Tamoz
       def build_list_session(adapter, options) = @sessions.build_list_session(adapter, options)
 
       def run_durable(options, thread_id, read_only: false, profile: nil, request_id: nil)
-        install_signal_handlers do
-          @sessions.assemble(options, thread_id, read_only:, profile:,
-                                                 openers: run_openers(options, thread_id)) do |parts, session|
-            @approval_engine = parts.approvals
-            yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
-          end
+        @sessions.assemble(options, thread_id, read_only:, profile:,
+                                               openers: run_openers(options, thread_id)) do |parts, session|
+          @approval_engine = parts.approvals
+          install_signal_handlers { yield session, request_id || SecureRandom.uuid, SecureRandom.uuid }
         end
       end
 
