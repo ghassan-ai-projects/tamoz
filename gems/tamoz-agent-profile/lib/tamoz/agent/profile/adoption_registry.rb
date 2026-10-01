@@ -34,11 +34,10 @@ module Tamoz
           document.fetch('activated').fetch(profile_id, [])
         end
 
-        # `document` verifies permissions and yields the empty document when no
-        # registry exists yet, so a registry someone else can read raises here
-        # before anything is written. The read-modify-write holds the registry's
-        # lock file, so two processes activating at once cannot lose one digest.
+        # A registry or directory someone else can read is refused before anything is
+        # changed; the lock keeps two processes activating at once from losing a digest.
         def activate(profile_id, digest)
+          Profile.verify_permissions!(@path) if File.exist?(@path)
           Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
           Tamoz::Core::FileLock.exclusive("#{@path}.lock") { append(profile_id, digest) }
         end

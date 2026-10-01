@@ -115,6 +115,22 @@ class AgentProfileAdoptionSeamsTest < Minitest::Test
     assert_equal before, File.read(@path)
   end
 
+  def test_activate_refuses_a_loose_directory_instead_of_repairing_it
+    write_registry({ 'schema_version' => 1, 'activated' => {} })
+    File.chmod(0o755, File.dirname(@path))
+
+    assert_raises(Profile::PermissionError) { registry.activate('p', DIGEST) }
+    assert_equal 0o755, File.stat(File.dirname(@path)).mode & 0o777
+    refute_path_exists "#{@path}.lock"
+  end
+
+  def test_concurrent_activations_each_land
+    digests = Array.new(8) { |index| "sha256:#{index.to_s * 64}" }
+    Array.new(8) { |index| Thread.new { registry.activate('p', digests.fetch(index)) } }.each(&:join)
+
+    assert_equal digests.sort, registry.digests('p').sort
+  end
+
   # --- activate's write contract ---------------------------------------------
 
   def test_activate_creates_an_owner_only_registry
