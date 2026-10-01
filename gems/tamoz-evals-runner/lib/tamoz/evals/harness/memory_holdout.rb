@@ -19,7 +19,7 @@ module Tamoz
 
         def self.create(record_id:, content:)
           directory = Dir.mktmpdir("tamoz-memory-holdout")
-          File.chmod(DIRECTORY_MODE, directory)
+          Tamoz::Core::PrivateDirectory.secure(directory)
           path = File.join(directory, "holdout.record.json")
           Tamoz::Core::AtomicFile.replace(path, "#{CanonicalJSON.dump(content)}\n", mode: FILE_MODE)
           instance = new(directory:, record_id:)
