@@ -40,7 +40,7 @@ module Tamoz
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
                    work_checkpoint: previous[:work_checkpoint],
-                   work_trace: [brief.event].compact)
+                   work_trace: [brief.event].compact + work(base).opening_trace)
       end
 
       def step(state, context)

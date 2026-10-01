@@ -196,7 +196,7 @@ module Tamoz
         raise ToolArgumentError, 'path must be a string' unless path.is_a?(String)
         raise ToolArgumentError, 'path exceeds 1024 bytes' if path.bytesize > 1024
 
-        Skills.read_resource_entry!(record, path)
+        Tamoz::Skills.read_resource_entry!(record, path)
         arguments
       end
 

@@ -31,7 +31,7 @@ module Tamoz
   module Agent
     ROOT = File.expand_path("../../..", __dir__).freeze
 
-    # P16: the tool primitives and the skills descriptor surface live in
+    # P16: the tool primitives live in
     # tamoz-tools. These are constant rebindings — object-identical to the
     # tools-side constants — never subclass or delegation wrappers, so class
     # identity, `MAX_*` constants, and attr_readers all survive. The
@@ -40,7 +40,6 @@ module Tamoz
     # spellings via `Tamoz::Core::TOOL_ERROR_CLASS_NAMES`.
     Toolbox = Tamoz::Tools::Toolbox
     CheckReceipt = Tamoz::Tools::CheckReceipt
-    Skills = Tamoz::Tools::Skills
     # ToolError/ToolArgumentError/ToolPolicyError are bound once, by the
     # capabilities umbrella (required above); rebinding them here would warn.
 
@@ -52,7 +51,7 @@ module Tamoz
       checks: {},
       check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
       ask: nil,
-      skills: Skills::Snapshot.empty,
+      skills: Tamoz::Skills.empty,
       routing: :legacy,
       recorder: Tamoz::Observability::Recorder::Null::INSTANCE,
       healing_rules: Healing::RuleRegistry.new

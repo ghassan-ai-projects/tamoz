@@ -136,6 +136,26 @@ class CliTelegramTest < Minitest::Test
     end
   end
 
+# With an operator skills source enabled, the chat profile offers the skill tools and pins the digest they make.
+def test_setup_offers_the_skill_tools_when_skills_are_enabled
+  with_dirs do |runtime, workspace|
+    Tamoz::Agent::RuntimeDirectory.create!(runtime, workspace:)
+    config = File.join(runtime, 'config.yaml')
+    File.write(config, File.read(config).sub(/^sources:.*?\n/m, "sources:\n  skills:\n    enabled: true\n").then do |text|
+      text.include?("skills:\n    enabled: true") ? text : "#{text}sources:\n  skills:\n    enabled: true\n"
+    end)
+    FileUtils.cp_r(File.join(Tamoz::Skills.bundled_root, 'evidence-audit'), File.join(runtime, 'skills', 'evidence-audit').tap { |dir| FileUtils.mkdir_p(File.dirname(dir)) })
+
+    status, _, err = cli(runtime, %W[telegram setup --workspace #{workspace} --owner #{OWNER}], bot: Bot.new([]))
+
+    assert_equal 0, status, err
+    profile = Psych.safe_load_file(File.join(runtime, 'profiles', 'telegram.yaml'))
+
+    assert_includes profile.dig('tools', 'allowed'), 'load_skill'
+    assert_equal 0, cli(runtime, %w[comms doctor], bot: Bot.new([]))[0], 'the written profile passes the doctor'
+  end
+end
+
   def test_setup_reports_a_transient_telegram_failure_without_a_backtrace
     with_dirs do |runtime, workspace|
       broken = Object.new

@@ -21,6 +21,7 @@ module Tamoz
       # unreadable.
       include CLIWorkerCommands
       include CLIProbeCommands
+      include CLISkillsCommands
       include CLIMemoryCommands
       include CLIImprovementCommands
       include CLIScheduleCommands
@@ -41,6 +42,7 @@ module Tamoz
         "investigate" => :cmd_investigate,
         "deep-research" => :cmd_deep_research,
         "probes" => :cmd_probes,
+        "skills" => :cmd_skills,
         "memory" => :cmd_memory,
         "resume" => :cmd_resume,
         "continue" => :cmd_continue,
@@ -187,6 +189,7 @@ module Tamoz
           root: options[:root],
           allow_changes: options[:allow_changes],
           checks: options[:checks],
+          skills: SkillsOptions.new(options).snapshot(options[:root]),
           ask: method(:approve_one_shot),
           routing: one_shot_routing(options)
         )
@@ -638,6 +641,8 @@ module Tamoz
       # record never disagrees with the run.
       def build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:, memory: nil)
         engine, owner, = memory
+        harness = work_harness(options, thread_id)
+        SkillsOptions.require_loadable!(toolbox, harness[:skill])
         Tamoz::Agent::Session.new(
           memory: engine,
           memory_owner: owner,
@@ -653,7 +658,7 @@ module Tamoz
           artifact_store: adapter.bind_artifact_store(tenant: "session:#{thread_id}"),
           artifact_tenant: "session:#{thread_id}",
           routing: durable_routing(options),
-          harness: work_harness(options, thread_id)
+          harness:
         )
       end
 
@@ -687,24 +692,27 @@ module Tamoz
       end
 
       def build_toolbox(options, profile: nil)
-        return build_profile_toolbox(profile) if profile
+        return build_profile_toolbox(profile, options) if profile
 
         Tamoz::Agent::Toolbox.new(
           root: options[:root],
           allow_changes: options[:allow_changes],
-          checks: options[:checks]
+          checks: options[:checks],
+          skills: SkillsOptions.new(options).snapshot(options[:root])
         )
       end
 
       # §5.2: the profile is the capability authority; the toolbox is derived
       # from it wholesale so its catalog digest matches the pinned value.
-      def build_profile_toolbox(profile)
+      def build_profile_toolbox(profile, options)
+        skills = SkillsOptions.new(options).snapshot_for(profile)
         Tamoz::Agent::Toolbox.new(
           root: profile.canonical_root,
           allow_changes: profile.allow_changes?,
           checks: profile.checks.transform_values { |check| check.fetch("argv") },
           check_safeties: profile.checks.transform_values { |check| check.fetch("safety").to_sym },
-          allowed_tools: profile.tools_allowed
+          allowed_tools: profile.tools_allowed,
+          skills:
         )
       end
 

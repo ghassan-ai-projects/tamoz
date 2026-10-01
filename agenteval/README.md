@@ -72,3 +72,17 @@ reported as such.
 
 Fixture/scripted runs prove plumbing only; a capability claim needs a real-provider run recorded
 with its provenance (`documentation/benchmark/README.md`).
+
+## The skills pack
+
+Does the bundled `evidence-audit` skill make Tamoz a better auditor, and does the model find it?
+Design, bar and results: [`docs/skills-review-2026-09-30/`](../docs/skills-review-2026-09-30/README.md).
+
+```bash
+bundle exec rake agenteval:skills:prove   # 12 controls through the real graders, no model calls
+bundle exec rake agenteval:skills:run     # arms skill / forced / none on GLM-5.3-Flash (AGENTEVAL_MODEL overrides)
+bundle exec ruby agenteval/bin/agenteval skills optimize   # rewrite SKILL.md; kept only if it wins on held-out
+```
+
+A run stops, and reports nothing, after two consecutive provider refusals. The optimizer stages a winning
+rewrite for `tamoz skills promote`; one trial per scenario is indicative, not a measurement.

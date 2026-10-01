@@ -1,9 +1,9 @@
 {
   "generated_by": "script/adr_catalog.rb",
-  "count": 55,
-  "next_number": 56,
+  "count": 56,
+  "next_number": 57,
   "states": {
-    "accepted": 51,
+    "accepted": 52,
     "retired": 3,
     "proposed": 1
   },
@@ -1413,6 +1413,33 @@
         "035",
         "037"
       ]
+    },
+    {
+      "num": "056",
+      "id": 56,
+      "title": "ADR-056 — Skills are a gem, `tamoz-skills`, reached through one facade",
+      "status": "Accepted 2026-10-01",
+      "state": "accepted",
+      "date": "2026-10-01",
+      "tier": "F",
+      "file": "adr-056-skills-gem.md",
+      "relates_to": [
+        "033",
+        "034"
+      ],
+      "superseded_by": [],
+      "amended_by": [],
+      "verified": true,
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Verification",
+        "Next reads"
+      ],
+      "supersedes": [],
+      "amends": []
     }
   ]
 }

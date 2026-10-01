@@ -1,0 +1,26 @@
+{
+  "criteria": {
+    "C1": {
+      "conclusion": "exception",
+      "path": "change-log.md",
+      "quote": "| CHG-104 | normal | 2026-03-03 | 2026-03-05 | yes |",
+      "alternatives": [
+        {
+          "path": "change-log.md",
+          "quote": "| CHG-107 | emergency | 2026-03-21 | none recorded | yes |"
+        }
+      ]
+    },
+    "C2": {
+      "conclusion": "exception",
+      "path": "change-log.md",
+      "quote": "| CHG-107 | emergency | 2026-03-21 | none recorded | yes |",
+      "absence": true
+    },
+    "C3": {
+      "conclusion": "no_exception",
+      "path": "change-procedure.md",
+      "quote": "Every change is tested in the staging environment before release to production"
+    }
+  }
+}

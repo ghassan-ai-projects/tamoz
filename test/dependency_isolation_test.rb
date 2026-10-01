@@ -52,6 +52,15 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  def test_skills_loads_only_core
+    allowed = declared_features("tamoz-core", "tamoz-skills")
+    features = loaded_features_after("tamoz/skills")
+
+    assert_includes features, "tamoz/skills.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
   def test_core_loads_only_its_declared_runtime_boundary
     features = loaded_features_after("tamoz/core")
 
@@ -70,7 +79,7 @@ class DependencyIsolationTest < Minitest::Test
     assert_includes features, "tamoz/core.rb"
     assert_includes features, "tamoz/tools.rb"
     assert_includes features, "tamoz/tools/toolbox.rb"
-    assert_includes features, "tamoz/tools/skills.rb"
+    assert_includes features, "tamoz/skills.rb"
     refute(
       features.any? { |path| path.match?(%r{tamoz/(?:graph|sqlite|agent|evals)|ruby_llm}) },
       features.inspect
@@ -83,7 +92,7 @@ class DependencyIsolationTest < Minitest::Test
   # three gems' own trees (derived from their roots); any loaded feature
   # outside the union is an upward or sideways edge.
   def test_kernel_loads_core_and_tools_only
-    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-tools", "tamoz-agent-kernel")
+    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-skills", "tamoz-tools", "tamoz-agent-kernel")
     features = loaded_features_after("tamoz/agent_kernel")
 
     assert_includes features, "tamoz/core.rb"
@@ -96,7 +105,7 @@ class DependencyIsolationTest < Minitest::Test
   # PA: the capabilities gem loads core + tools + kernel only, and keeps the
   # MCP surface lazy — requiring the umbrella must not pull tamoz/mcp.
   def test_capabilities_loads_core_tools_kernel_only_and_keeps_mcp_lazy
-    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-tools", "tamoz-agent-kernel", "tamoz-agent-capabilities")
+    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-skills", "tamoz-tools", "tamoz-agent-kernel", "tamoz-agent-capabilities")
     features = loaded_features_after("tamoz/agent_capabilities")
 
     assert_includes features, "tamoz/agent_capabilities.rb"

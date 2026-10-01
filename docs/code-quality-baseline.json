@@ -391,7 +391,7 @@
       "gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb": 17,
       "gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb": 17,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_selector_deriver.rb": 16,
-      "gems/tamoz-tools/lib/tamoz/tools/skills.rb": 16,
+      "gems/tamoz-skills/lib/tamoz/skills.rb": 16,
       "gems/tamoz-core/lib/tamoz/cancellation_token.rb": 16,
       "gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb": 16,
       "gems/tamoz-core/lib/tamoz/configuration.rb": 16,

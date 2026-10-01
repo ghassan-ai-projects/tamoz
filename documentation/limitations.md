@@ -89,9 +89,12 @@ If you need "every weekday at 09:00 local time", Tamoz cannot express it.
 
 Skills are compiled from operator-configured directories into immutable,
 content-addressed snapshots, and their content grants no authority. **There is
-no install, update, or self-improvement pipeline**: no quarantine staging, no
-provenance checks on a downloaded artifact, no atomic activation of a new
-digest. You place skill trees on disk yourself, out of band.
+no registry install or update pipeline**: no download, no quarantine staging, no
+provenance checks on a downloaded artifact, no auto-update. You place third-party
+skill trees on disk yourself, out of band. What exists is local:
+`tamoz skills promote` installs a staged candidate (a drafted or optimized skill)
+atomically on a named person's approval. A model cannot run a skill script; a
+script runs only when the operator wires it as a `--check`.
 
 ### Channel communications (invariants 56–58, ADR-041–043)
 

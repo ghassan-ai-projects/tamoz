@@ -11,8 +11,9 @@ module Tamoz
       # Operator settings for the work route; all of it is trusted configuration.
       # `research` is nil for an ordinary turn, :lead for a deep-research turn, :child for a research subagent.
       # `research_dir` is where research runs are written; `research_budgets` may only narrow the shipped budgets.
+      # `skill` is a skill the user invoked for this thread, loaded before the first model call.
       Settings = Data.define(:surface, :persona, :preferences, :guidance_files, :guidance_bytes, :context_policy,
-                             :loop_policy, :research, :research_dir, :research_budgets) do
+                             :loop_policy, :research, :research_dir, :research_budgets, :skill) do
         def self.from(options)
           options = (options || {}).transform_keys(&:to_sym)
           surface = options.fetch(:surface, :cli).to_sym
@@ -27,7 +28,7 @@ module Tamoz
               context_policy: ContextEngine::Policy.from_h(options.fetch(:context_policy, {})),
               loop_policy: Harness::LoopPolicy.from_h(options.fetch(:loop_policy, {})),
               research: options[:research]&.to_sym, research_dir: options[:research_dir],
-              research_budgets: options[:research_budgets])
+              research_budgets: options[:research_budgets], skill: options[:skill])
         end
       end
 
@@ -83,6 +84,7 @@ module Tamoz
         entries = method_pinned(append([], 'runtime', runtime_text, pinned: true))
         entries = append(entries, 'guidance', scrub(guidance.text), pinned: true, source: guidance.sources.join(' ')) if
           guidance
+        entries = skill_entries(entries)
         entries = append(entries, 'memory', scrub(carried[:memory]), pinned: true) if carried[:memory]
         if carried[:checkpoint]
           entries = append(entries, 'checkpoint', thread_checkpoint(carried[:checkpoint]), pinned: true,
@@ -98,6 +100,28 @@ module Tamoz
       end
 
       def scrub(text) = Tamoz::Core.scrub_secrets(text)
+
+      # The catalog is shown exactly when load_skill is on the surface; a user-invoked skill follows it.
+      def skill_entries(entries)
+        return entries unless skills?
+
+        entries = append(entries, 'guidance', toolbox.skill_catalog_prompt, pinned: true, source: 'skills')
+        return entries unless settings.skill
+
+        append(entries, 'guidance', toolbox.execute('load_skill', { 'skill' => settings.skill }), pinned: true,
+                                                                                         source: 'skill')
+      end
+
+      def skills? = header.tool_names.include?('load_skill')
+
+      # Provenance: which skill tree reached the model, and who chose it.
+      def skill_loaded(reference, invoked_by:)
+        { 'event' => 'skill_loaded', **toolbox.skill_identity(reference), 'invoked_by' => invoked_by }
+      end
+
+      def opening_trace = settings.skill && skills? ? [skill_loaded(settings.skill, invoked_by: 'user')] : []
+
+      def toolbox = @configuration.toolbox
 
       def thread_checkpoint(summary) = ContextEngine::Compaction.checkpoint_text(summary)
 

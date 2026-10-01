@@ -115,9 +115,10 @@ module WorkLoopFixtures
     end
   end
 
-  def work_session(model:, root:, adapter:, profile: 'auto', checks: { 'test' => ['true'] }, harness: {})
+  def work_session(model:, root:, adapter:, profile: 'auto', checks: { 'test' => ['true'] }, harness: {},
+                   skills: Tamoz::Skills.empty)
     Tamoz::Agent::Session.new(
-      model:, toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks:), checkpointer: adapter,
+      model:, toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks:, skills:), checkpointer: adapter,
       routing: :work, approval_engine: Tamoz::Agent.build_approval_engine(profile_name: profile),
       approval_session_id: 'work-test', artifact_store: adapter.bind_artifact_store(tenant: 'work-test'),
       artifact_tenant: 'work-test', harness:

@@ -15,6 +15,7 @@ module Tamoz
       PROFILE = 'telegram'
       TOKEN_ENV = 'TAMOZ_TELEGRAM_BOT_TOKEN'
       TOOLS = %w[read_file list_directory search_text glob apply_patch create_file].freeze
+      SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
       EXE = File.expand_path('../../../exe/tamoz', __dir__)
       PAIRING_WAIT_S = 120
       # Tried in this order when no --provider is given; the first that answers is used.
@@ -191,16 +192,29 @@ module Tamoz
       def write_telegram_profile(directory)
         path = File.join(directory.profiles_path, "#{PROFILE}.yaml")
         root = directory.workspace_root
-        digest = Toolbox.new(root:, allow_changes: true, checks: {}, allowed_tools: TOOLS).catalog_digest
+        skills = chat_skills(directory, root)
+        tools = skills.empty? ? TOOLS : TOOLS + SKILL_TOOLS
+        digest = Toolbox.new(root:, allow_changes: true, checks: {}, allowed_tools: tools, skills:).catalog_digest
         write_private(path, Psych.dump(
                               'profile' => { 'schema_version' => 1, 'profile_id' => PROFILE,
                                              'profile_version' => '1.0', 'canonical_root' => root },
                               'roots' => { 'workspace' => root },
-                              'tools' => { 'allowed' => TOOLS },
+                              'tools' => { 'allowed' => tools },
                               'policy' => { 'allow_changes' => true, 'default_check_safety' => 'read_only',
                                             'graph_version' => '1', 'behavior_version' => '1.0',
                                             'tool_catalog_digest' => digest, 'unattended_catalog_digest' => digest }
                             ))
+      end
+
+      # Chat offers the skill tools only when the operator enabled a skills source that holds a skill.
+      def chat_skills(directory, root)
+        return Tamoz::Skills.empty unless directory.enabled_sources.include?('skills')
+
+        settings = directory.source_settings('skills')
+        skills_root = directory.skills_root
+        skills_root = nil unless settings.key?('root') || File.directory?(skills_root)
+        Tamoz::Skills.operator_snapshot(root: skills_root, workspace_root: root,
+                                        bundled: settings['bundled'] == true)
       end
 
       def write_private(path, text)

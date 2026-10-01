@@ -907,17 +907,14 @@ module Tamoz
       # operator can see what was refused rather than wondering why a skill never
       # appeared.
       def skills_snapshot
-        return Skills::Snapshot.empty unless @directory.enabled_sources.include?("skills")
+        return Tamoz::Skills.empty unless @directory.enabled_sources.include?("skills")
 
         @skills_snapshot ||= begin
+          settings = @directory.source_settings("skills")
           root = @directory.skills_root
-          if File.directory?(root)
-            Skills::Compiler.new(
-              sources: [Skills::SkillSource.new(id: "operator", root:, trust: "operator", precedence: 0)]
-            ).compile
-          else
-            Skills::Snapshot.empty
-          end
+          Tamoz::Skills.operator_snapshot(root: (root if settings.key?("root") || File.directory?(root)),
+                                          workspace_root: @directory.workspace_root,
+                                          bundled: settings["bundled"] == true)
         end
       end
 
@@ -967,10 +964,6 @@ module Tamoz
 
       def local_capability_catalog
         local_toolbox.names.sort.freeze
-      end
-
-      def skill_rejections
-        skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
       end
 
       private

@@ -363,13 +363,13 @@ class CapabilityHostTest < Minitest::Test
         File.join(operator, "SKILL.md"),
         "---\nname: review\ndescription: A bounded review procedure.\n---\nBody.\n"
       )
-      snapshot = Tamoz::Tools::Skills::Compiler.new(
+      snapshot = Tamoz::Skills.compile(
         sources: [
-          Tamoz::Tools::Skills::SkillSource.new(
+          Tamoz::Skills::SkillSource.new(
             id: "operator", root: File.join(directory, "skills"), trust: "operator"
           )
         ]
-      ).compile
+      )
       toolbox = Tamoz::Tools::Toolbox.new(root:, allow_changes: true, skills: snapshot)
       binding = Tamoz::Agent::CapabilityBinding.build(toolbox:)
 

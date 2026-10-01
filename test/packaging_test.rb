@@ -90,7 +90,7 @@ class PackagingTest < Minitest::Test
   # and every case from an external index. No repository load path or package
   # fixture is available to this subprocess.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-context-engine tamoz-harness tamoz-research tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-context-engine tamoz-harness tamoz-research tamoz-skills tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -465,7 +465,7 @@ class PackagingTest < Minitest::Test
   # create_file mutation, and a compiled skills catalog. The `$LOADED_FEATURES`
   # scan proves no tamoz-agent feature was pulled in at runtime.
   def test_packaged_tools_runs_clean_with_only_core_installed
-    names = %w[tamoz-cancellation tamoz-core tamoz-tools]
+    names = %w[tamoz-cancellation tamoz-core tamoz-skills tamoz-tools]
 
     with_isolated_install(names, "tools") do |clean_environment|
       script = <<~'RUBY'
@@ -489,11 +489,11 @@ class PackagingTest < Minitest::Test
             "Reference material.\n",
             encoding: Encoding::UTF_8
           )
-          snapshot = Tamoz::Tools::Skills::Compiler.new(
+          snapshot = Tamoz::Skills.compile(
             sources: [
-              Tamoz::Tools::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")
+              Tamoz::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")
             ]
-          ).compile
+          )
           toolbox = Tamoz::Tools::Toolbox.new(
             root:, allow_changes: true,
             checks: {"verify" => ["sh", "-c", "test -f a.txt && echo ok"]},

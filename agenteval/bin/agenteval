@@ -28,6 +28,7 @@ module Agenteval
       when "compare" then cmd_compare(argv)
       when "memory" then cmd_memory(argv)
       when "subagents" then cmd_subagents(argv)
+      when "skills" then cmd_skills(argv)
       when "topologies" then cmd_topologies(argv)
       when "research" then cmd_research(argv)
       else
@@ -143,6 +144,68 @@ module Agenteval
       File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
       @out.puts(JSON.pretty_generate(report.fetch("arms")))
       0
+    end
+
+    # The skills pack: `skills prove` runs the evidence-audit controls offline; `skills run` drives real tamoz
+    # sessions with the skill selected, forced, or absent, and needs prove first.
+    def cmd_skills(argv)
+      require_relative "../skills/pack"
+      action = argv.shift
+      return cmd_skills_optimize(argv) if action == "optimize"
+
+      problems = SkillsPack.prove
+      problems.each { |problem| @err.puts("skills pack: #{problem}") }
+      return (problems.empty? ? 0 : 1) if action == "prove"
+      return 1 unless problems.empty?
+      return 64.tap { @err.puts("usage: agenteval skills prove | run [--arms a,b] [--repeat N] [--budget S] [--scenarios A1,..] [--out PATH]") } unless action == "run"
+
+      options = { arms: SkillsPack::ARMS, repeat: 2, budget: 600, out: nil, only: nil }
+      OptionParser.new do |parser|
+        parser.on("--arms LIST") { |value| options[:arms] = value.split(",") }
+        parser.on("--repeat N", Integer) { |value| options[:repeat] = value }
+        parser.on("--budget N", Integer) { |value| options[:budget] = value }
+        parser.on("--scenarios LIST") { |value| options[:only] = value.split(",") }
+        parser.on("--out PATH") { |value| options[:out] = value }
+      end.parse!(argv)
+      partial = options[:out] && "#{options[:out]}.partial.jsonl"
+      keep_root = options[:out] && File.join(Agenteval::ROOT, "sessions", "skills", File.basename(options[:out], ".json"))
+      report = begin
+        SkillsPack.run(arms: options[:arms], repeat: options[:repeat], budget: options[:budget], only: options[:only],
+                       partial:, keep_root:)
+      rescue SkillsPack::ProviderUnavailable => e
+        @err.puts("skills pack: stopped — #{e.message}; no result is reported")
+        return 2
+      end
+      File.write(options[:out], JSON.pretty_generate(report)) if options[:out]
+      @out.puts(JSON.pretty_generate(report.except("rows")))
+      0
+    end
+
+    # `skills optimize`: rewrite the evidence-audit SKILL.md on the training scenarios, keep it only if it wins on the
+    # held-out ones, and stage it for `tamoz skills promote`. Needs prove first.
+    def cmd_skills_optimize(argv)
+      require_relative "../skills/optimizer"
+      problems = SkillsPack.prove
+      problems.each { |problem| @err.puts("skills pack: #{problem}") }
+      return 1 unless problems.empty?
+
+      options = { variants: 2, out: nil }
+      OptionParser.new do |parser|
+        parser.on("--variants N", Integer) { |value| options[:variants] = value }
+        parser.on("--out PATH") { |value| options[:out] = value }
+      end.parse!(argv)
+      staging = File.join(Agenteval::ROOT, "sessions", "skills-optimizer", Time.now.utc.strftime("%Y%m%dT%H%M%S"))
+      FileUtils.mkdir_p(staging)
+      result = SkillsPack::Optimizer.new(propose: SkillsPack::Optimizer.proposer, evaluate: SkillsPack::Optimizer.evaluator(partial: File.join(staging, "trials.jsonl")),
+                                         variants: options[:variants], staging:).call
+      document = result.to_h.transform_keys(&:to_s).merge("model" => SkillsPack.model_route.join("/"))
+      File.write(options[:out], JSON.pretty_generate(document)) if options[:out]
+      @out.puts(JSON.pretty_generate(document))
+      @out.puts("promote with: tamoz --skills DIR skills promote #{result.best} --approver YOUR-NAME") if result.accepted
+      0
+    rescue SkillsPack::ProviderUnavailable => e
+      @err.puts("skills optimize: stopped — #{e.message}")
+      2
     end
 
     # The hard topology pack: `topologies prove` is offline; `topologies run` drives real sessions and needs prove.

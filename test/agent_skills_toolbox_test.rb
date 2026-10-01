@@ -5,7 +5,7 @@ require_relative "test_helper"
 # P9-B: progressive disclosure through the ordinary tool boundary, the prompt
 # surface epoch, and the durable exact-digest resume rule.
 class AgentSkillsToolboxTest < Minitest::Test
-  Skills = Tamoz::Agent::Skills
+  Skills = Tamoz::Skills
   Toolbox = Tamoz::Agent::Toolbox
 
   # Measured at 6dee1b6, before skills.rb existed; re-measured when the tool
@@ -52,12 +52,12 @@ class AgentSkillsToolboxTest < Minitest::Test
   end
 
   def snapshot(root: nil, id: "operator", trust: "operator")
-    Skills::Compiler.new(
+    Skills.compile(
       sources: [Skills::SkillSource.new(id:, root: root || @operator, trust:)]
-    ).compile
+    )
   end
 
-  def toolbox(skills: Skills::Snapshot.empty, **options)
+  def toolbox(skills: Skills.empty, **options)
     Toolbox.new(root: @workspace, skills:, **options)
   end
 
@@ -118,13 +118,10 @@ class AgentSkillsToolboxTest < Minitest::Test
 
   # --------------------------------------------------- H-4: profile isolation --
 
-  # A P8 profile's tools.allowed is a closed list that cannot name a skill tool,
-  # so a profile-bound toolbox is skill-free by construction. Fail-closed and
-  # deliberate for this run; lifted by P9-B2 after P8-E.
-  def test_a32_a_profile_bound_toolbox_exposes_no_skill_tool
+  # A profile may allow the skill tools; one whose tools.allowed does not name them exposes neither.
+  def test_a32_a_profile_that_does_not_allow_skill_tools_exposes_none
     write_skill("fix-answer")
-    refute_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "load_skill"
-    refute_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "read_skill_resource"
+    assert_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "load_skill"
 
     box = toolbox(skills: snapshot, allowed_tools: %w[read_file list_directory search_text glob])
 
@@ -232,12 +229,12 @@ class AgentSkillsToolboxTest < Minitest::Test
     FileUtils.mkdir_p(workspace_source)
     write_skill("helper")
     write_skill("helper", root: workspace_source, body: "Impostor.\n")
-    snap = Skills::Compiler.new(
+    snap = Skills.compile(
       sources: [
         Skills::SkillSource.new(id: "operator", root: @operator, trust: "operator"),
         Skills::SkillSource.new(id: "repo", root: workspace_source, trust: "workspace")
       ]
-    ).compile
+    )
     box = toolbox(skills: snap)
     error = assert_raises(Tamoz::Agent::ToolError) { box.validate("load_skill", "skill" => "helper") }
 
@@ -424,13 +421,13 @@ class AgentSkillsToolboxTest < Minitest::Test
     )
   end
 
-  def build_session(adapter:, skills: Skills::Snapshot.empty)
+  def build_session(adapter:, skills: Skills.empty)
     Tamoz::Agent::Session.new(
       model: scripted_model, toolbox: toolbox(skills:), checkpointer: adapter
     )
   end
 
-  def with_durable_session(skills: Skills::Snapshot.empty)
+  def with_durable_session(skills: Skills.empty)
     File.write(File.join(@workspace, "note.txt"), "Tamoz is awake.\n")
     adapter = Tamoz::SQLite::Adapter.new(
       path: File.join(@dir, "sessions.sqlite3"),
