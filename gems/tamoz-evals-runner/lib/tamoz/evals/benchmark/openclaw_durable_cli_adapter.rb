@@ -107,8 +107,7 @@ module Tamoz
           path = File.join(@runtime_dir, 'profiles', "#{@change_profile_id}.yaml")
           FileUtils.mkdir_p(File.dirname(path), mode: 0o700)
           File.chmod(0o700, File.dirname(path))
-          File.write(path, Psych.dump(change_profile_document), mode: 'wb')
-          File.chmod(0o600, path)
+          Tamoz::Core::AtomicFile.replace(path, Psych.dump(change_profile_document), mode: 0o600)
         rescue SystemCallError => e
           raise Tamoz::Evals::ExecutionError, "scenario_profile_setup_failed:#{e.class}"
         end

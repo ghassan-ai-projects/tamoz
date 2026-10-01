@@ -36,6 +36,23 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
     end
   end
 
+  def test_the_change_profile_lands_through_atomic_file
+    Dir.mktmpdir('openclaw-adapter') do |directory|
+      workspace = File.join(directory, 'workspace')
+      runtime = File.join(directory, 'runtime')
+      FileUtils.mkdir_p(workspace)
+      Tamoz::Agent::RuntimeDirectory.create!(runtime, workspace:)
+      adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
+        runtime_dir: runtime, workspace:, env: { 'OPENAI_API_KEY' => 'test-key' }, cli: fake_cli([])
+      )
+      adapter.prepare!(provider: 'openai', model: 'gpt-test')
+      writes = atomic_writes { adapter.prepare_changes! }
+
+      assert_equal [:replace, 0o600], writes.fetch(0).values_at(0, 2)
+      assert_match(%r{/profiles/scenario-t3-m3m4-\h+\.yaml\z}, writes.fetch(0)[1])
+    end
+  end
+
   def test_missing_provider_credentials_blocks_before_cli_execution
     cli_calls = 0
     adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
