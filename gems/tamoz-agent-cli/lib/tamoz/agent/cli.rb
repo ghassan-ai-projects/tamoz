@@ -198,8 +198,6 @@ module Tamoz
         end
       end
 
-      # Both openers are lazy: the work harness pins into the session dir, so it
-      # runs after the builder provisions it.
       def run_openers(options, thread_id)
         { harness: -> { work_harness(options, thread_id) },
           memory: ->(dir) { open_memory(options, dir) } }

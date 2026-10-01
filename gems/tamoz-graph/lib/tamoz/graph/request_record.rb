@@ -28,9 +28,6 @@ module Tamoz
         TERMINAL_STATUSES.include?(status)
       end
 
-      # A stale request terminal-failed by run_next: the typed payload DR-4
-      # writes (graph_status failed + a reason). Ordinary run failures carry
-      # no reason.
       def stale_failure?
         status == :failed && terminal_error.is_a?(Hash) &&
           terminal_error.fetch('graph_status', nil) == 'failed' &&

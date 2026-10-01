@@ -5,9 +5,7 @@ require 'securerandom'
 module Tamoz
   module Agent
     class CLI
-      # Drives one durable thread from the terminal: delivers the turn, then keeps
-      # advancing queued requests, answering interrupts and continuing until the
-      # thread settles or waits on the operator, and reports how it ended.
+      # Drives one durable thread until it settles or waits on the operator.
       class TurnDriver
         include CLIRendering
 
@@ -130,8 +128,6 @@ module Tamoz
           end
         end
 
-        # A stale request is terminal-failed by run_next; render its typed reason
-        # once and keep draining — a failed request is never re-claimed (DR-4 D3).
         def advance_queued_request
           advanced = @stream.run(thread_id: @thread_id, request_id: SecureRandom.uuid) do |context|
             @session.app.durable_runner.run_next(thread: @thread_id, owner_id: @owner_id, context:)
@@ -155,8 +151,6 @@ module Tamoz
           exit_for_view(view)
         end
 
-        # A `deliver` inside session.resume/start/continue can terminal-fail a
-        # stale request the drain loop never sees; each is rendered once.
         def render_pending_stale_failures
           @session.app.durable_runner.history(thread: @thread_id).each do |request|
             next unless request.stale_failure?

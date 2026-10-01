@@ -304,8 +304,6 @@ module Tamoz
         digest
       end
 
-      # Invariant 24 for one operator-supplied field value heading into a
-      # durable record; the caller owns the surface-specific message.
       def self.secret_shape(field, value)
         ContentScanner.classify(field, value)
       end

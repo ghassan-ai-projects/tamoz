@@ -3,8 +3,7 @@
 module Tamoz
   module Agent
     class CLI
-      # Answers a paused turn's interrupts: from `--answer`, or by asking the
-      # operator, and records an approval in the engine that asked for it.
+      # Answers a paused turn's interrupts.
       class InterruptAnswers
         EFFECT_RESOLUTIONS = {
           'fixed' => :succeeded, 'approve' => :succeeded, 'ok' => :succeeded, 'succeeded' => :succeeded,
@@ -12,7 +11,6 @@ module Tamoz
           'abandoned' => :abandoned, 'failed' => :failed, 'unknown' => :unknown, '?' => :unknown
         }.freeze
 
-        # The words an operator types are a stable user-facing contract.
         def self.parse(kind, raw)
           answer = raw.to_s.strip.downcase
           case kind
@@ -39,8 +37,6 @@ module Tamoz
           @options = options
         end
 
-        # Answers every interrupt and records the decisions this process's engine
-        # owns; nil when an interrupt is left unanswered.
         def resolve(view, resume_options)
           scripted = resume_options[:answer]
           view.interrupts.each_with_object({}) do |interrupt, answers|
@@ -62,7 +58,6 @@ module Tamoz
           ask(descriptor)
         end
 
-        # Shown when no prompt will ask; an interactive prompt shows the descriptor itself.
         def render_prompt(descriptor)
           case descriptor['kind']
           when 'approve_tool'
@@ -80,8 +75,6 @@ module Tamoz
           end
         end
 
-        # Only the engine that asked records the answer; another process's
-        # decision resolves there.
         def resolve_decision(descriptor, value, interactive:)
           asked = descriptor['decision']
           return unless descriptor['kind'] == 'approve_tool' && asked

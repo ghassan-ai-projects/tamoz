@@ -26,9 +26,6 @@ module Tamoz
       # :reek:MissingSafeMethod — `scan!` is a refusal that raises; there is no
       # useful predicate twin for "this document contains a secret".
       class ContentScanner
-        # The value-level invariant 24 classification for one (field, value):
-        # :none, :secret, or :candidate_secret. The document walk below and the
-        # facade's single-field check both read from here.
         def self.classify(field, value)
           return :secret if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
           return :candidate_secret if ENTROPY_PATTERN.match?(value) && !ENTROPY_EXEMPT_KEYS.include?(field.to_s)

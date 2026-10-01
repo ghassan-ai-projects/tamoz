@@ -3,8 +3,7 @@
 module Tamoz
   module Agent
     class CLI
-      # Builds the model client a command runs with, under §5.3 precedence:
-      # CLI flag > TAMOZ_MODEL/TAMOZ_PROVIDER > the profile's primary role.
+      # The model client a command runs with.
       class ModelBuilder
         DEFAULT_PROVIDER = 'openai'
 
@@ -27,12 +26,6 @@ module Tamoz
           )
         end
 
-        # DR-5 D1: ONE resolution path for both `build` and the recorded
-        # `profile_roles`, so the record is exactly what the run used. Only
-        # :primary takes overrides; every other role keeps its file value.
-        #
-        # DR-5 RC6: an override entering the durable record is gated by the same
-        # secret predicates profiles validate against (invariant 24).
         def resolve_profile_roles(profile, options)
           return {} unless profile
 

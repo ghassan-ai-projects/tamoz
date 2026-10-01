@@ -5,10 +5,7 @@ require 'json'
 module Tamoz
   module Agent
     class CLI
-      # Shows the operator what a run is doing: one stderr line per runtime event,
-      # or one JSON envelope per event on stdout in `--json` mode.
-      # :reek:FeatureEnvy :reek:TooManyStatements -- a renderer reads the event it
-      # was given and prints one line per field.
+      # Runtime events as operator lines or JSON envelopes.
       class EventRenderer
         ENVELOPE_SCHEMA = 1
         LINES = {
@@ -34,9 +31,6 @@ module Tamoz
           render_line(event.type, event.data)
         end
 
-        # The machine contract for every JSON-mode line. StreamPart-backed events
-        # carry their full identity (run_id, task_id, sequence, emitted_at);
-        # synthetic local events carry none of those keys rather than nulls.
         def emit(type, data, part = nil)
           envelope = {
             'schema' => ENVELOPE_SCHEMA,

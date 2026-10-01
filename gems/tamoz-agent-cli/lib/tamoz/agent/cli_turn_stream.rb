@@ -5,14 +5,11 @@ require 'securerandom'
 module Tamoz
   module Agent
     class CLI
-      # Runs one durable step on a worker thread and renders its stream parts to
-      # the operator as they arrive.
+      # Runs one durable step and renders its stream parts.
       class TurnStream
         FAILURE_MESSAGE = 'The session could not complete safely. Please inspect it before retrying.'
         HUMAN_MODES = %i[tasks updates interrupts checkpoints errors].freeze
 
-        # Never reset: the drain loop's empty poll after a failing run must not
-        # erase the reason the operator just saw.
         attr_reader :error
 
         def initialize(operator, json:)
@@ -27,8 +24,6 @@ module Tamoz
           cancellation = @cancellation || Tamoz::CancellationToken.new
           sink = Tamoz::StreamSink.new(cancellation:, run_id: request_id)
           context = build_context(sink, cancellation, thread_id:, request_id:)
-          # In-body, not Thread.new(report_on_exception: false) — that kwarg is a
-          # no-op on Ruby 3.3 — or a dying thread dumps the backtrace on stderr.
           worker = Thread.new do
             Thread.current.report_on_exception = false
             step(sink) { yield context }
@@ -45,8 +40,6 @@ module Tamoz
                              cancellation:, emitter:)
         end
 
-        # Bounded failure by contract (test_durable_worker_checkpoint_conflict_is_a_bounded_failure);
-        # the conflict rides as the cause.
         def step(sink)
           yield
         rescue Tamoz::CheckpointConflictError
@@ -76,7 +69,6 @@ module Tamoz
           end
         end
 
-        # The error class names a failure whose safe message is generic.
         def error_summary(data)
           reason = data['safe_message'].to_s.strip
           reason = 'the session failed' if reason.empty?

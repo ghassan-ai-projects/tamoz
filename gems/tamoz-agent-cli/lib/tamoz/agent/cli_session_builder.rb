@@ -5,11 +5,8 @@ require 'fileutils'
 module Tamoz
   module Agent
     class CLI
-      # Builds what a durable CLI session runs on: where its thread files live,
-      # its store, toolbox, MCP source and approval engine, and the session itself.
+      # Assembles and tears down a durable CLI session.
       class SessionBuilder
-        # What one durable run opened; SessionBuilder#assemble closes them after
-        # the command's yield returns.
         Parts = Data.define(:model, :toolbox, :adapter, :mcp, :memory, :approvals, :harness)
 
         APPROVAL_SESSION = 'interactive'
@@ -39,8 +36,6 @@ module Tamoz
           raise ArgumentError, "session directory #{session_dir} is accessible to group or others"
         end
 
-        # Crash-recovery harnesses that kill and immediately resume a session can
-        # shorten the wait for a dead owner's lease; the default stays conservative.
         def lease_ttl
           raw = @env['TAMOZ_LEASE_TTL']
           return MAX_LEASE_TTL if raw.to_s.empty?
@@ -66,13 +61,7 @@ module Tamoz
           McpSourceBuilder.new(directory).build
         end
 
-        # Assembles one durable run, yields the parts and the session while
-        # everything it opened is live, and closes it all afterwards. The memory
-        # opener stays with the CLI (it owns the memory wiring); a read-only
-        # command opens neither MCP nor memory.
         def assemble(options, thread_id, read_only:, profile:, openers:)
-          # Deferred: tamoz/agent must not load the adapter package at require time
-          # (dependency isolation), only when a durable subcommand actually runs.
           require 'tamoz/sqlite'
 
           session_dir = provision_session_dir!(options)
@@ -108,8 +97,6 @@ module Tamoz
           adapter.close unless read_only
         end
 
-        # DR-5 D1 (RC5): the session record carries the same post-override role
-        # resolution the model was built from, so the record never disagrees with the run.
         def build_session(parts, options:, thread_id:, profile:)
           SkillsOptions.require_loadable!(parts.toolbox, parts.harness[:skill])
           engine, owner, = parts.memory
@@ -124,8 +111,6 @@ module Tamoz
           )
         end
 
-        # A read-only command must not demand a model credential: its model fails
-        # closed, so a stray generate is loud, not silent.
         def read_only_model
           model = Object.new
           def model.generate(**)
@@ -150,16 +135,12 @@ module Tamoz
           )
         end
 
-        # The interactive default gates mutations behind a confirm: the operator
-        # opts into autonomy by naming a looser profile.
         def build_approvals(options)
           engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')
           engine.bind_session(APPROVAL_SESSION)
           engine
         end
 
-        # §5.2: the profile is the capability authority; the toolbox is derived
-        # from it wholesale so its catalog digest matches the pinned value.
         def build_profile_toolbox(profile, options)
           skills = SkillsOptions.new(options).snapshot_for(profile)
           checks = profile.checks
@@ -171,7 +152,6 @@ module Tamoz
           )
         end
 
-        # A durable session ignores --shadow-routing (unification is an owner decision).
         def durable_routing(options)
           if options[:work_routing] then :work
           elsif options[:adaptive_routing] then :adaptive

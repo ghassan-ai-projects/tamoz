@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# The profile secret predicates are policy data of tamoz-agent-profile: other
-# gems ask Profile.secret_shape, they never match against the patterns
-# themselves or the policy would fork per caller.
-# The scan covers gems/*/lib only; apps/ and test sources sit outside it.
 class ProfileBoundaryTest < Minitest::Test
   INTERNALS = [/\bProfile::[A-Z_]{2,}\b/].freeze
   OWNERS = %w[gems/tamoz-agent-profile/].freeze

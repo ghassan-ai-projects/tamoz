@@ -100,8 +100,6 @@ module Tamoz
         end
       end
 
-      # True when this process's log holds the decision: the process that asked
-      # records the operator's answer; one held by another process resolves there.
       def holds_decision?(decision_id)
         !decision_log.lookup(decision_id).nil?
       end

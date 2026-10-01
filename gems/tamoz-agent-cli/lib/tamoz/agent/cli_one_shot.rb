@@ -3,7 +3,7 @@
 module Tamoz
   module Agent
     class CLI
-      # A task run once, in memory, with no durable thread: `tamoz TASK`.
+      # `tamoz TASK`: one in-memory run.
       class OneShot
         def initialize(out:, err:, input:, events:, models:)
           @out = out
@@ -37,7 +37,6 @@ module Tamoz
           @out.puts("\n#{label}")
         end
 
-        # Only the one-shot path honors --shadow-routing (unification is an owner decision).
         def routing(options)
           if options[:experimental_routing] then :experimental
           elsif options[:shadow_routing] then :shadow
