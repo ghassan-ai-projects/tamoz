@@ -237,6 +237,24 @@ class AgentCLITest < Minitest::Test
   # `continue` drives a paused thread forward with no new input. Without a test
   # the verb could stop resolving its thread, or silently start a second turn,
   # and nothing in the corpus would notice.
+  def test_one_shot_operator_approval_applies_the_change
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "app.rb"), "value = 1\n")
+      digest = Digest::SHA256.hexdigest("value = 1\n")
+      err = StringIO.new
+
+      status = run_cli(
+        ["set value to 2"],
+        workspace:, session_dir:, input: StringIO.new("a\n"), err:, factory: repair_factory(digest),
+        checks: {"answer" => check_argv}
+      )
+
+      assert_equal 0, status
+      assert_match(%r{Approve \S+ \[a/approve, d/deny\]\? }, err.string)
+      assert_equal "value = 2\n", File.read(File.join(workspace, "app.rb"))
+    end
+  end
+
   def test_continue_advances_a_paused_thread_without_new_input
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "app.rb"), "value = 1\n")

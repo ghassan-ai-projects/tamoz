@@ -30,16 +30,12 @@ module Tamoz
           err.puts preview
         end
 
-        def approve_tool(descriptor)
-          self.class.approval_banner(@err, descriptor['tool'], descriptor['preview'])
-          approve(descriptor['tool'])
-        end
-
-        # The bare-tool ask: the one-shot runtime passes a name, not a descriptor.
         # :reek:TooManyStatements :reek:RepeatedConditional :reek:NilCheck --
         # the approval loop is a stateful read-validate-retry loop; the nil-check
         # at the loop head is the EOF-aborts-prompt contract.
-        def approve(tool)
+        def approve_tool(descriptor)
+          tool = descriptor['tool']
+          self.class.approval_banner(@err, tool, descriptor['preview'])
           loop do
             line = read_line("Approve #{tool}? [y/N/?] ")
             return nil if line.nil?

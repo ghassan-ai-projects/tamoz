@@ -7,7 +7,8 @@ module Tamoz
       class OneShot
         def initialize(out:, err:, input:, events:, models:)
           @out = out
-          @prompts = PromptAdapter.new(input:, err:)
+          @err = err
+          @input = input
           @events = events
           @models = models
         end
@@ -45,7 +46,9 @@ module Tamoz
         end
 
         def approve(tool:, **)
-          @prompts.approve(tool)
+          @err.print "Approve #{tool} [a/approve, d/deny]? "
+          @err.flush
+          Tamoz::Approval::Answer.parse(@input.gets.to_s)
         end
       end
     end
