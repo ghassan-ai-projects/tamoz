@@ -918,6 +918,21 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  def test_turn_stream_reports_a_bounded_failure_and_keeps_the_conflict_as_cause
+    out = StringIO.new
+    err = StringIO.new
+    operator = Tamoz::Agent::CLI::Operator.new(out:, err:, events: Tamoz::Agent::CLI::EventRenderer.new(out:, err:),
+                                               prompts: nil, approvals: nil, cancellation: nil)
+    stream = Tamoz::Agent::CLI::TurnStream.new(operator, json: false)
+
+    error = assert_raises(Tamoz::Agent::Error) do
+      stream.run(thread_id: 't1', request_id: 'r1') { raise Tamoz::CheckpointConflictError, 'conflict' }
+    end
+
+    assert_equal Tamoz::Agent::CLI::TurnStream::FAILURE_MESSAGE, error.message
+    assert_kind_of Tamoz::CheckpointConflictError, error.cause
+  end
+
   def test_unexpected_error_propagates_instead_of_clean_exit
     out = StringIO.new
     err = StringIO.new

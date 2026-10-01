@@ -10,7 +10,6 @@ module Tamoz
       class TurnStream
         FAILURE_MESSAGE = 'The session could not complete safely. Please inspect it before retrying.'
         HUMAN_MODES = %i[tasks updates interrupts checkpoints errors].freeze
-        CONFLICT = Object.new.freeze
 
         # Never reset: the drain loop's empty poll after a failing run must not
         # erase the reason the operator just saw.
@@ -28,12 +27,15 @@ module Tamoz
           cancellation = @cancellation || Tamoz::CancellationToken.new
           sink = Tamoz::StreamSink.new(cancellation:, run_id: request_id)
           context = build_context(sink, cancellation, thread_id:, request_id:)
-          worker = Thread.new { step(sink) { yield context } }
+          # The bounded failure below is delivered through worker.value, not by
+          # letting the thread report: a dying thread dumps the backtrace on
+          # stderr ahead of the clean message.
+          worker = Thread.new do
+            Thread.current.report_on_exception = false
+            step(sink) { yield context }
+          end
           render_parts(sink, worker)
-          outcome = worker.value
-          raise Tamoz::Agent::Error, FAILURE_MESSAGE if outcome.equal?(CONFLICT)
-
-          outcome
+          worker.value
         end
 
         private
@@ -44,10 +46,12 @@ module Tamoz
                              cancellation:, emitter:)
         end
 
+        # Bounded failure by contract (test_durable_worker_checkpoint_conflict_is_a_bounded_failure);
+        # the conflict rides as the cause.
         def step(sink)
           yield
         rescue Tamoz::CheckpointConflictError
-          CONFLICT
+          raise Tamoz::Agent::Error, FAILURE_MESSAGE
         ensure
           sink.finish
         end
