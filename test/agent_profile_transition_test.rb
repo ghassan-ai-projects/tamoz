@@ -180,6 +180,22 @@ class AgentProfileTransitionTest < Minitest::Test
 
   # --- candidate transitions -------------------------------------------------
 
+  def test_a_second_candidate_swaps_the_registry_file_instead_of_truncating_it
+    path = File.join(@dir, "config", "transitions.yaml")
+    registry = Profile::TransitionRegistry.new(path:)
+    transition = lambda do |to|
+      Profile::Transition.new(thread_id: "th-1", profile_id: "test-profile", from_digest: digest_of("a"),
+                              to_digest: digest_of(to), reason: "operator_activate")
+    end
+    registry.record(transition.call("b"))
+    inode = File.stat(path).ino
+
+    registry.record(transition.call("c"))
+
+    refute_equal inode, File.stat(path).ino
+    assert_empty Dir.children(File.dirname(path)).grep(/\.tmp\z/)
+  end
+
   def test_transition_registry_records_candidates_with_owner_only_permissions
     path = File.join(@dir, "config", "transitions.yaml")
     registry = Profile::TransitionRegistry.new(path:)

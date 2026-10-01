@@ -193,8 +193,9 @@ module Tamoz
         # migration step, stated): a v1 file that is recorded onto or consumed
         # from is upgraded in place; v1 files are never rewritten by a mere read.
         def write_document(document)
-          File.write(@path, Psych.dump(document.merge('schema_version' => REGISTRY_SCHEMA_VERSION)))
-          File.chmod(0o600, @path)
+          Tamoz::Core::AtomicFile.replace(
+            @path, Psych.dump(document.merge('schema_version' => REGISTRY_SCHEMA_VERSION)), mode: 0o600
+          )
         end
 
         # :reek:TooManyStatements :reek:MissingSafeMethod — the bang is the
