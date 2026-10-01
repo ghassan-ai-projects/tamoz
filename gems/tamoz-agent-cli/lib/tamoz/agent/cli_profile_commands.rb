@@ -279,9 +279,7 @@ module Tamoz
       # permissions can put content into the operator's profile directory that the
       # operator never saw and never confirmed.
       def install_profile(captured, document, target)
-        directory = File.dirname(target)
-        FileUtils.mkdir_p(directory, mode: 0o700)
-        File.chmod(0o700, directory)
+        Tamoz::Core::PrivateDirectory.secure(File.dirname(target))
         Tamoz::Core::AtomicFile.replace(target, captured.bytes, mode: 0o600)
         profile_id = document.profile_id
         digest = document.canonical_digest
