@@ -6,6 +6,8 @@ module Tamoz
       # Builds the model client a command runs with, under §5.3 precedence:
       # CLI flag > TAMOZ_MODEL/TAMOZ_PROVIDER > the profile's primary role.
       class ModelBuilder
+        DEFAULT_PROVIDER = 'openai'
+
         def initialize(env:, factory: nil)
           @env = env
           @factory = factory
@@ -20,7 +22,7 @@ module Tamoz
 
           provider = (overridden_provider(options) || primary&.fetch('provider')).to_s
           ModelClientFactory.build(
-            provider: provider.empty? ? 'openai' : provider, model: model_name,
+            provider: provider.empty? ? DEFAULT_PROVIDER : provider, model: model_name,
             profile_role: model_role_for(profile, primary), environment: @env, safety: :unsafe
           )
         end
@@ -50,24 +52,24 @@ module Tamoz
           { 'model' => overridden_model(options), 'provider' => overridden_provider(options) }.each do |field, value|
             next unless value
 
-            entry[field] = String(value)
             reject_secret_shaped_override!(field, value)
+            entry[field] = String(value)
           end
           entry
         end
 
         def reject_secret_shaped_override!(field, value)
-          if Profile::SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+          case Profile.secret_shape(field, value)
+          when :secret
             raise ProfilePolicyError,
                   "override for profile role \"primary\" field #{field.inspect} " \
                   'matches the embedded-secret pattern and cannot be recorded in profile_roles'
+          when :candidate_secret
+            raise ProfilePolicyError,
+                  "override for profile role \"primary\" field #{field.inspect} is a " \
+                  '40+ character high-entropy value (candidate secret). Pin an explicit ' \
+                  'identifier with --model/--provider if this value is a legitimate model id.'
           end
-          return unless Profile::ENTROPY_PATTERN.match?(value) && !Profile::ENTROPY_EXEMPT_KEYS.include?(field)
-
-          raise ProfilePolicyError,
-                "override for profile role \"primary\" field #{field.inspect} is a " \
-                '40+ character high-entropy value (candidate secret). Pin an explicit ' \
-                'identifier with --model/--provider if this value is a legitimate model id.'
         end
 
         def model_role_for(profile, primary)

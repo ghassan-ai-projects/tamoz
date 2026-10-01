@@ -304,6 +304,17 @@ module Tamoz
         digest
       end
 
+      # Invariant 24 for one operator-supplied field value heading into a
+      # durable record: the same refusal ContentScanner applies to profile
+      # documents, scoped to a single (field, value). :none, :secret, or
+      # :candidate_secret — the caller owns the surface-specific message.
+      def self.secret_shape(field, value)
+        return :secret if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+        return :candidate_secret if ENTROPY_PATTERN.match?(value) && !ENTROPY_EXEMPT_KEYS.include?(field.to_s)
+
+        :none
+      end
+
       def self.build_synthetic_document(hash)
         synthetic = {
           "profile" => {
