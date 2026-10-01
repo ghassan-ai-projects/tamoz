@@ -4,8 +4,9 @@ Repo-wide scan for raw filesystem operations that bypass `Tamoz::Core::AtomicFil
 (`gems/tamoz-core/lib/tamoz/core/atomic_file.rb`), which is the repo's one atomic
 write primitive: temp file, fsync, rename-or-link, directory fsync.
 
-Research-only. No code was changed. Every finding below was confirmed by reading
-the surrounding code, not just the scanner output.
+Research-only. No code was changed by the audit itself; every finding below was confirmed by reading
+the surrounding code, not just the scanner output. It was acted on afterwards: see
+[QUALITY_BAR.md](QUALITY_BAR.md) for the verdict and outcome per finding.
 
 ## Method
 
