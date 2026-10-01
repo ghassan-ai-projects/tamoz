@@ -12,6 +12,8 @@ module Tamoz
       # This class owns STORAGE — where the file is, that it stays owner-only, and
       # how an activation is appended. Whether the bytes it reads may be believed
       # is AdoptionDocument's question.
+      #
+      # :reek:DataClump — activated?, activate and append each act on one (profile_id, digest) pair.
       class AdoptionRegistry
         REGISTRY_SCHEMA_VERSION = AdoptionDocument::SCHEMA_VERSION
 
@@ -34,8 +36,16 @@ module Tamoz
 
         # `document` verifies permissions and yields the empty document when no
         # registry exists yet, so a registry someone else can read raises here
-        # before anything is written.
+        # before anything is written. The read-modify-write holds the registry's
+        # lock file, so two processes activating at once cannot lose one digest.
         def activate(profile_id, digest)
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
+          Tamoz::Core::FileLock.exclusive("#{@path}.lock") { append(profile_id, digest) }
+        end
+
+        private
+
+        def append(profile_id, digest)
           current = document
           activated = current.fetch('activated')
           list = activated.fetch(profile_id, [])
@@ -44,10 +54,7 @@ module Tamoz
           write(current.merge('activated' => activated.merge(profile_id => list + [digest])))
         end
 
-        private
-
         def write(updated)
-          Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
           Tamoz::Core::AtomicFile.replace(@path, Psych.dump(updated), mode: 0o600)
         end
 

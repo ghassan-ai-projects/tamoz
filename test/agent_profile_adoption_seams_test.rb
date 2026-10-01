@@ -125,6 +125,12 @@ class AgentProfileAdoptionSeamsTest < Minitest::Test
     assert registry.activated?('p', DIGEST)
   end
 
+  def test_activate_replaces_the_registry_only_while_holding_its_lock
+    held = lock_held_during_atomic_writes("#{@path}.lock") { registry.activate('p', DIGEST) }
+
+    assert_equal [true], held
+  end
+
   def test_activate_swaps_the_registry_file_instead_of_truncating_it
     registry.activate('p', DIGEST)
     inode = File.stat(@path).ino
