@@ -257,8 +257,7 @@ module Tamoz
 
         def backup_config!(config_path)
           backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}"
-          FileUtils.cp(config_path, backup)
-          File.chmod(0o600, backup)
+          Tamoz::Core::AtomicFile.create(backup, File.binread(config_path), mode: 0o600)
           backup
         end
 

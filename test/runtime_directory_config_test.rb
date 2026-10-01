@@ -69,11 +69,13 @@ class RuntimeDirectoryConfigTest < Minitest::Test
     end
   end
 
-  def test_config_migrate_lands_the_new_config_through_atomic_file
+  def test_config_migrate_lands_the_backup_and_the_new_config_through_atomic_file
     with_schema_one_directory do |runtime_dir, config_path, _workspace|
       calls = atomic_writes { cli(['--runtime-dir', runtime_dir, 'config', 'migrate']) }
 
-      assert_equal [[:replace, config_path, 0o600]], calls
+      backup = Dir.glob("#{config_path}.bak-*").fetch(0)
+
+      assert_equal [[:create, backup, 0o600], [:replace, config_path, 0o600]], calls
     end
   end
 
