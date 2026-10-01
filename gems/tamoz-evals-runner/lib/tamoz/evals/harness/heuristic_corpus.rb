@@ -107,8 +107,7 @@ module Tamoz
         end
 
         def write_corpus_file(path, value)
-          File.write(path, "#{CanonicalJSON.dump(value)}\n", encoding: Encoding::UTF_8)
-          File.chmod(FILE_MODE, path)
+          Tamoz::Core::AtomicFile.replace(path, "#{CanonicalJSON.dump(value)}\n", mode: FILE_MODE)
         end
 
         def write_train_trajectories

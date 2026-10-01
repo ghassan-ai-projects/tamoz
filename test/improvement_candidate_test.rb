@@ -91,6 +91,13 @@ class ImprovementCandidateTest < Minitest::Test
 
   # --- P12-ID: provenance completeness -------------------------------------
 
+  def test_the_corpus_files_land_through_atomic_file
+    writes = atomic_writes { with_corpus { |corpus| corpus } }
+
+    refute_empty writes
+    assert_equal [[:replace, 0o600]], writes.map { |operation, _path, mode| [operation, mode] }.uniq
+  end
+
   def test_provenance_completeness_is_checked_axis_by_axis
     with_corpus do |corpus|
       candidate = candidate_for(corpus)
