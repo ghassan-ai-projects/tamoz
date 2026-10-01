@@ -17,7 +17,8 @@ module Agenteval
       HELDOUT = %w[A5 A6].freeze
       CREATOR = "tamoz.skill-optimizer"
 
-      Result = Data.define(:accepted, :reason, :baseline, :variants, :best, :heldout, :candidate)
+      Result = Data.define(:accepted, :reason, :baseline, :variants, :best, :heldout, :candidate, :evidence)
+      TOKEN_MARGIN = 0.8
 
       # `propose`: (prompt) -> SKILL.md text. `evaluate`: (skill_dir, scenario_ids) -> pack rows for the forced arm.
       def initialize(propose:, evaluate:, skill_dir: SKILL_DIR, variants: 2, train: TRAIN, heldout: HELDOUT,
@@ -34,19 +35,19 @@ module Agenteval
       end
 
       def call
-        baseline = @evaluate.call(@skill_dir, @train)
+        baseline = evaluate(@skill_dir, @train)
         current = File.read(File.join(@skill_dir, "SKILL.md"))
         drafts = Array.new(@variants) { |index| draft(current, baseline, index) }.compact
-        scored = drafts.map { |dir| [dir, @evaluate.call(dir, @train)] }
+        scored = drafts.map { |dir| [dir, evaluate(dir, @train)] }
         return finish(false, "no rewrite passed the authoring bar", baseline, scored) if scored.empty?
 
         best_dir, best_rows = scored.max_by { |_, rows| Optimizer.score(rows) }
-        unless (Optimizer.score(best_rows) <=> Optimizer.score(baseline)).positive?
+        unless Optimizer.better?(best_rows, baseline)
           return finish(false, "no rewrite beat the current skill on the training scenarios", baseline, scored)
         end
 
-        heldout = { "current" => @evaluate.call(@skill_dir, @heldout), "candidate" => @evaluate.call(best_dir, @heldout) }
-        unless (Optimizer.score(heldout["candidate"]) <=> Optimizer.score(heldout["current"])).positive?
+        heldout = { "current" => evaluate(@skill_dir, @heldout), "candidate" => evaluate(best_dir, @heldout) }
+        unless Optimizer.better?(heldout["candidate"], heldout["current"])
           return finish(false, "the best rewrite did not beat the current skill on held-out scenarios", baseline, scored,
                         best_dir:, heldout:)
         end
@@ -55,8 +56,16 @@ module Agenteval
         finish(true, "staged", baseline, scored, best_dir:, heldout:, candidate:)
       end
 
-      # Better means: more scenarios solved, then fewer gate trips, then more planted exceptions found, then fewer
-      # compliant criteria misjudged, then fewer prompt tokens.
+      # Better means better audits (solved, then fewer gates, then more found, then fewer misjudged), or audits
+      # exactly as good for at most 80% of the prompt tokens: a shorter skill does not win on length alone.
+      def self.better?(candidate, current)
+        quality = (score(candidate).first(4) <=> score(current).first(4))
+        return quality.positive? unless quality.zero?
+
+        tokens = ->(rows) { rows.sum { |row| row["prompt_tokens"].to_i } }
+        tokens.(candidate) <= tokens.(current) * TOKEN_MARGIN
+      end
+
       def self.score(rows)
         [rows.count { |row| row["solved"] }, -rows.sum { |row| Array(row["gates"]).length },
          rows.sum { |row| row["matched"].to_i }, -rows.sum { |row| row["clean_misjudged"].to_i },
@@ -65,16 +74,24 @@ module Agenteval
 
       private
 
+      # A provider refusal measures the account, not the skill: the optimization stops instead of scoring it.
+      def evaluate(dir, ids)
+        rows = @evaluate.call(dir, ids)
+        failed = rows.find { |row| row["provider_failure"] || row["harness_error"] }
+        raise ProviderUnavailable, "trial #{failed['scenario']} did not run: #{failed['provider_failure'] || failed['harness_error']}" if failed
+
+        rows
+      end
+
       def draft(current, baseline, index)
         text = @propose.call(prompt(current, baseline))
         dir = File.join(@staging, "variant-#{index + 1}", "evidence-audit")
         FileUtils.mkdir_p(File.dirname(dir))
         FileUtils.cp_r(@skill_dir, dir)
         File.write(File.join(dir, "SKILL.md"), text.to_s)
-        Tamoz::Skills.stage_candidate(dir, created_by: CREATOR, source: "optimizer:draft")
-        dir
-      rescue Tamoz::Skills::Error
-        nil
+        snapshot = Tamoz::Skills.compile(sources: [Tamoz::Skills::SkillSource.new(id: "draft", root: File.dirname(dir), trust: "workspace")])
+        record = snapshot.records["draft/evidence-audit"]
+        record && Tamoz::Skills.lint(record).empty? ? dir : nil
       end
 
       # Only training scenarios reach the proposer: what it sees is what it may fit.
@@ -105,6 +122,7 @@ module Agenteval
       # rubocop:disable Metrics/ParameterLists -- one result assembled from the run's parts
       def finish(accepted, reason, baseline, scored, best_dir: nil, heldout: nil, candidate: nil)
         Result.new(accepted:, reason:, baseline: Optimizer.summary(baseline),
+                   evidence: "one trial per scenario: indicative, not a measurement",
                    variants: scored.map { |dir, rows| { "dir" => dir, "train" => Optimizer.summary(rows) } },
                    best: best_dir, heldout: heldout&.transform_values { |rows| Optimizer.summary(rows) }, candidate:)
       end

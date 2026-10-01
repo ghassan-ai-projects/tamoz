@@ -3,8 +3,8 @@
 module Tamoz
   module Skills
     # A drafted or optimized skill is a candidate: staged outside every skills root, pinned by its tree digest, and
-    # installed only when a person who did not create it approves (ADR-034: generated skills never approve
-    # themselves).
+    # installed only on a named approver other than its recorded creator (ADR-034). The manifest is a plain operator
+    # file and the approver is free text: the digest pin is the gate, the names are a record.
     # :reek:TooManyStatements :reek:UtilityFunction -- install is one ordered, all-or-nothing procedure.
     module Candidates
       MANIFEST_SUFFIX = ".candidate.json"
@@ -33,18 +33,28 @@ module Tamoz
 
         require_bar!(record)
         root = File.realpath(skills_root)
-        retired = replace(File.expand_path(directory), root, record.name)
+        retired = replace(record, root)
         entry = manifest.merge("approver" => approver, "installed_at" => Time.now.utc.iso8601, "retired" => retired)
         File.open(File.join(root, PROMOTIONS), "a") { |file| file.puts(JSON.generate(entry)) }
         entry
       end
 
-      # Copy beside the target, move the old tree aside, then rename: the skill is never half-installed.
-      def replace(source, root, name)
+      # Copy exactly the digested files beside the target and digest the copy again, move the old tree aside, then
+      # rename: what is installed is what was approved, and the skill is never half-installed.
+      def replace(record, root)
+        name = record.name
         target = File.join(root, name)
-        incoming = File.join(root, ".incoming-#{name}")
-        FileUtils.rm_rf(incoming)
-        FileUtils.cp_r(source, incoming)
+        holder = File.join(root, ".incoming-#{name}")
+        incoming = File.join(holder, name)
+        FileUtils.rm_rf(holder)
+        record.resource_index.each_key do |path|
+          FileUtils.mkdir_p(File.dirname(File.join(incoming, path)))
+          FileUtils.cp(File.join(record.directory, path), File.join(incoming, path), preserve: true)
+        end
+        unless compile_one(incoming).tree_digest == record.tree_digest
+          FileUtils.rm_rf(holder)
+          raise Error, "the copy of #{name} does not match the approved digest"
+        end
         retired = nil
         if File.exist?(target)
           retired = "#{RETIRED}/#{name}-#{Time.now.utc.strftime('%Y%m%dT%H%M%S')}"
@@ -52,6 +62,7 @@ module Tamoz
           File.rename(target, File.join(root, retired))
         end
         File.rename(incoming, target)
+        FileUtils.rm_rf(holder)
         retired
       end
 

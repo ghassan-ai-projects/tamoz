@@ -76,4 +76,14 @@ class SkillsCandidatesTest < Minitest::Test
     assert_includes installed.fetch('operator/tidy-notes').body, 'tidy-notes v2'
     assert File.directory?(File.join(@skills, entry.fetch('retired')))
   end
+
+  def test_only_the_digested_files_are_installed
+    directory = draft
+    File.write(File.join(directory, '.hidden'), 'unreviewed')
+    FileUtils.mkdir_p(File.join(directory, '.git'))
+    File.symlink('/etc/passwd', File.join(directory, '.link'))
+    install(directory)
+
+    assert_equal %w[SKILL.md], Dir.children(File.join(@skills, 'tidy-notes'))
+  end
 end

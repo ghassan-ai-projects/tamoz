@@ -20,8 +20,8 @@ tools used in order, the files changed, the checks that passed, and the final an
 
 ## Output
 
-One directory, named exactly as the task says, holding `SKILL.md` and, only when needed,
-`references/*.md`. Nothing else in the workspace changes.
+One directory, named exactly as the task says (it already exists, with an empty `references/`),
+holding `SKILL.md` and, only when needed, `references/*.md`. Nothing else in the workspace changes.
 
 ## Procedure
 

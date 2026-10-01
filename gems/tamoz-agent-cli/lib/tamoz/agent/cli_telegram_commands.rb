@@ -211,7 +211,9 @@ module Tamoz
         return Tamoz::Skills.empty unless directory.enabled_sources.include?('skills')
 
         settings = directory.source_settings('skills')
-        Tamoz::Skills.operator_snapshot(root: directory.skills_root, workspace_root: root,
+        skills_root = directory.skills_root
+        skills_root = nil unless settings.key?('root') || File.directory?(skills_root)
+        Tamoz::Skills.operator_snapshot(root: skills_root, workspace_root: root,
                                         bundled: settings['bundled'] == true)
       end
 

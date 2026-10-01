@@ -92,18 +92,26 @@ module Tamoz
       # thread into a private staging workspace; the draft is staged only when it meets the authoring bar.
       def create_skill(name, options, thread)
         raise OptionParser::MissingArgument, 'skills create NAME --from-session THREAD' if thread.to_s.empty?
+        raise OptionParser::InvalidArgument, "#{name.inspect} is not a skill name" unless Tamoz::Skills::NAME_PATTERN.match?(name)
 
+        validate_thread_id!(thread)
         trajectory = verified_trajectory(options, thread)
         stamp = Time.now.utc.strftime('%Y%m%dT%H%M%S')
         workspace = File.join(provision_private_session_dir!(options), 'skill-drafts', "#{name}-#{stamp}")
-        FileUtils.mkdir_p(workspace, mode: 0o700)
+        FileUtils.mkdir_p(File.join(workspace, name, 'references'), mode: 0o700)
         File.write(File.join(workspace, 'trajectory.md'), trajectory)
         status = cmd_ask(options.merge(root: workspace, work_routing: true, allow_changes: true, bundled_skills: true,
-                                       skills_dir: nil, skill: 'skill-authoring', checks: {}, session: nil,
+                                       skills_dir: nil, skill: 'skill-authoring', checks: {}, session: nil, profile: nil,
                                        explicit_session: "skill-draft-#{name}-#{stamp}".downcase),
                          ["Write a skill named #{name} into the directory #{name}/ of this workspace, from trajectory.md."])
-        return status unless status.zero?
+        # The draft has no check of its own (exit 2, done unverified); the authoring bar at staging is its gate.
+        unless [0, 2].include?(status)
+          @err.puts "the drafting turn did not finish (exit #{status}); the draft is in #{workspace}"
+          return status
+        end
 
+        references = File.join(workspace, name, 'references')
+        Dir.rmdir(references) if Dir.exist?(references) && Dir.empty?(references)
         manifest = Tamoz::Skills.stage_candidate(File.join(workspace, name), created_by: 'tamoz.skill-creator',
                                                                                 source: "session:#{thread}")
         @out.puts "staged candidate #{manifest['name']} #{manifest['tree_digest']}"
@@ -121,7 +129,7 @@ module Tamoz
           raise ArgumentError, "thread #{thread} did not finish verified (#{state[:terminal_reason]}); only verified work becomes a skill"
         end
 
-        trajectory_text(state, verification)
+        Tamoz::Core.scrub_secrets(trajectory_text(state, verification))
       end
 
       def trajectory_text(state, verification)
@@ -159,6 +167,7 @@ module Tamoz
 
       def promote_skill(candidate, options, approver)
         raise OptionParser::MissingArgument, 'skills promote CANDIDATE_DIR --skills DIR' unless options[:skills_dir]
+        raise ArgumentError, "skills root #{options[:skills_dir]} does not exist" unless File.directory?(options[:skills_dir])
 
         entry = Tamoz::Skills.install_candidate(candidate, skills_root: options[:skills_dir], approver:)
         @out.puts "installed #{entry['name']} #{entry['tree_digest']}, approved by #{entry['approver']}" \

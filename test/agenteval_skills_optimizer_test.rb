@@ -73,4 +73,16 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
     assert_predicate (OPT.score(cheap) <=> OPT.score(costly)), :positive?
     assert_predicate (OPT.score(costly) <=> OPT.score(failing)), :positive?
   end
+
+  def test_a_losing_draft_is_not_promotable_and_a_refused_trial_stops_the_run
+    run_optimizer(SHORTER, heldout_helps: false) do |result, _, _|
+      refute File.exist?("#{result.best}.candidate.json"), 'only an accepted rewrite is staged'
+    end
+    refused = ->(_dir, ids) { ids.map { |id| row(id, solved: false).merge('provider_failure' => 'model_out_of_credit') } }
+    Dir.mktmpdir('opt') do |staging|
+      assert_raises(Agenteval::SkillsPack::ProviderUnavailable) do
+        OPT.new(propose: ->(_) { SHORTER }, evaluate: refused, staging:, variants: 1).call
+      end
+    end
+  end
 end
