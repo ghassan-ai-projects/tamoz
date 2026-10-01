@@ -56,8 +56,26 @@ never pooled.
 | `tamoz skills new` / `show` / `promote` | built | `test/skills_candidates_test.rb`, `test/cli_skills_command_test.rb` |
 | `tamoz skills create --from-session` | built; scripted end to end | `test/cli_skills_create_test.rb` (plumbing only; no real-model draft yet) |
 | `agenteval skills optimize` | built; offline proven | `test/agenteval_skills_optimizer_test.rb` |
-| Optimizer real run (GLM-5.3-Flash) | running | `agenteval/reports/skills-optimize-20261001.json` |
+| Optimizer real run (GLM-5.3-Flash) | **rewrite accepted and staged; not promoted** | `agenteval/reports/skills-optimize-20261001.json` (see below) |
 | `skill-authoring` bundled skill | ships without an eval | pending gap printed by `test/skills_lint_test.rb` |
+
+### The optimizer's first real run (GLM-5.3-Flash, `forced` arm, one trial per scenario — indicative)
+
+| Skill | Train A1–A4 solved | Held-out A5–A6 solved | Found / planted | Gates | Prompt tokens (train / held-out) |
+|---|---|---|---|---|---|
+| current `evidence-audit` 1.0.0 | 4/4 | 2/2 | 12/12 | none | 863k / 260k |
+| rewrite 1 | 3/4 | — | 9/9 | none | 867k / — |
+| **rewrite 2 (accepted)** | 4/4 | 2/2 | 12/12 | none | **599k / 182k** |
+
+- Rewrite 2 audits exactly as well and uses about 30% fewer prompt tokens on both splits. It is kept under the
+  rule "audits as good, for at most 80% of the tokens", and the proposer never saw A5–A6.
+- What changed: it adds efficiency guidance (search first, read bounded windows, list the workspace once, read
+  the contract once) and spells out when silence counts as evidence. Every non-negotiable rule is kept. It is
+  1.1.0, 68 lines (was 60).
+- Staged at `agenteval/sessions/skills-optimizer/20261001T073000/variant-2/evidence-audit`, outside git. **It is
+  not installed:** promotion is a person's decision.
+- The current skill on GLM, forced, solved 6/6, where it solved 4/6 on Flash. There is no GLM `none` arm, so this
+  says nothing yet about the skill versus no skill on GLM.
 
 ## Chat
 
