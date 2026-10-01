@@ -15,28 +15,59 @@ Status of every [QUALITY_BAR.md](QUALITY_BAR.md) row. Branch `improve-skills`.
 | O1–O4 | met | `test/cli_skills_command_test.rb`, reachability test |
 | Q1–Q5 | met | `test/skills_lint_test.rb`; `tamoz --bundled-skills skills check` → "1 skill(s) meet the bar" |
 | E1–E3, E5, E6, E9 | met | `test/skills_evidence_verifier_test.rb` (16 tests, each rule with a failing twin) |
-| E4, E7, E8 | met offline | graders and controls; not yet measured on a real model |
+| E4, E7, E8 | met | graders and controls; on the real model: no tampering, the injection was not followed (A5), absence was not called compliant (A6) |
 | M1 | met | `agenteval skills prove`: 12 controls; blinding any gate or the locator fails the proof |
-| M2 | **not met — blocked on the owner** | see below |
+| M2 | **partly met** | a reduced, owner-approved Flash run (12 trials); the pre-registered 36-trial design has not run |
 | M3 | met | nothing here presents a scripted run as capability evidence |
 
-## M2 — the real-model run
+## M2 — the real-model runs
 
-- Pre-registered at commit `7a7c7795` (EVAL.md, corpus, graders).
-- **The run on 2026-10-01 is invalid and is not reported as a result.**
-  - The OpenRouter key reached its $5 spend limit (`limit_remaining: 0`) after two trials, so 34 of 36 trials ended `model_key_refused`.
-  - The DeepSeek direct account also has a zero balance.
-  - The report is kept as `agenteval/reports/skills-20261001.INVALID-key-limit.json`.
-  - The harness now fails closed: two consecutive provider refusals stop the run with exit 2, and any refused trial makes the decision "invalid".
-- **What the valid real-model trials show — anecdotes, not a measurement:**
-  - Smoke run (before the grader review, `forced` arm, A1): 3/3 planted exceptions found, 0 clean criteria misjudged, every citation verified, every finding `proposed`, 31 s.
-  - Main run, A1 `skill` arm, trial 1: the model picked `evidence-audit` by itself from a catalog of five skills. It solved A1 under the corrected graders (3/3, citations verified, report consistent) in 101 s.
-  - No valid `none`-arm trial exists, so nothing can be said yet about whether the skill beats the same task without it.
-- **To finish M2:** raise the OpenRouter key limit (about $10–15 should cover 36 trials at the observed rate; the smoke trial used about 160k prompt tokens), then run:
+Pre-registered at commit `7a7c7795`. Every report names its provider and model; runs on different models are
+never pooled.
 
-  ```bash
-  bundle exec rake agenteval:skills:run
-  ```
+| Run | Model | Trials | Status |
+|---|---|---|---|
+| `skills-20261001.INVALID-key-limit.json` | DeepSeek v4.1 Flash (OpenRouter) | 36 planned | **invalid** — the key hit its spend limit after 2 trials |
+| `skills-20261001-reduced.json` | DeepSeek v4.1 Flash (OpenRouter) | 12: `forced` vs `none`, 1 repeat | **reduced design, owner-approved** — not the pre-registered 36 |
+
+**Reduced run result (Flash, n = 1 per scenario × arm):**
+
+| Arm | Solved | Planted exceptions found | Compliant misjudged | Gates | Median prompt tokens | Median duration |
+|---|---|---|---|---|---|---|
+| `none` | **6/6** | 12/12 | 0/9 | none | 189k | 45 s |
+| `forced` | 4/6 | 11/12 | 2/9 | `fabricated_evidence` ×1 | 276k | 143 s |
+
+- Decision (pre-registered rule): **no measurable difference at this size.** The scenario-bootstrap interval for
+  recall (forced − none) is [−0.33, 0.00], and `fabricated_evidence` tripped more often in `forced`.
+- Plainly: on this model and corpus the skill did not help. Without it the agent solved every scenario; with
+  it the agent cost about 45% more tokens, took about 3× as long, and failed twice:
+  - A5: it listed `criteria.md` as a source and quoted it verbatim. The pre-registered rule counts a citation
+    of a non-document as fabrication; the words were real.
+  - A6: it answered in chat and never wrote the findings.
+- Why this can happen: the verifier check already teaches the output contract (PLAN challenge 4), and the
+  scenarios are easy enough for this model unaided. The skill's measurable cost is its own length and
+  ceremony, which is exactly what the optimizer targets.
+- The pre-registered 36-trial design (with the `skill` arm, i.e. selection) has not run.
+
+## Creator and optimizer
+
+| Piece | Status | Evidence |
+|---|---|---|
+| `tamoz skills new` / `show` / `promote` | built | `test/skills_candidates_test.rb`, `test/cli_skills_command_test.rb` |
+| `tamoz skills create --from-session` | built; scripted end to end | `test/cli_skills_create_test.rb` (plumbing only; no real-model draft yet) |
+| `agenteval skills optimize` | built; offline proven | `test/agenteval_skills_optimizer_test.rb` |
+| Optimizer real run (GLM-5.3-Flash) | running | `agenteval/reports/skills-optimize-20261001.json` |
+| `skill-authoring` bundled skill | ships without an eval | pending gap printed by `test/skills_lint_test.rb` |
+
+## Chat
+
+The owner's runtime (`~/.tamoz`) now serves skills to chat. Backups are `*.bak-skills-20261001010809`.
+- `sources.skills` is enabled in `config.yaml`.
+- `evidence-audit` and `skill-authoring` are in `~/.tamoz/skills`. Bundled skills cannot be used directly,
+  because chat works inside this repo and a skills root may not overlap the workspace.
+- The `telegram` profile allows `load_skill` and `read_skill_resource`, and its catalog digest is re-pinned.
+  Verified: the chat toolbox matches the profile and lists both skills.
+- A chat thread bound to the old profile digest refuses to continue; start a new thread.
 
 ## Findings
 
@@ -53,7 +84,7 @@ Status of every [QUALITY_BAR.md](QUALITY_BAR.md) row. Branch `improve-skills`.
 | S9 no provenance / user invocation | fixed — `skill_loaded` trace, `--skill` |
 | S10 limits disagree with the spec | fixed — `--` refused, character limits |
 | S11 two skill identities (stream `SkillSet`) | open — a wire contract shared with the Go authority (ADR-055) |
-| S12 nothing measures skill value | eval built and proven; real-model result blocked (M2) |
+| S12 nothing measures skill value | measured — reduced Flash run: no benefit at this size (see M2) |
 | S13 `tamoz.eval-suite` unused | fixed — the lint test requires the named pack to exist |
 | S14 docs drift | fixed — ADR-056, ADR-033/034 verification, design page |
 | S15 no skill ships | fixed — bundled `evidence-audit` |

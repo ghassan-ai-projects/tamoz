@@ -156,6 +156,29 @@ See [EVAL.md](EVAL.md). An `agenteval skills` pack: `prove` (offline controls) a
 model). It is the first consumer of `metadata.tamoz.eval-suite` (S13): a bundled skill names its
 pack, and a test checks that the pack exists.
 
+## Built after the first evaluation (owner decisions, 2026-10-01)
+
+The owner asked for the creator and optimizer after challenge 5, and narrowed the optimizer to the skill's
+definition only, with `tamoz improve` and the improvement gem unchanged.
+
+- **Creator.** `tamoz skills new` writes a scaffold that meets the bar. `tamoz skills create NAME
+  --from-session THREAD` exports a verified thread (scrubbed) into a private drafting workspace, then runs a
+  work turn guided by the bundled `skill-authoring` skill. The draft is staged as a digest-pinned candidate
+  only when it meets the authoring bar.
+- **Promotion.** `tamoz skills promote` installs a candidate exactly as staged: it copies only the digested
+  files, digests the copy again, keeps the previous version aside, and logs the promotion. The approver must
+  be named and must differ from the recorded creator. The manifest is an operator file, so the digest pin is
+  the gate and the names are a record.
+- **Optimizer.** `agenteval skills optimize` rewrites only `SKILL.md`. The proposer sees training scenarios
+  only. A rewrite is kept when it audits better on held-out scenarios, or audits as well for at most 80% of
+  the tokens; it is then staged for promotion. It stops on any trial that did not run, and reports one trial
+  per scenario as indicative.
+- **Catalog, partly.** `tamoz skills show` was added for reviewing candidates. Search and visibility remain
+  planned (challenge 6).
+- **Chat.** `tamoz telegram setup` offers the skill tools, pinning the digest they produce, when a skills
+  source holding a skill is enabled. The owner's runtime has `sources.skills` enabled, with
+  `evidence-audit` and `skill-authoring` in `~/.tamoz/skills`.
+
 ## Planned (not built in this change)
 
 ### Phase 8 — skill catalog at scale
