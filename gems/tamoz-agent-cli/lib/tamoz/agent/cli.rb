@@ -207,7 +207,8 @@ module Tamoz
       end
 
       def tracked_request_queued?(session, tracked_request)
-        turn_driver(session, thread_id: tracked_request.thread_id, owner_id: nil, options: {}).queued?(tracked_request)
+        session.app.durable_runner.fetch(thread: tracked_request.thread_id,
+                                         request_id: tracked_request.request_id)&.status == :queued
       end
 
       def map_answer(kind, raw) = InterruptAnswers.parse(kind, raw)
