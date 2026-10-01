@@ -105,8 +105,7 @@ module Tamoz
           initialize_runtime!
           @change_profile_id = "#{CHANGE_PROFILE_PREFIX}-#{Digest::SHA256.hexdigest(@run_id)[0, 16]}"
           path = File.join(@runtime_dir, 'profiles', "#{@change_profile_id}.yaml")
-          FileUtils.mkdir_p(File.dirname(path), mode: 0o700)
-          File.chmod(0o700, File.dirname(path))
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(path))
           Tamoz::Core::AtomicFile.replace(path, Psych.dump(change_profile_document), mode: 0o600)
         rescue SystemCallError => e
           raise Tamoz::Evals::ExecutionError, "scenario_profile_setup_failed:#{e.class}"
