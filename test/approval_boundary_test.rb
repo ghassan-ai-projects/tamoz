@@ -5,6 +5,7 @@ require_relative 'test_helper'
 # Approval's stores are engine internals: other gems ask the Engine or build one,
 # they never read its decision log or grant store. A leak here puts the log's
 # nil-means-another-process semantics in a caller that cannot maintain it.
+# The scan covers gems/*/lib only; apps/ and test sources sit outside it.
 class ApprovalBoundaryTest < Minitest::Test
   INTERNALS = [/\.(?:decision_log|grant_store)\b/].freeze
   OWNERS = %w[gems/tamoz-approval/ gems/tamoz-sqlite/].freeze

@@ -930,7 +930,7 @@ class AgentCLITest < Minitest::Test
     end
 
     assert_equal Tamoz::Agent::CLI::TurnStream::FAILURE_MESSAGE, error.message
-    assert_kind_of Tamoz::CheckpointConflictError, error.cause
+    assert_instance_of Tamoz::CheckpointConflictError, error.cause
   end
 
   def test_unexpected_error_propagates_instead_of_clean_exit

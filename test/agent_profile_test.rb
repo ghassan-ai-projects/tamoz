@@ -536,6 +536,7 @@ class AgentProfileTest < Minitest::Test
   def test_secret_shape_classifies_one_field_value_for_callers
     assert_equal :secret, Profile.secret_shape('model', 'sk-proj-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
     assert_equal :candidate_secret, Profile.secret_shape('model', 'x' * 40)
+    assert_equal :none, Profile.secret_shape('model', 'd' * 64)
     assert_equal :none, Profile.secret_shape('canonical_root', 'd' * 64)
     assert_equal :none, Profile.secret_shape('model', 'claude-sonnet-4-5')
   end

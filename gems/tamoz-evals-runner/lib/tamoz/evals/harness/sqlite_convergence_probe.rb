@@ -358,9 +358,7 @@ module Tamoz
           end
           {
             "request_status" => request.status.to_s,
-            "terminal_reason" =>
-              request.terminal_error.is_a?(Hash) ?
-                request.terminal_error.fetch("reason") : nil,
+            "terminal_reason" => request.terminal_reason,
             "execution_bound" => !request.execution_id.nil?
           }
         end

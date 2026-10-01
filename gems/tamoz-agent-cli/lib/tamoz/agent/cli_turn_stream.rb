@@ -27,9 +27,8 @@ module Tamoz
           cancellation = @cancellation || Tamoz::CancellationToken.new
           sink = Tamoz::StreamSink.new(cancellation:, run_id: request_id)
           context = build_context(sink, cancellation, thread_id:, request_id:)
-          # The bounded failure below is delivered through worker.value, not by
-          # letting the thread report: a dying thread dumps the backtrace on
-          # stderr ahead of the clean message.
+          # In-body, not Thread.new(report_on_exception: false) — that kwarg is a
+          # no-op on Ruby 3.3 — or a dying thread dumps the backtrace on stderr.
           worker = Thread.new do
             Thread.current.report_on_exception = false
             step(sink) { yield context }

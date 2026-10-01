@@ -168,7 +168,7 @@ module Tamoz
 
         def render_request_terminal_failure(request)
           @rendered_stale_request_ids[request.request_id] = true
-          reason = request.terminal_error.fetch('reason')
+          reason = request.terminal_reason
           if @options[:json]
             emit_cli_event('cli.request_stale', { 'thread_id' => request.thread_id, 'request_id' => request.request_id,
                                                   'operation' => request.operation.to_s, 'reason' => reason })

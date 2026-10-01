@@ -95,6 +95,7 @@ class GraphDurableRunnerTest < Minitest::Test
     stale = request(status: :failed, terminal_error: { 'graph_status' => 'failed', 'reason' => 'superseded' })
 
     assert_predicate stale, :stale_failure?
+    refute_predicate request(status: :failed, terminal_error: nil), :stale_failure?
   end
 
   def test_ordinary_run_failures_are_not_stale_failures

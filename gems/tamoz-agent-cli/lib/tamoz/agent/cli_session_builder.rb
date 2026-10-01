@@ -8,7 +8,8 @@ module Tamoz
       # Builds what a durable CLI session runs on: where its thread files live,
       # its store, toolbox, MCP source and approval engine, and the session itself.
       class SessionBuilder
-        # What the CLI opened for one session; it closes them after the command.
+        # What one durable run opened; SessionBuilder#assemble closes them after
+        # the command's yield returns.
         Parts = Data.define(:model, :toolbox, :adapter, :mcp, :memory, :approvals, :harness)
 
         APPROVAL_SESSION = 'interactive'
@@ -50,32 +51,6 @@ module Tamoz
           raise ArgumentError, 'TAMOZ_LEASE_TTL must be a number of seconds within (0, 30]'
         end
 
-        # A read-only command must not demand a model credential: its model fails
-        # closed, so a stray generate is loud, not silent.
-        def read_only_model
-          model = Object.new
-          def model.generate(**)
-            raise Tamoz::Core::ToolError, 'a read-only command must not generate'
-          end
-          model
-        end
-
-        def build_adapter(session_dir, thread_id)
-          Tamoz::SQLite::Adapter.new(
-            path: File.join(session_dir, "#{thread_id}.sqlite3"),
-            limits: Tamoz::SQLite::Limits.new(lease_ttl:)
-          )
-        end
-
-        def build_toolbox(options, profile: nil)
-          return build_profile_toolbox(profile, options) if profile
-
-          Tamoz::Agent::Toolbox.new(
-            root: options[:root], allow_changes: options[:allow_changes], checks: options[:checks],
-            skills: SkillsOptions.new(options).snapshot(options[:root])
-          )
-        end
-
         def build_mcp_source(options, profile: nil)
           runtime_path = options[:runtime_dir] || @env['TAMOZ_RUNTIME_DIR']
           return nil unless runtime_path
@@ -89,14 +64,6 @@ module Tamoz
           end
 
           McpSourceBuilder.new(directory).build
-        end
-
-        # The interactive default gates mutations behind a confirm: the operator
-        # opts into autonomy by naming a looser profile.
-        def build_approvals(options)
-          engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')
-          engine.bind_session(APPROVAL_SESSION)
-          engine
         end
 
         # Assembles one durable run, yields the parts and the session while
@@ -125,6 +92,22 @@ module Tamoz
           end
         end
 
+        def build_list_session(adapter, options)
+          model = Object.new
+          def model.generate(**) = '{}'
+          toolbox = Tamoz::Agent::Toolbox.new(root: options[:root], allow_changes: options[:allow_changes],
+                                              checks: options[:checks])
+          Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter)
+        end
+
+        private
+
+        def close_run_resources(mcp, memory, read_only:, adapter:)
+          mcp&.close
+          memory&.first&.close
+          adapter.close unless read_only
+        end
+
         # DR-5 D1 (RC5): the session record carries the same post-override role
         # resolution the model was built from, so the record never disagrees with the run.
         def build_session(parts, options:, thread_id:, profile:)
@@ -141,20 +124,38 @@ module Tamoz
           )
         end
 
-        def build_list_session(adapter, options)
+        # A read-only command must not demand a model credential: its model fails
+        # closed, so a stray generate is loud, not silent.
+        def read_only_model
           model = Object.new
-          def model.generate(**) = '{}'
-          toolbox = Tamoz::Agent::Toolbox.new(root: options[:root], allow_changes: options[:allow_changes],
-                                              checks: options[:checks])
-          Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter)
+          def model.generate(**)
+            raise Tamoz::Core::ToolError, 'a read-only command must not generate'
+          end
+          model
         end
 
-        private
+        def build_adapter(session_dir, thread_id)
+          Tamoz::SQLite::Adapter.new(
+            path: File.join(session_dir, "#{thread_id}.sqlite3"),
+            limits: Tamoz::SQLite::Limits.new(lease_ttl:)
+          )
+        end
 
-        def close_run_resources(mcp, memory, read_only:, adapter:)
-          mcp&.close
-          memory&.first&.close
-          adapter.close unless read_only
+        def build_toolbox(options, profile: nil)
+          return build_profile_toolbox(profile, options) if profile
+
+          Tamoz::Agent::Toolbox.new(
+            root: options[:root], allow_changes: options[:allow_changes], checks: options[:checks],
+            skills: SkillsOptions.new(options).snapshot(options[:root])
+          )
+        end
+
+        # The interactive default gates mutations behind a confirm: the operator
+        # opts into autonomy by naming a looser profile.
+        def build_approvals(options)
+          engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')
+          engine.bind_session(APPROVAL_SESSION)
+          engine
         end
 
         # §5.2: the profile is the capability authority; the toolbox is derived

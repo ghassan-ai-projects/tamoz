@@ -11,8 +11,11 @@ module Tamoz
       # Reads operator answers for the CLI's approval/clarify prompts. EOF
       # (nil input) aborts the prompt — the caller treats nil as "no answer".
       class PromptAdapter
-        APPROVE = %w[y yes a approve].freeze
-        DENY = %w[n no d deny].freeze
+        # The interactive words and the approval gem's published answer
+        # vocabulary stay one list, so a scripted --answer and a typed answer
+        # can never drift apart.
+        APPROVE = Tamoz::Approval::Answer::APPROVE_TOKENS.map(&:to_s).freeze
+        DENY = Tamoz::Approval::Answer::DENY_TOKENS.map(&:to_s).freeze
         HELP = %w[? h help].freeze
 
         def initialize(input:, err:)
