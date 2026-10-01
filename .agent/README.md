@@ -9,5 +9,6 @@
 - [`rules/memory.md`](rules/memory.md) — full-text search, write authority, replay-safe writes.
 - [`rules/files.md`](rules/files.md) — one atomic write primitive; what may bypass it.
 - [`rules/subgraphs.md`](rules/subgraphs.md) — child effect identity and checkpoint recovery.
+- [`rules/adr.md`](rules/adr.md) — ADRs match the code; policy edits are ADR changes.
 
 Record a rule in the same change that taught it; rewrite any rule it contradicts.
