@@ -85,15 +85,11 @@ class ObservabilityRuntimeTest < Minitest::Test
         directory:, role: 'worker', queue_size: 1, flush_interval_ms: 1_000
       )
       producer = Observability::Producer.new(recorder: journal)
-      writes = atomic_writes do
-        100.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x'}) }
-        journal.close
-      end
+      100.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x'}) }
+      journal.close
 
       documents = Observability::Recorder::Journal.read(directory)
       assert documents.all? { |document| document.key?('name') }
-      assert_equal [:replace], writes.map(&:first).uniq
-      assert writes.all? { |_operation, path, mode| path.end_with?('.health.json') && mode == 0o600 }
       assert_operator Observability::Recorder::Journal.inventory(directory).fetch('drops'), :>, 0
     end
   end

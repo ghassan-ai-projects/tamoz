@@ -218,7 +218,7 @@ module Tamoz
         end
 
         def persist_health
-          Tamoz::Core::AtomicFile.replace(@health_path, JSON.generate('drops' => drops_hash), mode: 0o600)
+          File.write(@health_path, JSON.generate('drops' => drops_hash), mode: 'w', perm: 0o600)
         rescue SystemCallError
           nil
         end
