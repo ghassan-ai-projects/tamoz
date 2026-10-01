@@ -218,8 +218,7 @@ module Tamoz
       end
 
       def write_private(path, text)
-        File.write(path, text)
-        File.chmod(0o600, path)
+        Tamoz::Core::AtomicFile.replace(path, text, mode: 0o600)
       end
 
       # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
