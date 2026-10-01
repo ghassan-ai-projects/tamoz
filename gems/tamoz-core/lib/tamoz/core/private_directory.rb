@@ -13,7 +13,6 @@ module Tamoz
       def secure(path)
         FileUtils.mkdir_p(path, mode: MODE)
         File.chmod(MODE, path)
-        path
       end
     end
   end

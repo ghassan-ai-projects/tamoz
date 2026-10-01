@@ -13,7 +13,8 @@ class CorePrivateDirectoryTest < Minitest::Test
   def test_a_new_directory_is_owner_only_and_its_missing_parents_are_created
     path = File.join(@dir, 'a', 'b')
 
-    assert_equal path, PrivateDirectory.secure(path)
+    PrivateDirectory.secure(path)
+
     assert_equal 0o700, mode(path)
   end
 
