@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'json'
 
 module Tamoz
@@ -15,7 +14,7 @@ module Tamoz
         return author_skill(action, options, argv) if %w[new create promote].include?(action)
 
         # Read-only views: nothing here reaches a session, so the workspace rule does not apply.
-        snapshot = skills_snapshot(options, nil)
+        snapshot = SkillsOptions.new(options).snapshot(nil)
         case action
         when 'list' then list_skills(snapshot, options)
         when 'check' then check_skills(snapshot)
@@ -98,9 +97,8 @@ module Tamoz
         validate_thread_id!(thread)
         trajectory = verified_trajectory(options, thread)
         stamp = Time.now.utc.strftime('%Y%m%dT%H%M%S')
-        workspace = File.join(provision_private_session_dir!(options), 'skill-drafts', "#{name}-#{stamp}")
-        FileUtils.mkdir_p(File.join(workspace, name, 'references'), mode: 0o700)
-        File.write(File.join(workspace, 'trajectory.md'), trajectory)
+        workspace = SkillInstallation.draft_workspace(provision_private_session_dir!(options), "#{name}-#{stamp}", name,
+                                                      trajectory)
         status = cmd_ask(options.merge(root: workspace, work_routing: true, allow_changes: true, bundled_skills: true,
                                        skills_dir: nil, skill: 'skill-authoring', checks: {}, session: nil, profile: nil,
                                        explicit_session: "skill-draft-#{name}-#{stamp}".downcase),
@@ -111,9 +109,7 @@ module Tamoz
           return status
         end
 
-        references = File.join(workspace, name, 'references')
-        Dir.rmdir(references) if Dir.exist?(references) && Dir.empty?(references)
-        manifest = SkillInstallation.stage(File.join(workspace, name), created_by: 'tamoz.skill-creator',
+        manifest = SkillInstallation.stage_draft(File.join(workspace, name), created_by: 'tamoz.skill-creator',
                                                                                 source: "session:#{thread}")
         @out.puts "staged candidate #{manifest['name']} #{manifest['tree_digest']}"
         @out.puts "review #{File.join(workspace, name)}, then: tamoz skills promote #{File.join(workspace, name)} " \

@@ -189,7 +189,7 @@ module Tamoz
           root: options[:root],
           allow_changes: options[:allow_changes],
           checks: options[:checks],
-          skills: skills_snapshot(options, options[:root]),
+          skills: SkillsOptions.new(options).snapshot(options[:root]),
           ask: method(:approve_one_shot),
           routing: one_shot_routing(options)
         )
@@ -642,7 +642,7 @@ module Tamoz
       def build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:, memory: nil)
         engine, owner, = memory
         harness = work_harness(options, thread_id)
-        require_skill!(toolbox, harness[:skill])
+        SkillsOptions.require_loadable!(toolbox, harness[:skill])
         Tamoz::Agent::Session.new(
           memory: engine,
           memory_owner: owner,
@@ -660,16 +660,6 @@ module Tamoz
           routing: durable_routing(options),
           harness:
         )
-      end
-
-      # A thread's invoked skill must load now, not fail or vanish at its first model call.
-      def require_skill!(toolbox, skill)
-        return unless skill
-        unless toolbox.names.include?("load_skill")
-          raise ArgumentError, "--skill #{skill} needs --skills DIR or --bundled-skills, and a profile that allows load_skill"
-        end
-
-        toolbox.skill_catalog.resolve(skill)
       end
 
       # Kept apart from one_shot_routing on purpose: a durable session ignores
@@ -708,24 +698,14 @@ module Tamoz
           root: options[:root],
           allow_changes: options[:allow_changes],
           checks: options[:checks],
-          skills: skills_snapshot(options, options[:root])
+          skills: SkillsOptions.new(options).snapshot(options[:root])
         )
-      end
-
-      # Skills come only from the operator's command line: `--skills DIR` and `--bundled-skills`.
-      def skills_snapshot(options, workspace_root)
-        Tamoz::Skills.operator_snapshot(root: options[:skills_dir], workspace_root:,
-                                        bundled: options[:bundled_skills] == true)
       end
 
       # §5.2: the profile is the capability authority; the toolbox is derived
       # from it wholesale so its catalog digest matches the pinned value.
       def build_profile_toolbox(profile, options)
-        skills = skills_snapshot(options, profile.canonical_root)
-        if skills.empty? && profile.tools_allowed.include?("load_skill")
-          raise ArgumentError, "profile #{profile.profile_id} allows load_skill; pass --skills DIR or --bundled-skills"
-        end
-
+        skills = SkillsOptions.new(options).snapshot_for(profile)
         Tamoz::Agent::Toolbox.new(
           root: profile.canonical_root,
           allow_changes: profile.allow_changes?,

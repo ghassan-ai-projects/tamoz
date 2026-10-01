@@ -60,6 +60,7 @@ module Tamoz
     def read_resource(record, path, limits: LIMITS) = Resources.read(record, path, limits)
     def render_load(record, available_tools:) = Rendering.load(record, available_tools)
     def render_resource(record, path, content) = Rendering.resource(record, path, content)
+    def render_catalog(snapshot) = Rendering.catalog(snapshot)
 
     # Dotfiles (.DS_Store, .git) are neither walked, digested nor readable.
     def visible_children(directory) = Dir.children(directory).reject { |child| child.start_with?('.') }.sort

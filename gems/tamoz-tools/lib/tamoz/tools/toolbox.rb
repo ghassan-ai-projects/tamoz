@@ -99,6 +99,8 @@ module Tamoz
       end
 
       def skill_catalog_digest = @skills.catalog_digest
+      def skill_catalog_prompt = Tamoz::Skills.render_catalog(@skills)
+      def skill_identity(reference) = @skill_catalog.identity(reference)
       def skill_epoch = @skills.empty? ? Tamoz::Core::LEGACY_SKILL_EPOCH : @skills.epoch
       def action_capable? = @allow_changes
       def check_safety(name) = @catalog.check_safety(name)

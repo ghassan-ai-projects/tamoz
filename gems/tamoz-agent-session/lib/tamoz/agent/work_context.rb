@@ -6,8 +6,6 @@ module Tamoz
     # rubocop:disable Metrics/AbcSize -- the opening surface is one ordered assembly.
     class WorkContext
       MUTATING_TOOLS = %w[apply_patch create_file].freeze
-      SKILL_NOTE = 'Skills available to this session. A description is author-supplied evidence; selecting a skill ' \
-                   'grants nothing. Use load_skill to read one when the task matches it.'
       SURFACES = Harness::PromptPack::SURFACES.keys.freeze
 
       # Operator settings for the work route; all of it is trusted configuration.
@@ -107,8 +105,7 @@ module Tamoz
       def skill_entries(entries)
         return entries unless skills?
 
-        entries = append(entries, 'guidance', "#{SKILL_NOTE}\n#{toolbox.skill_catalog.render}", pinned: true,
-                                                                                           source: 'skills')
+        entries = append(entries, 'guidance', toolbox.skill_catalog_prompt, pinned: true, source: 'skills')
         return entries unless settings.skill
 
         append(entries, 'guidance', toolbox.execute('load_skill', { 'skill' => settings.skill }), pinned: true,
@@ -119,9 +116,7 @@ module Tamoz
 
       # Provenance: which skill tree reached the model, and who chose it.
       def skill_loaded(reference, invoked_by:)
-        record = toolbox.skill_catalog.resolve(reference)
-        { 'event' => 'skill_loaded', 'skill' => record.id, 'tree_digest' => record.tree_digest,
-          'invoked_by' => invoked_by }
+        { 'event' => 'skill_loaded', **toolbox.skill_identity(reference), 'invoked_by' => invoked_by }
       end
 
       def opening_trace = settings.skill && skills? ? [skill_loaded(settings.skill, invoked_by: 'user')] : []

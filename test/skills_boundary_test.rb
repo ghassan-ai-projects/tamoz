@@ -37,6 +37,15 @@ def test_the_gem_writes_nothing
   assert_empty writes
 end
 
+# The session reaches skills only through its toolbox: the catalog prompt, a skill's identity, the skill tools.
+def test_the_session_asks_the_toolbox_and_never_reads_skill_internals
+  leaks = files('gems/tamoz-agent-session/lib/**/*.rb').flat_map do |path|
+    matches(path, /Tamoz::Skills\b|\.skill_catalog\b|\.tree_digest\b|record\.id\b/)
+  end
+
+  assert_empty leaks
+end
+
   def test_every_gem_that_names_the_facade_declares_it
     GEM_ROOTS.each do |name, root|
       next if name == 'tamoz-skills'

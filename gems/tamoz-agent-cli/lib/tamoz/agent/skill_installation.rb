@@ -27,6 +27,22 @@ module Tamoz
         manifest
       end
 
+      # A private workspace for one drafting turn: the exported trajectory, and the draft's directory made ready
+      # because create_file never makes parents.
+      def self.draft_workspace(session_dir, label, name, trajectory)
+        workspace = File.join(session_dir, 'skill-drafts', label)
+        FileUtils.mkdir_p(File.join(workspace, name, 'references'), mode: 0o700)
+        File.write(File.join(workspace, 'trajectory.md'), trajectory)
+        workspace
+      end
+
+      # Stages a finished draft, dropping the references/ directory it was given if it stayed empty.
+      def self.stage_draft(directory, created_by:, source:)
+        references = File.join(directory, 'references')
+        Dir.rmdir(references) if Dir.exist?(references) && Dir.empty?(references)
+        stage(directory, created_by:, source:)
+      end
+
       def initialize(skills_root)
         @root = File.realpath(skills_root)
       end
@@ -37,7 +53,8 @@ module Tamoz
         manifest = JSON.parse(File.read(Tamoz::Skills.manifest_path(directory)))
         record = Tamoz::Skills.approve_candidate(directory, manifest:, approver:)
         retired = replace(record)
-        entry = manifest.merge('approver' => approver.strip, 'installed_at' => Time.now.utc.iso8601, 'retired' => retired)
+        entry = manifest.merge('approver' => approver.strip, 'installed_at' => Time.now.utc.iso8601,
+                               'retired' => retired)
         File.open(File.join(@root, PROMOTIONS), 'a') { |file| file.puts(JSON.generate(entry)) }
         entry
       end

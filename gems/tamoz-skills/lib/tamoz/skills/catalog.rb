@@ -25,6 +25,12 @@ module Tamoz
         @snapshot.records[text] || resolve_name(text)
       end
 
+      # What a trace records about a loaded skill: which tree, never its content.
+      def identity(reference)
+        record = resolve(reference)
+        { 'skill' => record.id, 'tree_digest' => record.tree_digest }
+      end
+
       # What the model sees is always a prefix of what exists, and the cut is said out loud.
       def render(budget_bytes: MAX_CATALOG_BYTES)
         lines = record_lines + collision_lines
