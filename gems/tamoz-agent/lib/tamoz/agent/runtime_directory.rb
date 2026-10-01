@@ -63,7 +63,7 @@ module Tamoz
       # runs unattended.
       def self.create!(path, workspace:)
         ensure_private_runtime_directories!(path)
-        write_default_config!(path, workspace:)
+        write_default_config!(path, workspace:) unless File.exist?(config_path(path))
         new(path)
       end
 

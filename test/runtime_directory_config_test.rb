@@ -89,7 +89,7 @@ class RuntimeDirectoryConfigTest < Minitest::Test
       again = atomic_writes { RuntimeDirectory.create!(runtime_dir, workspace: File.join(directory, 'other')) }
 
       assert_equal [[:create, config_path, 0o600]], calls
-      assert_equal [[:create, config_path, 0o600]], again
+      assert_empty again
       assert_equal before, File.read(config_path)
     end
   end
