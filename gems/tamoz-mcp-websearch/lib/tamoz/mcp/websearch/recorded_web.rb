@@ -18,8 +18,7 @@ module Tamoz
         end
 
         def charge!
-          File.open("#{@path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
-            lock.flock(File::LOCK_EX)
+          Tamoz::Core::FileLock.exclusive("#{@path}.lock") do
             ledger = JSON.parse(File.read(@path))
             raise Exhausted, "the search budget of #{ledger.fetch('cap')} requests is spent" if
               ledger.fetch('used') >= ledger.fetch('cap')

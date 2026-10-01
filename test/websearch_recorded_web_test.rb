@@ -33,6 +33,15 @@ class WebsearchRecordedWebTest < Minitest::Test
     end
   end
 
+  def test_the_ledger_is_replaced_only_while_its_lock_is_held
+    Dir.mktmpdir do |dir|
+      path = counter(dir, used: 0)
+      held = lock_held_during_atomic_writes("#{path}.lock") { W::SearchLedger.new(path).charge! }
+
+      assert_equal [true], held
+    end
+  end
+
   def test_a_repeated_query_is_served_from_the_record_without_a_charge
     Dir.mktmpdir do |dir|
       web = W::RecordedWeb.new(dir: File.join(dir, 'cache'), ledger: W::SearchLedger.new(counter(dir, used: 0)))

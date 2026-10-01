@@ -103,6 +103,19 @@ module AtomicWrites
   ensure
     AtomicWrites.log = nil
   end
+
+  def lock_held_during_atomic_writes(lock_path)
+    held = []
+    probe = Object.new
+    probe.define_singleton_method(:push) do |_write|
+      File.open(lock_path) { |other| held << !other.flock(File::LOCK_EX | File::LOCK_NB) }
+    end
+    AtomicWrites.log = probe
+    yield
+    held
+  ensure
+    AtomicWrites.log = nil
+  end
 end
 
 class Minitest::Test

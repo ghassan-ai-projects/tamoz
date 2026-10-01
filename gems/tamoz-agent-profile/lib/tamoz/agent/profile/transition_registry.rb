@@ -167,22 +167,12 @@ module Tamoz
         private
 
         # The registry's single write critical section. flock is advisory but the
-        # only writers are the two paths through this class, so both serialize
-        # here; flock releases when the descriptor closes (including process
-        # death), so a killed writer can never leave the registry wedged.
-        #
-        # :reek:TooManyStatements — directory setup, lock acquisition, the
-        # permission check and the release are one indivisible protocol.
+        # only writers are the two paths through this class, so both serialize here.
         def with_registry_lock
           Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
-          File.open("#{@path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
-            lock.flock(File::LOCK_EX)
-            begin
-              Profile.verify_permissions!(@path) if File.exist?(@path)
-              yield
-            ensure
-              lock.flock(File::LOCK_UN)
-            end
+          Tamoz::Core::FileLock.exclusive("#{@path}.lock") do
+            Profile.verify_permissions!(@path) if File.exist?(@path)
+            yield
           end
         end
 
