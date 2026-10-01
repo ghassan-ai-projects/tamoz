@@ -28,7 +28,7 @@ class AgentCliResearchTest < Minitest::Test
         report = Dir[File.join(runtime.workspace, 'research', '*', 'report.md')].first
 
         refute_nil report, out
-        assert_replaced writes, report, 0o644
+        assert_replaced writes, report
         assert_includes File.read(report), "[1] Population of Oslo - Statistics Norway. #{SSB}."
         assert_includes out, 'The full report is saved at'
         refute_includes out, 'probe'
@@ -98,7 +98,7 @@ class AgentCliResearchTest < Minitest::Test
 
   private
 
-  def assert_replaced(writes, path, mode)
+  def assert_replaced(writes, path, mode = 0o666 & ~File.umask)
     published = writes.map { |operation, written, written_mode| [operation, File.realpath(written), written_mode] }
 
     assert_includes published, [:replace, File.realpath(path), mode]

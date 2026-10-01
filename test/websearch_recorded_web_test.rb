@@ -57,7 +57,7 @@ class WebsearchRecordedWebTest < Minitest::Test
       web = W::RecordedWeb.new(dir: File.join(dir, 'cache'))
       writes = atomic_writes { web.read('https://a.example/') { { 'text' => 'page' } } }
 
-      assert_equal [[:replace, Dir[File.join(dir, 'cache', 'page-*.json')].first, 0o644]], writes
+      assert_equal [[:replace, Dir[File.join(dir, 'cache', 'page-*.json')].first, 0o666 & ~File.umask]], writes
     end
   end
 

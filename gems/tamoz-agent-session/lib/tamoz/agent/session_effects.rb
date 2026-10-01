@@ -75,7 +75,7 @@ module Tamoz
         files.each do |relative, content|
           path = File.join(directory, relative)
           FileUtils.mkdir_p(File.dirname(path))
-          Tamoz::Core::AtomicFile.replace(path, content, mode: 0o644)
+          Tamoz::Core::AtomicFile.replace(path, content, mode: 0o666 & ~File.umask)
         end
         { 'directory' => directory, 'files' => files.keys.sort }
       end
