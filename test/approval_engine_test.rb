@@ -207,6 +207,15 @@ class ApprovalEngineTest < Minitest::Test
     assert_equal 'engine.grant_hit', hit_record[:rule_id]
   end
 
+  def test_holds_decision_reports_only_decisions_this_engine_was_asked
+    eng = build_engine
+    request = eng.build_request(tool: 'run_check', argv: ['lint'], targets: ['/workspace/src'], effect_class: :bounded, session_id: 's1')
+    decision = eng.decide(request)
+
+    assert eng.holds_decision?(decision.id)
+    refute eng.holds_decision?('missing-decision')
+  end
+
   def test_session_grant_for_one_check_never_covers_another
     eng = build_engine
     lint = eng.build_request(tool: 'run_check', argv: ['lint'], targets: ['/workspace/src'], effect_class: :bounded, session_id: 's1')

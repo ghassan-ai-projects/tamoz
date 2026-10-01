@@ -87,7 +87,7 @@ module Tamoz
           return unless descriptor['kind'] == 'approve_tool' && asked
 
           decision_id = asked.fetch('id')
-          return unless @approvals.decision_log.lookup(decision_id)
+          return unless @approvals.holds_decision?(decision_id)
 
           @approvals.resolve(decision_id:, answer: value ? :approve : :deny,
                              scope: grant_scope(descriptor, value, interactive))
