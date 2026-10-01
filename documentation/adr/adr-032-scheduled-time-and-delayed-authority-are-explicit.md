@@ -52,26 +52,3 @@ changes, and accumulated backlog.
 
 **Residual risk:** within one occurrence, an approval granted by a remote chat identity applies under
 ADR-049's evidence rule.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Host-timezone cron, run missed jobs on startup, inherit current permissions | DST surprises, restart storms, delayed privilege escalation |
-| Re-check authority only at schedule creation *(retrospective, 2026-10-01)* | A later revocation would not apply to future runs |
-
-## Reopen when
-
-Cron is implemented (this ADR then becomes Complete), or a run-time intersection is found to widen
-any grant.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Grants intersect at run time | `gems/tamoz-scheduler/lib/tamoz/scheduler/grant_intersector.rb` | `test/scheduler_values_test.rb` | — |
-| Misfire and overlap policies behave as stored | `gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb` | `test/sqlite_schedule_store_test.rb` — `test_misfire_skip_delivers_only_the_latest_and_records_older_skipped`, `test_overlap_forbid_skips_the_next_occurrence_while_one_is_in_flight` | — |
-| An unattended worker never grants its own approval; approvals do not carry over | worker | `test/agent_unattended_policy_test.rb` — `test_a_worker_left_running_never_grants_its_own_approval`, `test_an_approval_does_not_carry_to_the_next_occurrence` | — |
-| Cron/IANA | — | `documentation/overview/compatibility.md` records the gap | Not built |

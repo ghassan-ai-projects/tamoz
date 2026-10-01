@@ -51,27 +51,3 @@ malicious or compromised MCP server.
 
 **Residual risk:** an MCP server is arbitrary code running with the host access the operator gave
 its process.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Implement JSON-RPC/MCP inside Tamoz | Duplicates a fast-moving standard and couples graph correctness to protocol churn |
-| Defer MCP until after v0.1 (the retired ADR-012) | External tools were needed now, and the SDK made the edge cheap |
-
-## Reopen when
-
-The official SDK lags the protocol in a way that blocks a needed feature, or its security posture
-falls behind (for example, unpatched transport issues).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Loads only core and the official SDK | `tamoz-mcp` | `test/dependency_isolation_test.rb` — `test_mcp_loads_only_core_and_the_official_sdk` | — |
-| Catalogs are immutable with exact digests; protocol range fails closed | `tamoz-mcp` catalog | `test/mcp_catalog_test.rb` — `test_compile_produces_immutable_catalog_with_exact_digests`, `test_protocol_outside_configured_range_fails_closed` | — |
-| Credentials never appear in errors | same | `test/mcp_catalog_test.rb` — `test_credential_values_never_appear_in_errors_or_stderr_metadata` | — |
-| A crash mid-call is unknown and never retried | session + effect journal | `test/agent_mcp_adversarial_test.rb` — `test_crash_mid_call_is_typed_unknown_and_never_retried` | — |
-| Elicitation is a durable interrupt | `tamoz-mcp` elicitation | `test/mcp_elicitation_test.rb` — `test_build_produces_the_durable_interrupt_descriptor_shape` | — |

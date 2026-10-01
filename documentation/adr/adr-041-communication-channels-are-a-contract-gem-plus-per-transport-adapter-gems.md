@@ -29,23 +29,3 @@ that only needs channel values.
 
 The contract gem stays dependency-free and every transport is tested against the same seam.
 **Cost:** each transport is a Tamoz release (ADR-014).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| One comms gem with a lazily required Telegram backend | Untested seam; HTTP in the contract's load graph |
-
-## Reopen when
-
-ADR-014 opens adapter registration to third parties.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The contract gem loads core only, no HTTP | `tamoz-comms` | `test/dependency_isolation_test.rb` — `test_comms_loads_core_only_and_no_http_or_agent` | — |
-| Transport and store contracts are structural | `tamoz-comms` | `test/comms_seams_test.rb` — `test_transport_contract_is_structural`, `test_comms_store_contract_is_structural_and_versioned` | — |
-| The null sink discards without raising | same | `test/comms_seams_test.rb` — `test_null_sink_discards_events_without_raising` | — |

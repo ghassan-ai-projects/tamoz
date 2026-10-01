@@ -59,28 +59,3 @@ owner waking up.
 | A human resolution from the wrong writer | Resolution is fenced to the row scope and audited |
 
 **Residual risk:** an `:unknown` unsafe effect may in fact have happened; a human decides.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Blind retry after an ambiguous outcome | Duplicates irreversible work |
-| Key effects by their result (content hash of the answer) *(retrospective, 2026-10-01)* | A replay gets a different answer and a different key, so it would run again |
-| Rely on the graph checkpoint alone *(retrospective, 2026-10-01)* | The checkpoint commits after the node; the effect happened before it |
-
-## Reopen when
-
-A target offers a reliable idempotency-key protocol that lets an unsafe class become idempotent,
-or `:unknown` resolutions become frequent enough that operators rubber-stamp them.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Effects route through one dispatcher | `gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb` | `test/agent_session_effect_test.rb`, `test/agent_runtime_effects_test.rb` | No mechanical test that no node calls a model raw |
-| Identity is request-derived and stable | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal_key.rb` | `test/effect_identity_test.rb` — `test_logical_identity_is_stable_for_same_checkpointed_operation` | — |
-| Succeeded is immutable | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb` | `test/sqlite_effect_journal_test.rb` — `test_prepare_start_complete_is_idempotent_and_succeeded_is_immutable` | — |
-| Unsafe ambiguous attempts become `:unknown` | effect journal + dispatcher | `test/sqlite_effect_journal_test.rb` — `test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth` | — |
-| Human resolution is audited and fenced | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb` | `test/sqlite_effect_journal_test.rb` — `test_human_resolution_refuses_a_foreign_writer_row_scope` | — |

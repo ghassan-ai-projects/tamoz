@@ -27,6 +27,10 @@ made before the core stops moving. Yet users do need new tools, new channels, an
 - Nothing discovers or loads adapter code at runtime from configuration, a directory, or a gem
   name supplied by a user.
 
+A proposal to admit third-party adapters must show a privilege boundary granting access only to
+their own credential, an operator-pinned digest for each enabled adapter, and the conformance suite
+run by the adapter author.
+
 ## Consequences
 
 Every piece of code that touches a credential or an egress path is reviewed and released with
@@ -51,26 +55,3 @@ of extension code the operator installs.
 
 **Residual risk:** an MCP server is arbitrary code the operator chose to run, out of process, with
 whatever host access the operator gave it.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A versioned adapter API: third-party adapter gems that pass the published conformance suite, enabled by the operator *(retrospective, 2026-10-01)* | Conformance proves the interface, not that the adapter does not exfiltrate the credential it is handed; until adapters can run with only their own credential, the reviewer must be us |
-| A plugin marketplace with discovery *(retrospective, 2026-10-01)* | Adds a supply-chain surface and a compatibility promise before 1.0 |
-
-## Reopen when
-
-A second party needs to ship an adapter, **and** adapters can run with access to only their own
-credential (for example, in their own process). A loosening ADR must show the adapter's privilege
-boundary, an operator-pinned digest for each enabled adapter, and the conformance suite run by the
-adapter author.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The capability source set is closed | `gems/tamoz-core/lib/tamoz/core/capability/registry.rb` (`BUILT_IN_SOURCES`) | `test/capability_closed_world_test.rb` | — |
-| Transports and exporters pass their contract suites | `tamoz-comms`, `tamoz-observability` | `test/comms_seams_test.rb`, `test/otel_test.rb` | No test asserts that nothing loads adapter code dynamically; source inspection only |

@@ -45,25 +45,3 @@ attacker.
 | A non-durable checkpointer passed as durable | Refused at construction |
 
 **Residual risk:** durability is only as strong as the filesystem's fsync (ADR-011).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Asynchronous durable commit (write-behind) *(retrospective, 2026-10-01)* | A crash loses barriers the caller already observed; resume then repeats visible work |
-| Commit every N supersteps *(retrospective, 2026-10-01)* | Same loss window, made configurable |
-
-## Reopen when
-
-A measured workload is bound by per-barrier commit latency and can tolerate replay of the uncommitted
-window under ADR-016.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| A kill before or after commit recovers one execution | `gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_committer.rb` | `test/sqlite_crash_recovery_test.rb` — `test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution` | Real process kill; not power loss |
-| A committed node is not re-executed | executor + committer | `test/sqlite_crash_recovery_test.rb` — `test_process_kill_after_durable_task_write_does_not_reexecute_node` | — |
-| A non-durable checkpointer is refused | `tamoz-graph` durable runner | `test/graph_durable_runner_test.rb` — `test_a_non_durable_checkpointer_is_refused_at_construction` | — |

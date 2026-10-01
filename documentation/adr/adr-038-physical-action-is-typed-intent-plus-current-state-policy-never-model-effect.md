@@ -50,25 +50,3 @@ approval fatigue.
 
 **Residual risk:** everything after the proposal is enforced in the Go runtime, outside this
 repository's tests.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Actuator tools with a confirmation prompt | Leaves injection, stale state, duplicates, and approval fatigue uncontrolled |
-| Let the model pick a risk class with the intent *(retrospective, 2026-10-01)* | A compromised plan would lower its own gate |
-
-## Reopen when
-
-Never for direct model actuation. Revisit the intent catalog's shape if a domain's actions cannot be
-typed ahead of time.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| A missing or forged intent catalog fails before any model call | `gems/tamoz-stream/lib/tamoz/stream/decision_builder.rb` | `test/stream_episode_intent_authority_test.rb` — `test_gate1_a_forged_intent_catalog_digest_fails_closed_before_any_model_call` | — |
-| The decision carries the catalog-declared risk | same | `test/stream_episode_intent_authority_test.rb` — `test_the_decision_carries_the_catalog_declared_risk` | — |
-| The worker names no hardware mechanism | `tamoz-stream` | `test/tamoz_brain_hardware_boundary_test.rb` — `test_the_brain_names_no_hardware_mechanism` | Revalidation and dispatch are in `agentic-stream`, not checked here |

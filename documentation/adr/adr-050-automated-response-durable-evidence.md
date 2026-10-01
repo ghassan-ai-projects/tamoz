@@ -3,7 +3,7 @@
 **Status:** Proposed
 **Date:** 2026-08-10
 **Tier:** F
-**Implementation:** Not built — ratified when observability phase 5 (alerting) ships with the fault-injection test below
+**Implementation:** Not built — ratified when observability phase 5 (alerting) ships with fault-injection proof of the non-degraded-window precondition
 **Relates to:** [ADR-045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md), [ADR-047](./adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md), [ADR-022](./adr-022-reviewed-plan-gate.md), [ADR-028](./adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md)
 
 Observability may compute that a condition holds; it may never act on it. A response fires only on
@@ -30,6 +30,9 @@ remediation (ADR-028).
 
 This proposes invariant clause 62; the invariant contract still ends at 61 until this is ratified.
 
+Any specific automated effect needs a new ADR naming the effect, routing it through ADR-022
+or ADR-028, and proving the non-degraded-window precondition with a fault-injection test.
+
 ## Consequences
 
 Alerting cannot become a control plane. **Cost:** "when X, run Y" cannot be wired inside
@@ -54,22 +57,3 @@ metric, or lost telemetry read as health.
 
 **Residual risk:** a correctly computed condition can still trigger a rule whose own gate is weak;
 that is the owning subsystem's risk.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A threshold-action engine inside observability | An unaudited authority path |
-| Auto-restart or auto-approve on an alert | Grants authority from a measurement |
-| Act on an in-memory alert window | A paused turn outlives the window |
-
-## Reopen when
-
-Never for a general hook. Any specific automated effect needs a new ADR that names the effect, routes
-it through ADR-022 or ADR-028, and proves the non-degraded-window precondition with a fault-injection
-test.
-
-## Verification
-
-Not implemented. Phases 1–4 (observer-only) are in `gems/tamoz-observability`; no alerting or
-actuator code exists there today.

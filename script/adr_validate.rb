@@ -21,9 +21,8 @@ module AdrValidate
   IMPLEMENTATION = /\A(?:Complete(?: — .+)?|Partial — .+|Not built(?: — .+)?)\z/
   RELATION_KEYS = ['Status', 'Relates to', 'Amends', 'Amended by', 'Supersedes'].freeze
   SECTIONS = {
-    'C' => ['Context', 'Decision', 'Consequences', 'Rejected alternatives', 'Reopen when', 'Verification'],
-    'F' => ['Context', 'Decision', 'Consequences', 'Invariants', 'Threat model', 'Rejected alternatives',
-            'Reopen when', 'Verification']
+    'C' => %w[Context Decision Consequences],
+    'F' => ['Context', 'Decision', 'Consequences', 'Invariants', 'Threat model']
   }.freeze
   OPTIONAL_SECTIONS = ['History', 'Next reads'].freeze
   BANNED = {

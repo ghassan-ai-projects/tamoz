@@ -27,10 +27,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -102,10 +99,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -125,10 +119,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -148,10 +139,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -171,10 +159,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -196,10 +181,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -219,10 +201,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -245,10 +224,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -286,10 +262,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -315,10 +288,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -343,10 +313,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -371,10 +338,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -398,10 +362,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -421,10 +382,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -448,10 +406,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -475,10 +430,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -502,10 +454,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -531,10 +480,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -560,10 +506,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -586,10 +529,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -611,10 +551,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -639,10 +576,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -666,10 +600,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -694,10 +625,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -723,10 +651,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -753,10 +678,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -779,10 +701,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -807,10 +726,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -837,10 +753,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -865,10 +778,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -914,10 +824,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -961,10 +868,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -989,10 +893,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1016,10 +917,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -1042,10 +940,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -1070,10 +965,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1114,10 +1006,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -1140,10 +1029,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -1167,10 +1053,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1194,10 +1077,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1225,9 +1105,6 @@
         "Consequences",
         "Invariants",
         "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification",
         "History"
       ]
     },
@@ -1257,9 +1134,6 @@
         "Consequences",
         "Invariants",
         "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification",
         "History"
       ]
     },
@@ -1270,7 +1144,7 @@
       "state": "proposed",
       "date": "2026-08-10",
       "tier": "F",
-      "implementation": "Not built — ratified when observability phase 5 (alerting) ships with the fault-injection test below",
+      "implementation": "Not built — ratified when observability phase 5 (alerting) ships with fault-injection proof of the non-degraded-window precondition",
       "file": "adr-050-automated-response-durable-evidence.md",
       "relates_to": [
         "022",
@@ -1287,10 +1161,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1334,9 +1205,6 @@
         "Context",
         "Decision",
         "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification",
         "History"
       ]
     },
@@ -1364,9 +1232,6 @@
         "Consequences",
         "Invariants",
         "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification",
         "History"
       ]
     },
@@ -1394,10 +1259,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1428,10 +1290,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1455,10 +1314,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -1484,10 +1340,7 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Threat model"
       ]
     },
     {
@@ -1511,10 +1364,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     },
     {
@@ -1537,10 +1387,7 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Reopen when",
-        "Verification"
+        "Consequences"
       ]
     }
   ]

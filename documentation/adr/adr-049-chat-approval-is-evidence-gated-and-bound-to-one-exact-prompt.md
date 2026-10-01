@@ -42,6 +42,8 @@ the policy so the bound correspondent can approve.
   policy: it shows Approve and Deny); `none` and `affirmative` (a mode with approver roles that the
   delivery sink does not yet serve) deliver a notice instead.
 
+A loosening beyond today's policy needs a new ADR with a blast-radius table per tier.
+
 ## Consequences
 
 The operator can approve from a phone, and the evidence axis makes tightening a data edit. Replay,
@@ -78,38 +80,6 @@ interrupt pending at that point. The
 2026-08-12 bar for letting chat approve an effect (reversible, argument-bounded, blast radius
 stated, shorter TTL and louder audit for chat approvals, default deny) was not applied to this
 change; the owner accepted the risk.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Hard revert to deny-only | Fixes the defect but bakes a transport rule into code; the next wanted change needs a rewrite |
-| Keep approve-everything without an evidence check | Any chat identity releases any effect |
-| Gate on tool effect class only | Same tool differs in risk by argument |
-| Let the model declare an action's risk | A compromised plan would lower its own gate |
-
-## Reopen when
-
-Any of: chat approval is used for an action that later proves harmful; the operator wants
-destructive or publishing actions back behind `filesystem_operator`; or a second chat transport is
-added. A loosening beyond today's policy (for example, approving without a bound correspondent) needs
-a new ADR with a blast-radius table per tier.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The lattice is closed and only sanctioned levels can be minted | `tamoz-comms` authority evidence | `test/comms_authority_evidence_test.rb` — `test_lattice_is_closed_and_totally_ordered`, `test_no_actor_kind_mapping_can_grant_operator_evidence` | — |
-| A chat approve is refused when operator evidence is required; deny still works | `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_callbacks.rb` | `test/comms_evidence_gated_approval_test.rb` — `test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence`, `test_the_equivalent_deny_still_succeeds` | — |
-| Expired evidence never approves | same | `test/comms_evidence_gated_approval_test.rb` — `test_expired_evidence_never_approves` | — |
-| The prompt pins the requirement it was built with | `ApprovalPrompt.build` | `test/comms_evidence_gated_approval_test.rb` — `test_required_evidence_is_trusted_and_not_model_settable` | Shows the builder uses its argument; nothing tests that the delivered descriptor's `decision` is engine-written |
-| Cross-correspondent, cross-surface, cross-message presses are refused | same | `test/comms_evidence_gated_approval_test.rb` — `test_a_cross_correspondent_press_is_refused`, `test_a_cross_surface_press_is_refused` | — |
-| A reference is consumed exactly once | comms store | `test/comms_deny_callback_test.rb` — `test_a_replayed_reference_is_consumed_exactly_once` | — |
-| A press on another message is refused | gateway | `test/comms_evidence_gated_approval_test.rb` — `test_a_cross_message_press_is_refused` | — |
-| A prompt activates only from a live inactive row | `gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb` (`activate_prompt`) | `test/sqlite_comms_store_test.rb` — `test_prompt_activation_requires_a_live_inactive_prompt` | — |
-| The live policy approves from chat | `gems/tamoz-approval/policy/base.yaml` (`evidence.approve`) | `test/comms_adr049_consistency_test.rb` | Pins this page to the policy file |
 
 ## History
 

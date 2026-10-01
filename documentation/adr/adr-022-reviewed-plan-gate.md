@@ -26,6 +26,9 @@ durable, not inspectable, and not enforceable across tools, sub-agents, resume, 
 - When evidence is missing, an accepted discovery plan may use only locally classified read-only
   capabilities; its evidence feeds a separately reviewed action plan and authorizes nothing.
 
+A proposal to loosen the plan gate must show that each ungated tool is read-only by local
+classification and state what an injected read can still leak.
+
 ## Consequences
 
 On the deliberation path, and for the work loop's plan-bound tools, every action has exactly one
@@ -55,29 +58,3 @@ delegate. **Adversary:** a mistaken or prompt-injected model.
 **Residual risk:** in the coding work loop, reads, web research, and read-only delegation run
 before any plan; they can exfiltrate context through queries (governed only by approval policy and
 egress rules, ADR-054).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A system-prompt "always plan first" | Not enforceable and cannot prove which plan authorized an action |
-| Plan only high-risk actions | The risk classifier becomes the hole; the gate must be structural |
-| Gate effects only and let reads run freely *(retrospective, 2026-10-01)* | Credible and cheaper; lost because reads can still leak context and steer later action — but the shipped work loop does this today, so it is the open question below |
-
-## Reopen when
-
-The work-loop divergence must be resolved: either this ADR narrows to "effect-bearing actions"
-(with reads governed by approval policy and egress), or the work loop gates reads behind a
-discovery plan. A loosening ADR must show that every ungated tool is read-only by local
-classification and state what an injected read can still leak.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| No execution when no plan passes review | `gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb` | `test/agent_runtime_test.rb` — `test_never_executes_when_no_plan_passes_review` | Durable deliberation path |
-| A semantic reviewer can force replanning before action | same | `test/agent_runtime_test.rb` — `test_semantic_reviewer_can_force_replanning_before_action` | — |
-| Read-only work discovers before planning | session routing | `test/agent_durable_routing_test.rb` — `test_read_only_work_uses_durable_discovery_before_read_only_plan` | — |
-| Work loop: mutations before an accepted plan are refused; widening scope returns to review | `gems/tamoz-agent-session/lib/tamoz/agent/work_gate.rb` (`PLAN_BOUND_TOOLS`) | `test/work_loop_test.rb` — `test_mutations_before_an_accepted_plan_are_refused_and_fed_back`, `test_widening_the_scope_goes_back_to_review_and_narrowing_does_not` | Only `apply_patch`, `create_file`, `run_check` are plan-bound |

@@ -52,25 +52,3 @@ any runtime table — including approval decisions and requests — directly, by
 code. Only OS-level separation (different users, read-only views) would close that, and none exists. Both
 credentials come from environment variables, so the credential split holds only if the operator
 starts each process with only its own variable set.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| The worker performs channel sends | One process would hold the model and transport credentials and the workspace |
-| Separate databases joined by a queue *(retrospective, 2026-10-01)* | No single transaction for admission plus enqueue; duplicate or lost turns on crash |
-
-## Reopen when
-
-A deployment needs the gateway on another host, or the shared-database residual risk becomes
-unacceptable (then separate OS users or a narrow write API are the candidates).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The gateway authenticates its transport before polling | `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb` | `test/comms_gateway_test.rb` — `test_start_authenticates_the_transport_before_polling` | — |
-| A replayed update creates no second request | gateway + store | `test/comms_gateway_test.rb` — `test_a_replayed_update_does_not_create_a_second_request` | — |
-| The packaged gateway runs with an injected transport and store | packaging | `test/packaging_test.rb` — `test_packaged_comms_gateway_runs_with_injected_transport_and_store` | "Never loads a model credential" is source inspection, not a test |

@@ -27,6 +27,9 @@ unsafe whatever its tests say.
 - Replay and shadow workers are given no production effector credentials (a deployment rule; the
   episode worker holds none at all).
 
+Moving Tamoz into safety-critical control requires retiring this product claim and pursuing
+certification; changing an ADR alone cannot authorize that transition.
+
 ## Consequences
 
 Tamoz can be useful in physical settings without being a safety component. **Cost:** the product
@@ -49,24 +52,3 @@ weakens a safeguard.
 
 **Residual risk:** if the operator wires Tamoz to equipment without independent interlocks, this
 boundary does not exist; it is a deployment requirement, not something code can enforce.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Position Tamoz as a robot or safety controller | No real-time semantics, no certification, and a model cannot be the final barrier |
-| Allow R4 control behind human approval *(retrospective, 2026-10-01)* | Approval fatigue makes the human a rubber stamp at exactly the wrong moment |
-
-## Reopen when
-
-Never by ADR alone: moving Tamoz into safety-critical control would mean retiring this product claim
-and pursuing certification, not loosening a rule.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The worker names no hardware mechanism | `tamoz-stream` | `test/tamoz_brain_hardware_boundary_test.rb` — `test_the_brain_names_no_hardware_mechanism` | Deployment-level interlocks cannot be tested from this repository |
-| The episode path has no effectful reference | `gems/tamoz-stream/lib/tamoz/stream/capability_host.rb` | `test/stream_episode_capability_host_test.rb` — `test_dependency_direction_episode_path_has_no_effectful_reference` | — |

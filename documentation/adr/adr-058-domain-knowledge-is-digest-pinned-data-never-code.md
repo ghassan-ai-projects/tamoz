@@ -34,26 +34,3 @@ silently diverges.
 
 A new domain needs no Ruby, and a domain change is visible as a digest change. **Cost:** a data edit
 is a two-repository change when it touches a cross-pinned catalog.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Domain modules in Ruby | Lets special cases fake generality; a new domain is a code change |
-| Unpinned JSON | The Go side and the benchmark could drift without anyone noticing |
-
-## Reopen when
-
-Domain data needs logic the loader cannot express as data (then extend the data schema, not the
-loader).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| A novel domain produces a decision with zero new Ruby | `test/support/domain_loader.rb` | `test/stream_episode_intent_authority_test.rb` — `test_gate4_a_novel_domain_produces_a_decision_with_zero_new_ruby` | — |
-| A family is built for every discovered domain | same | `test/benchmark_families_test.rb` — `test_a_family_is_built_for_every_discovered_domain` | — |
-| The cross-repo digest is pinned | intent catalog | `test/agent_intent_catalog_test.rb` — `test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector` | The Go side is not checked here |
-| The protocol SHA is pinned | `documentation/benchmark/BENCHMARK_PROTOCOL.json` | `test/benchmark_protocol_test.rb` — `test_committed_sha256_pin` | No test fails on a domain literal in Ruby |

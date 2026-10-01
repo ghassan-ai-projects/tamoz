@@ -26,25 +26,3 @@ result; nothing above the worker catches it. A throw never crosses a thread.
 User code can `rescue StandardError` freely without breaking pauses. **Cost:** every pool
 implementation must install the `catch` around each task, and an interrupt is scoped to one
 worker's task — there is no cross-thread pause.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| An `Interrupt` exception (LangGraph's design) *(retrospective, 2026-10-01)* | Any broad `rescue` in a node swallows it; the framework cannot detect that |
-| A sentinel return value *(retrospective, 2026-10-01)* | A node can return the sentinel by accident, and nested helpers must propagate it by hand |
-
-## Reopen when
-
-A pool is added whose tasks do not run on a Ruby stack the pool controls (for example, out of
-process), so a worker-local `catch` is impossible.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The throw is caught inside each worker | `gems/tamoz-concurrency/lib/tamoz/pool.rb` (`Pool::Base#execute`) | `test/core_pool_test.rb` — `test_interrupt_is_captured_inside_each_worker` | — |
-| A normal value is never read as an interrupt | same | `test/core_pool_test.rb` — `test_normal_value_cannot_be_confused_with_an_interrupt` | — |
-| The cursor uses `throw` | `gems/tamoz-graph/lib/tamoz/graph/interrupt.rb` | `test/graph_identity_test.rb` — `test_interrupt_cursor_is_explicit_positional_and_uses_throw` | — |

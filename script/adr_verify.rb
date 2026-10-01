@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Checks every ADR's Verification evidence still exists: each backticked repo path and `tamoz-*` gem,
+# Checks the separate ADR evidence register's citations still exist: each backticked repo path and `tamoz-*` gem,
 # and each backticked `test_*` name, which must be defined in a test file cited on the same row.
 # Text near a citation that asserts absence ("does not exist", "was removed") flips the path check.
 #
 #   ruby script/adr_verify.rb [dir]    # exit 0 when every citation holds, else 1
 
-# Resolves each Verification citation against the repository.
+# Resolves each evidence citation against the repository.
 module AdrVerify
   ROOT = File.expand_path('..', __dir__)
   DEFAULT_DIR = File.join(ROOT, 'documentation', 'adr')
@@ -30,9 +30,9 @@ module AdrVerify
   end
 
   def sections(dir)
-    Dir[File.join(dir, 'adr-*.md')].filter_map do |path|
-      section = File.read(path, encoding: Encoding::UTF_8)[/^##\s+Verification\s*\n(.+?)(?=^##\s|\z)/m, 1]
-      [File.basename(path), section] if section
+    text = File.read(File.join(dir, 'evidence.md'), encoding: Encoding::UTF_8)
+    text.scan(/^## ADR-(\d{3})\s*\n(.+?)(?=^## |\z)/m).map do |num, section|
+      ["evidence.md: ADR-#{num}", section]
     end
   end
 
@@ -59,9 +59,9 @@ module AdrVerify
     return unless path
 
     absent = cell.match?(ABSENCE)
-    return "#{base}: Verification says `#{token}` is absent, but it exists" if absent && File.exist?(path)
+    return "#{base}: Evidence says `#{token}` is absent, but it exists" if absent && File.exist?(path)
 
-    "#{base}: Verification cites `#{token}`, which does not exist" unless absent || File.exist?(path)
+    "#{base}: Evidence cites `#{token}`, which does not exist" unless absent || File.exist?(path)
   end
 
   def test_problem(base, name, test_files)

@@ -16,32 +16,14 @@ settled while changing it was still free.
 
 ## Decision
 
-The Ruby namespace is `Tamoz`, require paths are `tamoz/*`, every gem is named `tamoz-*`, and the
+Tamoz-owned framework and application gems use the Ruby namespace `Tamoz`, require paths
+`tamoz/*`, and gem names `tamoz-*`. Third-party dependencies retain their own names. The
 operator CLI is `tamoz`. Tamoz Agent is the reference application built from those gems. No alias
 keeps a former name working.
 
 ## Consequences
 
-Every public symbol, gem, and path shares one prefix, so ownership is obvious from a name.
-**Cost:** a later rename breaks every user; the RubyGems names and trademark are not yet reserved
+A shared prefix makes the packages recognizable as one family. It does not distinguish reusable
+framework components from application components; their documented roles do that.
+**Cost:** a later rename breaks dependent imports and commands; the RubyGems names and trademark are not yet reserved
 (tracked in the [roadmap](../roadmap.md), not here).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Keep the old names as aliases through the rename *(retrospective, 2026-10-01)* | Nothing had shipped, so aliases would protect no user and double the surface to document and test |
-| Different names for the framework and the agent gems | Users could not tell which gems form the framework and which the application |
-
-## Reopen when
-
-A published gem name collides with an existing RubyGems package or a trademark claim.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Every gem is `tamoz-*` under `Tamoz` | gem layout | `test/packaging_test.rb` | Name reservation on RubyGems is not checked |
-| The CLI is `tamoz` | `gems/tamoz-agent-cli/exe/tamoz` | `test/agent_cli_test.rb` | — |

@@ -31,23 +31,3 @@ reach into each other because the code is right there.
 
 Cross-gem changes land atomically with their tests. **Cost:** CI and tooling must check per-gem
 dependency closure, because the repository will not stop an undeclared `require`.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A repository per gem from the start | Multiplies coordination before ownership diverged |
-| One gem for everything *(retrospective, 2026-10-01)* | No dependency boundary; the graph engine would load agent and provider code |
-
-## Reopen when
-
-Two gems need different owners or release cadences that one repository's CI cannot serve.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Each gem loads only its declared closure | gemspecs | `test/dependency_isolation_test.rb` | Covers the gems listed in that test |
-| Each gem packages and runs from its release files alone | packaging | `test/packaging_test.rb` — `test_every_gem_is_strict_valid_and_contains_only_release_files` | — |

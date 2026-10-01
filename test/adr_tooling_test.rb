@@ -18,19 +18,6 @@ class AdrToolingTest < Minitest::Test
 
     **Cost:** some.
 
-    ## Rejected alternatives
-
-    | Rejected | Why it lost |
-    |---|---|
-    | Other | Worse |
-
-    ## Reopen when
-
-    Never.
-
-    ## Verification
-
-    Checked 2026-10-01.
   MD
 
   def adr(num, title: 'A rule holds', tier: 'C', extra: '', body: BODY_C)
@@ -50,7 +37,9 @@ class AdrToolingTest < Minitest::Test
 
   def with_corpus(files)
     Dir.mktmpdir do |dir|
-      { 'RETIRED.md' => "| **000** |\n", 'README.md' => index(files) }.merge(files).each do |name, text|
+      base = { 'evidence.md' => "# ADR implementation evidence\n",
+               'RETIRED.md' => "| **000** |\n", 'README.md' => index(files) }
+      base.merge(files).each do |name, text|
         File.write(File.join(dir, name), text)
       end
       File.write(AdrCatalog.path(dir), AdrCatalog.json(dir))
@@ -73,13 +62,28 @@ class AdrToolingTest < Minitest::Test
                  problems_in('adr-001-a.md' => adr('001', tier: 'F'))
   end
 
+  def test_a_full_record_keeps_safety_sections_without_review_boilerplate
+    body = "#{BODY_C}\n## Invariants\n\nI-1.\n\n## Threat model\n\nBounded.\n"
+
+    assert_empty problems_in('adr-001-a.md' => adr('001', tier: 'F', body:))
+  end
+
+  def test_review_sections_do_not_belong_in_a_decision_record
+    ['Rejected alternatives', 'Reopen when', 'Verification'].each do |heading|
+      body = "#{BODY_C}\n## #{heading}\n\nReview material.\n"
+
+      assert_includes problems_in('adr-001-a.md' => adr('001', body:)),
+                      "ADR-001: unexpected section '## #{heading}'"
+    end
+  end
+
   def test_two_files_sharing_a_number_are_a_duplicate
     assert_includes problems_in('adr-001-a.md' => adr('001'), 'adr-001-b.md' => adr('001')),
                     'duplicate ADR number 001'
   end
 
   def test_a_retirement_must_name_a_successor_or_say_withdrawn
-    ledger = { 'RETIRED.md' => "| **002** |\n" }
+    ledger = { 'evidence.md' => "# ADR implementation evidence\n", 'RETIRED.md' => "| **002** |\n" }
     retired = ->(status) { "# ADR-002 — Old\n\n**Status:** #{status}\n**Date:** 2026-07-30\n" }
 
     corpus = ->(status) { ledger.merge('adr-001-a.md' => adr('001'), 'adr-002-b.md' => retired.call(status)) }
@@ -120,12 +124,12 @@ class AdrToolingTest < Minitest::Test
 
   def test_a_cited_test_name_must_be_defined_in_the_cited_file
     row = ->(name) { "| Claim | seam | `test/adr_tooling_test.rb` — `#{name}` | — |\n" }
-    real = adr('001', body: "#{BODY_C}\n#{row.call('test_a_stale_catalog_fails')}")
-    fake = adr('001', body: "#{BODY_C}\n#{row.call('test_that_was_never_written')}")
+    real = "# Evidence\n\n## ADR-001\n\n#{row.call('test_a_stale_catalog_fails')}"
+    fake = "# Evidence\n\n## ADR-001\n\n#{row.call('test_that_was_never_written')}"
 
-    assert_empty(with_corpus('adr-001-a.md' => real) { |dir| AdrVerify.run(dir) })
-    assert_equal ['adr-001-a.md: `test_that_was_never_written` is not defined in test/adr_tooling_test.rb'],
-                 with_corpus('adr-001-a.md' => fake) { |dir| AdrVerify.run(dir) }
+    assert_empty(with_corpus('adr-001-a.md' => adr('001'), 'evidence.md' => real) { |dir| AdrVerify.run(dir) })
+    assert_equal ['evidence.md: ADR-001: `test_that_was_never_written` is not defined in test/adr_tooling_test.rb'],
+                 with_corpus('adr-001-a.md' => adr('001'), 'evidence.md' => fake) { |dir| AdrVerify.run(dir) }
   end
 
   def mutated(old, new) = problems_in('adr-001-a.md' => adr('001').sub(old, new))
@@ -186,12 +190,16 @@ class AdrToolingTest < Minitest::Test
     missing = "| Claim | `gems/no_such_gem/x.rb` | source inspection | — |\n"
     exempt = "| Claim | `gems/no_such_gem/x.rb` | `docs/no_such.md` was removed | — |\n"
     orphan = "| Claim | seam | `test_a_stale_catalog_fails` | — |\n"
-    verify = ->(row) { with_corpus('adr-001-a.md' => adr('001', body: "#{BODY_C}\n#{row}")) { AdrVerify.run(_1) } }
-    gone = ['adr-001-a.md: Verification cites `gems/no_such_gem/x.rb`, which does not exist']
+    verify = lambda do |row|
+      with_corpus('adr-001-a.md' => adr('001'), 'evidence.md' => "# Evidence\n\n## ADR-001\n\n#{row}") do |dir|
+        AdrVerify.run(dir)
+      end
+    end
+    gone = ['evidence.md: ADR-001: Evidence cites `gems/no_such_gem/x.rb`, which does not exist']
 
     assert_equal gone, verify.call(missing)
     assert_equal gone, verify.call(exempt)
-    assert_equal ['adr-001-a.md: `test_a_stale_catalog_fails` is cited with no test file on the same row'],
+    assert_equal ['evidence.md: ADR-001: `test_a_stale_catalog_fails` is cited with no test file on the same row'],
                  verify.call(orphan)
   end
 end

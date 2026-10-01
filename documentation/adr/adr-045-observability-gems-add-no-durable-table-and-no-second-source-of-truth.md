@@ -31,24 +31,3 @@ affecting execution.
 
 Telemetry can be lost without losing truth. **Cost:** some views are reconstructed rather than
 stored, and the journal is not an audit log.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A durable telemetry table in the runtime database | A second writer of overlapping truth that drifts and contends with the fenced writer |
-| An unbounded journal *(retrospective, 2026-10-01)* | Fills the disk on the host that also holds the runtime database |
-
-## Reopen when
-
-An operator needs telemetry retention the durable record cannot reconstruct.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The journal rotates, keeps a cap, and survives reopen | `gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb` | `test/observability_runtime_test.rb` — `test_journal_cap_survives_reopen_and_one_file_retention` | — |
-| Trace identity derives from durable identity | `tamoz-observability` correlation | `test/observability_correlation_test.rb` — `test_trace_id_follows_turn_identity` | — |
-| No telemetry table in the runtime store | `tamoz-sqlite` | source inspection | No mechanical test |

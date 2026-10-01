@@ -49,26 +49,3 @@ Tamoz-specific needs are limited to flat string metadata keys.
 
 **Residual risk:** a skill's instructions can still persuade the model; that is prompt injection,
 handled by the plan and approval gates, not by the skill loader.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A Tamoz-only skill DSL | Gives up portability and creates an executable extension surface |
-| Skills that bundle runnable tools *(retrospective, 2026-10-01)* | Turns every skill install into a code install |
-
-## Reopen when
-
-The open format adds an execution model Tamoz users need, or a portable skill can no longer express
-what Tamoz needs in flat metadata keys.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Portable format conformance | `gems/tamoz-skills/lib/tamoz/skills/frontmatter.rb` | `test/skills_spec_conformance_test.rb` | — |
-| Path escape, links, and YAML tricks are refused at compile | `tamoz-skills` walk and frontmatter | `test/agent_skills_adversarial_test.rb` — `test_a2_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed`, `test_a8_ruby_object_tag_in_frontmatter_is_rejected_without_materialising_anything` | — |
-| Loads are recorded with their tree digest | session | `test/skills_reachability_test.rb` — `test_a_model_load_is_recorded_with_its_tree_digest` | — |
-| Scripts are never readable as resources | `tamoz-skills` resources | `test/agent_skills_adversarial_test.rb` — `test_a25_reading_a_script_is_refused` | — |

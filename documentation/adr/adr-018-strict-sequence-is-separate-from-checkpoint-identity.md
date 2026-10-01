@@ -22,23 +22,3 @@ depends on wall-clock time or lexical id order.
 ## Consequences
 
 History order is exactly append order. **Cost:** the backend must assign and store the sequence.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| UUIDv7/ULID lexical order as the sequence | Not safe under clock skew or across hosts |
-| Timestamps *(retrospective, 2026-10-01)* | Same problem, plus collisions at clock resolution |
-
-## Reopen when
-
-Never expected; only if a backend cannot assign a per-namespace sequence atomically.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Strict sequence; stale base refused | checkpointers (`gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_appender.rb`) | `test/graph_identity_test.rb` — `test_memory_checkpointer_assigns_strict_sequence_and_rejects_stale_base` | The in-memory checkpointer is tested here; SQLite through `test/sqlite_checkpoint_test.rb` |
-| A fork appends a new sequence | same | `test/graph_identity_test.rb` — `test_fork_uses_historical_parent_but_appends_new_sequence` | — |

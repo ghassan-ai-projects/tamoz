@@ -52,24 +52,3 @@ worker.
 
 **Residual risk:** the digest travels with the payload, so it proves consistency, not who sent it;
 sender authenticity comes from the transport (ADR-055).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Invoke the agent per event, or put raw windows in the prompt | Maximizes cost and staleness; moves deterministic semantics into probabilistic cognition |
-| Rename token streaming as "bidirectional streaming" and attach sensor callbacks to a chat | No temporal truth, bounded state, or recovery |
-
-## Reopen when
-
-A use case needs cognition latency below what admission plus one episode allows.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| A tampered snapshot fails before any model call | `gems/tamoz-stream/lib/tamoz/stream/situation_snapshot.rb` | `test/stream_situation_snapshot_test.rb` — `test_a_tampered_snapshot_fails_before_any_model_call` | — |
-| Snapshot mismatch terminates the episode | episode worker | `test/stream_invariants_test.rb` — `test_invariant_2_snapshot_mismatch_terminates_before_any_model_call` | — |
-| The episode path computes no stream-plane concept | `tamoz-stream` | `test/stream_invariants_test.rb` — `test_invariant_1_the_episode_path_computes_no_stream_plane_concepts` | Admission/reduction is in the Go repository, not checked here |

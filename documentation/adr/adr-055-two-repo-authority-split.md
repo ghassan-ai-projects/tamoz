@@ -48,6 +48,8 @@ and they have different justifications:
   binds `0.0.0.0` unauthenticated; it is meant for development, but nothing stops `--port` in
   production.
 
+Accepting episodes from more than one local caller requires real transport authentication first.
+
 ## Consequences
 
 The authority split is structural: the worker has no credential that could accept a Decision or
@@ -75,29 +77,3 @@ compromised or mistaken worker; a process that reaches the worker socket.
 **Residual risk:** the snapshot digest proves consistency, not origin; anyone who can reach the socket — or,
 in TCP mode, the port from any network — can submit an episode and spend model budget. A compromised bound adapter is trusted by the host (it guarantees the
 call surface, not adapter internals).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Keep the continuous plane in Ruby `tamoz-stream` | A throughput/temporal system and a durable-cognition system in one runtime served neither |
-| Two processes, two languages, one monorepo *(retrospective, 2026-10-01)* | Credible: it keeps the authority boundary; lost on toolchain and release-cadence ownership, not on safety |
-| Make Tamoz the client and authority | Puts authority in the LLM-bearing process |
-| A shared database instead of a sealed snapshot | A live read reintroduces staleness and an ambient trust surface |
-
-## Reopen when
-
-The proto changes faster than coordinated releases can follow, or the worker must accept episodes
-from more than one local caller (then add real transport authentication first).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Tool surface is exactly the allowlist; injection cannot bind a denied tool | `gems/tamoz-stream/lib/tamoz/stream/capability_host.rb` | `test/stream_episode_capability_host_test.rb` — `test_the_surface_is_exactly_the_permitted_allowlist`, `test_an_injected_instruction_cannot_bind_a_denied_capability` | Adapter internals are trusted |
-| Tool context never carries effects or store | same | `test/stream_episode_capability_host_test.rb` — `test_the_context_passed_to_a_tool_never_carries_effects_or_store` | — |
-| Tokens never persist or cross the wire | worker | `test/stream_token_custody_test.rb` — `test_the_token_never_enters_the_durable_payload`, `test_the_token_never_crosses_in_a_wire_event` | — |
-| Serves over Unix socket or TCP, not both | `gems/tamoz-stream/lib/tamoz/stream/worker_server.rb` | `test/stream_worker_server_test.rb` — `test_the_server_refuses_both_or_neither_transport` | Both bind insecure ports; no TLS |
-| Shared contract vectors reproduce exactly | `tamoz-stream` | `test/stream_invariants_test.rb` — `test_invariant_9_every_shared_contract_vector_reproduces_exactly` | The Go side is in a sibling repository and not checked here |

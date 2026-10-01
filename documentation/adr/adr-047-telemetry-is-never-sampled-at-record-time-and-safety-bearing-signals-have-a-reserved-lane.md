@@ -53,25 +53,3 @@ failure, not an attacker.
 
 **Residual risk:** on a disk error even safety-bearing signals are lost, with one journal-level count
 rather than per-signal counts; the durable record remains the source of truth.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Sampling at record time against an in-memory window | A paused turn outlives the window; safety evidence is dropped when loudest |
-| Unbounded queues so nothing drops *(retrospective, 2026-10-01)* | Moves the failure to memory exhaustion of the process that runs the agent |
-
-## Reopen when
-
-Export volume forces sampling (then define it at export), or a safety-bearing signal is found
-dropped without a counted reason.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Safety-bearing flags are seeded in the catalog | `gems/tamoz-observability/lib/tamoz/observability/catalog.rb` | `test/observability_catalog_test.rb` — `test_seeded_safety_bearing_flags` | — |
-| Bulk saturation is counted | `gems/tamoz-observability/lib/tamoz/observability/recorder_journal.rb` | `test/observability_runtime_test.rb` — `test_bulk_saturation_is_counted_and_metric_cardinality_is_rejected` | The reserved-lane synchronous fallback is source inspection only |
-| No record-time sampling exists | recorder | source inspection (no sampling code in the observability or otel gems) | — |

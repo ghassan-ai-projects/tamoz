@@ -28,22 +28,3 @@ and inert resources, no execution engine — is unchanged.
 
 Callers depend on a small facade and the compiler can change freely. **Cost:** one more gem to
 release.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Keep skills in `tamoz-tools` behind a module facade | Credible; lost because the lint, bundled skills, and operator snapshot have callers that do not need the toolbox, and the boundary test is simpler at a gem edge |
-
-## Reopen when
-
-The skills surface shrinks back to what one caller needs.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| No file outside the gem names an inner constant | `gems/tamoz-skills/lib/tamoz/skills.rb` | `test/skills_boundary_test.rb` — `test_no_file_outside_the_gem_names_an_inner_constant` | — |
-| The gem loads only core | same | `test/dependency_isolation_test.rb` — `test_skills_loads_only_core` | — |

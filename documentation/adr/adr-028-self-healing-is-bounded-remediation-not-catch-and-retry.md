@@ -53,28 +53,3 @@ or a failure crafted to trigger a destructive "fix".
 
 **Residual risk:** a rule whose verifier is wrong can declare false recovery; staged evaluation is
 the defense.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Free-form "try something else" | Cannot prove authority, effect state, recovery, or bounded harm |
-| Retry with backoff only *(retrospective, 2026-10-01)* | Duplicates non-idempotent effects and never fixes a logical failure |
-
-## Reopen when
-
-Escalation volume shows healing never fires in practice, or a verifier is found that the
-remediating model can influence.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Recovery only through the oracle | `tamoz-agent-healing` remediation | `test/healing_remediation_test.rb` — `test_full_lifecycle_recovers_only_through_the_oracle`, `test_oracle_mismatch_never_recovers` | Deterministic scenarios |
-| Scope intersection refuses out-of-authority targets | same | `test/healing_remediation_test.rb` — `test_scope_intersection_refuses_a_target_outside_authorized_resources` | — |
-| Unknown effects reconcile then escalate | same | `test/healing_remediation_test.rb` — `test_effect_unknown_reconciles_then_escalates_without_an_executor` | — |
-| Open circuit stops before classification | same | `test/healing_remediation_test.rb` — `test_open_circuit_terminates_before_classification` | — |
-| Never-mutate classes never reach a mutating family | matrix | `test/healing_matrix_test.rb` — `test_never_mutate_classes_never_reach_a_mutating_family` | — |
-| A rule with total abstention cannot be promoted | `gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb` | `test/healing_matrix_test.rb` — `test_promotion_gate_rejects_total_abstention_and_never_mutate_leak` | — |

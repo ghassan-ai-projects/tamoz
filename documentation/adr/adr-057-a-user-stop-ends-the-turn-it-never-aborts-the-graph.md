@@ -59,30 +59,3 @@ completion, and crash.
 **Residual risk:** `Cancellation::Stops` is a process-global registry keyed by thread id, which is
 the kind of ambient state invariant 14 forbids; it is safe only while one worker process owns each
 thread (ADR-017).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Cancel the graph context's token on a user stop | Leaves the request `running`; recovery resumes the stopped work |
-| Raise an exception into the running node | Loses effect state mid-node and can be rescued by user code |
-| Kill the worker thread | Unsafe in Ruby; can leave a half-committed barrier |
-
-## Reopen when
-
-A user needs a stop to interrupt a long-running tool call immediately, or more than one process can
-run turns for the same thread.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| A CLI cancel routes a parked thread to its terminal | CLI | `test/agent_cli_test.rb` — `test_cancel_routes_to_terminal` | — |
-| A chat stop routes the running turn to `cancelled_by_user` | `gems/tamoz-agent-session/lib/tamoz/agent/session_work.rb` (`stopped?`, `CANCELLED`) | source inspection | The chat stop → `stopped?` path has no test |
-| A consumed cancel runs no second turn | worker | `test/cancellation_visibility_test.rb` — `test_a_real_worker_claim_consumes_a_cancel_redirect_and_stamps_observation` | — |
-| A raced completion is never reported as stopped | status projection | `test/cancellation_visibility_test.rb` — `test_a_raced_completion_says_completed_before_effect_and_never_stopped` | — |
-| A crashed claim recovers through the recover path | worker | `test/cancellation_visibility_test.rb` — `test_a_crashed_claim_is_recovered_through_the_recover_path_and_stamps_observation` | — |
-| A model call in flight is abandoned | `gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb` (`until_cancelled`) | source inspection | No test isolates mid-call abandonment |
-| The stop is registered per thread | `gems/tamoz-cancellation/lib/tamoz/cancellation/stops.rb`, `gems/tamoz-agent/lib/tamoz/agent/worker.rb` (`watching_for_stop`) | source inspection | Watcher runs only with a comms store |

@@ -25,23 +25,3 @@ without conditional semantics. 3.3 may be dropped after its end of life while Ta
 
 One exact Ruby keeps sealed-build pins reproducible. **Cost:** nothing proves Tamoz runs on 3.4 or
 4.0 today; a user on those versions is on an untested target.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Keep 3.2 as the floor *(retrospective, 2026-10-01)* | It was already past end of support |
-| A floating multi-version CI matrix | Regenerates sealed-build pins per version; needs pins keyed by Ruby version first |
-
-## Reopen when
-
-Before the first public release (decide whether 3.4/4.0 enter CI or leave the promise), or when
-3.3 reaches end of life.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| CI runs exactly `.ruby-version` | `.github/workflows/ci.yml` | `test/ci_configuration_test.rb` | 3.4 and 4.0 are not exercised anywhere |

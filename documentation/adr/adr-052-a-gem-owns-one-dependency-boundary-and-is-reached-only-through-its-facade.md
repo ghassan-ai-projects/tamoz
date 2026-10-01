@@ -40,29 +40,6 @@ is enough.
 Concerns can be tested and changed behind a small surface. **Cost:** every gem is release and
 compatibility-matrix overhead; each new one must justify its boundary.
 
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Keep one `tamoz-agent` gem | No dependency boundary: loading memory loaded the CLI and providers |
-| A new gem per concern, always (the 2026-08-26 rule) | Optimizes package count, not isolation; a module behind a guarded facade gives the same isolation at less release cost |
-| Split by layer (models, services) | Every feature change crosses every gem |
-
-## Reopen when
-
-Release overhead (version bumps, matrix upkeep) becomes a measurable drag, or a boundary test is
-found that does not fail on a real leak.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Gems load only their declared closure | gemspecs | `test/dependency_isolation_test.rb` | — |
-| No gem reaches past memory, skills, research, approval, or profile facades | boundary tests | `test/memory_boundary_test.rb`, `test/skills_boundary_test.rb`, `test/research_boundary_test.rb`, `test/approval_boundary_test.rb`, `test/profile_boundary_test.rb` | Other gems are unguarded |
-| File staging, private directories, and locks go through core facades | `tamoz-core` | `test/file_facades_boundary_test.rb` | — |
-
 ## History
 
 - 2026-10-01 — Round-3 review proposed replacing "a new agent concern is a new gem" with the

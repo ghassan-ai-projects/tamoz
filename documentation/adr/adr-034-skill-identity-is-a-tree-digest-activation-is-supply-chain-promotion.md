@@ -50,25 +50,3 @@ self-promoting generator.
 | A regression ships in a new version | Not mitigated yet: no comparative evaluation |
 
 **Residual risk:** an approved skill can still be harmful; review, not the digest, judges content.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Watch mutable skill directories and load the newest bytes | Unreproducible; enables silent shadowing and same-version swaps |
-| Trust a `version` field in frontmatter *(retrospective, 2026-10-01)* | Self-declared; nothing binds it to content |
-
-## Reopen when
-
-Comparative skill evaluation is built (this becomes Complete), or a signed-skill ecosystem makes
-author identity verifiable.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Installed exactly as staged by a named non-creator | `gems/tamoz-skills/lib/tamoz/skills/candidates.rb` | `test/skills_candidates_test.rb` — `test_the_creator_cannot_approve_and_an_approver_must_be_named`, `test_a_candidate_changed_after_staging_is_refused` | — |
-| Only digested files are installed | same | `test/skills_candidates_test.rb` — `test_only_the_digested_files_are_installed` | — |
-| Loads record the tree digest | session | `test/skills_reachability_test.rb` — `test_a_model_load_is_recorded_with_its_tree_digest` | — |

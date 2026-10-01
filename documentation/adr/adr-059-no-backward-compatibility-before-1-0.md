@@ -32,24 +32,3 @@ do exist during development.
 
 The code carries only the current shape. **Cost:** upgrading a development install may mean losing
 its local state.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Write upgrade paths for every schema change | Pays for compatibility nobody needs yet, in the safety-critical store |
-| Reset migration numbering on each schema change | Breaks the checksum and manifest pins that catch an edited migration |
-
-## Reopen when
-
-The first public release (1.0, or earlier if external users run Tamoz with data they need to keep).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Applied migrations cannot be edited | `tamoz-sqlite` kernel | `test/sqlite_kernel_test.rb` — `test_migration_checksum_tampering_is_rejected` | — |
-| No compatibility migration for session records | session records | `test/agent_session_records_test.rb` — `test_version_one_session_record_is_rejected_without_compatibility_migration` | — |
-| No legacy readers | — | contradicted by `test/legacy_session_resume_test.rb` — `test_a_current_build_reads_the_old_database` | Open: delete that tolerance or narrow this rule |

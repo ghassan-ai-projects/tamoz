@@ -69,32 +69,6 @@ symlink trick, or an over-broad grant.
 every unclassified tool, including an unclassified MCP tool — run without asking. Base policy allows
 workspace writes without asking.
 
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Policy spread across core, agent, comms, and sqlite | Rule sites drift; a change needs Ruby edits in four gems |
-| Policy as Ruby methods | Needs a code change and release to reclassify; cannot be simulated or digest-pinned |
-| Keep the `--all` flag | All or nothing |
-| A compatibility layer for the old seams | Two policy paths to audit |
-
-## Reopen when
-
-A policy decision needs information the request description does not carry (for example, the content
-of a diff), or a profile needs to change evidence levels (today only `base.yaml` can).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Policy documents load only if their simulations pass | `gems/tamoz-approval/lib/tamoz/approval/policy_document.rb` | `test/approval_policy_document_test.rb` | — |
-| No gem outside approval reads its stores | boundary | `test/approval_boundary_test.rb` — `test_no_gem_outside_approval_reads_its_stores` | — |
-| Bound sessions keep their revision; reload never leaks | `gems/tamoz-approval/lib/tamoz/approval/engine.rb` | `test/approval_reload_test.rb` — `test_bound_session_keeps_old_rev_after_reload`; `test/approval_mode_switch_test.rb` — `test_rebind_never_redecides_an_already_recorded_decision` | — |
-| Grant keys are argv-aware | engine | `test/approval_grant_key_test.rb` | — |
-| A denial is fed back to the model | work loop | `test/work_loop_test.rb` — `test_an_asked_edit_pauses_for_approval_and_a_denial_is_fed_back` | — |
-
 ## History
 
 - 2026-08-22 — Accepted; adopted the approval-policy redesign (now in

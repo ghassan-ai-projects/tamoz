@@ -25,22 +25,3 @@ concept whose absence would hide a failure.
 
 The getting-started path stays short without lying about failure. **Cost:** this is judgment, not
 a test — the public API inventory makes growth visible, but nothing fails when a concept is added.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A hard cap on public concepts *(retrospective, 2026-10-01)* | Forces hiding necessary failure states |
-| No budget *(retrospective, 2026-10-01)* | The surface grows until nobody can learn it, as the reference frameworks did |
-
-## Reopen when
-
-The public API inventory grows by more than a few concepts in one release without a stated reason.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The public surface is inventoried | `documentation/reference/public-api.md`, `docs/public-api.json` | `test/public_api_test.rb` | Counts the surface; does not judge whether a concept was needed |

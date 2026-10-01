@@ -28,6 +28,9 @@ the thing that changed.
   evaluate, approve, or promote itself.
 - A resumed turn runs the behavior version recorded in its checkpoint.
 
+The human gate may be relaxed only for a candidate class shown to be unable to widen authority
+or change the evaluator by construction, with a test for each.
+
 ## Consequences
 
 Every promoted heuristic is attributable to provenance, a holdout result, and a named approver, and
@@ -53,29 +56,3 @@ generator (reward hacking) or a poisoned trajectory.
 
 **Residual risk:** the holdout is only as representative as its tasks; a candidate that games
 something the holdout does not measure can pass.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Live adoption of improvements by the running agent | It can change its evaluator or permissions and hide regressions |
-| Promote what repeated ("worked twice") *(retrospective, 2026-10-01)* | Frequency is not a holdout; repetition does not make a claim true |
-| Auto-approve low-risk candidates | The risk label becomes the hole; the human gate on capability/security/evaluator/prompt/code stays |
-
-## Reopen when
-
-Never for live self-mutation. Reopen the human gate only if a candidate class can be shown to be
-unable to widen authority or change the evaluator by construction, with a test for each.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Generator cannot read holdout or evaluator output | `tamoz-agent-improvement` | `test/improvement_candidate_test.rb` — `test_generator_cannot_read_the_holdout_or_the_evaluator_output` | Heuristic candidates only |
-| A candidate cannot evaluate or promote itself | same | `test/improvement_candidate_test.rb` — `test_a_candidate_cannot_evaluate_or_promote_itself` | — |
-| Evaluator tampering is refused | same | `test/improvement_candidate_test.rb` — `test_evaluator_tampering_is_refused` | — |
-| Holdout regression refuses promotion; rollback is byte-identical | same | `test/heuristic_promotion_controls_test.rb` — `test_overfit_candidate_is_refused_on_holdout_regression`, `test_rollback_restores_the_prior_epoch_byte_identically` | Deterministic tests; no real-model improvement result |
-| Every human-gate class is enforced | same | `test/improvement_candidate_test.rb` — `test_every_human_gate_class_is_enforced` | — |
-| Profile/skill/config approval binds the exact candidate and actor | `CandidateLifecycle` | `test/agent_improvement_lifecycle_test.rb` — `test_approval_digest_binds_the_exact_candidate_and_actor` | No holdout for these kinds |

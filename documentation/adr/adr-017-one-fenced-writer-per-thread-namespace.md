@@ -47,25 +47,3 @@ malicious one — any local process with DB access can rewrite the file).
 
 **Residual risk:** any process with write access to the SQLite file bypasses fencing; the file's
 permissions are the boundary.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Optimistic concurrency on the base checkpoint only *(retrospective, 2026-10-01)* | Catches a concurrent commit but not a zombie whose base is still the head |
-| A process-level lock file *(retrospective, 2026-10-01)* | Does not survive a paused process outliving its lock, and gives no token to check at write time |
-
-## Reopen when
-
-A deployment needs two writers on one namespace (for example, multi-host), which ADR-011 rules out.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Fences increase and reject a concurrent owner | `gems/tamoz-sqlite/lib/tamoz/sqlite/lease.rb` | `test/sqlite_checkpoint_test.rb` — `test_lease_fences_increase_after_release_and_reject_concurrent_owner` | — |
-| An expired owner cannot write after takeover | `gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_committer.rb` | `test/sqlite_checkpoint_test.rb` — `test_expired_owner_cannot_write_after_takeover` | — |
-| Two racing processes get one live fence | lease operations | `test/sqlite_crash_recovery_test.rb` — `test_two_processes_racing_for_one_namespace_have_one_live_fence` | Real processes, one host |
-| Effect start needs the current fence | effect journal | `test/sqlite_effect_journal_test.rb` — `test_effect_start_requires_current_graph_fence_but_late_receipt_does_not` | — |

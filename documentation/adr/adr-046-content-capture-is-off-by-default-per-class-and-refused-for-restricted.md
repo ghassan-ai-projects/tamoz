@@ -49,25 +49,3 @@ destination.
 
 **Residual risk:** content correctly classified as `confidential` and admitted by policy is exported
 in full to the configured destination.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Capture by default, scrub at export | Cannot prove what never reached the journal |
-| No content capture ever *(retrospective, 2026-10-01)* | Makes production debugging impossible |
-
-## Reopen when
-
-A content class is found that the classification ranks cannot express.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Default emits digest and size only | `gems/tamoz-observability/lib/tamoz/observability/content_policy.rb` | `test/observability_runtime_test.rb` — `test_default_policy_emits_digest_and_size_without_content` | — |
-| Restricted capture is refused at load | same | `test/observability_runtime_test.rb` — `test_restricted_policy_refuses_capture_at_load` | — |
-| Enabled content is bounded; policy recorded | same | `test/observability_runtime_test.rb` — `test_enabled_content_is_bounded_and_policy_is_recorded` | — |
-| A secret never reaches a signal | producer | `test/observability_runtime_test.rb` — `test_secret_is_rejected_before_it_can_reach_a_signal` | — |

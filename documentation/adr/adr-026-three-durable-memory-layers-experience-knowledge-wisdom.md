@@ -51,27 +51,3 @@ in conversations and tool results.
 
 **Residual risk:** a consistently false source can still become curated Knowledge if consolidation
 has nothing contradicting it.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| One vector store for everything | Erases authority, lifecycle, and evaluation differences |
-| One store where every record carries a confidence score, and recall weights by it *(retrospective, 2026-10-01)* | Credible and simpler; lost because a score cannot say *why* a record is trusted or *who* promoted it, and a high-scoring claim would still be injected as if it were evaluated behavior |
-
-## Reopen when
-
-A real workload shows records that fit none of the three levels, or consolidation never promotes
-anything in practice.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Unobserved episodes admit only as reported | `tamoz-agent-memory` admission | `test/memory_engine_test.rb` — `test_episodes_without_independent_observation_admit_only_as_reported` | — |
-| No model call decides admission | same | `test/memory_engine_test.rb` — `test_no_model_call_decides_admission` | — |
-| Consolidation preserves preimages | consolidation | `test/memory_engine_test.rb` — `test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge` | — |
-| Lifecycle transitions are exact | lifecycle | `test/memory_engine_test.rb` — `test_lifecycle_transitions_and_eligible_state_set_are_exact` | — |
-| Wisdom promotion is gated | `gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb` | source inspection | Pipeline tests live in the improvement gem (ADR-023) |

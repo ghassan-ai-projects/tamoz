@@ -27,24 +27,3 @@ an unversioned egress path with no conformance gate.
 
 Telemetry egress is reviewed code with tested destination rules. **Cost:** each exporter is a Tamoz
 release (ADR-014).
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| An exporter plugin API | Unversioned egress with no conformance gate |
-| Fold the OTLP exporter into the contract gem | Puts HTTP in the load graph of every gem that records a signal |
-
-## Reopen when
-
-ADR-014 opens adapter registration.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The recorder does not raise over a malformed payload | `tamoz-core` instrumentation | `test/core_instrumentation_test.rb` — `test_malformed_payload_under_a_null_notifier_does_not_raise` | With a notifier attached it does raise (`test_malformed_payload_with_a_notifier_still_raises`) |
-| The catalog is closed and versioned | `tamoz-observability` catalog | `test/observability_catalog_test.rb` — `test_attribute_set_change_without_a_version_bump_raises` | — |
-| Exporter egress rejects untrusted destinations and redirects | `tamoz-otel` | `test/otel_test.rb` — `test_egress_policy_rejects_untrusted_destinations`, `test_http_exporter_does_not_follow_redirects_or_use_proxy_environment` | — |

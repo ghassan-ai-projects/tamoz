@@ -24,24 +24,3 @@ cyclic, ambiguous, or unregistered mutable objects fail closed. Shallow freeze i
 
 Sibling nodes cannot mutate shared state, and a checkpoint is the same bytes on replay. **Cost:**
 nodes return new values instead of mutating; custom value types must register an immutable codec.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Shallow freeze | Nested arrays and hashes stay mutable |
-| Copy-on-read without freezing *(retrospective, 2026-10-01)* | Costs a copy per read and still lets a node mutate its copy and leak it into a write by accident |
-
-## Reopen when
-
-Copy-and-freeze cost shows up as a measured bottleneck in a real workload.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Round-trips are deterministic and immutable | `gems/tamoz-core/lib/tamoz/core.rb` (`deep_freeze`), state codec | `test/core_state_codec_test.rb` — `test_built_in_round_trip_is_deterministic_and_immutable` | — |
-| Unsupported, cyclic, and ambiguous values fail closed | state codec | `test/core_state_codec_test.rb` — `test_sensitive_unsupported_cyclic_and_ambiguous_values_fail_closed` | — |
-| Registered types must declare immutability | state codec | `test/core_state_codec_test.rb` — `test_registration_requires_and_enforces_an_explicit_immutability_contract` | — |

@@ -52,27 +52,3 @@ injected content that tries to recall or plant records, and code that bypasses t
 
 **Residual risk:** derived artifacts outside memory's store (exports, transcripts) are not reached
 by deletion.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Relevance-first retrieval, then model-side filtering | The unauthorized record has already crossed the boundary |
-| Consolidate by majority or averaging *(retrospective, 2026-10-01)* | Destroys the disagreement a later decision needs |
-
-## Reopen when
-
-A recall path is found that bypasses `Memory::Access`, or deletion receipts are needed for artifacts
-memory does not own.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Access sees only this owner and workspace | `Memory::Access` | `test/memory_access_test.rb` — `test_find_sees_only_this_owner_and_workspace_while_eligible` | — |
-| No gem reaches past the facade | boundary test | `test/memory_boundary_test.rb` — `test_no_gem_outside_memory_reaches_into_its_storage_or_scopes` | Source scan |
-| Sensitive records are never indexed; other scopes are never returned | retrieval | `test/memory_spec_test.rb` — `test_b4_sensitive_never_indexed_and_other_scopes_never_returned` | Surface-level filtering has no dedicated test |
-| Sensitive records are never injected or decrypted | repository adapter | `test/memory_repository_adapter_test.rb` — `test_sensitive_records_are_matched_never_injected_never_decrypted` | — |
-| Correction and deletion leave recall and index | lifecycle | `test/memory_engine_test.rb` — `test_correction_removes_bad_record_from_active_recall_and_index`, `test_deletion_emits_receipt_and_propagates_to_index` | Derived artifacts outside memory are not covered |

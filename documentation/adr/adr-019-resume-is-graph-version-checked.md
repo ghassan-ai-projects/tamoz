@@ -48,25 +48,3 @@ path is to let them fail and start fresh.
 **Residual risk:** the definition digest covers names, channels, edges, branches, and each node's
 declared name and version — not node code. A node whose Ruby body changes without a version bump
 resumes old checkpoints under new behavior, undetected.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Best-effort resume (run if the state keys still match) *(retrospective, 2026-10-01)* | Runs new behavior on old state with no record that anything changed |
-| Implicit migration on load *(retrospective, 2026-10-01)* | A migration is a decision; doing it invisibly hides a behavior change |
-
-## Reopen when
-
-Users need long-lived paused threads to survive graph releases routinely (then migrations become a
-first-class tool, not an exception).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Identity is checked before state or user code | `tamoz-graph` history | `test/graph_history_test.rb` — `test_graph_identity_is_checked_before_state_access_or_user_code` | — |
-| A future graph is rejected before resume | agent runtime | `test/agent_durable_compatibility_spike_test.rb` — `test_runtime_rejects_a_future_graph_before_resume` | — |
-| Another protocol version is refused | durable runner | `test/graph_durable_runner_test.rb` — `test_a_checkpointer_at_another_protocol_version_is_refused` | — |

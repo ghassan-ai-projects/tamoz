@@ -56,25 +56,3 @@ server, skill author, or injected model output.
 
 **Residual risk:** the operator's own classification can be wrong — classifying a dangerous MCP
 tool as `read` grants it.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Import MCP annotations or skill `allowed-tools` as permissions | Content from another trust boundary can only request or narrow |
-| One catalog per source with its own policy *(retrospective, 2026-10-01)* | Authority logic drifts per source; the intersection rule needs one place |
-
-## Reopen when
-
-A fifth source kind is needed, or a source offers authenticated, operator-pinned capability
-metadata that could safely pre-fill classification.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Four sources dispatch through one protocol | `gems/tamoz-tools/lib/tamoz/tools/capability_host.rb` | `test/capability_closed_world_test.rb` — `test_four_built_ins_dispatch_through_one_protocol` | — |
-| Descriptor digests cover every field; unknown classes fail closed | descriptor contract | `test/capability_descriptor_contract_test.rb` — `test_definition_digest_is_verified_against_all_descriptor_fields`, `test_unknown_effect_class_and_policy_values_fail_closed` | — |
-| A widened profile is refused for a bound thread | worker runtime | `test/agent_worker_profile_digest_test.rb` — `test_a_widened_on_disk_profile_is_refused_for_a_bound_thread` | — |

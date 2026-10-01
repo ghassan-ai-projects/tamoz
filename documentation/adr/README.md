@@ -9,7 +9,7 @@ only the decisions and the rules for writing them.
 - **By area:** the index below groups decisions by the part of the system they govern.
 - **Read one:** every ADR has the same header (`Status`, `Date`, `Tier`, `Implementation`, relations)
   and the same sections in the same order: Context, Decision, Consequences, Invariants and Threat
-  model (Tier F), Rejected alternatives, Reopen when, Verification, History. `Implementation:` says
+  model (Tier F), optional History. Implementation evidence lives in [evidence.md](./evidence.md). `Implementation:` says
   plainly when part of a decision is not built.
 - **As data:** [`catalog.json`](./catalog.json) is generated from the files (`rake adr:catalog`).
 - **Write one:** [`LIFECYCLE.md`](./LIFECYCLE.md) for the workflow, [`_TEMPLATE.md`](./_TEMPLATE.md) for
@@ -21,7 +21,7 @@ only the decisions and the rules for writing them.
 |---|---|
 | `rake adr:catalog` | Regenerates `catalog.json` |
 | `rake adr:validate` | Numbering, header fields, required sections per tier, banned boilerplate, reciprocal relations, links, index coverage, catalog sync |
-| `rake adr:verify` | Every backticked path, gem, and `test_*` name in a Verification section exists (a cell that says a path was removed checks the opposite) |
+| `rake adr:verify` | Every backticked path, gem, and `test_*` name in the separate evidence register exists (a cell that says a path was removed checks the opposite) |
 | `rake adr:trace`, `rake adr:graph` | Regenerate `traceability.md` and `relationships.md` |
 
 Green tooling means the mechanical checks pass. Whether an ADR is true is a review (bar §7).

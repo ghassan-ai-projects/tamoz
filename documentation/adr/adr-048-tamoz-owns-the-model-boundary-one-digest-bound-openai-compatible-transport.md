@@ -63,31 +63,6 @@ hostile profile, endpoint, or provider response.
 **Residual risk:** the endpoint itself sees every prompt; choosing a provider is a trust decision the
 operator makes in the profile.
 
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Keep `ruby_llm` behind a Tamoz-owned projection *(retrospective, 2026-10-01)* | Credible; lost because the receipt needs exact wire bytes the SDK does not expose, and two message models must be kept in sync |
-| One adapter per native protocol *(retrospective, 2026-10-01)* | Multiplies credential, failure, and projection paths per provider |
-| A compatibility alias for the retired `RubyLLMModel` | Nothing shipped depended on it (ADR-059) |
-
-## Reopen when
-
-A needed provider capability is unreachable through the OpenAI-compatible surface and OpenRouter.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Profile-named credential only; no generic fallback | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_client_factory.rb` | `test/model_client_factory_test.rb` — `test_factory_requires_the_profile_credential_without_generic_fallback` | — |
-| Native protocols and unknown providers fail closed | same | `test/model_client_factory_test.rb` — `test_native_protocols_and_unknown_providers_fail_closed` | — |
-| Configuration binds without the secret | same | `test/model_client_factory_test.rb` — `test_factory_binds_profile_and_explicit_endpoint_configuration_without_secret` | — |
-| Receipt identity changes with request and provider configuration | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb` | `test/agent_model_receipt_test.rb` — `test_logical_key_changes_with_provider_configuration` | — |
-| No retry of a received failure | `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb` | `test/model_transport_parity_test.rb` — `test_transport_does_not_retry_a_received_failure` | — |
-| The graph loads no model, eval, or HTTP package | `tamoz-graph` | `test/dependency_isolation_test.rb` — `test_graph_loads_no_model_eval_or_adapter_package` | — |
-
 ## History
 
 - 2026-08-26 — Accepted as the transport decision; `RubyLLMModel` retired.

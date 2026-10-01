@@ -49,26 +49,3 @@ stale attempts, and forks.
 | A crash re-runs a successful sibling | Activation id is stable; its committed writes are reused |
 
 **Residual risk:** none known beyond ADR-016's.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| One id per node invocation *(retrospective, 2026-10-01)* | A crash resume would look like new work and repeat effects |
-| Fork keeps the source execution id *(retrospective, 2026-10-01)* | Re-execution would silently return the source's recorded effects |
-
-## Reopen when
-
-A product need appears to fork *with* effect reuse (replaying a branch against recorded receipts) —
-that would be a new, explicit replay policy.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Activation survives a new base; attempt changes | `tamoz-graph` identity | `test/graph_identity_test.rb` — `test_activation_survives_new_base_while_attempt_identity_changes` | — |
-| A stale attempt is rejected before the barrier | executor | `test/graph_interrupt_test.rb` — `test_stale_attempt_result_is_rejected_before_barrier_use` | — |
-| A successful sibling is not re-executed after restart | SQLite checkpointer | `test/sqlite_checkpoint_test.rb` — `test_successful_sibling_is_not_reexecuted_after_restart_and_resume` | — |
-| A fork binds a new execution to an explicit checkpoint | request inbox | `test/sqlite_request_inbox_test.rb` — `test_fork_binds_new_execution_to_an_explicit_historical_checkpoint` | — |

@@ -26,24 +26,3 @@ request then follows the normal path. Delivery status and task outcome are recor
 
 A crash or a second poller produces at most one occurrence and one request. **Cost:** an operator
 reads two statuses — delivered, and how the task went.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Model calls or business execution in a timer callback | Timers are not durable; crash and duplicate semantics become dishonest |
-| An external cron that runs the CLI *(retrospective, 2026-10-01)* | Loses occurrence identity and dedup; a double fire is two tasks |
-
-## Reopen when
-
-A schedule needs sub-second latency the inbox path cannot meet.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Claim → create → enqueue is atomic | `gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb` | `test/sqlite_schedule_store_test.rb` — `test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` | — |
-| Occurrences dedup on identity | same | `test/sqlite_schedule_store_test.rb` — `test_materialize_due_dedups_on_occurrence_identity` | — |
-| Restart survival; separate completion state | same | `test/sqlite_schedule_store_test.rb` — `test_restart_survival_and_completion_state_machine` | — |

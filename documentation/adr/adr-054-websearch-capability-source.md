@@ -52,26 +52,3 @@ content steering the agent, or a server impersonating websearch.
 
 **Residual risk:** whatever the model puts in a query reaches the provider, and when the operator
 declares websearch read-only, nobody is asked first.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| A new source mechanism | Widens the trust surface the catalog must reason about |
-| An unreserved MCP server named websearch | An operator's server could silently replace the governed one |
-| A raw HTTP tool | No egress boundary, no application trust assignment |
-
-## Reopen when
-
-Query-content exfiltration is observed, or a second web capability (for example, a browser) needs
-the same governance.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| The id `websearch` is reserved | `gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb` | `test/agent_worker_mcp_test.rb` — `test_the_websearch_id_cannot_be_claimed_by_a_generic_server` | — |
-| Egress is pinned; changed egress on resume stops | `gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch.rb` | `test/websearch_egress_test.rb` — `test_session_record_pins_the_canonical_egress_declaration`, `test_resume_with_changed_egress_stops_typed` | — |
-| Websearch loads only its declared closure | packaging | `test/dependency_isolation_test.rb` — `test_websearch_loads_only_its_declared_tamoz_closure` | — |

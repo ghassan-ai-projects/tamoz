@@ -52,26 +52,3 @@ logs, traces, or exports.
 | A sensitive store value is written in clear | Fails without a protection codec |
 
 **Residual risk:** a secret passed as a plain `String` is not a secret to Tamoz and is not refused.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Regex scrubbing by key name | Lossy and incomplete; misses secrets in values |
-| `Marshal` as the default serializer *(retrospective, 2026-10-01)* | Remote code execution on a tampered artifact |
-| Encrypt the whole database file *(retrospective, 2026-10-01)* | Protects data at rest but not logs, traces, exports, or error text, and every reader needs the key |
-
-## Reopen when
-
-A secret is found on any durable or observable surface, or an operator needs protected store
-values and there is no codec to give them (then ship one).
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Secrets are refused on each swept surface, by type | state codec | `test/secret_sweep_test.rb` — `test_the_swept_surface_list_is_complete`, `test_the_refusal_is_by_type_not_by_key_name` | Only the surfaces in the sweep list |
-| A secret never renders its value | `Tamoz::Secret` | `test/secret_sweep_test.rb` — `test_a_secret_never_renders_its_value` | — |
-| Sensitive store values need a protection codec | `gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb` (`protect`) | `test/sqlite_store_test.rb` — `test_sensitive_values_fail_closed_and_round_trip_only_with_protection` | The codec's cryptographic strength is the operator's |

@@ -46,25 +46,3 @@ change that lets the runtime influence its own grade.
 
 **Residual risk:** someone with repository write access can change both subject and evaluator in
 one commit; review, not architecture, catches that.
-
-## Rejected alternatives
-
-| Rejected | Why it lost |
-|---|---|
-| Evaluation as scattered test files | Cannot own corpora, baselines, judge lineage, or release evidence |
-| One evals gem with harness and verifier together *(retrospective, 2026-10-01)* | The verifier must load without harness dependencies; the split keeps it minimal |
-
-## Reopen when
-
-A runtime feature needs evaluation results at run time (for example, live canary gating), which
-would put an evaluator in the runtime's path.
-
-## Verification
-
-Checked 2026-10-01 (source inspection).
-
-| Claim | Enforced by | Evidence | Limit |
-|---|---|---|---|
-| Only the runner depends on `tamoz-evals` | gemspecs | `test/packaging_test.rb`; source inspection of `gems/*/*.gemspec` | — |
-| The evals gem loads only the verifier boundary | `tamoz-evals` | `test/dependency_isolation_test.rb` — `test_evals_loads_the_verifier_boundary_only` | — |
-| The verifier enforces the artifact contract | `tamoz-evals` | `test/evals_verifier_test.rb` | "Safety is never weighted" and "every evaluator change starts a lineage" are design rules with no mechanical check |
