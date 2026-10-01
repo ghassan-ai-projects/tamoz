@@ -29,5 +29,8 @@ The same compiled graph supports ordered threaded execution, `Command`/`Send` ro
 worker-local interrupt/resume, failure retry, immutable history, reducer-mediated forks,
 nested invocation-mode subgraphs, and bounded event streaming.
 
+A durable request is read back as a `Tamoz::Graph::RequestRecord`; `stale_failure?` and
+`terminal_reason` say whether it was terminal-failed as stale, and why.
+
 See `docs/M2.md` and `docs/M2_PLAN.md` in the repository for the implemented guarantees and
 their evidence.

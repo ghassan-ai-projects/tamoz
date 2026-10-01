@@ -999,11 +999,6 @@ class AgentCLITest < Minitest::Test
     assert_match(/duplicate check/, err.string)
   end
 
-  # --- Interactive answer vocabulary (map_answer contract) ---
-  # The words an operator types at an approval/clarify/resolve prompt are a
-  # stable user-facing contract. These pin the mapping through the CLI's own
-  # private seam (send) because the vocabulary is exactly what a full-flow test
-  # would exercise, at a fraction of the fixture cost.
 
   def test_approve_tool_answer_vocabulary
     answers = Tamoz::Agent::CLI::InterruptAnswers

@@ -2,8 +2,7 @@
 
 # Tamoz::Agent::CLI::PromptAdapter — the interactive approval/clarify seam
 # (Q3 slice 2). Owns the prompt LOOPS that read operator answers from input
-# and write prompts to err. The CLI owns the answer POLICY (answer_for,
-# map_answer, non-interactive routing) and delegates the mechanics here.
+# and write prompts to err. InterruptAnswers owns the answer policy.
 # Prompt text is a stable user-facing contract: byte-identical output.
 module Tamoz
   module Agent
@@ -11,8 +10,8 @@ module Tamoz
       # Reads operator answers for the CLI's approval/clarify prompts. EOF
       # (nil input) aborts the prompt — the caller treats nil as "no answer".
       class PromptAdapter
-        APPROVE = Tamoz::Approval::Answer::APPROVE_TOKENS.map(&:to_s).freeze
-        DENY = Tamoz::Approval::Answer::DENY_TOKENS.map(&:to_s).freeze
+        APPROVE = %w[y yes a approve].freeze
+        DENY = %w[n no d deny].freeze
         HELP = %w[? h help].freeze
 
         def initialize(input:, err:)

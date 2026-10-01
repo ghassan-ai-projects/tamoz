@@ -24,12 +24,12 @@ module Tamoz
           cancellation = @cancellation || Tamoz::CancellationToken.new
           sink = Tamoz::StreamSink.new(cancellation:, run_id: request_id)
           context = build_context(sink, cancellation, thread_id:, request_id:)
-          worker = Thread.new do
-            Thread.current.report_on_exception = false
-            step(sink) { yield context }
-          end
+          worker = Thread.new { step(sink) { yield context } }
           render_parts(sink, worker)
-          worker.value
+          outcome = worker.value
+          raise Tamoz::Agent::Error, FAILURE_MESSAGE, cause: outcome if outcome.is_a?(Tamoz::CheckpointConflictError)
+
+          outcome
         end
 
         private
@@ -42,8 +42,8 @@ module Tamoz
 
         def step(sink)
           yield
-        rescue Tamoz::CheckpointConflictError
-          raise Tamoz::Agent::Error, FAILURE_MESSAGE
+        rescue Tamoz::CheckpointConflictError => e
+          e
         ensure
           sink.finish
         end

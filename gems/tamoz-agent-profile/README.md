@@ -9,7 +9,7 @@ Extracted from `tamoz-agent`; the namespace stays `Tamoz::Agent::Profile`.
 
 - **`Profile`** — the facade: `preview`, `load`, `from_authority`,
   `resolve_path`, `preview_source`, `profiles_dir`, `adoption_path`,
-  `suggestion_path`. It assembles the validators and registries below; it is
+  `suggestion_path`, `secret_shape`. It assembles the validators and registries below; it is
   not a re-export shim.
 - **Validators**: `DocumentValidator`, `AuthorityValidator` (resolves graph
   versions through the kernel's `GraphVersions`), `EgressValidator`
