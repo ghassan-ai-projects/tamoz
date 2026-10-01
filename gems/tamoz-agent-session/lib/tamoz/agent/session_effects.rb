@@ -75,8 +75,7 @@ module Tamoz
         files.each do |relative, content|
           path = File.join(directory, relative)
           FileUtils.mkdir_p(File.dirname(path))
-          File.write("#{path}.partial", content)
-          File.rename("#{path}.partial", path)
+          Tamoz::Core::AtomicFile.replace(path, content, mode: 0o644)
         end
         { 'directory' => directory, 'files' => files.keys.sort }
       end
