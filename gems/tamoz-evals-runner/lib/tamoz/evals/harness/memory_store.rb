@@ -167,8 +167,7 @@ module Tamoz
 
         def write_stable(filename, document)
           path = File.join(@directory, filename)
-          File.write(path, "#{CanonicalJSON.dump(document)}\n", encoding: Encoding::UTF_8)
-          File.chmod(0o600, path)
+          Tamoz::Core::AtomicFile.replace(path, "#{CanonicalJSON.dump(document)}\n", mode: 0o600)
         end
 
         def read_json(filename)
