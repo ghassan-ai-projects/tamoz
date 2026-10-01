@@ -20,6 +20,19 @@ class WebsearchRecordedWebTest < Minitest::Test
     end
   end
 
+  def test_concurrent_charges_are_each_counted_and_land_through_atomic_file
+    Dir.mktmpdir do |dir|
+      path = counter(dir, used: 0)
+      ledger = W::SearchLedger.new(path)
+      writes = atomic_writes { Array.new(8) { Thread.new { ledger.charge! } }.each(&:join) }
+
+      assert_equal 8, JSON.parse(File.read(path)).fetch('used')
+      published = writes.map { |operation, written, _mode| [operation, written] }
+
+      assert_equal [[:replace, path]] * 8, published
+    end
+  end
+
   def test_a_repeated_query_is_served_from_the_record_without_a_charge
     Dir.mktmpdir do |dir|
       web = W::RecordedWeb.new(dir: File.join(dir, 'cache'), ledger: W::SearchLedger.new(counter(dir, used: 0)))
