@@ -27,15 +27,15 @@ module Tamoz
           err.puts preview
         end
 
-        # :reek:TooManyStatements :reek:RepeatedConditional :reek:NilCheck --
-        # the approval loop is a stateful read-validate-retry loop; the nil-check
-        # at the loop head is the EOF-aborts-prompt contract.
         def approve_tool(descriptor)
           self.class.approval_banner(@err, descriptor['tool'], descriptor['preview'])
           approve(descriptor['tool'])
         end
 
         # The bare-tool ask: the one-shot runtime passes a name, not a descriptor.
+        # :reek:TooManyStatements :reek:RepeatedConditional :reek:NilCheck --
+        # the approval loop is a stateful read-validate-retry loop; the nil-check
+        # at the loop head is the EOF-aborts-prompt contract.
         def approve(tool)
           loop do
             line = read_line("Approve #{tool}? [y/N/?] ")

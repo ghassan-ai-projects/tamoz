@@ -7,7 +7,6 @@ module Tamoz
       class OneShot
         def initialize(out:, err:, input:, events:, models:)
           @out = out
-          @err = err
           @prompts = PromptAdapter.new(input:, err:)
           @events = events
           @models = models
