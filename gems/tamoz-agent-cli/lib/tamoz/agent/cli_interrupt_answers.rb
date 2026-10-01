@@ -39,8 +39,9 @@ module Tamoz
           @options = options
         end
 
-        # nil when an interrupt is left unanswered.
-        def collect(view, resume_options)
+        # Answers every interrupt and records the decisions this process's engine
+        # owns; nil when an interrupt is left unanswered.
+        def resolve(view, resume_options)
           scripted = resume_options[:answer]
           view.interrupts.each_with_object({}) do |interrupt, answers|
             value = answer_for(interrupt.descriptor, scripted)
@@ -80,8 +81,8 @@ module Tamoz
           end
         end
 
-        # The operator resolves a decision only when this process's engine holds
-        # it (it made the ask); one recorded by another process resolves there.
+        # Only the engine that asked records the answer; another process's
+        # decision resolves there.
         def resolve_decision(descriptor, value, interactive:)
           asked = descriptor['decision']
           return unless descriptor['kind'] == 'approve_tool' && asked

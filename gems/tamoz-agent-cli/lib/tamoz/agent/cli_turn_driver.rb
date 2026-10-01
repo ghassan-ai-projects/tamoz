@@ -38,7 +38,7 @@ module Tamoz
           view = current_view
           case view.status
           when :paused
-            answers = @answers.collect(view, resume_options)
+            answers = @answers.resolve(view, resume_options)
             return CLI::EXIT_PAUSED if answers.nil?
 
             resume_with(answers, request_id)
@@ -111,7 +111,7 @@ module Tamoz
         def answer_interrupts(view, resume_options)
           return :waiting if view.interrupts.empty?
 
-          answers = @answers.collect(view, resume_options)
+          answers = @answers.resolve(view, resume_options)
           return :waiting if answers.nil?
 
           resume_with(answers, SecureRandom.uuid)
