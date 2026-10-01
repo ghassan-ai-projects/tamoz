@@ -175,9 +175,7 @@ module Tamoz
         # :reek:TooManyStatements — directory setup, lock acquisition, the
         # permission check and the release are one indivisible protocol.
         def with_registry_lock
-          directory = File.dirname(@path)
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          File.chmod(0o700, directory)
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(@path))
           File.open("#{@path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
             lock.flock(File::LOCK_EX)
             begin
