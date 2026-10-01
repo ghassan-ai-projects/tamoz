@@ -68,10 +68,15 @@ class AgentCliResearchTest < Minitest::Test
         configure_websearch(runtime)
         budgets = File.join(runtime.dir, 'budgets.json')
         File.write(budgets, JSON.generate('depths' => { 'quick' => { 'minutes' => 1 } }))
-        _status, _out, err = run_cli(runtime, input: '', args: ['--session', 'oslo', '--research-budgets', budgets,
-                                                                'deep-research', QUESTION])
-        pin = JSON.parse(File.read(File.join(runtime.dir, 'sessions', 'oslo.harness.json')))
+        err = nil
+        writes = atomic_writes do
+          _status, _out, err = run_cli(runtime, input: '', args: ['--session', 'oslo', '--research-budgets', budgets,
+                                                                  'deep-research', QUESTION])
+        end
+        pin_path = File.join(runtime.dir, 'sessions', 'oslo.harness.json')
+        pin = JSON.parse(File.read(pin_path))
 
+        assert_includes writes, [:replace, pin_path, 0o600]
         assert_equal({ 'depths' => { 'quick' => { 'minutes' => 1 } } }, pin.fetch('research_budgets'))
         assert_includes err, 'about 1 minutes'
       end
