@@ -360,6 +360,25 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
+  def test_a_forced_import_swaps_the_installed_profile_instead_of_truncating_it
+    with_profile_env do |workspace, session_dir, config_home|
+      suggestion = File.join(workspace, ".tamoz", "suggested-profile.yaml")
+      FileUtils.mkdir_p(File.dirname(suggestion))
+      write_profile(workspace:, config_home:, path: suggestion, mode: 0o644)
+      import = lambda do
+        run_cli(["profile", "import", "--force", suggestion],
+                workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new, factory: read_factory)
+      end
+      assert_equal 0, import.call
+      installed = File.join(config_home, "profiles", "test-profile.yaml")
+      inode = File.stat(installed).ino
+
+      assert_equal 0, import.call
+      refute_equal inode, File.stat(installed).ino
+      assert_empty Dir.children(File.dirname(installed)).grep(/\.tmp\z/)
+    end
+  end
+
   private
 
   def with_profile_env

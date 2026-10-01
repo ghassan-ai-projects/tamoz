@@ -282,11 +282,7 @@ module Tamoz
         directory = File.dirname(target)
         FileUtils.mkdir_p(directory, mode: 0o700)
         File.chmod(0o700, directory)
-        File.open(target, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |handle|
-          handle.binmode
-          handle.write(captured.bytes)
-        end
-        File.chmod(0o600, target)
+        Tamoz::Core::AtomicFile.replace(target, captured.bytes, mode: 0o600)
         profile_id = document.profile_id
         digest = document.canonical_digest
         Profile::AdoptionRegistry.new(env: @env).activate(profile_id, digest)
