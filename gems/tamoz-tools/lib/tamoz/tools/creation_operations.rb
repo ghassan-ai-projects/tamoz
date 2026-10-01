@@ -47,31 +47,11 @@ module Tamoz
 
       def atomic_create(target_path, content, mode)
         parent = target_path.dirname
-        temp = nil
-        published = false
-        begin
-          temp = Tempfile.new(['.tamoz-create-', '.tmp'], parent.to_s, binmode: true)
-          temp.write(content.b)
-          temp.flush
-          temp.fsync
-          temp.chmod(mode)
-          temp.fsync
-          temp.close
-          revalidate_parent(parent)
-          File.link(temp.path, target_path.to_s)
-          published = true
-        rescue Errno::EEXIST
-          raise ToolArgumentError, 'file already exists'
-        rescue SystemCallError => e
-          raise ToolError, "atomic create failed: #{e.class}"
-        ensure
-          begin
-            temp&.close!
-          rescue SystemCallError
-            nil
-          end
-          toolbox.__send__(:fsync_directory, parent) if published
-        end
+        Tamoz::Core::AtomicFile.create(target_path, content.b, mode:, before_publish: -> { revalidate_parent(parent) })
+      rescue Errno::EEXIST
+        raise ToolArgumentError, 'file already exists'
+      rescue SystemCallError => e
+        raise ToolError, "atomic create failed: #{e.class}"
       end
 
       def revalidate_parent(parent)

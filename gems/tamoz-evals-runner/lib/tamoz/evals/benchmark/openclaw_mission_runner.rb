@@ -527,13 +527,7 @@ module Tamoz
         end
 
         def atomic_write(path, bytes, mission_id)
-          Tempfile.create([".#{mission_id}-", '.tmp'], path.dirname) do |temporary|
-            temporary.write(bytes)
-            temporary.flush
-            temporary.fsync
-            temporary.close
-            File.rename(temporary.path, path)
-          end
+          Tamoz::Core::AtomicFile.replace(path, bytes, prefix: ".#{mission_id}-")
         end
 
         def mission_ids

@@ -66,20 +66,7 @@ module Tamoz
       end
 
       def atomic_replace(path, content)
-        mode = path.stat.mode & 0o777
-        temporary = Tempfile.new(['.tamoz-', '.tmp'], path.dirname.to_s, binmode: true)
-        begin
-          temporary.write(content)
-          temporary.flush
-          temporary.fsync
-          temporary.chmod(mode)
-          temporary.fsync
-          temporary.close
-          File.rename(temporary.path, path.to_s)
-          fsync_directory(path.dirname)
-        ensure
-          temporary.close! unless temporary.closed? && !File.exist?(temporary.path)
-        end
+        Tamoz::Core::AtomicFile.replace(path, content, mode: path.stat.mode & 0o777)
       rescue SystemCallError => e
         raise ToolError, "atomic patch failed: #{e.class}"
       end
