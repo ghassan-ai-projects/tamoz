@@ -125,6 +125,16 @@ class AgentProfileAdoptionSeamsTest < Minitest::Test
     assert registry.activated?('p', DIGEST)
   end
 
+  def test_activate_swaps_the_registry_file_instead_of_truncating_it
+    registry.activate('p', DIGEST)
+    inode = File.stat(@path).ino
+
+    registry.activate('q', OTHER_DIGEST)
+
+    refute_equal inode, File.stat(@path).ino
+    assert_empty Dir.children(File.dirname(@path)).grep(/\.tmp\z/)
+  end
+
   def test_activate_is_idempotent_and_preserves_other_profiles
     registry.activate('p', DIGEST)
     registry.activate('q', OTHER_DIGEST)

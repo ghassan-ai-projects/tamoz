@@ -51,8 +51,7 @@ module Tamoz
           directory = File.dirname(@path)
           FileUtils.mkdir_p(directory, mode: 0o700)
           File.chmod(0o700, directory)
-          File.write(@path, Psych.dump(updated))
-          File.chmod(0o600, @path)
+          Tamoz::Core::AtomicFile.replace(@path, Psych.dump(updated), mode: 0o600)
         end
 
         # :reek:TooManyStatements — read, verify, parse, validate, normalize is
