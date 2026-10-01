@@ -154,10 +154,9 @@ class AgentCliMcpTest < Minitest::Test
   # rubocop:enable Metrics/AbcSize
 
   def test_cli_without_runtime_configuration_keeps_mcp_disabled
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new,
-                                input: StringIO.new, env: {})
+    sessions = Tamoz::Agent::CLI::SessionBuilder.new(env: {}, models: nil)
 
-    assert_nil cli.send(:build_mcp_source, { root: Dir.pwd })
+    assert_nil sessions.build_mcp_source({ root: Dir.pwd })
   end
 
   def test_cli_rejects_a_runtime_workspace_that_differs_from_the_cli_workspace

@@ -190,31 +190,6 @@ module Tamoz
         TurnDriver.new(session, thread_id:, owner_id:, options:, operator:)
       end
 
-      def drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
-        turn_driver(session, thread_id:, owner_id:, options:).turn(task, request_id:)
-      end
-
-      def drive_resume(session, thread_id:, request_id:, owner_id:, options:, resume_options:)
-        turn_driver(session, thread_id:, owner_id:, options:).resume(request_id:, resume_options:)
-      end
-
-      def drive_continue(session, thread_id:, request_id:, owner_id:, options:)
-        turn_driver(session, thread_id:, owner_id:, options:).continue(request_id:)
-      end
-
-      def drain_to_terminal(session, thread_id:, owner_id:, options:, tracked_request: nil, resume_options: {})
-        turn_driver(session, thread_id:, owner_id:, options:).drain(tracked_request:, resume_options:)
-      end
-
-      def tracked_request_queued?(session, tracked_request)
-        session.app.durable_runner.fetch(thread: tracked_request.thread_id,
-                                         request_id: tracked_request.request_id)&.status == :queued
-      end
-
-      def map_answer(kind, raw) = InterruptAnswers.parse(kind, raw)
-
-      def build_list_session(adapter, options) = @sessions.build_list_session(adapter, options)
-
       def run_durable(options, thread_id, read_only: false, profile: nil, request_id: nil)
         @sessions.assemble(options, thread_id, read_only:, profile:,
                                                openers: run_openers(options, thread_id)) do |parts, session|
@@ -229,10 +204,6 @@ module Tamoz
         { harness: -> { work_harness(options, thread_id) },
           memory: ->(dir) { open_memory(options, dir) } }
       end
-
-      def provision_private_session_dir!(options) = @sessions.provision_session_dir!(options)
-
-      def build_mcp_source(options, profile: nil) = @sessions.build_mcp_source(options, profile:)
 
       def install_signal_handlers
         @cancellation = Tamoz::CancellationToken.new
@@ -271,26 +242,6 @@ module Tamoz
       def generate_thread_id
         "th_#{SecureRandom.urlsafe_base64(12)}"
       end
-
-      def parse_resume_options(argv)
-        options = {}
-        OptionParser.new do |value|
-          value.on("--answer ANSWER", "Non-interactive answer") { |entry| options[:answer] = entry }
-          value.on("--recover", "Force recovery before resuming") { options[:recover] = true }
-          value.on("--approval-profile NAME", "Approval policy profile for this session") { |entry| options[:approval_profile] = entry }
-        end.parse!(argv)
-        options
-      end
-
-      def resolve_session_dir(options) = @sessions.resolve_session_dir(options)
-
-      def lease_ttl = @sessions.lease_ttl
-
-      def resolve_profile_roles(profile, options) = @models.resolve_profile_roles(profile, options)
-
-      def build_model(options, profile: nil) = @models.build(options, profile:)
-
-      def emit_cli_event(type, data) = @events.emit(type, data)
     end
   end
 end

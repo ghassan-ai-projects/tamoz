@@ -267,7 +267,7 @@ module Tamoz
       # nil means "this file is not a listable thread" — no checkpoint yet — and
       # the caller filters it out rather than showing an empty row.
       def read_list_entry(adapter, options, path, thread_id)
-        session = build_list_session(adapter, options)
+        session = @sessions.build_list_session(adapter, options)
         return nil unless session.app.checkpointer.latest(thread_id:, namespace: [])
 
         view = session.view(thread: thread_id)

@@ -71,16 +71,16 @@ module Tamoz
           current_view.tap { |view| render_final_view(view, options: @options, stream_error: @stream.error) }
         end
 
+        def queued?(request)
+          current = @session.app.durable_runner.fetch(thread: request.thread_id, request_id: request.request_id)
+          current&.status == :queued
+        end
+
         private
 
         def current_view = @session.view(thread: @thread_id)
 
         def emit_cli_event(type, data) = @events.emit(type, data)
-
-        def queued?(request)
-          current = @session.app.durable_runner.fetch(thread: request.thread_id, request_id: request.request_id)
-          current&.status == :queued
-        end
 
         def report_queued(view)
           front_request_id = view.execution_id

@@ -97,8 +97,8 @@ module Tamoz
         validate_thread_id!(thread)
         trajectory = verified_trajectory(options, thread)
         stamp = Time.now.utc.strftime('%Y%m%dT%H%M%S')
-        workspace = SkillInstallation.draft_workspace(provision_private_session_dir!(options), "#{name}-#{stamp}", name,
-                                                      trajectory)
+        session_dir = @sessions.provision_session_dir!(options)
+        workspace = SkillInstallation.draft_workspace(session_dir, "#{name}-#{stamp}", name, trajectory)
         status = cmd_ask(options.merge(root: workspace, work_routing: true, allow_changes: true, bundled_skills: true,
                                        skills_dir: nil, skill: 'skill-authoring', checks: {}, session: nil, profile: nil,
                                        explicit_session: "skill-draft-#{name}-#{stamp}".downcase),

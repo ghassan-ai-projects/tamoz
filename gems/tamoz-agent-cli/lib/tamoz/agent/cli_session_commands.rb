@@ -36,7 +36,7 @@ module Tamoz
         request_id = SecureRandom.uuid
         profile = resolve_session_authority(options, thread_id, profile, boundary: true, request_id:)
         run_durable(options, thread_id, profile:, request_id:) do |session, request_id, owner_id|
-          drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
+          turn_driver(session, thread_id:, owner_id:, options:).turn(task, request_id:)
         end
       end
 
@@ -53,7 +53,7 @@ module Tamoz
         raise OptionParser::InvalidArgument, 'tamoz code needs --allow-changes or a --profile' unless
           options[:allow_changes] || options[:profile]
 
-        thread = options[:session] && File.join(resolve_session_dir(options), options[:session])
+        thread = options[:session] && File.join(@sessions.resolve_session_dir(options), options[:session])
         if thread && File.exist?("#{thread}.sqlite3") && !File.exist?("#{thread}.harness.json")
           raise OptionParser::InvalidArgument, "thread #{options[:session]} is not a work thread"
         end
@@ -72,7 +72,7 @@ module Tamoz
       # A work thread's surface, guidance and persona are pinned at its first turn, so a follow-up,
       # resume or continue builds the same header and body without repeating the flags.
       def work_harness(options, thread_id)
-        pin = File.join(resolve_session_dir(options), "#{thread_id}.harness.json")
+        pin = File.join(@sessions.resolve_session_dir(options), "#{thread_id}.harness.json")
         if File.exist?(pin)
           pinned = pinned_harness(pin, options[:subagents])
           raise OptionParser::InvalidArgument, "this thread's skill was pinned at its first turn (#{pinned[:skill] || 'none'})" if
@@ -100,7 +100,7 @@ module Tamoz
 
       # A work thread (one with a pinned harness) resumes on the work route, so its subagents are built again.
       def pinned_routing(options, thread_id)
-        pin = File.join(resolve_session_dir(options), "#{thread_id}.harness.json")
+        pin = File.join(@sessions.resolve_session_dir(options), "#{thread_id}.harness.json")
         File.exist?(pin) ? options.merge(work_routing: true) : options
       end
 
@@ -138,8 +138,20 @@ module Tamoz
         profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           session.verify_skill_binding!(thread: thread_id)
-          drive_resume(session, thread_id:, request_id:, owner_id:, options:, resume_options:)
+          turn_driver(session, thread_id:, owner_id:, options:).resume(request_id:, resume_options:)
         end
+      end
+
+      def parse_resume_options(argv)
+        options = {}
+        OptionParser.new do |value|
+          value.on('--answer ANSWER', 'Non-interactive answer') { |entry| options[:answer] = entry }
+          value.on('--recover', 'Force recovery before resuming') { options[:recover] = true }
+          value.on('--approval-profile NAME', 'Approval policy profile for this session') do |entry|
+            options[:approval_profile] = entry
+          end
+        end.parse!(argv)
+        options
       end
 
       def cmd_continue(options, argv)
@@ -149,14 +161,14 @@ module Tamoz
         profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           session.verify_skill_binding!(thread: thread_id)
-          drive_continue(session, thread_id:, request_id:, owner_id:, options:)
+          turn_driver(session, thread_id:, owner_id:, options:).continue(request_id:)
         end
       end
 
       def cmd_list(options)
         require 'tamoz/sqlite'
 
-        session_dir = resolve_session_dir(options)
+        session_dir = @sessions.resolve_session_dir(options)
         pattern = File.join(session_dir, '*.sqlite3')
         files = Dir.glob(pattern)
         if options[:json]
@@ -223,12 +235,9 @@ module Tamoz
         run_durable(options, thread_id, read_only: false, profile:, request_id:) do |session, request_id, owner_id|
           session.verify_skill_binding!(thread: thread_id)
           request = submit_follow_up(session, task, thread_id, request_id)
-          view = drain_to_terminal(session, thread_id:, owner_id:, options:, tracked_request: request)
-          # The drain already reported the queued state; this re-check only
-          # picks the exit code.
-          return CLI::EXIT_PAUSED if tracked_request_queued?(session, request)
-
-          exit_for_view(view)
+          driver = turn_driver(session, thread_id:, owner_id:, options:)
+          view = driver.drain(tracked_request: request)
+          driver.queued?(request) ? CLI::EXIT_PAUSED : exit_for_view(view)
         end
       end
 
@@ -256,7 +265,7 @@ module Tamoz
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           session.verify_skill_binding!(thread: thread_id)
           submit_redirect(session, task, thread_id, request_id)
-          view = drain_to_terminal(session, thread_id:, owner_id:, options:)
+          view = turn_driver(session, thread_id:, owner_id:, options:).drain
           exit_for_view(view)
         end
       end
@@ -279,7 +288,7 @@ module Tamoz
           view = session.view(thread: thread_id)
           validate_cancellable!(view, force)
           submit_cancel(session, thread_id, request_id)
-          view = drain_to_terminal(session, thread_id:, owner_id:, options:)
+          view = turn_driver(session, thread_id:, owner_id:, options:).drain
           cancel_exit(view)
         end
       end

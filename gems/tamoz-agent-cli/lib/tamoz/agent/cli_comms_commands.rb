@@ -198,7 +198,7 @@ module Tamoz
             codec = directory.enabled_sources.include?('memory') ? Memory::Surface.codec : nil
             adapter = Tamoz::SQLite::Adapter.new(
               path: directory.database_path,
-              limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl),
+              limits: Tamoz::SQLite::Limits.new(lease_ttl: @sessions.lease_ttl),
               **(codec ? { state_codec: codec } : {})
             )
             store = adapter.bind_comms_store

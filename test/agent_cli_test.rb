@@ -1006,29 +1006,29 @@ class AgentCLITest < Minitest::Test
   # would exercise, at a fraction of the fixture cost.
 
   def test_approve_tool_answer_vocabulary
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+    answers = Tamoz::Agent::CLI::InterruptAnswers
 
-    assert cli.send(:map_answer, "approve_tool", "y")
-    assert cli.send(:map_answer, "approve_tool", "yes")
-    assert cli.send(:map_answer, "approve_tool", "a")
-    assert cli.send(:map_answer, "approve_tool", "approve")
-    refute cli.send(:map_answer, "approve_tool", "n")
-    refute cli.send(:map_answer, "approve_tool", "deny")
-    assert_raises(ArgumentError) { cli.send(:map_answer, "approve_tool", "maybe") }
+    assert answers.parse("approve_tool", "y")
+    assert answers.parse("approve_tool", "yes")
+    assert answers.parse("approve_tool", "a")
+    assert answers.parse("approve_tool", "approve")
+    refute answers.parse("approve_tool", "n")
+    refute answers.parse("approve_tool", "deny")
+    assert_raises(ArgumentError) { answers.parse("approve_tool", "maybe") }
   end
 
   def test_resolve_effect_answer_vocabulary
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+    answers = Tamoz::Agent::CLI::InterruptAnswers
 
     %w[fixed approve ok succeeded yes].each do |word|
-      assert_equal :succeeded, cli.send(:map_answer, "resolve_effect", word), word
+      assert_equal :succeeded, answers.parse("resolve_effect", word), word
     end
     %w[skipped deny no abandoned].each do |word|
-      assert_equal :abandoned, cli.send(:map_answer, "resolve_effect", word), word
+      assert_equal :abandoned, answers.parse("resolve_effect", word), word
     end
-    assert_equal :failed, cli.send(:map_answer, "resolve_effect", "failed")
-    assert_equal :unknown, cli.send(:map_answer, "resolve_effect", "?")
-    assert_raises(ArgumentError) { cli.send(:map_answer, "resolve_effect", "maybe") }
+    assert_equal :failed, answers.parse("resolve_effect", "failed")
+    assert_equal :unknown, answers.parse("resolve_effect", "?")
+    assert_raises(ArgumentError) { answers.parse("resolve_effect", "maybe") }
   end
 
   # --- Milestone facts on the CLI ---
