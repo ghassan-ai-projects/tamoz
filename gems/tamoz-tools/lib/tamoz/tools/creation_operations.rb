@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 require 'digest'
-require 'tempfile'
 
 module Tamoz
   module Tools
     # Creates new files through the no-overwrite publication boundary.
     # :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:LongParameterList
     # :reek:TooManyStatements :reek:UncommunicativeVariableName
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     class CreationOperations
       def initialize(toolbox)
         @toolbox = toolbox
@@ -47,31 +45,11 @@ module Tamoz
 
       def atomic_create(target_path, content, mode)
         parent = target_path.dirname
-        temp = nil
-        published = false
-        begin
-          temp = Tempfile.new(['.tamoz-create-', '.tmp'], parent.to_s, binmode: true)
-          temp.write(content.b)
-          temp.flush
-          temp.fsync
-          temp.chmod(mode)
-          temp.fsync
-          temp.close
-          revalidate_parent(parent)
-          File.link(temp.path, target_path.to_s)
-          published = true
-        rescue Errno::EEXIST
-          raise ToolArgumentError, 'file already exists'
-        rescue SystemCallError => e
-          raise ToolError, "atomic create failed: #{e.class}"
-        ensure
-          begin
-            temp&.close!
-          rescue SystemCallError
-            nil
-          end
-          toolbox.__send__(:fsync_directory, parent) if published
-        end
+        Tamoz::Core::AtomicFile.create(target_path, content.b, mode:, before_publish: -> { revalidate_parent(parent) })
+      rescue Errno::EEXIST
+        raise ToolArgumentError, 'file already exists'
+      rescue SystemCallError => e
+        raise ToolError, "atomic create failed: #{e.class}"
       end
 
       def revalidate_parent(parent)
@@ -94,6 +72,5 @@ module Tamoz
         TEXT
       end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
   end
 end

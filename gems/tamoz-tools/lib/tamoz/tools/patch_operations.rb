@@ -2,14 +2,12 @@
 
 require 'digest'
 require 'json'
-require 'tempfile'
 
 module Tamoz
   module Tools
     # Applies prepared patches through the atomic publication boundary.
     # :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:TooManyStatements
     # :reek:UncommunicativeVariableName :reek:UtilityFunction
-    # rubocop:disable Metrics/AbcSize
     class PatchOperations
       def initialize(toolbox)
         @toolbox = toolbox
@@ -66,30 +64,10 @@ module Tamoz
       end
 
       def atomic_replace(path, content)
-        mode = path.stat.mode & 0o777
-        temporary = Tempfile.new(['.tamoz-', '.tmp'], path.dirname.to_s, binmode: true)
-        begin
-          temporary.write(content)
-          temporary.flush
-          temporary.fsync
-          temporary.chmod(mode)
-          temporary.fsync
-          temporary.close
-          File.rename(temporary.path, path.to_s)
-          fsync_directory(path.dirname)
-        ensure
-          temporary.close! unless temporary.closed? && !File.exist?(temporary.path)
-        end
+        Tamoz::Core::AtomicFile.replace(path, content, mode: path.stat.mode & 0o777)
       rescue SystemCallError => e
         raise ToolError, "atomic patch failed: #{e.class}"
       end
-
-      def fsync_directory(directory)
-        File.open(directory.to_s, File::RDONLY, &:fsync)
-      rescue SystemCallError
-        nil
-      end
     end
-    # rubocop:enable Metrics/AbcSize
   end
 end

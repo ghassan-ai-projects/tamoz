@@ -219,12 +219,6 @@ module Tamoz
       end
 
       def validate_create_path!(raw_path) = @path_resolver.validate_create_path!(raw_path)
-
-      def fsync_directory(directory)
-        File.open(directory.to_s, File::RDONLY, &:fsync)
-      rescue SystemCallError
-        nil
-      end
     end
   end
 end
