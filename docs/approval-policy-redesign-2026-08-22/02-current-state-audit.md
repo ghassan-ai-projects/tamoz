@@ -637,7 +637,7 @@ cases (reported: `harness/agent_smoke_corpus.rb:1027-1043`, `harness/agent_run_a
 - `gems/tamoz-evals/suites/agent/smoke/*.case.json` — `07_denied_approval` and siblings.
 - `script/autonomy_scorecard`, `script/live_alms_telegram`, manifest generators —
   read `paused_approvals` status (reported).
-- Docs with structural claims that rot on a move: `documentation/adr/adr-049-telegram-approval.md`,
+- Docs with structural claims that rot on a move: `documentation/adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md`,
   `documentation/design/comms.md`, `documentation/architecture/security-model.md`,
   and `docs/requirements-manifest.json`. A retired draft also mislabelled the relay
   as `Tamoz::Agent::ApprovalRelay`; it is `Tamoz::Stream` (reported).

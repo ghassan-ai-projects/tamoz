@@ -126,7 +126,7 @@ Date: 2026-09-29 · Scope: adr-001–adr-055 · Method: boundary inventory + inv
 
 ## Findings
 
-- **F1 (P2) — ADR-014** (`documentation/adr/adr-014-no-plugin-api-in-v0-1.md:1-28`): Tier F
+- **F1 (P2) — ADR-014** (`documentation/adr/adr-014-extensions-are-first-party-adapter-gems-not-plugins.md:1-28`): Tier F
   decision drawing a deliberately restrictive capability boundary ("closed set" of sources,
   adding one requires a gem release) with no Invariant linkage, no Threat model, no change-bar —
   the file has no numbered sections at all. Quality bar §2 makes §8–10 required for
@@ -135,7 +135,7 @@ Date: 2026-09-29 · Scope: adr-001–adr-055 · Method: boundary inventory + inv
   §-numbered Invariant linkage (point at ADR-030/034 as the live capability authority) and a
   §4-style change-bar ("a new source enters only as a gem release with a catalog entry and
   digest identity").
-- **F2 (P1) — ADR-016** (`documentation/adr/adr-016-external-effects-are-at-least-once-unless-proven-otherwise.md:1-31`):
+- **F2 (P1) — ADR-016** (`documentation/adr/adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md:1-31`):
   the ADR that owns the effect-safety vocabulary the whole product thesis rests on
   ("ambiguous effects stop as `:unknown`") — deterministic effect key, safety class,
   no blind retry — is a 31-line Tier F page with no Invariant linkage section, no threat
@@ -147,7 +147,7 @@ Date: 2026-09-29 · Scope: adr-001–adr-055 · Method: boundary inventory + inv
   (key identity, class fail-closed, unknown-pauses), a threat table for the effect
   target/channel, and a class-demotion change bar.
 - **F3 (P2) — ADR-020 / design-refusals** (`documentation/adr/design-refusals.md:14`,
-  `documentation/adr/adr-020-sensitive-data-policy-is-explicit-and-lossless.md:1-31`):
+  `documentation/adr/adr-020-secrets-are-refused-by-type-or-explicitly-protected-never-scrubbed-by-name.md:1-31`):
   design-refusals.md owns the Marshal ban ("`Marshal.load` on a durable artifact is remote
   code execution") to ADR-020, but ADR-020 never mentions Marshal — the refusal and its
   security rationale live only in the digest, so the owning ADR cannot reconstruct why the
@@ -229,7 +229,7 @@ Date: 2026-09-29 · Scope: adr-001–adr-055 · Method: boundary inventory + inv
   invariant rows mechanically).
 - **F12 (P0) — ADR-049's body contradicts its own 2026-09-24 policy amendment; the §4 bar
   was never invoked on paper**
-  (`documentation/adr/adr-049-telegram-approval.md:3` amendment; `:10` abstract; `:42` INV-D;
+  (`documentation/adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md:3` amendment; `:10` abstract; `:42` INV-D;
   `:55-65` §5; `:80` §6): the Status line records that `base.yaml` now *requires only
   `chat_bound` to approve* — the bound Telegram correspondent can Approve. But the body
   still states, in four places, the deny-only world: the abstract ("a Telegram correspondent

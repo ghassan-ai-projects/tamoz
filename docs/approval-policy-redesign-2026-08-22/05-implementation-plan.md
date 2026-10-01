@@ -728,7 +728,7 @@ relay's other injected ports.
 conventions files name the new gem.
 
 **Files modified:**
-- `documentation/adr/adr-049-telegram-approval.md` — updated where it describes the
+- `documentation/adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md` — updated where it describes the
   constant policy (evidence now comes from the `Decision`, validated at load).
 - `documentation/design/comms.md` — the six-site split is gone; comms section
   describes evidence-from-decision.
@@ -737,7 +737,7 @@ conventions files name the new gem.
 - `README.md` (component map) and `AGENTS.md` — `tamoz-approval` added to the gem
   list; the "approval policy is data in `gems/tamoz-approval/policy/*.yaml`" rule
   stated next to the existing domain-data rule.
-- `documentation/adr/approval-policy-redesign/03-redesign-adr.md` — status flipped to
+- `docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md` — status flipped to
   **implemented** with the final commit reference.
 
 **Final consistency sweep (no earlier step may leave these behind):**

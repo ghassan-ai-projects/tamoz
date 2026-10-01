@@ -1,27 +1,46 @@
 # ADR-013 — Public vocabulary is a budget, never a correctness cap
 
-**Status:** Accepted (revised after review).
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Status:** Accepted 2026-07-30
+**Date:** 2026-07-30
+**Tier:** C
+**Implementation:** Complete
+
+A new user learns about twelve concepts; operational concepts appear only when their feature is
+used. Keeping the surface small never justifies hiding a failure boundary.
 
 ## Context
 
-The reference frameworks grew to dozens of user-facing concepts; Tamoz bets on a small learning surface — but a hard numeric cap could force hiding a genuinely necessary failure boundary.
+The reference frameworks grew to dozens of user-facing concepts. Tamoz bets on a small learning
+surface, but a hard numeric cap would push a real failure mode (a lease, an `:unknown` effect)
+out of sight to stay under the number.
 
 ## Decision
 
-The twelve introductory concepts are the learning surface; operational concepts (leases,
-effect receipts, graph versions, request ids) appear only when their feature is used. A
-concept needs justification, but no numeric cap may erase a necessary failure boundary.
+The introductory surface is about twelve concepts. Operational concepts (leases, effect receipts,
+graph versions, request ids) are public but appear only when their feature is used. A new public
+concept must name the failure it exposes or the capability it adds; no budget may remove a
+concept whose absence would hide a failure.
 
 ## Consequences
 
-The introductory surface stays around twelve concepts, and operational concepts (leases, receipts, graph versions) appear only when their feature is used. **Cost:** this is a discipline requiring per-concept judgment, not an enforceable limit.
+The getting-started path stays short without lying about failure. **Cost:** this is judgment, not
+a test — the public API inventory makes growth visible, but nothing fails when a concept is added.
+
+## Rejected alternatives
+
+| Rejected | Why it lost |
+|---|---|
+| A hard cap on public concepts *(retrospective, 2026-10-01)* | Forces hiding necessary failure states |
+| No budget *(retrospective, 2026-10-01)* | The surface grows until nobody can learn it, as the reference frameworks did |
+
+## Reopen when
+
+The public API inventory grows by more than a few concepts in one release without a stated reason.
 
 ## Verification
 
-Verified against code: 2026-08-29 — The public vocabulary surface is tracked in `documentation/reference/public-api.md` (and `docs/public-api.json`).
+Checked 2026-10-01 (source inspection).
 
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| The public surface is inventoried | `documentation/reference/public-api.md`, `docs/public-api.json` | `test/public_api_test.rb` | Counts the surface; does not judge whether a concept was needed |

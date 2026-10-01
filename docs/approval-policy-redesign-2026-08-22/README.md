@@ -2,7 +2,7 @@
 
 Status: implemented and reviewed; this package is retained as historical design
 and implementation evidence. The canonical decision is
-[`ADR-053`](../adr-053-approval-gem.md).
+[`ADR-053`](../../documentation/adr/adr-053-approval-gem.md).
 
 This folder isolates every *policy* decision in tamoz — "does this action need
 approval, and under what evidence?" — into one dedicated gem, `tamoz-approval`,

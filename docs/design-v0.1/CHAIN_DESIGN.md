@@ -2,6 +2,10 @@
 
 Status: designed, not in the v0.1 build.
 
+> Historical. ADR-004, which made `Tamoz.seq` the canonical composition API, was withdrawn on
+> 2026-10-01: neither `Tamoz.seq` nor `tamoz-chain` was built; composition is the graph plus
+> ordinary Ruby. See [`RETIRED.md`](../../documentation/adr/RETIRED.md).
+
 The reference agent does not require a general chain package. Ordinary Ruby functions cover
 simple pipelines and `tamoz-graph` covers branch, loop, pause, concurrency, and durability.
 This package is promoted only after two shipped consumers demonstrate repeated plumbing

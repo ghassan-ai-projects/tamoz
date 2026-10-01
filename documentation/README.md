@@ -46,8 +46,8 @@ root is the entry point; this folder contains the detailed reference material.
 ## Decisions
 
 - [adr/README.md](adr/README.md): the ADR index — every decision record 001–055
-- [adr/adr-049-telegram-approval.md](adr/adr-049-telegram-approval.md): evidence-gated Telegram approval
-- [adr/approval-policy-redesign/README.md](adr/approval-policy-redesign/README.md): the implemented approval-policy design and evidence package
+- [adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md](adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md): evidence-gated Telegram approval
+- [../docs/approval-policy-redesign-2026-08-22/README.md](../docs/approval-policy-redesign-2026-08-22/README.md): the implemented approval-policy design and evidence package
 
 ## Guides
 

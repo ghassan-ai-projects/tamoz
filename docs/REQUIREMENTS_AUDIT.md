@@ -7,16 +7,16 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 569 | 300 | 15 | **no** |
+| 579 | 305 | 14 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
-| indirect | 4 |
-| missing | 15 |
-| pass | 539 |
+| indirect | 3 |
+| missing | 14 |
+| pass | 551 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -24,11 +24,10 @@ generating run.
 |---|---|---|
 | `ADR-041` — Communication channels are a contract gem plus per-transport adapter gems | missing | Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves. |
 | `ADR-042` — The channel gateway is a separate process in the connector zone | missing | Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice. |
-| `ADR-043` — Telegram v1 is deny-only and reference-bound | missing | Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence. |
 | `ADR-044` — Observability is a contract gem plus per-exporter adapter gems | missing | Observability gem split (OBSERVABILITY_PLAN slices A/I). The packaging and dependency-isolation proof for tamoz-observability/tamoz-otel lands with the gems themselves. |
 | `ADR-045` — The observability gems add no durable table and no second source of truth | missing | No durable telemetry table (OBSERVABILITY_PLAN slices B/E). The migration-count proof and the separately authorized model usage persistence land with slice E. |
 | `ADR-046` — Content capture is off by default, per class, and refused for restricted classes | missing | Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-default and classification-refusal suite lands with the content policy slice. |
-| `ADR-047` — Sampling applies to export only and never to safety-bearing signals | missing | Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-first retention proof lands with the sampling slice. |
+| `ADR-047` — Telemetry is never sampled at record time, and safety-bearing signals have a reserved lane | missing | Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-first retention proof lands with the sampling slice. |
 | `INV-39` — Civil time, misfire, overlap, and backlog semantics are explicit and bounded | missing | Cron/IANA civil time is not implemented (P13 plan §12 deferral). The misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is unavailable, so the clause cannot be claimed as a whole. The owner must either sign the residual or exclude tamoz-scheduler from the v0.1 release surface (P15-I). |
 | `INV-56` — A user channel is identified, bound, and grants nothing | missing | Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence. |
 | `INV-57` — Channel delivery is ordered, bounded, and ambiguity-safe | missing | Channel outbox, offset persistence, and ambiguity handling (COMMS_TELEGRAM_PLAN slices C/G). No test exists before the channel gems are built; the kill matrix in the telegram slices converts this row to direct evidence. |
@@ -43,7 +42,6 @@ generating run.
 | Requirement | Category | Blocking | Status | Direct evidence |
 |---|---|---|---|---|
 | `ADR-001` | adr | yes | pass | `test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice` |
-| `ADR-004` | adr | no | indirect | `test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order` |
 | `ADR-005` | adr | yes | pass | `test/graph_identity_test.rb#test_interrupt_cursor_is_explicit_positional_and_uses_throw` |
 | `ADR-006` | adr | yes | pass | `test/graph_reducer_test.rb#test_append_merge_union_min_and_max_contracts` |
 | `ADR-007` | adr | yes | pass | `test/graph_state_manager_test.rb#test_unknown_unsupported_and_sensitive_updates_fail_before_candidate` |
@@ -73,26 +71,26 @@ generating run.
 | `ADR-032` | adr | yes | pass | `test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule` |
 | `ADR-033` | adr | yes | pass | `test/agent_skills_test.rb#test_compiles_a_portable_skill_into_an_immutable_content_addressed_record` |
 | `ADR-034` | adr | no | deferred-by-contract | `test/agent_skills_test.rb#test_tree_digest_changes_on_body_description_content_and_executable_bit` |
-| `ADR-035` | adr | yes | pass | `test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary` |
 | `ADR-036` | adr | yes | pass | `test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused` |
-| `ADR-037` | adr | yes | pass | `test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts` |
 | `ADR-038` | adr | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
 | `ADR-039` | adr | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `ADR-040` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
 | `ADR-041` | adr | yes | missing | `—` |
 | `ADR-042` | adr | yes | missing | `—` |
-| `ADR-043` | adr | yes | missing | `—` |
 | `ADR-044` | adr | yes | missing | `—` |
 | `ADR-045` | adr | yes | missing | `—` |
 | `ADR-046` | adr | yes | missing | `—` |
 | `ADR-047` | adr | yes | missing | `—` |
 | `ADR-048` | adr | yes | pass | `test/model_client_factory_test.rb#test_provider_descriptor_exposes_the_closed_phase_three_matrix` |
 | `ADR-049` | adr | yes | pass | `test/comms_evidence_gated_approval_test.rb#test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence` |
-| `ADR-051` | adr | yes | pass | `test/dependency_isolation_test.rb#test_graph_loads_no_model_eval_or_adapter_package` |
 | `ADR-052` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
 | `ADR-053` | adr | yes | pass | `test/approval_policy_document_test.rb#test_bundled_base_loads_and_validates` |
 | `ADR-054` | adr | yes | pass | `test/capability_host_test.rb#test_websearch_registers_under_the_websearch_built_in_source` |
 | `ADR-055` | adr | yes | pass | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
+| `ADR-056` | adr | yes | pass | `test/skills_boundary_test.rb#test_no_file_outside_the_gem_names_an_inner_constant` |
+| `ADR-057` | adr | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
+| `ADR-058` | adr | yes | pass | `test/stream_episode_intent_authority_test.rb#test_gate4_a_novel_domain_produces_a_decision_with_zero_new_ruby` |
+| `ADR-059` | adr | yes | pass | `test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -107,7 +105,6 @@ generating run.
 | `API-tamoz-agent-Tamoz::Agent::Result` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Runtime` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::SkillSnapshotUnavailableError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-agent-Tamoz::Agent::Skills` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Step` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::ToolArgumentError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::ToolError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -413,6 +410,37 @@ generating run.
 | `API-tamoz-scheduler-Tamoz::Scheduler::StoreConflictError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::TERMINAL` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.approve_candidate` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.bundled_root` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.candidate_manifest` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.candidate_record` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.canonical` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.compile` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.digest_of` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.disjoint!` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.empty` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.lint` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.manifest_path` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.operator_snapshot` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.read_resource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.read_resource_entry!` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.render_load` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.render_resource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills.scaffold` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::CATALOG_DIGEST_DOMAIN` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::Catalog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::Error` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::LIMITS` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SNAPSHOT_FORMAT_VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SkillCollision` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SkillRecord` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SkillRejection` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SkillResource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SkillSnapshot` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::SkillSource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::Snapshot` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-skills-Tamoz::Skills::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-sqlite-Tamoz::SQLite::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-stream-Tamoz::Stream::ApprovalRelay` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-stream-Tamoz::Stream::ArtifactStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -442,26 +470,6 @@ generating run.
 | `API-tamoz-telegram-Tamoz::Telegram::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-telegram-Tamoz::Telegram::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills.canonical` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills.digest_of` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills.read_resource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills.read_resource_entry!` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills.render_load` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills.render_resource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::CATALOG_DIGEST_DOMAIN` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::Catalog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::Compiler` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::Error` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::LIMITS` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SNAPSHOT_FORMAT_VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SkillCollision` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SkillRecord` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SkillRejection` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SkillResource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SkillSnapshot` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::SkillSource` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-tools-Tamoz::Tools::Skills::Snapshot` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::ToolArgumentError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::ToolError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::ToolPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -493,6 +501,7 @@ generating run.
 | `CLI-resume` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resume_collects_interrupt_answers` |
 | `CLI-schedule` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence` |
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
+| `CLI-skills` | cli_command | yes | pass | `test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections` |
 | `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |
 | `CLI-telegram` | cli_command | yes | pass | `test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel` |
 | `CLI-think` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |

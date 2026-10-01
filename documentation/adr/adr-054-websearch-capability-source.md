@@ -1,99 +1,77 @@
 # ADR-054 — Websearch is the fourth capability source, realized as a reserved MCP server with governed egress
 
 **Status:** Accepted 2026-08-26
-**Date:** 2026-08-29 (recording a shipped decision)
-**Relates to:** ADR-030 (one local capability catalog — **this ADR extends it from three named sources to four**), ADR-029 (MCP native at the edge), ADR-014 (no plugin API; the source set is closed), ADR-046/ADR-047 (egress and content governance).
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Date:** 2026-08-26
+**Tier:** F
+**Implementation:** Complete
+**Amends:** [ADR-030](./adr-030-one-local-capability-catalog-governs-all-sources.md) (adds the fourth source)
+**Relates to:** [ADR-029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md) (the mechanism it reuses), [ADR-014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) (the closed source set)
 
-The capability catalog's closed source set is **four** named sources — local tools, skills,
-MCP, and **websearch** — not the three ADR-030 records. Websearch is not a new mechanism: it
-is a reserved MCP server id with a governed egress policy, which is exactly why it can be a
-first-class source without widening the capability surface.
+Web access is a named, operator-enabled capability source, built as an MCP server under the reserved
+id `websearch` with its own egress policy. It adds no new mechanism to secure; it adds a governed
+instance of one.
 
-Current version: `0.1.0.alpha.1` (pre-release).
+## Context
 
-## 1. Context
+Web search shipped as a first-class capability. It could have been a new kind of source — widening
+what the catalog must reason about — or reuse MCP. But web egress needs governance plain MCP servers
+do not get: destination rules, budgets, and protection against an operator's own server
+impersonating it.
 
-ADR-030 established one local capability catalog governing "local tools, MCP, and skills" —
-three sources, a closed set (ADR-014: adding a source is a release, not a plugin). Since
-then, websearch (P17) shipped as a first-class capability the operator can enable, and
-product.md now describes the registry as "a closed set of **four** built-in sources — local
-tools, skills, MCP servers, websearch." ADR-030 was never updated; the record undercounts the
-sources the code exposes.
+## Decision
 
-The design question websearch raised: is web access a *new* capability mechanism (a fourth
-kind of thing the catalog must understand), or can it reuse an existing one? A new mechanism
-would widen the trust surface the catalog reasons about. But web egress also needs governance
-that ordinary local tools do not — an allow/deny egress boundary, content limits.
+- `sources.websearch` in configuration declares an MCP server with id `websearch`. The id is
+  reserved: an ordinary MCP server using it is refused at build time.
+- Its egress policy (`tamoz-mcp-websearch`) bounds destinations and budgets; the declaration is
+  pinned in the session record, and resuming with a changed egress declaration stops.
+- Its tools are tier `network` in approval policy (asked by default); an operator may declare them
+  read-only for research sub-agents that cannot ask.
+- Like every source, it is sealed at session construction and grants nothing by itself (ADR-030).
 
-## 2. Decision
+## Consequences
 
-**Websearch is the fourth named source in the closed capability set, realized as a reserved
-MCP server whose id is `websearch`, carrying its own governed egress policy.**
+Web access is opt-in, operator-trusted, and egress-bounded, with one mechanism count. **Cost:** a
+reserved id and an egress surface to maintain.
 
-- Mechanically, websearch is an MCP server (ADR-029), not a new source mechanism.
-  `sources.websearch` in configuration is sugar for "an MCP server called `websearch`"; the
-  id `websearch` is **reserved** and cannot be claimed by an ordinary MCP server
-  (`WEBSEARCH_SERVER_ID = "websearch"`; a user MCP server using that id is refused —
-  *"`websearch` is reserved; configure it under `sources.websearch`"*).
-- It is nonetheless a **first-class named source** in the closed four-source set the operator
-  reasons about — enabled/disabled explicitly, governed by the application's trust
-  assignment, and sealed at session construction like every other source.
-- Its network reach is bounded by a dedicated **egress policy** in `tamoz-mcp-websearch`
-  (`egress_policy`, `egress_client`), the precedent later observability export egress rules
-  reuse.
+## Invariants
 
-## 3. Consequences
+- 35 — capability authority is local and intersected.
+- 37 — MCP calls preserve Tamoz authorization, durability, and uncertainty.
 
-- The catalog's mechanism count stays at what ADR-029/ADR-030 established (MCP + local tools +
-  skills); websearch adds a *governed instance*, not a new mechanism to secure.
-- Web access is opt-in, application-trusted, and egress-bounded — it cannot become an
-  unbounded network primitive the model reaches for freely.
-- ADR-030's "three sources" is now stale and must read "four"; this ADR is that revision.
-- Reserving the `websearch` id means an operator cannot accidentally (or maliciously) shadow
-  the governed websearch with an ordinary MCP server of the same name.
-- Cost: one reserved id and a dedicated egress-policy surface to maintain. Cheap relative to a
-  new source mechanism.
+## Threat model
 
-## 4. Invariant linkage
+**Asset:** network reach and the context that could leave through it. **Adversary:** injected
+content steering the agent, or a server impersonating websearch.
 
-- **ADR-030 intersection rule** — effective access is the intersection of application, agent,
-  accepted-plan, parent/schedule, and source limits; websearch is subject to it like any
-  source.
-- **ADR-014 / closed set** — adding or changing a source is a release of the owning gem, not a
-  plugin; the four-source set is closed.
-- **ADR-046/047** — the egress policy governs what leaves the process; websearch egress is the
-  precedent for exporter egress.
-
-## 5. Threat model
-
-**Asset:** the agent's ability to reach the network and to exfiltrate context through a query.
-
-| Threat | Vector | Mitigation |
-|---|---|---|
-| An ordinary MCP server impersonates websearch | Register a server with id `websearch` | The id is reserved; such a server is refused at build time |
-| Unbounded network reach | Model treats websearch as a free network tool | Dedicated egress policy bounds destinations and content; source is application-trusted, opt-in |
-| Context exfiltration via query text | Sensitive context placed in a search query | Governed under the same content/egress rules; websearch is a named, auditable source, not an ambient capability |
-
-## 6. Rejected alternatives
-
-| Rejected | Why |
+| Threat | Mitigation |
 |---|---|
-| Websearch as a brand-new source mechanism | Widens the trust surface the catalog must reason about; reusing MCP keeps the mechanism count fixed |
-| An ordinary MCP server named "websearch" with no reservation | An operator's server could shadow the governed one; the reserved id prevents silent substitution |
-| A raw HTTP tool exposed to the model | No egress boundary, no application trust assignment; violates ADR-030's "the application assigns authority" |
-| Leave ADR-030 saying "three sources" | The record would keep undercounting the shipped capability surface (A4 reality-consistency failure) |
+| An ordinary MCP server shadows websearch | Reserved id refused at build |
+| Unbounded network reach | Egress policy bounds destinations and budgets; tier `network` asks by default |
+| Egress rules change under a running session | Declaration pinned; changed egress on resume stops |
+| Context exfiltration in query text | **Not mitigated by content rules:** query text reaches the search provider as written |
 
-## 7. Verification
+**Residual risk:** whatever the model puts in a query reaches the provider, and when the operator
+declares websearch read-only, nobody is asked first.
 
-Verified against code: 2026-08-29 — `gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch.rb`
-(module `Tamoz::Mcp::Websearch`, with `egress_policy`/`egress_client`);
-`gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb` reserves
-`WEBSEARCH_SERVER_ID = "websearch"` and documents "one of the four closed-world sources."
-product.md already states the four-source set.
+## Rejected alternatives
 
-## Next reads
+| Rejected | Why it lost |
+|---|---|
+| A new source mechanism | Widens the trust surface the catalog must reason about |
+| An unreserved MCP server named websearch | An operator's server could silently replace the governed one |
+| A raw HTTP tool | No egress boundary, no application trust assignment |
 
-- [`README.md`](./README.md) — the ADR index
-- [`../design/mcp.md`](../design/mcp.md) — the MCP host/source design
-- [`../overview/product.md`](../overview/product.md) — the four-source capability registry
+## Reopen when
+
+Query-content exfiltration is observed, or a second web capability (for example, a browser) needs
+the same governance.
+
+## Verification
+
+Checked 2026-10-01 (source inspection).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| The id `websearch` is reserved | `gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb` | `test/agent_worker_mcp_test.rb` — `test_the_websearch_id_cannot_be_claimed_by_a_generic_server` | — |
+| Egress is pinned; changed egress on resume stops | `gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch.rb` | `test/websearch_egress_test.rb` — `test_session_record_pins_the_canonical_egress_declaration`, `test_resume_with_changed_egress_stops_typed` | — |
+| Websearch loads only its declared closure | packaging | `test/dependency_isolation_test.rb` — `test_websearch_loads_only_its_declared_tamoz_closure` | — |

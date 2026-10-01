@@ -1,59 +1,84 @@
 # frozen_string_literal: true
 
-# Executable check of every ADR's `## Verification` evidence. For each backticked citation:
-#   - a repo path (gems/…, documentation/…, docs/…, script/…, .github/…) must exist
-#   - a `tamoz-*` gem name must have a gems/<name> directory
-# unless the surrounding text asserts ABSENCE (absent/removed/deferred/retired/gone/zero),
-# in which case the opposite is checked. Symbols, bare filenames, and globs are skipped.
-# This turns "Verified against code" from prose into an alarm that fires when the code moves.
+# Checks every ADR's Verification evidence still exists: each backticked repo path and `tamoz-*` gem,
+# and each backticked `test_*` name, which must be defined in a test file cited on the same row.
+# Text near a citation that asserts absence ("does not exist", "was removed") flips the path check.
 #
-#   ruby script/adr_verify.rb        # exit 0 if every citation holds, else 1
-#
-# Wired as `rake adr:verify`.
+#   ruby script/adr_verify.rb [dir]    # exit 0 when every citation holds, else 1
 
-ROOT = File.expand_path("..", __dir__)
-ADR_DIR = File.join(ROOT, "documentation", "adr")
-# Strong, unambiguous absence phrases only — plain words like "never"/"deferred"/"retired"
-# appear in normal present-tense prose (e.g. "never actuates", "the retired ADR-012").
-ABSENCE = /\babsent\b|does not exist|returns? zero|zero matches|no longer exists|was removed|correctly deferred/i
-PATH_RE = %r{\A(?:gems|documentation|docs|script|\.github)/[\w./-]+\z}
-GEM_RE  = /\Atamoz-[a-z0-9]+(?:-[a-z0-9]+)*\z/
+# Resolves each Verification citation against the repository.
+module AdrVerify
+  ROOT = File.expand_path('..', __dir__)
+  DEFAULT_DIR = File.join(ROOT, 'documentation', 'adr')
+  ABSENCE = /\babsent\b|does not exist|returns? zero|zero matches|no longer exists|was removed/i
+  PATH = %r{\A(?:gems|documentation|docs|script|test|\.github)/[\w./-]+\z}
+  GEM = /\Atamoz-[a-z0-9]+(?:-[a-z0-9]+)*\z/
+  TEST_NAME = /\Atest_\w+\z/
 
-problems = []
-checked = 0
+  module_function
 
-Dir[File.join(ADR_DIR, "adr-*.md")].sort.each do |path|
-  text = File.read(path, encoding: Encoding::UTF_8)
-  base = File.basename(path)
-  ver = text[/^\#\#\s+(?:\d+\.\s+)?Verification\s*\n+(.+?)(?:\n\#\#\s|\z)/m, 1]
-  next unless ver
-
-  ver.to_enum(:scan, /`([^`]+)`/).each do
-    tok = Regexp.last_match(1).strip
-    next if tok.include?("*")
-    at = ver.index("`#{tok}`") || 0
-    absent_ctx = ver[[0, at - 60].max...(at + tok.length + 60)] =~ ABSENCE
-
-    target =
-      if tok =~ PATH_RE then File.join(ROOT, tok)
-      elsif tok =~ GEM_RE then File.join(ROOT, "gems", tok)
-      else next
-      end
-
-    checked += 1
-    exists = File.exist?(target)
-    if absent_ctx && exists
-      problems << "#{base}: Verification says `#{tok}` is absent, but it exists"
-    elsif !absent_ctx && !exists
-      problems << "#{base}: Verification cites `#{tok}`, which does not exist"
+  def run(dir = DEFAULT_DIR)
+    sections(dir).flat_map do |base, section|
+      section.each_line.flat_map { |line| check_line(base, line) }
     end
+  end
+
+  def citations(dir = DEFAULT_DIR)
+    sections(dir).sum do |_, section|
+      section.scan(/`([^`]+)`/).flatten.count { |token| target(token) || TEST_NAME.match?(token) }
+    end
+  end
+
+  def sections(dir)
+    Dir[File.join(dir, 'adr-*.md')].filter_map do |path|
+      section = File.read(path, encoding: Encoding::UTF_8)[/^##\s+Verification\s*\n(.+?)(?=^##\s|\z)/m, 1]
+      [File.basename(path), section] if section
+    end
+  end
+
+  def check_line(base, line)
+    tokens = line.scan(/`([^`]+)`/).flatten.map(&:strip)
+    test_files = tokens.select { |token| token.start_with?('test/') && token.end_with?('.rb') }
+    cell_tokens(line).filter_map { |cell, token| path_problem(base, cell, token) } +
+      tokens.grep(TEST_NAME).filter_map { |name| test_problem(base, name, test_files) }
+  end
+
+  def cell_tokens(line)
+    line.split('|').flat_map { |cell| cell.scan(/`([^`]+)`/).flatten.map { |token| [cell, token.strip] } }
+  end
+
+  def target(token)
+    return File.join(ROOT, token) if PATH.match?(token)
+
+    File.join(ROOT, 'gems', token) if GEM.match?(token)
+  end
+
+  # Absence wording exempts only the citations in its own table cell.
+  def path_problem(base, cell, token)
+    path = target(token)
+    return unless path
+
+    absent = cell.match?(ABSENCE)
+    return "#{base}: Verification says `#{token}` is absent, but it exists" if absent && File.exist?(path)
+
+    "#{base}: Verification cites `#{token}`, which does not exist" unless absent || File.exist?(path)
+  end
+
+  def test_problem(base, name, test_files)
+    return "#{base}: `#{name}` is cited with no test file on the same row" if test_files.empty?
+
+    defined = test_files.any? do |file|
+      path = File.join(ROOT, file)
+      File.exist?(path) && File.read(path, encoding: Encoding::UTF_8).match?(/^\s*def #{name}\b/)
+    end
+    "#{base}: `#{name}` is not defined in #{test_files.join(', ')}" unless defined
   end
 end
 
-if problems.empty?
-  puts "adr:verify passed — #{checked} evidence citations all hold"
-else
-  warn "ADR verification FAILED (#{problems.size}):"
-  problems.each { |p| warn "  - #{p}" }
-  exit 1
+if $PROGRAM_NAME == __FILE__
+  dir = ARGV.first || AdrVerify::DEFAULT_DIR
+  problems = AdrVerify.run(dir)
+  abort "ADR verification FAILED (#{problems.size}):\n#{problems.map { |p| "  - #{p}" }.join("\n")}" if problems.any?
+
+  puts "adr:verify passed — #{AdrVerify.citations(dir)} evidence citations all hold"
 end

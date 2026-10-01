@@ -192,7 +192,7 @@ already answered or expired says so and records nothing.
 
 An approval records a decision; the worker resumes the same occurrence on its
 next pass. Deny with `--deny`. The evidence model is in
-[`../adr/adr-049-telegram-approval.md`](../adr/adr-049-telegram-approval.md).
+[`../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md`](../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md).
 
 ## Migrations
 

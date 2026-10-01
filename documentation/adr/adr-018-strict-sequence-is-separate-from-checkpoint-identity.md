@@ -1,30 +1,44 @@
 # ADR-018 — Strict sequence is separate from checkpoint identity
 
-**Status:** Accepted.
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Status:** Accepted 2026-07-30
+**Date:** 2026-07-30
+**Tier:** C
+**Implementation:** Complete
+
+Checkpoints are ordered by a backend-assigned integer sequence per `(thread, ns)`; their opaque ids
+(UUIDv7, ULID) are never used for order.
 
 ## Context
 
-Opaque ids (UUIDv7/ULID) are convenient, but their lexical or timestamp order is not a safe append order under concurrency or clock skew.
+Time-ordered ids are convenient, but their order depends on clocks, and clocks skew and jump. Under
+concurrency, two ids minted on different hosts or after a clock step can sort the wrong way.
 
 ## Decision
 
-Opaque ids may be UUIDv7/ULID, but a backend-assigned integer sequence orders checkpoints
-within `(thread_id, ns)`. Correctness never depends on wall-clock or lexical UUID ordering.
+The store assigns each appended checkpoint a strictly increasing integer within its `(thread, ns)`
+(gaps allowed). All ordering, "latest", and base checks use that sequence. Correctness never
+depends on wall-clock time or lexical id order.
 
 ## Consequences
 
-Checkpoint ordering is a backend-assigned integer sequence per `(thread, ns)`, so correctness never depends on wall-clock or UUID ordering. **Cost:** the backend must assign and store that sequence — a small extra contract.
+History order is exactly append order. **Cost:** the backend must assign and store the sequence.
 
 ## Rejected alternatives
 
-- UUID lexical order as sequence — not a concurrency- or clock-safe append order.
+| Rejected | Why it lost |
+|---|---|
+| UUIDv7/ULID lexical order as the sequence | Not safe under clock skew or across hosts |
+| Timestamps *(retrospective, 2026-10-01)* | Same problem, plus collisions at clock resolution |
+
+## Reopen when
+
+Never expected; only if a backend cannot assign a per-namespace sequence atomically.
 
 ## Verification
 
-Verified against code: 2026-08-29 — Checkpoint sequencing is owned by `gems/tamoz-sqlite`; ordering is covered by the persistence conformance suite.
+Checked 2026-10-01 (source inspection).
 
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| Strict sequence; stale base refused | checkpointers (`gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_appender.rb`) | `test/graph_identity_test.rb` — `test_memory_checkpointer_assigns_strict_sequence_and_rejects_stale_base` | The in-memory checkpointer is tested here; SQLite through `test/sqlite_checkpoint_test.rb` |
+| A fork appends a new sequence | same | `test/graph_identity_test.rb` — `test_fork_uses_historical_parent_but_appends_new_sequence` | — |

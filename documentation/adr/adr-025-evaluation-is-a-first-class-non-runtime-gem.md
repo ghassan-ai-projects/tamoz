@@ -1,37 +1,70 @@
 # ADR-025 — Evaluation is a first-class non-runtime gem
 
-**Status:** Accepted 2026-07-30.
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** F
+**Implementation:** Complete
+
+Evaluation lives in its own gems, outside the agent's dependency graph: `tamoz-evals` owns
+artifacts, schemas, and the verifier; `tamoz-evals-runner` owns harnesses and benchmarks. No runtime
+gem depends on either.
 
 ## Context
 
-Evaluation embedded in the runtime cannot observe behavior without changing it, and scattered test files cannot reproduce a release decision or protect a holdout from a self-improving agent.
+An evaluator inside the runtime can be changed by the thing it judges, and evaluation scattered
+across test files cannot own versioned corpora, baselines, holdouts, or release evidence. A
+self-improving agent (ADR-023) makes this a safety question: the judge must be out of reach.
 
 ## Decision
 
-`tamoz-evals` owns executable invariant suites, behavioral cases, canonical artifacts, paired
-baseline comparison, protected-holdout policy, and release gates. It can exercise every public
-boundary, but **no runtime gem depends on it**. Safety/correctness are hard gates, not weighted
-scores; model judges are fallible evidence after deterministic scorers; every evaluator change
-starts a new lineage.
+- `tamoz-evals` owns canonical artifacts, case/evidence/result schemas, digests, and the verifier.
+- `tamoz-evals-runner` owns execution harnesses, scorecards, treatments, and benchmarks, and runs
+  only from an explicit external input manifest.
+- No runtime gem depends on either. Safety and correctness are hard gates, never weighted into a
+  score. Model judges are fallible evidence that runs after deterministic scorers. Every evaluator
+  change starts a new lineage.
 
 ## Consequences
 
-`tamoz-evals` owns corpora, baselines, holdouts, and gates and can exercise every public boundary, yet no runtime gem depends on it. **Cost:** an extra gem, and the standing discipline of keeping it out of the production dependency graph.
+The subject cannot reach its judge, and a release decision is reproducible from artifacts.
+**Cost:** two more gems, and the standing discipline of keeping them out of the runtime graph.
+
+## Invariants
+
+- 28 — self-improvement is evaluated and reversible (needs an evaluator outside the subject).
+
+## Threat model
+
+**Asset:** the integrity of evaluation results. **Adversary:** a self-improving agent or a careless
+change that lets the runtime influence its own grade.
+
+| Threat | Mitigation |
+|---|---|
+| The runtime loads or edits the evaluator | No runtime gem depends on the evals gems |
+| A weighted score hides a safety failure | Safety is a hard gate, not a weight |
+| A judge model drifts silently | Evaluator changes start a new lineage |
+
+**Residual risk:** someone with repository write access can change both subject and evaluator in
+one commit; review, not architecture, catches that.
 
 ## Rejected alternatives
 
-- evaluation as scattered test files — cannot own versioned corpora, baselines, judge lineage, or release evidence, or stop a self-improving agent redefining success.
+| Rejected | Why it lost |
+|---|---|
+| Evaluation as scattered test files | Cannot own corpora, baselines, judge lineage, or release evidence |
+| One evals gem with harness and verifier together *(retrospective, 2026-10-01)* | The verifier must load without harness dependencies; the split keeps it minimal |
+
+## Reopen when
+
+A runtime feature needs evaluation results at run time (for example, live canary gating), which
+would put an evaluator in the runtime's path.
 
 ## Verification
 
-Verified against code: 2026-08-29 — `tamoz-evals` present; no runtime gem depends on it. The
-`gems/tamoz-evals-runner` gem is a *packaging* split (it ships the tamoz-eval-runner executable
-— the isolated harness/benchmark/treatment runner this ADR calls the "isolated evaluation
-worker"), not a second decision (resolves audit O3).
+Checked 2026-10-01 (source inspection).
 
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| Only the runner depends on `tamoz-evals` | gemspecs | `test/packaging_test.rb`; source inspection of `gems/*/*.gemspec` | — |
+| The evals gem loads only the verifier boundary | `tamoz-evals` | `test/dependency_isolation_test.rb` — `test_evals_loads_the_verifier_boundary_only` | — |
+| The verifier enforces the artifact contract | `tamoz-evals` | `test/evals_verifier_test.rb` | "Safety is never weighted" and "every evaluator change starts a lineage" are design rules with no mechanical check |

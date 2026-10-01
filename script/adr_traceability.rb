@@ -24,10 +24,12 @@ Dir[File.join(ADR_DIR, "adr-*.md")].sort.each do |path|
   num = File.basename(path)[/^adr-(\d{3})-/, 1]
   title = text[/^\#\s+ADR-\d{3}\s+—\s+(.+?)(?:\s+\(RETIRED\))?$/, 1].to_s.strip
   tier = text[/^\*\*Tier:\*\*\s*([A-Z])/, 1] || "—"
-  state = text =~ /^\*\*Status:\*\*\s*Retired/i ? "retired" : (text =~ /^\*\*Status:\*\*.*Proposed/ ? "proposed" : "accepted")
+  state = text =~ /^\*\*Status:\*\*\s*Retired/i ? "retired" : (text =~ /^\*\*Status:\*\*\s*Proposed/ ? "proposed" : "accepted")
 
   gems = text.scan(/\btamoz-[a-z0-9]+(?:-[a-z0-9]+)*/).uniq.sort
-  invs = text.scan(/(?:invariant|clause)\s+(\d+)/i).flatten.map(&:to_i).uniq.sort
+  listed = text[/^##\s+Invariants\s*\n(.+?)(?=^##\s|\z)/m, 1].to_s.scan(/^-\s+([\d,\s]+)\s+—/).flatten
+  invs = (text.scan(/(?:invariant|clause)\s+(\d+)/i).flatten + listed.flat_map { |l| l.scan(/\d+/) })
+         .map(&:to_i).uniq.sort
   n = num.to_i
   test_re = /adr[-_ ]?0*#{n}\b/i
   tests = test_index.select { |(_, body)| body =~ test_re }.map(&:first).sort

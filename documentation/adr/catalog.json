@@ -1,1445 +1,1547 @@
 {
   "generated_by": "script/adr_catalog.rb",
-  "count": 56,
-  "next_number": 57,
+  "count": 59,
+  "next_number": 60,
   "states": {
-    "accepted": 52,
-    "retired": 3,
-    "proposed": 1
+    "accepted": 50,
+    "proposed": 1,
+    "retired": 8
   },
   "adrs": [
     {
       "num": "001",
-      "id": 1,
-      "title": "ADR-001 — The framework is Tamoz; the reference application is Tamoz Agent",
-      "status": "Accepted 2026-07-30.",
+      "title": "The framework is Tamoz; the reference application is Tamoz Agent",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "C",
+      "implementation": "Complete",
       "file": "adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md",
-      "relates_to": [],
+      "relates_to": [
+        "059"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "002",
-      "id": 2,
-      "title": "ADR-002 — Four v0.1 runtime gems",
-      "status": "Retired — superseded by [ADR-052](./adr-052-agent-gem-decomposition.md).",
+      "title": "Four v0.1 runtime gems",
+      "status": "Retired 2026-08-26 — superseded by [ADR-052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
+      "implementation": null,
       "file": "adr-002-four-v0-1-runtime-gems.md",
       "relates_to": [],
+      "supersedes": [],
       "superseded_by": [
         "052"
       ],
+      "amends": [],
       "amended_by": [],
-      "verified": false,
-      "sections": [],
-      "supersedes": [],
-      "amends": []
+      "sections": []
     },
     {
       "num": "003",
-      "id": 3,
-      "title": "ADR-003 — Reuse RubyLLM public values; durable codec",
-      "status": "Retired — superseded by [ADR-048](./adr-048-one-digest-bound-openai-compatible-model-transport.md) (transport) and [ADR-051](./adr-051-rubyllm-removed.md) (RubyLLM removal).",
+      "title": "Reuse RubyLLM public values; durable codec",
+      "status": "Retired 2026-08-26 — superseded by [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
+      "implementation": null,
       "file": "adr-003-reuse-rubyllm-public-values.md",
       "relates_to": [],
-      "superseded_by": [
-        "048",
-        "051"
-      ],
-      "amended_by": [],
-      "verified": false,
-      "sections": [],
       "supersedes": [],
-      "amends": []
+      "superseded_by": [
+        "048"
+      ],
+      "amends": [],
+      "amended_by": [],
+      "sections": []
     },
     {
       "num": "004",
-      "id": 4,
-      "title": "ADR-004 — Explicit `Tamoz.seq`; no native `Proc#>>`",
-      "status": "Accepted (revised after an executable counterexample).",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-004-explicit-tamoz-seq-no-native-proc.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "005",
-      "id": 5,
-      "title": "ADR-005 — Interrupt by `throw`, not by exception",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-005-interrupt-by-throw-not-by-exception.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "006",
-      "id": 6,
-      "title": "ADR-006 — Plain Hash state with an explicit reducer registry",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-006-plain-hash-state-with-an-explicit-reducer-registry.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "007",
-      "id": 7,
-      "title": "ADR-007 — Frozen state is handed to nodes",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-007-frozen-state-is-handed-to-nodes.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "008",
-      "id": 8,
-      "title": "ADR-008 — `:threads` is the default pool; `:inline` in tests",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-008-threads-is-the-default-pool-inline-in-tests.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "009",
-      "id": 9,
-      "title": "ADR-009 — Prompt-cache stability is invariant 16",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-009-prompt-cache-stability-is-invariant-16.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "010",
-      "id": 10,
-      "title": "ADR-010 — Ruby 3.3 floor; 3.4 and 4.0 primary targets",
-      "status": "Accepted (revised after support-status review).",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "011",
-      "id": 11,
-      "title": "ADR-011 — SQLite is Tamoz Agent's default persistence",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-011-sqlite-is-tamoz-agent-s-default-persistence.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "012",
-      "id": 12,
-      "title": "ADR-012 — MCP is a deferred integration strategy",
-      "status": "Retired — superseded by [ADR-029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md).",
+      "title": "Explicit `Tamoz.seq`; no native `Proc#>>`",
+      "status": "Retired 2026-10-01 — withdrawn",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
+      "implementation": null,
+      "file": "adr-004-explicit-tamoz-seq-no-native-proc.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": []
+    },
+    {
+      "num": "005",
+      "title": "Interrupt by `throw`, not by exception",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-005-interrupt-by-throw-not-by-exception.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "006",
+      "title": "Plain Hash state with an explicit reducer registry",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-006-plain-hash-state-with-an-explicit-reducer-registry.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "007",
+      "title": "Frozen state is handed to nodes",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-007-frozen-state-is-handed-to-nodes.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "008",
+      "title": "`:threads` is the default pool; `:inline` in tests",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-008-threads-is-the-default-pool-inline-in-tests.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "009",
+      "title": "The model request prefix is byte-stable within a cache epoch",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-009-the-model-request-prefix-is-byte-stable-within-a-cache-epoch.md",
+      "relates_to": [
+        "033"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "010",
+      "title": "Ruby 3.3 floor; 3.4 and 4.0 primary targets",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Partial — CI runs only the pinned 3.3.11; 3.4 and 4.0 are untested targets",
+      "file": "adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "011",
+      "title": "SQLite is Tamoz Agent's default persistence",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-011-sqlite-is-tamoz-agent-s-default-persistence.md",
+      "relates_to": [
+        "015",
+        "017"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "012",
+      "title": "MCP is a deferred integration strategy",
+      "status": "Retired 2026-07-30 — superseded by [ADR-029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md)",
+      "state": "retired",
+      "date": "2026-07-30",
+      "tier": null,
+      "implementation": null,
       "file": "adr-012-mcp-deferred-integration.md",
       "relates_to": [],
+      "supersedes": [],
       "superseded_by": [
         "029"
       ],
+      "amends": [],
       "amended_by": [],
-      "verified": false,
-      "sections": [],
-      "supersedes": [],
-      "amends": []
+      "sections": []
     },
     {
       "num": "013",
-      "id": 13,
-      "title": "ADR-013 — Public vocabulary is a budget, never a correctness cap",
-      "status": "Accepted (revised after review).",
+      "title": "Public vocabulary is a budget, never a correctness cap",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
-      "date": null,
+      "date": "2026-07-30",
       "tier": "C",
+      "implementation": "Complete",
       "file": "adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md",
       "relates_to": [],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "014",
-      "id": 14,
-      "title": "ADR-014 — No plugin API in v0.1",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-014-no-plugin-api-in-v0-1.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "015",
-      "id": 15,
-      "title": "ADR-015 — Durable means synchronous barrier commit",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-015-durable-means-synchronous-barrier-commit.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "016",
-      "id": 16,
-      "title": "ADR-016 — External effects are at-least-once unless proven otherwise",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-016-external-effects-are-at-least-once-unless-proven-otherwise.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "017",
-      "id": 17,
-      "title": "ADR-017 — One fenced writer per thread namespace",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-017-one-fenced-writer-per-thread-namespace.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "018",
-      "id": 18,
-      "title": "ADR-018 — Strict sequence is separate from checkpoint identity",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "C",
-      "file": "adr-018-strict-sequence-is-separate-from-checkpoint-identity.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "019",
-      "id": 19,
-      "title": "ADR-019 — Resume is graph-version checked",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-019-resume-is-graph-version-checked.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "020",
-      "id": 20,
-      "title": "ADR-020 — Sensitive-data policy is explicit and lossless",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-020-sensitive-data-policy-is-explicit-and-lossless.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "021",
-      "id": 21,
-      "title": "ADR-021 — Resume preserves execution identity; fork changes it",
-      "status": "Accepted.",
-      "state": "accepted",
-      "date": null,
-      "tier": "F",
-      "file": "adr-021-resume-preserves-execution-identity-fork-changes.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "022",
-      "id": 22,
-      "title": "ADR-022 — Every task action requires a reviewed, digest-bound plan",
+      "title": "Extensions are first-party adapter gems, not plugins",
       "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-014-extensions-are-first-party-adapter-gems-not-plugins.md",
+      "relates_to": [
+        "030",
+        "041",
+        "044"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "015",
+      "title": "Durable means synchronous barrier commit",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-015-durable-means-synchronous-barrier-commit.md",
+      "relates_to": [
+        "011",
+        "017"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "016",
+      "title": "Every external effect is journaled, and ambiguity stops as `:unknown`",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md",
+      "relates_to": [
+        "015",
+        "021"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "017",
+      "title": "One fenced writer per thread namespace",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-017-one-fenced-writer-per-thread-namespace.md",
+      "relates_to": [
+        "011"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "018",
+      "title": "Strict sequence is separate from checkpoint identity",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "C",
+      "implementation": "Complete",
+      "file": "adr-018-strict-sequence-is-separate-from-checkpoint-identity.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "019",
+      "title": "Resume is graph-version checked",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-019-resume-is-graph-version-checked.md",
+      "relates_to": [
+        "059"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "020",
+      "title": "Secrets are refused by type or explicitly protected, never scrubbed by name",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Partial — the protection seam exists, but Tamoz ships no encryption codec; sensitive values fail closed unless the operator supplies one",
+      "file": "adr-020-secrets-are-refused-by-type-or-explicitly-protected-never-scrubbed-by-name.md",
+      "relates_to": [
+        "046"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "021",
+      "title": "Resume preserves execution identity; fork changes it",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-021-resume-preserves-execution-identity-fork-changes.md",
+      "relates_to": [
+        "016"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "022",
+      "title": "Every task action requires a reviewed, digest-bound plan",
+      "status": "Accepted 2026-07-30",
+      "state": "accepted",
+      "date": "2026-07-30",
+      "tier": "F",
+      "implementation": "Partial — the durable deliberation path gates every action; the coding work loop gates only file mutations and checks, and lets reads, web research, and read-only delegation run before a plan is accepted",
       "file": "adr-022-reviewed-plan-gate.md",
       "relates_to": [
         "023",
         "028",
-        "030",
-        "049",
         "053"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Invariant linkage",
+        "Invariants",
         "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "023",
-      "id": 23,
-      "title": "ADR-023 — Self-improvement is candidate promotion, never live self-mutation",
+      "title": "Self-improvement is candidate promotion, never live self-mutation",
       "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Partial — heuristic candidates get the full holdout pipeline; profile, skill, and config candidates get a human-approved, digest-bound lifecycle without a holdout; code candidates have no path",
       "file": "adr-023-self-improvement-promotion.md",
       "relates_to": [
-        "022",
         "025",
-        "026",
-        "027",
         "028",
         "034"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Invariant linkage",
+        "Invariants",
         "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "024",
-      "id": 24,
-      "title": "ADR-024 — \"Smart\" means evidence-based, proportional, and verified",
-      "status": "Accepted 2026-07-30.",
+      "title": "\"Smart\" means evidence-based, proportional, and verified",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Partial — the benchmark protocol and its controls exist; no released real-provider result yet meets it",
       "file": "adr-024-smart-means-evidence-based-proportional-and-verified.md",
-      "relates_to": [],
+      "relates_to": [
+        "025",
+        "058"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "025",
-      "id": 25,
-      "title": "ADR-025 — Evaluation is a first-class non-runtime gem",
-      "status": "Accepted 2026-07-30.",
+      "title": "Evaluation is a first-class non-runtime gem",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-025-evaluation-is-a-first-class-non-runtime-gem.md",
       "relates_to": [],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "026",
-      "id": 26,
-      "title": "ADR-026 — Three durable memory layers: Experience, Knowledge, Wisdom",
-      "status": "Accepted 2026-07-30.",
+      "title": "Three durable memory layers: Experience, Knowledge, Wisdom",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-026-three-durable-memory-layers-experience-knowledge-wisdom.md",
-      "relates_to": [],
+      "relates_to": [
+        "023",
+        "027"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "027",
-      "id": 27,
-      "title": "ADR-027 — Memory retrieval is authorization; consolidation preserves disagreement",
-      "status": "Accepted 2026-07-30.",
+      "title": "Memory retrieval is authorization; consolidation preserves disagreement",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-027-memory-retrieval-is-authorization-consolidation-preserves-disagreement.md",
-      "relates_to": [],
+      "relates_to": [
+        "026"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "028",
-      "id": 28,
-      "title": "ADR-028 — Self-healing is bounded remediation, not catch-and-retry",
-      "status": "Accepted 2026-07-30.",
+      "title": "Self-healing is bounded remediation, not catch-and-retry",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md",
-      "relates_to": [],
+      "relates_to": [
+        "016",
+        "022"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "029",
-      "id": 29,
-      "title": "ADR-029 — MCP is native at the edge and uses the official Ruby SDK",
-      "status": "Accepted 2026-07-30; **shipped** (`tamoz-mcp`).",
+      "title": "MCP is native at the edge and uses the official Ruby SDK",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md",
-      "relates_to": [],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
+      "relates_to": [
+        "030"
       ],
       "supersedes": [
         "012"
       ],
-      "amends": []
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "030",
-      "id": 30,
-      "title": "ADR-030 — One local capability catalog governs all sources",
-      "status": "Accepted 2026-07-30; **extended by [ADR-054](./adr-054-websearch-capability-source.md).**",
+      "title": "One local capability catalog governs all sources",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-030-one-local-capability-catalog-governs-all-sources.md",
       "relates_to": [
-        "054"
+        "014",
+        "053"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [
         "054"
       ],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "031",
-      "id": 31,
-      "title": "ADR-031 — Scheduling materializes occurrences; it does not run agents",
-      "status": "Accepted 2026-07-30; **shipped** (`tamoz-scheduler`).",
+      "title": "Scheduling materializes occurrences; it does not run agents",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Complete",
       "file": "adr-031-scheduling-materializes-occurrences-it-does-not-run-agents.md",
-      "relates_to": [],
+      "relates_to": [
+        "022",
+        "032"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "032",
-      "id": 32,
-      "title": "ADR-032 — Scheduled time and delayed authority are explicit",
-      "status": "Accepted 2026-07-30.",
+      "title": "Scheduled time and delayed authority are explicit",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Partial — `at` and `interval` schedules, misfire, overlap, and backlog policies are built; cron with an IANA timezone and DST handling is not",
       "file": "adr-032-scheduled-time-and-delayed-authority-are-explicit.md",
-      "relates_to": [],
+      "relates_to": [
+        "030",
+        "031"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "033",
-      "id": 33,
-      "title": "ADR-033 — Skills use the open Agent Skills format and stay an agent recipe",
-      "status": "Accepted 2026-07-30.",
+      "title": "Skills use the open Agent Skills format and stay an agent recipe",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-033-skills-use-the-open-agent-skills-format-and-stay-an-agent-recipe.md",
-      "relates_to": [],
+      "relates_to": [
+        "030",
+        "034"
+      ],
+      "supersedes": [],
       "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
+      "amends": [],
+      "amended_by": [
+        "056"
+      ],
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "034",
-      "id": 34,
-      "title": "ADR-034 — Skill identity is a tree digest; activation is supply-chain promotion",
-      "status": "Accepted 2026-07-30.",
+      "title": "Skill identity is a tree digest; activation is supply-chain promotion",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Partial — digest identity, staged candidates, and two-person install are built; comparative evaluation before install is not",
       "file": "adr-034-skill-identity-is-a-tree-digest-activation-is-supply-chain-promotion.md",
-      "relates_to": [],
+      "relates_to": [
+        "023",
+        "033"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "035",
-      "id": 35,
-      "title": "ADR-035 — Streaming input is a distinct first-class runtime",
-      "status": "Accepted 2026-07-30; **revised** by [ADR-055](./adr-055-two-repo-authority-split.md).",
-      "state": "accepted",
+      "title": "Streaming input is a distinct first-class runtime",
+      "status": "Retired 2026-10-01 — superseded by [ADR-036](./adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md) and [ADR-055](./adr-055-two-repo-authority-split.md)",
+      "state": "retired",
       "date": "2026-07-30",
-      "tier": "F",
+      "tier": null,
+      "implementation": null,
       "file": "adr-035-streaming-input-is-a-distinct-first-class-runtime.md",
-      "relates_to": [
-        "055"
-      ],
-      "superseded_by": [],
-      "amended_by": [
-        "055"
-      ],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
+      "relates_to": [],
       "supersedes": [],
-      "amends": []
+      "superseded_by": [
+        "036",
+        "055"
+      ],
+      "amends": [],
+      "amended_by": [],
+      "sections": []
     },
     {
       "num": "036",
-      "id": 36,
-      "title": "ADR-036 — Situation is the boundary between continuous evidence and episodic cognition",
-      "status": "Accepted 2026-07-30.",
+      "title": "Cognition sees only a sealed Situation snapshot, never raw evidence",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
-      "file": "adr-036-situation-is-the-boundary-between-continuous-evidence-and-episodic-cognition.md",
-      "relates_to": [],
+      "implementation": "Complete — Tamoz side only; admission and Situation reduction live in `agentic-stream` and are not verified here",
+      "file": "adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md",
+      "relates_to": [
+        "038",
+        "055"
+      ],
+      "supersedes": [
+        "035"
+      ],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "037",
-      "id": 37,
-      "title": "ADR-037 — Event time, explicit backpressure, and effect-disabled replay are contracts",
-      "status": "Accepted 2026-07-30; **revised** by [ADR-055](./adr-055-two-repo-authority-split.md).",
-      "state": "accepted",
+      "title": "Event time, explicit backpressure, and effect-disabled replay are contracts",
+      "status": "Retired 2026-10-01 — superseded by [ADR-055](./adr-055-two-repo-authority-split.md)",
+      "state": "retired",
       "date": "2026-07-30",
-      "tier": "F",
+      "tier": null,
+      "implementation": null,
       "file": "adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md",
-      "relates_to": [
-        "055"
-      ],
-      "superseded_by": [],
-      "amended_by": [
-        "055"
-      ],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
+      "relates_to": [],
       "supersedes": [],
-      "amends": []
+      "superseded_by": [
+        "055"
+      ],
+      "amends": [],
+      "amended_by": [],
+      "sections": []
     },
     {
       "num": "038",
-      "id": 38,
-      "title": "ADR-038 — Physical action is typed intent plus current-state policy, never model effect",
-      "status": "Accepted 2026-07-30.",
+      "title": "Physical action is typed intent plus current-state policy, never model effect",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete — Tamoz side only (typed intents); dispatch policy lives in `agentic-stream` and is not verified here",
       "file": "adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md",
-      "relates_to": [],
+      "relates_to": [
+        "039",
+        "055",
+        "058"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "039",
-      "id": 39,
-      "title": "ADR-039 — Tamoz is supervisory; certified safety and real-time control stay external",
-      "status": "Accepted 2026-07-30.",
+      "title": "Tamoz is supervisory; certified safety and real-time control stay external",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "F",
+      "implementation": "Complete — as a boundary; no physical profile has shipped",
       "file": "adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md",
-      "relates_to": [],
+      "relates_to": [
+        "038",
+        "055"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "040",
-      "id": 40,
-      "title": "ADR-040 — One monorepo, multiple independently publishable gems",
-      "status": "Accepted 2026-07-30; **instantiated by [ADR-052](./adr-052-agent-gem-decomposition.md).**",
+      "title": "One monorepo, multiple independently publishable gems",
+      "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Complete",
       "file": "adr-040-one-monorepo-multiple-independently-publishable-gems.md",
       "relates_to": [
         "052"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [
-        "052"
+        "055"
       ],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "041",
-      "id": 41,
-      "title": "ADR-041 — Communication channels are a contract gem plus per-transport adapter gems",
-      "status": "Accepted 2026-08-10.",
+      "title": "Communication channels are a contract gem plus per-transport adapter gems",
+      "status": "Accepted 2026-08-10",
       "state": "accepted",
       "date": "2026-08-10",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Complete",
       "file": "adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md",
-      "relates_to": [],
+      "relates_to": [
+        "014",
+        "042"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "042",
-      "id": 42,
-      "title": "ADR-042 — The channel gateway is a separate process in the connector zone",
-      "status": "Accepted 2026-08-10.",
+      "title": "The channel gateway is a separate process in the connector zone",
+      "status": "Accepted 2026-08-10",
       "state": "accepted",
       "date": "2026-08-10",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md",
-      "relates_to": [],
+      "relates_to": [
+        "041",
+        "049"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "043",
-      "id": 43,
-      "title": "ADR-043 — Telegram v1 is deny-only and reference-bound",
-      "status": "Accepted 2026-08-10; **amended by [ADR-049](./adr-049-telegram-approval.md).**",
-      "state": "accepted",
+      "title": "Telegram v1 is deny-only and reference-bound",
+      "status": "Retired 2026-10-01 — superseded by [ADR-049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md)",
+      "state": "retired",
       "date": "2026-08-10",
-      "tier": "F",
+      "tier": null,
+      "implementation": null,
       "file": "adr-043-telegram-v1-is-deny-only-and-reference-bound.md",
-      "relates_to": [
-        "049"
-      ],
-      "superseded_by": [],
-      "amended_by": [
-        "049"
-      ],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
+      "relates_to": [],
       "supersedes": [],
-      "amends": []
+      "superseded_by": [
+        "049"
+      ],
+      "amends": [],
+      "amended_by": [],
+      "sections": []
     },
     {
       "num": "044",
-      "id": 44,
-      "title": "ADR-044 — Observability is a contract gem plus per-exporter adapter gems",
-      "status": "Accepted 2026-08-10.",
+      "title": "Observability is a contract gem plus per-exporter adapter gems",
+      "status": "Accepted 2026-08-10",
       "state": "accepted",
       "date": "2026-08-10",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Complete",
       "file": "adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md",
-      "relates_to": [],
+      "relates_to": [
+        "014",
+        "045"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "045",
-      "id": 45,
-      "title": "ADR-045 — The observability gems add no durable table and no second source of truth",
-      "status": "Accepted 2026-08-10.",
+      "title": "The observability gems add no durable table and no second source of truth",
+      "status": "Accepted 2026-08-10",
       "state": "accepted",
       "date": "2026-08-10",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Complete",
       "file": "adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md",
-      "relates_to": [],
+      "relates_to": [
+        "047",
+        "050"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "046",
-      "id": 46,
-      "title": "ADR-046 — Content capture is off by default, per class, and refused for restricted classes",
-      "status": "Accepted 2026-08-10.",
+      "title": "Content capture is off by default, per class, and refused for restricted classes",
+      "status": "Accepted 2026-08-10",
       "state": "accepted",
       "date": "2026-08-10",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-046-content-capture-is-off-by-default-per-class-and-refused-for-restricted.md",
-      "relates_to": [],
+      "relates_to": [
+        "020"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "047",
-      "id": 47,
-      "title": "ADR-047 — Sampling applies to export only and never to safety-bearing signals",
-      "status": "Accepted 2026-08-10.",
+      "title": "Telemetry is never sampled at record time, and safety-bearing signals have a reserved lane",
+      "status": "Accepted 2026-08-10",
       "state": "accepted",
       "date": "2026-08-10",
       "tier": "F",
-      "file": "adr-047-sampling-applies-to-export-only-and-never-to-safety-bearing-signals.md",
-      "relates_to": [],
+      "implementation": "Complete",
+      "file": "adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md",
+      "relates_to": [
+        "045"
+      ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "Reopen when",
+        "Verification"
+      ]
     },
     {
       "num": "048",
-      "id": 48,
-      "title": "ADR-048 — One digest-bound OpenAI-compatible model transport",
-      "status": "Accepted 2026-08-26; **completed by [ADR-051](./adr-051-rubyllm-removed.md).**",
+      "title": "Tamoz owns the model boundary: one digest-bound OpenAI-compatible transport",
+      "status": "Accepted 2026-08-26",
       "state": "accepted",
       "date": "2026-08-26",
       "tier": "F",
-      "file": "adr-048-one-digest-bound-openai-compatible-model-transport.md",
+      "implementation": "Complete",
+      "file": "adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md",
       "relates_to": [
+        "016"
+      ],
+      "supersedes": [
+        "003",
         "051"
       ],
       "superseded_by": [],
-      "amended_by": [
-        "051"
-      ],
-      "verified": true,
+      "amends": [],
+      "amended_by": [],
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
+        "Reopen when",
         "Verification",
-        "Next reads"
-      ],
-      "supersedes": [
-        "003"
-      ],
-      "amends": []
+        "History"
+      ]
     },
     {
       "num": "049",
-      "id": 49,
-      "title": "ADR-049 — Telegram approval is evidence-gated, not transport-gated",
-      "status": "Accepted 2026-08-12; policy amended 2026-09-24 (owner): `base.yaml` requires `chat_bound` to approve, so the bound correspondent can Approve. A profile can still require `filesystem_operator`.",
+      "title": "Chat approval is evidence-gated and bound to one exact prompt",
+      "status": "Accepted 2026-08-12",
       "state": "accepted",
       "date": "2026-08-12",
       "tier": "F",
-      "file": "adr-049-telegram-approval.md",
+      "implementation": "Complete",
+      "file": "adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md",
       "relates_to": [
+        "022",
         "042",
+        "053"
+      ],
+      "supersedes": [
         "043"
       ],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
-        "Evidence-gated approval invariants (INV-A..INV-E)",
-        "Requirements for a future grant (the bar)",
-        "Policy status after the approval-policy redesign (2026-08-22)",
-        "Threat model summary",
         "Consequences",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Adoption",
+        "Reopen when",
         "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": [
-        "043"
+        "History"
       ]
     },
     {
       "num": "050",
-      "id": 50,
-      "title": "ADR-050 — Automated responses act only on durable evidence, under the subsystem that owns the effect",
-      "status": "Proposed — observability phase 5",
+      "title": "Automated responses act only on durable evidence, under the subsystem that owns the effect",
+      "status": "Proposed",
       "state": "proposed",
       "date": "2026-08-10",
       "tier": "F",
+      "implementation": "Not built — ratified when observability phase 5 (alerting) ships with the fault-injection test below",
       "file": "adr-050-automated-response-durable-evidence.md",
       "relates_to": [
         "022",
         "028",
-        "044",
         "045",
         "047"
       ],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Invariant linkage",
-        "Threat model",
-        "The bar to change it",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
       "supersedes": [],
-      "amends": []
-    },
-    {
-      "num": "051",
-      "id": 51,
-      "title": "ADR-051 — RubyLLM is removed from the runtime; message and tool fidelity are Tamoz-native",
-      "status": "Accepted 2026-08-26",
-      "state": "accepted",
-      "date": "2026-08-29",
-      "tier": "F",
-      "file": "adr-051-rubyllm-removed.md",
-      "relates_to": [
-        "002",
-        "003",
-        "004",
-        "048"
-      ],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Invariant linkage",
+        "Invariants",
+        "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [
-        "003"
-      ],
-      "amends": [
-        "048"
+        "Reopen when",
+        "Verification"
       ]
     },
     {
+      "num": "051",
+      "title": "RubyLLM is removed from the runtime; message and tool fidelity are Tamoz-native",
+      "status": "Retired 2026-10-01 — superseded by [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md)",
+      "state": "retired",
+      "date": "2026-08-26",
+      "tier": null,
+      "implementation": null,
+      "file": "adr-051-rubyllm-removed.md",
+      "relates_to": [],
+      "supersedes": [],
+      "superseded_by": [
+        "048"
+      ],
+      "amends": [],
+      "amended_by": [],
+      "sections": []
+    },
+    {
       "num": "052",
-      "id": 52,
-      "title": "ADR-052 — `tamoz-agent` is decomposed into focused, independently publishable gems",
+      "title": "A gem owns one dependency boundary and is reached only through its facade",
       "status": "Accepted 2026-08-26",
       "state": "accepted",
-      "date": "2026-08-29",
-      "tier": "F",
-      "file": "adr-052-agent-gem-decomposition.md",
+      "date": "2026-08-26",
+      "tier": "C",
+      "implementation": "Partial — boundary tests guard memory, skills, research, approval, profile, and core file facades; other gems have no leak test yet. The \"when a gem\" criterion is proposed (owner decision D6); until confirmed, the 2026-08-26 rule stands",
+      "file": "adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md",
       "relates_to": [
-        "002",
-        "025",
         "040",
-        "053"
-      ],
-      "superseded_by": [],
-      "amended_by": [],
-      "verified": true,
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences",
-        "Invariant linkage",
-        "Rejected alternatives",
-        "Verification",
-        "Next reads"
+        "056"
       ],
       "supersedes": [
         "002"
       ],
-      "amends": [
-        "040"
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification",
+        "History"
       ]
     },
     {
       "num": "053",
-      "id": 53,
-      "title": "ADR-053 — Approval policy is isolated into the `tamoz-approval` gem",
-      "status": "Accepted 2026-08-22 (implemented)",
+      "title": "Approval policy is data, decided by one gem, `tamoz-approval`",
+      "status": "Accepted 2026-08-22",
       "state": "accepted",
-      "date": "2026-08-29",
+      "date": "2026-08-22",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-053-approval-gem.md",
       "relates_to": [
         "022",
         "030",
-        "043",
-        "049",
-        "052"
+        "049"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Invariant linkage",
+        "Invariants",
         "Threat model",
         "Rejected alternatives",
+        "Reopen when",
         "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": []
+        "History"
+      ]
     },
     {
       "num": "054",
-      "id": 54,
-      "title": "ADR-054 — Websearch is the fourth capability source, realized as a reserved MCP server with governed egress",
+      "title": "Websearch is the fourth capability source, realized as a reserved MCP server with governed egress",
       "status": "Accepted 2026-08-26",
       "state": "accepted",
-      "date": "2026-08-29",
+      "date": "2026-08-26",
       "tier": "F",
+      "implementation": "Complete",
       "file": "adr-054-websearch-capability-source.md",
       "relates_to": [
         "014",
-        "029",
-        "030",
-        "046",
-        "047"
+        "029"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [
+        "030"
+      ],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Invariant linkage",
+        "Invariants",
         "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": [
-        "030"
+        "Reopen when",
+        "Verification"
       ]
     },
     {
       "num": "055",
-      "id": 55,
-      "title": "ADR-055 — The continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker",
+      "title": "The continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker",
       "status": "Accepted 2026-08-12",
       "state": "accepted",
-      "date": "2026-08-29",
+      "date": "2026-08-12",
       "tier": "F",
+      "implementation": "Partial — the worker has no transport authentication: both transports bind insecure gRPC ports, the socket's permissions are left to the process umask, and TCP mode listens on all interfaces",
       "file": "adr-055-two-repo-authority-split.md",
       "relates_to": [
-        "035",
         "036",
-        "037",
         "038",
-        "039",
-        "040"
+        "039"
+      ],
+      "supersedes": [
+        "035",
+        "037"
       ],
       "superseded_by": [],
+      "amends": [
+        "040"
+      ],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
-        "Invariant linkage",
+        "Invariants",
         "Threat model",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
-      ],
-      "supersedes": [],
-      "amends": [
-        "035",
-        "037"
+        "Reopen when",
+        "Verification"
       ]
     },
     {
       "num": "056",
-      "id": 56,
-      "title": "ADR-056 — Skills are a gem, `tamoz-skills`, reached through one facade",
+      "title": "Skills are a gem, `tamoz-skills`, reached through one facade",
       "status": "Accepted 2026-10-01",
       "state": "accepted",
       "date": "2026-10-01",
-      "tier": "F",
+      "tier": "C",
+      "implementation": "Complete",
       "file": "adr-056-skills-gem.md",
       "relates_to": [
-        "033",
-        "034"
+        "052"
       ],
+      "supersedes": [],
       "superseded_by": [],
+      "amends": [
+        "033"
+      ],
       "amended_by": [],
-      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
-        "Verification",
-        "Next reads"
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "057",
+      "title": "A user's stop ends the turn; it never aborts the graph",
+      "status": "Accepted 2026-10-01",
+      "state": "accepted",
+      "date": "2026-10-01",
+      "tier": "F",
+      "implementation": "Complete — for chat stops; the stop watcher runs only when the worker has a comms store",
+      "file": "adr-057-a-user-stop-ends-the-turn-it-never-aborts-the-graph.md",
+      "relates_to": [
+        "005",
+        "015",
+        "016"
       ],
       "supersedes": [],
-      "amends": []
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "058",
+      "title": "Domain knowledge is digest-pinned data, never code",
+      "status": "Accepted 2026-10-01",
+      "state": "accepted",
+      "date": "2026-10-01",
+      "tier": "C",
+      "implementation": "Partial — `test/support/domain_loader.rb` still carries domain-specific branches (`install_watch_condition` schema and presets) and a fixed approval and rate-limit policy; no test fails on domain content authored in Ruby",
+      "file": "adr-058-domain-knowledge-is-digest-pinned-data-never-code.md",
+      "relates_to": [
+        "024",
+        "038",
+        "055"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
+    },
+    {
+      "num": "059",
+      "title": "No backward compatibility before 1.0",
+      "status": "Accepted 2026-10-01",
+      "state": "accepted",
+      "date": "2026-10-01",
+      "tier": "C",
+      "implementation": "Partial — `test/legacy_session_resume_test.rb` still requires a current build to read a pre-P8 session database, and session records tolerate the missing fields; that is the read-time tolerance this rule forbids",
+      "file": "adr-059-no-backward-compatibility-before-1-0.md",
+      "relates_to": [
+        "001",
+        "019"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Rejected alternatives",
+        "Reopen when",
+        "Verification"
+      ]
     }
   ]
 }

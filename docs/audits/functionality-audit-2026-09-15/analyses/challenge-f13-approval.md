@@ -22,7 +22,7 @@ I read `docs/subagent-orchestration.md`, `README.md`, the audit `BAR.md`,
 - `gems/tamoz-agent-cli/lib/tamoz/agent/{cli,cli_worker_commands,cli_schedule_commands}.rb`;
 - `gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb` and
   `gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb`;
-- `documentation/adr/approval-policy-redesign/{00-acceptance-bar,03-redesign-adr,04-review-simplicity}.md`.
+- `docs/approval-policy-redesign-2026-08-22/{00-acceptance-bar,03-redesign-adr,04-review-simplicity}.md`.
 
 I also checked the existing F05, F07, F09, F10, F20, F21, F22, F23, F24, and
 F25 records and their available challenge records for ownership overlap. All
@@ -171,7 +171,7 @@ no-session tiers (`gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:
 reject the same scope when it is declared on the tier (`:239-255`). The evaluator
 preserves a classified tool's override (`evaluator.rb:82-102`), and the engine
 accepts any scope present in that offer (`engine.rb:243-256`). This contradicts
-the acceptance bar and redesign ADR (`documentation/adr/approval-policy-redesign/
+the acceptance bar and redesign ADR (`docs/approval-policy-redesign-2026-08-22/
 00-acceptance-bar.md:67-73,98-101`; `03-redesign-adr.md:370-376`).
 
 The temporary policy below classified `send_http` as `network`, gave the tool
@@ -218,7 +218,7 @@ checks the presence of `:session`, grant-key availability, and the special
 no-session tiers, but never checks a closed set (`:201-255`). The evaluator
 copies the list and `Engine#mint_grant` checks only membership in that offer
 (`evaluator.rb:82-102`; `engine.rb:243-256`). The normative ADR defines only
-`:once` and `:session` (`documentation/adr/approval-policy-redesign/03-redesign-
+`:once` and `:session` (`docs/approval-policy-redesign-2026-08-22/03-redesign-
 adr.md:375-376`).
 
 I loaded a temporary policy advertising `[once, session, lifetime]` and resolved
@@ -331,7 +331,7 @@ under its mutex, then records the mode switch after unlocking
 (`engine.rb:183-199`). In the worker, another `StandardError` is emitted and
 returns `false` without rolling back the session (`gems/tamoz-agent/lib/tamoz/
 agent/worker.rb:988-1033`). The acceptance bar requires the switch to be
-durable (`documentation/adr/approval-policy-redesign/00-acceptance-bar.md:135-140`;
+durable (`docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:135-140`;
 `03-redesign-adr.md:464-498`).
 
 I used a decision log that raises once on `record_mode_switch`:
@@ -393,7 +393,7 @@ session `profile:<id>` (`gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:
 that ensure. Migration 17 has no worker epoch or run fence in the grant table
 (`gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1085-1099`). The ADR says session
 grants die with the session and records the accepted teardown/expiry contract
-(`documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-386`).
+(`docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:375-386`).
 
 The analyst's exact reachability wording needs correction. The normal in-tree
 worker approval path always resolves an approval as `:once`
@@ -466,7 +466,7 @@ The cited `04-review-simplicity.md:97-100` calls this a NIT and asks for one lin
 that either adds a purge story or explicitly accepts accumulation. The normative
 redesign contains that acceptance: “The decision log is append-only and retained
 with the database it lives in — accepted”
-(`documentation/adr/approval-policy-redesign/03-redesign-adr.md:382-387`).
+(`docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:382-387`).
 The security model likewise treats the durable decision log as the audit record
 (`documentation/architecture/security-model.md:47`).
 

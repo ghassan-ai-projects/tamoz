@@ -281,7 +281,7 @@
          "status": "open",
          "title": "The launcher has no test; only ADR prose references it",
          "seam": "bin/tamoz-stream-subscriber",
-         "citations": ["documentation/adr/approval-policy-redesign/02-current-state-audit.md:598-599"],
+         "citations": ["docs/approval-policy-redesign-2026-08-22/02-current-state-audit.md:598-599"],
          "five_whys": false,
          "recommendation": "The dead-endpoint case recommended in E08-REL-01 would be the first test; no separate action."}
       ],
