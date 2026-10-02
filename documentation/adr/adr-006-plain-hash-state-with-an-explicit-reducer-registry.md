@@ -5,23 +5,28 @@
 **Tier:** C
 **Implementation:** Complete
 
-Graph state is a plain `Hash`; how concurrent writes merge is a named, visible reducer per key.
+Graph state is a plain `Hash`; declared reducers make each key's merge behavior explicit.
 
 ## Context
 
-State needs a record type and a merge rule for writes from parallel nodes. The reference
-frameworks use typed annotations and metaprogramming; Ruby already has `Hash` and pattern matching.
-The merge rule is where silent data loss happens, so it must be visible.
+Parallel nodes can update the same state key. Replacing one update with another would silently
+lose work. State should be easy to inspect, while the graph must combine updates by an explicit
+rule or reject the conflict.
 
 ## Decision
 
-State is a `Hash`. A key that several nodes may write declares a reducer
-(`state :message_events, reduce: Tamoz::Reducers.message_events`). Two writes to a key with no
-reducer in one superstep fail before commit, naming every writing task. Behavior is configured by
-keyword arguments, never by a config hash dispatched on string keys.
+State is a `Hash` with keys declared through the graph's `state` API. A key that accepts updates
+from several nodes declares a reducer, for example
+`state :events, default: [], reduce: Tamoz::Reducers.append`.
+
+A reducer is a named, versioned callable that receives the current value and the writes for that
+key. Without a reducer, one write replaces the value; multiple writes to the same key in one
+superstep fail before state commit, identifying the writing tasks.
 
 ## Consequences
 
-State is inspectable and pattern-matchable with no framework types, and every merge rule is a
-lambda you can read. **Cost:** no static shape checking; a wrong partial update is caught by its
-reducer or a test, not by a type.
+State remains directly inspectable, and merge behavior is visible in each key's declaration.
+Runtime checks reject undeclared keys and unsupported values.
+
+**Cost:** Hash state provides no static guarantee of value shapes. Runtime validation does not
+establish application-level correctness; reducers and application tests must check those rules.

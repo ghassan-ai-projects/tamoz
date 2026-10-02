@@ -118,6 +118,7 @@ is a case statement spread across a class, and every new capability edits the cl
   diagnostic — never split cohesive logic or add indirection merely to satisfy a
   number; name the exception and why.
 - Keyword arguments beyond one or two positional parameters; no long positional lists.
+- Configure behavior with keyword arguments, never with a config hash dispatched on string keys.
 - No boolean parameters (Reek `BooleanParameter`): a boolean argument means two
   behaviors — split the method or pass a named policy.
 - One responsibility per method. A method mixing policy, persistence, orchestration
