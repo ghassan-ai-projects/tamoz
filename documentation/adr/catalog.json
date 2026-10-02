@@ -33,12 +33,12 @@
     {
       "num": "002",
       "title": "Four v0.1 runtime gems",
-      "status": "Retired 2026-08-26 — superseded by [ADR-052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md)",
+      "status": "Retired 2026-08-26 — superseded by [ADR-052](../adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
       "implementation": null,
-      "file": "adr-002-four-v0-1-runtime-gems.md",
+      "file": "retired/adr-002-four-v0-1-runtime-gems.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [

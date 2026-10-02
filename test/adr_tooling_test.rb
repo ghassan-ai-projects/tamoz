@@ -40,6 +40,7 @@ class AdrToolingTest < Minitest::Test
       base = { 'evidence.md' => "# ADR implementation evidence\n",
                'RETIRED.md' => "| **000** |\n", 'README.md' => index(files) }
       base.merge(files).each do |name, text|
+        FileUtils.mkdir_p(File.dirname(File.join(dir, name)))
         File.write(File.join(dir, name), text)
       end
       File.write(AdrCatalog.path(dir), AdrCatalog.json(dir))
@@ -48,7 +49,8 @@ class AdrToolingTest < Minitest::Test
   end
 
   def index(files)
-    files.keys.filter_map { |name| name[/\Aadr-(\d{3})-/, 1] }.uniq.map { |num| "| [#{num}](./README.md) | x |\n" }.join
+    numbers = files.keys.filter_map { |name| File.basename(name)[/\Aadr-(\d{3})-/, 1] }.uniq
+    numbers.map { |num| "| [#{num}](./README.md) | x |\n" }.join
   end
 
   def problems_in(files) = with_corpus(files) { |dir| AdrValidate.run(dir) }
@@ -177,6 +179,25 @@ class AdrToolingTest < Minitest::Test
     assert_includes problems, 'ADR-002: retired but has no RETIRED.md row'
     assert_includes problems, 'ADR-002: a tombstone keeps no sections'
     assert_includes problems, "ADR-002: superseded by ADR-001, but ADR-001 has no 'Supersedes ADR-002'"
+  end
+
+  def test_a_retired_folder_keeps_catalog_identity_and_checks_its_links
+    successor = adr('001', extra: "**Supersedes:** [ADR-002](./retired/adr-002-b.md)\n")
+    retired = TOMBSTONE.sub('(./adr-001-a.md)', '(../adr-001-a.md)')
+    files = { 'adr-001-a.md' => successor, 'retired/adr-002-b.md' => retired,
+              'RETIRED.md' => "| **002** |\n" }
+
+    with_corpus(files) do |dir|
+      catalog = AdrCatalog.build(dir)
+
+      assert_equal [2, 3, 'retired/adr-002-b.md'],
+                   [catalog['count'], catalog['next_number'], catalog['adrs'].last['file']]
+      assert_empty AdrValidate.run(dir)
+    end
+
+    broken = files.merge('retired/adr-002-b.md' => "#{retired}\nSee [history](../missing.md).\n")
+
+    assert_includes problems_in(broken), 'adr-002-b.md: broken link ../missing.md'
   end
 
   def test_a_retirement_names_a_successor_that_exists

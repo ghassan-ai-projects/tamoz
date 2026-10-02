@@ -9,6 +9,8 @@
 #
 # Wired as `rake adr:trace`.
 
+require_relative 'adr_catalog'
+
 ROOT = File.expand_path("..", __dir__)
 ADR_DIR = File.join(ROOT, "documentation", "adr")
 OUT = File.join(ADR_DIR, "traceability.md")
@@ -22,7 +24,7 @@ evidence_by_adr = File.read(File.join(ADR_DIR, 'evidence.md'), encoding: Encodin
                       .scan(/^## ADR-(\d{3})\s*\n(.+?)(?=^## |\z)/m).to_h
 
 rows = []
-Dir[File.join(ADR_DIR, "adr-*.md")].sort.each do |path|
+AdrCatalog.files(ADR_DIR).sort.each do |path|
   text = File.read(path, encoding: Encoding::UTF_8)
   num = File.basename(path)[/^adr-(\d{3})-/, 1]
   title = text[/^\#\s+ADR-\d{3}\s+—\s+(.+?)(?:\s+\(RETIRED\))?$/, 1].to_s.strip

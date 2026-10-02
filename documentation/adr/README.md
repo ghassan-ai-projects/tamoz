@@ -146,7 +146,7 @@ decision is not built; the ADR says which part.
 
 | ADR | Decision | Replaced by |
 |---|---|---|
-| [002](./adr-002-four-v0-1-runtime-gems.md) | ~~Four v0.1 runtime gems~~ | 052 |
+| [002](./retired/adr-002-four-v0-1-runtime-gems.md) | ~~Four v0.1 runtime gems~~ | 052 |
 | [003](./adr-003-reuse-rubyllm-public-values.md) | ~~Reuse RubyLLM public values; durable codec~~ | 048 |
 | [004](./adr-004-explicit-tamoz-seq-no-native-proc.md) | ~~Explicit `Tamoz.seq`; no native `Proc#>>`~~ | withdrawn |
 | [012](./adr-012-mcp-deferred-integration.md) | ~~MCP is a deferred integration strategy~~ | 029 |

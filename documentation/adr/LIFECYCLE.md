@@ -47,7 +47,7 @@ stateDiagram-v2
 
 1. The surviving ADR absorbs whatever rule and evidence still hold, and names the retired one in
    its `Supersedes:` header.
-2. Shrink the old file to a tombstone: Status `Retired YYYY-MM-DD — superseded by ADR-M`, with
+2. Move the old file into `retired/`, update its incoming and relative links, and shrink it to a tombstone: Status `Retired YYYY-MM-DD — superseded by ADR-M`, with
    ADR-M linked (or `— withdrawn`), one paragraph of what it said, and where it went.
 3. Add a row to [`RETIRED.md`](./RETIRED.md) and move its README row to the Retired table.
 4. `rake adr:catalog adr:validate adr:graph`.

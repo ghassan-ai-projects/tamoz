@@ -8,7 +8,7 @@ Retired records remain retired. Proposed 050 remains proposed.
 | ADR | Priority | Disposition | Required repair / reason |
 |---|---|---|---|
 | [001](../../documentation/adr/adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md) | P3 | Keep; clarify | Stable identity is useful. Separate the open release reservation action from the rule; keep the dated gem count historical. |
-| [002](../../documentation/adr/adr-002-four-v0-1-runtime-gems.md) | — | Keep retired | Tombstone resolves to 052. Evaluate the successor on its own reasoning, rather than treating growth as its justification. |
+| [002](../../documentation/adr/retired/adr-002-four-v0-1-runtime-gems.md) | — | Keep retired | Tombstone resolves to 052. Evaluate the successor on its own reasoning, rather than treating growth as its justification. |
 | [003](../../documentation/adr/adr-003-reuse-rubyllm-public-values.md) | — | Keep retired | Preserve the explicit transport/type split to 048/051 and the surviving native codec contract. |
 | [004](../../documentation/adr/adr-004-explicit-tamoz-seq-no-native-proc.md) | P1 | Reconcile API claim | No production seq/step API found by targeted Ruby search. Verify historical intent; revise obsolete composition claims rather than inventing a new API. |
 | [005](../../documentation/adr/adr-005-interrupt-by-throw-not-by-exception.md) | P3 | Keep; tighten proof | Worker-scoped throw/catch is a clear decision. Attribute catch to the pool and cite a rescue/worker-scope test. |

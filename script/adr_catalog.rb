@@ -31,7 +31,11 @@ module AdrCatalog
     end
   end
 
-  def parse(path)
+  def files(dir = DEFAULT_DIR)
+    Dir[File.join(dir, 'adr-*.md'), File.join(dir, 'retired', 'adr-*.md')]
+  end
+
+  def parse(path, dir = File.dirname(path))
     text = File.read(path, encoding: Encoding::UTF_8)
     fields = headers(text)
     status = fields.fetch('Status', '')
@@ -43,7 +47,7 @@ module AdrCatalog
       'date' => fields['Date'].to_s[/\d{4}-\d{2}-\d{2}/],
       'tier' => fields['Tier'],
       'implementation' => fields['Implementation'],
-      'file' => File.basename(path),
+      'file' => path.delete_prefix("#{dir}/"),
       **relations(fields, status),
       'sections' => text.scan(/^##\s+(.+)$/).flatten.map(&:strip)
     }
@@ -60,7 +64,7 @@ module AdrCatalog
   end
 
   def build(dir = DEFAULT_DIR)
-    adrs = Dir[File.join(dir, 'adr-*.md')].map { |path| parse(path) }.sort_by { |adr| adr['num'] }
+    adrs = files(dir).map { |path| parse(path, dir) }.sort_by { |adr| adr['num'] }
     {
       'generated_by' => 'script/adr_catalog.rb',
       'count' => adrs.size,

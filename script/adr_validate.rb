@@ -36,8 +36,8 @@ module AdrValidate
   module_function
 
   def run(dir)
-    files = Dir[File.join(dir, 'adr-*.md')]
-    adrs = files.to_h { |path| [File.basename(path)[/\Aadr-(\d{3})-/, 1], AdrCatalog.parse(path)] }
+    files = AdrCatalog.files(dir)
+    adrs = files.to_h { |path| [File.basename(path)[/\Aadr-(\d{3})-/, 1], AdrCatalog.parse(path, dir)] }
     [*numbering(files), *adrs.flat_map { |num, adr| record(dir, num, adr, adrs) }, *Corpus.run(dir, adrs)]
   end
 
@@ -151,7 +151,8 @@ module AdrValidate
     end
 
     def links(dir)
-      Dir[File.join(dir, '*.md')].reject { |path| File.basename(path) == '_TEMPLATE.md' }.flat_map do |path|
+      files = Dir[File.join(dir, '*.md'), File.join(dir, 'retired', '*.md')]
+      files.reject { |path| File.basename(path) == '_TEMPLATE.md' }.flat_map do |path|
         text = File.read(path, encoding: Encoding::UTF_8)
         prose = text.gsub(/^```.*?^```/m, '').gsub(/`[^`\n]*`/, '')
         prose.scan(/\]\(([^)\s]+)\)/).flatten.filter_map { |target| dead_link(path, text, target) }

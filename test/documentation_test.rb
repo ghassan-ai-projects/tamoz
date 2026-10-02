@@ -22,7 +22,7 @@ class DocumentationTest < Minitest::Test
   def test_design_source_and_contract_counts_are_pinned
     source = ROOT.join("docs", "design-v0.1", "SOURCE").read(encoding: Encoding::UTF_8)
     invariants = ROOT.join("docs", "design-v0.1", "INVARIANTS.md").read(encoding: Encoding::UTF_8)
-    adr_numbers = ROOT.glob("documentation/adr/adr-*.md").map do |path|
+    adr_numbers = ROOT.glob("documentation/adr/**/adr-*.md").map do |path|
       Integer(path.basename.to_s[/\Aadr-0*(\d+)-/, 1], 10)
     end.sort
 

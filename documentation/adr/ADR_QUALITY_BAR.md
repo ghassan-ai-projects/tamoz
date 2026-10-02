@@ -138,7 +138,8 @@ Checked YYYY-MM-DD (source inspection; tests marked *run* were executed that day
   validator checks it lists every file.
 - **States:** Proposed (names what would ratify it) → Accepted → Retired. There is no
   "Revised" state: a change in force is an Amends/Amended-by edge or a History line.
-- **Retirement:** the file shrinks to a tombstone (Status, one paragraph of what it said, the
+- **Retirement:** move the file to `retired/` and update its incoming and relative links.
+  The file shrinks to a tombstone (Status, one paragraph of what it said, the
   successor), and `RETIRED.md` gets one row: what it said, when it died, why, replaced by.
 - **Merging:** when two ADRs state one rule, the survivor absorbs the rule and its evidence, the
   other is retired as superseded by the survivor.
