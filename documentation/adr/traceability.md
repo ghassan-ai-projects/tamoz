@@ -15,8 +15,7 @@ clause or has a dedicated test yet.
 | [006](./adr-006-plain-hash-state-with-an-explicit-reducer-registry.md) | Plain Hash state with an explicit reducer registry | C | `tamoz-graph` | — | — |
 | [007](./adr-007-frozen-state-is-handed-to-nodes.md) | Frozen state is handed to nodes | C | `tamoz-core` | — | — |
 | [008](./adr-008-threads-is-the-default-pool-inline-in-tests.md) | `:threads` is the default pool; `:inline` in tests | C | `tamoz-concurrency`, `tamoz-core` | — | — |
-| [009](./adr-009-the-model-request-prefix-is-byte-stable-within-a-cache-epoch.md) | The model request prefix is byte-stable within a cache epoch | C | `tamoz-context-engine` | 16 | `adr_tooling_test.rb` |
-| [010](./adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md) | Ruby 3.3 floor; 3.4 and 4.0 primary targets | C | — | — | — |
+| [009](./adr-009-the-model-request-prefix-is-byte-stable-within-a-cache-epoch.md) | Keep model request prefixes stable within a request series | C | `tamoz-context-engine` | 16 | `adr_tooling_test.rb` |
 | [011](./adr-011-sqlite-is-tamoz-agent-s-default-persistence.md) | SQLite is Tamoz Agent's default persistence | C | `tamoz-sqlite` | — | — |
 | [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public vocabulary is a budget, never a correctness cap | C | — | — | — |
 | [014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) | Extensions are first-party adapter gems, not plugins | F | `tamoz-comms`, `tamoz-core`, `tamoz-observability` | 35, 42 | — |
@@ -64,7 +63,7 @@ clause or has a dedicated test yet.
 
 ## Coverage snapshot
 
-- In-force ADRs: **51**
+- In-force ADRs: **50**
 - With at least one referencing test: **14**
 - With a named invariant clause: **33**
 

@@ -7,7 +7,10 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 579 | 305 | 14 | **no** |
+| 578 | 305 | 14 | **no** |
+
+ADR-010 was withdrawn on 2026-10-02 and removed from this historical audit. Remaining verdicts
+and the 305-case execution count retain their original provenance; the audit was not rerun.
 
 ## Status counts
 
@@ -16,7 +19,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 551 |
+| pass | 550 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -47,7 +50,6 @@ generating run.
 | `ADR-007` | adr | yes | pass | `test/graph_state_manager_test.rb#test_unknown_unsupported_and_sensitive_updates_fail_before_candidate` |
 | `ADR-008` | adr | yes | pass | `test/graph_execution_test.rb#test_inline_and_threads_commit_byte_identical_histories` |
 | `ADR-009` | adr | yes | pass | `test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it` |
-| `ADR-010` | adr | yes | pass | `test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate` |
 | `ADR-011` | adr | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
 | `ADR-013` | adr | no | indirect | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `ADR-014` | adr | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |

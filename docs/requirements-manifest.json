@@ -142,27 +142,11 @@
       "id": "ADR-009",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "The model request prefix is byte-stable within a cache epoch",
+      "title": "Keep model request prefixes stable within a request series",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it",
       "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30"
-    },
-    {
-      "id": "ADR-010",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Ruby 3.3 floor; 3.4 and 4.0 primary targets",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate",
-      "supporting_tests": [
-        "test/ci_configuration_test.rb#test_lockfile_has_a_portable_platform"
-      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,

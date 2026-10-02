@@ -2,13 +2,13 @@
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
   "generated_at": "2026-10-01T22:16:33Z",
-  "manifest_requirements": 579,
+  "manifest_requirements": 578,
   "named_cases_run": 305,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 3,
     "missing": 14,
-    "pass": 551
+    "pass": 550
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -124,24 +124,6 @@
       "status": "pass",
       "named_test": "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it",
       "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "ADR-010",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Ruby 3.3 floor; 3.4 and 4.0 primary targets",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate",
-      "supporting_tests": [
-        "test/ci_configuration_test.rb#test_lockfile_has_a_portable_platform"
-      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,

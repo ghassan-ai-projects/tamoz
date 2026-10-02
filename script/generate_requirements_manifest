@@ -499,8 +499,6 @@ EVIDENCE = {
   "ADR-008" => {test: "test/graph_execution_test.rb#test_inline_and_threads_commit_byte_identical_histories",
                 supporting: ["test/core_pool_test.rb#test_inline_and_threaded_results_preserve_submission_order"]},
   "ADR-009" => {test: "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it"},
-  "ADR-010" => {test: "test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate",
-                supporting: ["test/ci_configuration_test.rb#test_lockfile_has_a_portable_platform"]},
   "ADR-011" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection"},
   "ADR-013" => {test: "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
                 classification: "indirect",

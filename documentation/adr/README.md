@@ -36,7 +36,6 @@ decision is not built; the ADR says which part.
 | ADR | Decision | Tier | Implementation |
 |---|---|---|---|
 | [001](./adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md) | The framework is Tamoz; the reference application is Tamoz Agent | C | Complete |
-| [010](./adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md) | Ruby 3.3 floor; 3.4 and 4.0 primary targets | C | Partial |
 | [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public vocabulary is a budget, never a correctness cap | C | Complete |
 | [014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) | Extensions are first-party adapter gems, not plugins | F | Complete |
 | [040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) | One monorepo, multiple independently publishable gems | C | Complete |
@@ -149,6 +148,7 @@ decision is not built; the ADR says which part.
 | [002](./retired/adr-002-four-v0-1-runtime-gems.md) | ~~Four v0.1 runtime gems~~ | 052 |
 | [003](retired/adr-003-reuse-rubyllm-public-values.md) | ~~Reuse RubyLLM public values; durable codec~~ | 048 |
 | [004](retired/adr-004-explicit-tamoz-seq-no-native-proc.md) | ~~Explicit `Tamoz.seq`; no native `Proc#>>`~~ | withdrawn |
+| [010](retired/adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md) | ~~Ruby 3.3 floor; 3.4 and 4.0 targets~~ | withdrawn |
 | [012](retired/adr-012-mcp-deferred-integration.md) | ~~MCP is a deferred integration strategy~~ | 029 |
 | [035](retired/adr-035-streaming-input-is-a-distinct-first-class-runtime.md) | ~~Streaming input is a distinct first-class runtime~~ | 036, 055 |
 | [037](retired/adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md) | ~~Event time, explicit backpressure, and effect-disabled replay are contracts~~ | 055 |

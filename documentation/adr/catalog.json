@@ -3,9 +3,9 @@
   "count": 59,
   "next_number": 60,
   "states": {
-    "accepted": 50,
+    "accepted": 49,
     "proposed": 1,
-    "retired": 8
+    "retired": 9
   },
   "adrs": [
     {
@@ -187,22 +187,18 @@
     {
       "num": "010",
       "title": "Ruby 3.3 floor; 3.4 and 4.0 primary targets",
-      "status": "Accepted 2026-07-30",
-      "state": "accepted",
+      "status": "Retired 2026-10-02 — withdrawn",
+      "state": "retired",
       "date": "2026-07-30",
-      "tier": "C",
-      "implementation": "Partial — CI runs only the pinned 3.3.11; 3.4 and 4.0 are untested targets",
-      "file": "adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md",
+      "tier": null,
+      "implementation": null,
+      "file": "retired/adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [],
       "amends": [],
       "amended_by": [],
-      "sections": [
-        "Context",
-        "Decision",
-        "Consequences"
-      ]
+      "sections": []
     },
     {
       "num": "011",
