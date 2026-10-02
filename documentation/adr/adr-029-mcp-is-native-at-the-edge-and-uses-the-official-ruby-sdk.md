@@ -4,7 +4,7 @@
 **Date:** 2026-07-30
 **Tier:** F
 **Implementation:** Complete
-**Supersedes:** [ADR-012](./adr-012-mcp-deferred-integration.md)
+**Supersedes:** [ADR-012](retired/adr-012-mcp-deferred-integration.md)
 **Relates to:** [ADR-030](./adr-030-one-local-capability-catalog-governs-all-sources.md) (MCP tools enter through the catalog)
 
 `tamoz-mcp` speaks MCP through the official `mcp` gem; Tamoz owns everything about what an MCP tool

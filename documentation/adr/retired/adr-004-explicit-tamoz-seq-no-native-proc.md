@@ -9,4 +9,4 @@ compose `(state, context)` callables, because `Proc#>>` drops `context`, and def
 ordinary Ruby, and no consumer has needed more. Nothing replaces it; a future composition API
 would be a new ADR.
 
-- **Why it was withdrawn:** [`RETIRED.md`](./RETIRED.md).
+- **Why it was withdrawn:** [`RETIRED.md`](../RETIRED.md).

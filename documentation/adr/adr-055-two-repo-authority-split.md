@@ -5,7 +5,7 @@
 **Tier:** F
 **Implementation:** Partial — the worker has no transport authentication: both transports bind insecure gRPC ports, the socket's permissions are left to the process umask, and TCP mode listens on all interfaces
 **Amends:** [ADR-040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) (a second repository, in Go)
-**Supersedes:** [ADR-035](./adr-035-streaming-input-is-a-distinct-first-class-runtime.md), [ADR-037](./adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md)
+**Supersedes:** [ADR-035](retired/adr-035-streaming-input-is-a-distinct-first-class-runtime.md), [ADR-037](retired/adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md)
 **Relates to:** [ADR-036](./adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md), [ADR-038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md), [ADR-039](./adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md)
 
 The continuous plane — event time, watermarks, windows, channels, replay, device I/O, capability

@@ -51,12 +51,12 @@
     {
       "num": "003",
       "title": "Reuse RubyLLM public values; durable codec",
-      "status": "Retired 2026-08-26 — superseded by [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md)",
+      "status": "Retired 2026-08-26 — superseded by [ADR-048](../adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
       "implementation": null,
-      "file": "adr-003-reuse-rubyllm-public-values.md",
+      "file": "retired/adr-003-reuse-rubyllm-public-values.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [
@@ -74,7 +74,7 @@
       "date": "2026-07-30",
       "tier": null,
       "implementation": null,
-      "file": "adr-004-explicit-tamoz-seq-no-native-proc.md",
+      "file": "retired/adr-004-explicit-tamoz-seq-no-native-proc.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [],
@@ -230,12 +230,12 @@
     {
       "num": "012",
       "title": "MCP is a deferred integration strategy",
-      "status": "Retired 2026-07-30 — superseded by [ADR-029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md)",
+      "status": "Retired 2026-07-30 — superseded by [ADR-029](../adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
       "implementation": null,
-      "file": "adr-012-mcp-deferred-integration.md",
+      "file": "retired/adr-012-mcp-deferred-integration.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [
@@ -784,12 +784,12 @@
     {
       "num": "035",
       "title": "Streaming input is a distinct first-class runtime",
-      "status": "Retired 2026-10-01 — superseded by [ADR-036](./adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md) and [ADR-055](./adr-055-two-repo-authority-split.md)",
+      "status": "Retired 2026-10-01 — superseded by [ADR-036](../adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md) and [ADR-055](../adr-055-two-repo-authority-split.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
       "implementation": null,
-      "file": "adr-035-streaming-input-is-a-distinct-first-class-runtime.md",
+      "file": "retired/adr-035-streaming-input-is-a-distinct-first-class-runtime.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [
@@ -830,12 +830,12 @@
     {
       "num": "037",
       "title": "Event time, explicit backpressure, and effect-disabled replay are contracts",
-      "status": "Retired 2026-10-01 — superseded by [ADR-055](./adr-055-two-repo-authority-split.md)",
+      "status": "Retired 2026-10-01 — superseded by [ADR-055](../adr-055-two-repo-authority-split.md)",
       "state": "retired",
       "date": "2026-07-30",
       "tier": null,
       "implementation": null,
-      "file": "adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md",
+      "file": "retired/adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [
@@ -971,12 +971,12 @@
     {
       "num": "043",
       "title": "Telegram v1 is deny-only and reference-bound",
-      "status": "Retired 2026-10-01 — superseded by [ADR-049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md)",
+      "status": "Retired 2026-10-01 — superseded by [ADR-049](../adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md)",
       "state": "retired",
       "date": "2026-08-10",
       "tier": null,
       "implementation": null,
-      "file": "adr-043-telegram-v1-is-deny-only-and-reference-bound.md",
+      "file": "retired/adr-043-telegram-v1-is-deny-only-and-reference-bound.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [
@@ -1167,12 +1167,12 @@
     {
       "num": "051",
       "title": "RubyLLM is removed from the runtime; message and tool fidelity are Tamoz-native",
-      "status": "Retired 2026-10-01 — superseded by [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md)",
+      "status": "Retired 2026-10-01 — superseded by [ADR-048](../adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md)",
       "state": "retired",
       "date": "2026-08-26",
       "tier": null,
       "implementation": null,
-      "file": "adr-051-rubyllm-removed.md",
+      "file": "retired/adr-051-rubyllm-removed.md",
       "relates_to": [],
       "supersedes": [],
       "superseded_by": [

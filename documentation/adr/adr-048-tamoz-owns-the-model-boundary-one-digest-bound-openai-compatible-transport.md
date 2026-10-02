@@ -4,7 +4,7 @@
 **Date:** 2026-08-26
 **Tier:** F
 **Implementation:** Complete
-**Supersedes:** [ADR-003](./adr-003-reuse-rubyllm-public-values.md), [ADR-051](./adr-051-rubyllm-removed.md)
+**Supersedes:** [ADR-003](retired/adr-003-reuse-rubyllm-public-values.md), [ADR-051](retired/adr-051-rubyllm-removed.md)
 **Relates to:** [ADR-016](./adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md) (every model call is a journaled effect)
 
 Every model call — session, one-shot, and stream episode — goes through one Tamoz-owned client that

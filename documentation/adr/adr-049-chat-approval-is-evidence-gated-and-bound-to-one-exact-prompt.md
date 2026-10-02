@@ -4,7 +4,7 @@
 **Date:** 2026-08-12
 **Tier:** F
 **Implementation:** Complete
-**Supersedes:** [ADR-043](./adr-043-telegram-v1-is-deny-only-and-reference-bound.md)
+**Supersedes:** [ADR-043](retired/adr-043-telegram-v1-is-deny-only-and-reference-bound.md)
 **Relates to:** [ADR-053](./adr-053-approval-gem.md) (where `required_evidence` is decided), [ADR-042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) (the process that enforces this), [ADR-022](./adr-022-reviewed-plan-gate.md) (approval only applies to an already planned action)
 
 Whether a chat press may approve a withheld action depends on the evidence the presser holds, not on

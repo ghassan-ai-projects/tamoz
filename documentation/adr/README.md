@@ -147,13 +147,13 @@ decision is not built; the ADR says which part.
 | ADR | Decision | Replaced by |
 |---|---|---|
 | [002](./retired/adr-002-four-v0-1-runtime-gems.md) | ~~Four v0.1 runtime gems~~ | 052 |
-| [003](./adr-003-reuse-rubyllm-public-values.md) | ~~Reuse RubyLLM public values; durable codec~~ | 048 |
-| [004](./adr-004-explicit-tamoz-seq-no-native-proc.md) | ~~Explicit `Tamoz.seq`; no native `Proc#>>`~~ | withdrawn |
-| [012](./adr-012-mcp-deferred-integration.md) | ~~MCP is a deferred integration strategy~~ | 029 |
-| [035](./adr-035-streaming-input-is-a-distinct-first-class-runtime.md) | ~~Streaming input is a distinct first-class runtime~~ | 036, 055 |
-| [037](./adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md) | ~~Event time, explicit backpressure, and effect-disabled replay are contracts~~ | 055 |
-| [043](./adr-043-telegram-v1-is-deny-only-and-reference-bound.md) | ~~Telegram v1 is deny-only and reference-bound~~ | 049 |
-| [051](./adr-051-rubyllm-removed.md) | ~~RubyLLM is removed from the runtime~~ | 048 |
+| [003](retired/adr-003-reuse-rubyllm-public-values.md) | ~~Reuse RubyLLM public values; durable codec~~ | 048 |
+| [004](retired/adr-004-explicit-tamoz-seq-no-native-proc.md) | ~~Explicit `Tamoz.seq`; no native `Proc#>>`~~ | withdrawn |
+| [012](retired/adr-012-mcp-deferred-integration.md) | ~~MCP is a deferred integration strategy~~ | 029 |
+| [035](retired/adr-035-streaming-input-is-a-distinct-first-class-runtime.md) | ~~Streaming input is a distinct first-class runtime~~ | 036, 055 |
+| [037](retired/adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md) | ~~Event time, explicit backpressure, and effect-disabled replay are contracts~~ | 055 |
+| [043](retired/adr-043-telegram-v1-is-deny-only-and-reference-bound.md) | ~~Telegram v1 is deny-only and reference-bound~~ | 049 |
+| [051](retired/adr-051-rubyllm-removed.md) | ~~RubyLLM is removed from the runtime~~ | 048 |
 
 What each said and why it died: [`RETIRED.md`](./RETIRED.md).
 

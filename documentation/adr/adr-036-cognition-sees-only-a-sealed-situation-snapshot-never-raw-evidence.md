@@ -4,7 +4,7 @@
 **Date:** 2026-07-30
 **Tier:** F
 **Implementation:** Complete — Tamoz side only; admission and Situation reduction live in `agentic-stream` and are not verified here
-**Supersedes:** [ADR-035](./adr-035-streaming-input-is-a-distinct-first-class-runtime.md)
+**Supersedes:** [ADR-035](retired/adr-035-streaming-input-is-a-distinct-first-class-runtime.md)
 **Relates to:** [ADR-055](./adr-055-two-repo-authority-split.md) (who builds the snapshot), [ADR-038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md) (what an episode may propose)
 
 Unbounded evidence never enters a Tamoz graph or a model. A deterministic plane reduces it into an
