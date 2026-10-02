@@ -17,7 +17,7 @@ clause or has a dedicated test yet.
 | [008](./adr-008-threads-is-the-default-pool-inline-in-tests.md) | `:threads` is the default pool; `:inline` in tests | C | `tamoz-concurrency`, `tamoz-core` | — | — |
 | [009](./adr-009-the-model-request-prefix-is-byte-stable-within-a-cache-epoch.md) | Keep model request prefixes stable within a request series | C | `tamoz-context-engine` | 16 | `adr_tooling_test.rb` |
 | [011](./adr-011-sqlite-is-tamoz-agent-s-default-persistence.md) | SQLite is Tamoz Agent's default persistence | C | `tamoz-sqlite` | — | — |
-| [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public vocabulary is a budget, never a correctness cap | C | — | — | — |
+| [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public concepts are documented and introduced when needed | C | — | — | — |
 | [014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) | Extensions are first-party adapter gems, not plugins | F | `tamoz-comms`, `tamoz-core`, `tamoz-observability` | 35, 42 | — |
 | [015](./adr-015-durable-means-synchronous-barrier-commit.md) | Durable means synchronous barrier commit | F | `tamoz-agent-s-default-persistence`, `tamoz-graph`, `tamoz-sqlite` | 1, 2, 4, 19 | `documentation_surface_test.rb` |
 | [016](./adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md) | Every external effect is journaled, and ambiguity stops as `:unknown` | F | `tamoz-agent-kernel`, `tamoz-sqlite` | 21, 52, 54 | — |

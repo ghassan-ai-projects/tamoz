@@ -15,6 +15,7 @@ root is the entry point; this folder contains the detailed reference material.
 ## Start here
 
 - [overview/product.md](overview/product.md): what Tamoz is, what it is not, and who it is for
+- [concepts.md](concepts.md): public concepts, when to use them, and where to learn more
 - [overview/concepts.md](overview/concepts.md): the core mental model — a graph run, a checkpoint, a review
 - [getting-started/quickstart.md](getting-started/quickstart.md): install, ask, and try an approved change
 - [getting-started/install.md](getting-started/install.md): requirements, the 29 gems, and the full install surface

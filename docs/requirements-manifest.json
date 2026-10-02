@@ -170,7 +170,7 @@
       "id": "ADR-013",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Public vocabulary is a budget, never a correctness cap",
+      "title": "Public concepts are documented and introduced when needed",
       "release_blocking": false,
       "status": "unverified",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",

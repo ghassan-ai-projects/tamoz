@@ -36,7 +36,7 @@ decision is not built; the ADR says which part.
 | ADR | Decision | Tier | Implementation |
 |---|---|---|---|
 | [001](./adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md) | The framework is Tamoz; the reference application is Tamoz Agent | C | Complete |
-| [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public vocabulary is a budget, never a correctness cap | C | Complete |
+| [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public concepts are documented and introduced when needed | C | Complete |
 | [014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) | Extensions are first-party adapter gems, not plugins | F | Complete |
 | [040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) | One monorepo, multiple independently publishable gems | C | Complete |
 | [052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md) | A gem owns one dependency boundary and is reached only through its facade | C | Partial |
