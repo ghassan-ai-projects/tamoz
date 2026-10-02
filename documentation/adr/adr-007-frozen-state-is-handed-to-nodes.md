@@ -5,22 +5,39 @@
 **Tier:** C
 **Implementation:** Complete
 
-Durable values are normalized, copied, and recursively frozen at commit; a value that cannot be
-made immutable is refused before execution.
+Nodes read a snapshot of state that they cannot change in place. They return updates for the
+graph to apply.
 
 ## Context
 
-Nodes in one superstep read the same snapshot concurrently, and that snapshot is checkpointed. A
-mutable value handed to a node can be mutated by a sibling, changed after commit, or fail to
-round-trip — each a nondeterministic replay.
+Several nodes can read the same state at the same time. If one changes that state directly,
+another may see different input depending on which node runs first. A saved copy of state must
+also be protected from later changes.
 
 ## Decision
 
-The state codec normalizes durable values to codec-registered immutable types and freezes them
-recursively (`Tamoz::Core.deep_freeze`). Hashes, arrays, and strings are copied and frozen;
-cyclic, ambiguous, or unregistered mutable objects fail closed. Shallow freeze is not enough.
+Tamoz prepares state through `Tamoz::StateCodec`, which encodes values and reconstructs them.
+For built-in hashes, arrays and strings, this produces copies that are frozen, including nested
+values. Freezing only the outer hash would leave its contents open to changes.
+
+Nodes return updates rather than changing their input. For example, a node increments a declared
+`count` key by returning a new hash:
+
+```ruby
+{count: state[:count] + 1}
+```
+
+Assigning directly to `state[:count]` raises `FrozenError`. The graph applies returned updates
+using the merge rules in ADR-006.
+
+Unsupported values and cycles are rejected. Custom Ruby objects need a registered encoder,
+decoder and immutability check; Tamoz accepts them only when that check passes.
 
 ## Consequences
 
-Sibling nodes cannot mutate shared state, and a checkpoint is the same bytes on replay. **Cost:**
-nodes return new values instead of mutating; custom value types must register an immutable codec.
+Nodes cannot accidentally change the built-in state values shared with other nodes. This also
+protects saved snapshots, but does not by itself guarantee that running the graph again produces
+the same result.
+
+**Cost:** nodes must create updates instead of changing state in place. Custom types require
+serialization support and a trustworthy immutability check.
