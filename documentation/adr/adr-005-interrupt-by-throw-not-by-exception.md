@@ -5,24 +5,30 @@
 **Tier:** C
 **Implementation:** Complete
 
-A node pauses with `throw :tamoz_interrupt`, caught inside the worker that ran it, so no
-`rescue` in user code can swallow a pause.
+A node signals a pause through worker-local `throw`/`catch`, keeping pause requests separate from
+execution errors.
 
 ## Context
 
-LangGraph's interrupt is an exception, and its most repeated warning is "never wrap `interrupt()`
-in a bare `try/except`" — a rule the framework cannot enforce. A swallowed interrupt is worse than a
-crash: an approval gate that never pauses. Ruby's `throw`/`catch` is not an exception and `rescue`
-cannot intercept it.
+A node may need to pause execution to obtain input or approval. Application code routinely rescues
+exceptions to recover from errors. If a pause were represented as an exception, an error handler
+could consume it and let execution continue instead of pausing.
 
 ## Decision
 
-`InterruptCursor#call` throws `:tamoz_interrupt`. The matching `catch` wraps each task inside the
-pool worker that executes it (`Tamoz::Pool::Base#execute`) and returns a typed `Interrupted`
-result; nothing above the worker catches it. A throw never crosses a thread.
+When no resume value is available for an interrupt call, `InterruptCursor#call` throws
+`:tamoz_interrupt` with the interrupt descriptor. When a resume value is available, it returns
+that value and execution continues.
+
+`Tamoz::Pool::Base#execute` installs the matching `catch` around each task in the worker executing
+it and returns `Tamoz::TaskResult::Interrupted` to the graph executor. The signal stays within
+that task's thread; it is not a cross-thread pause mechanism.
 
 ## Consequences
 
-User code can `rescue StandardError` freely without breaking pauses. **Cost:** every pool
-implementation must install the `catch` around each task, and an interrupt is scoped to one
-worker's task — there is no cross-thread pause.
+Ordinary `rescue StandardError` handlers do not intercept the pause signal. Node code can still
+intercept it with its own matching `catch`; this mechanism separates control flow from errors,
+it does not isolate untrusted node code.
+
+**Cost:** each pool implementation must catch interrupts inside the executing task, and a pause
+cannot directly interrupt work running in another thread.
