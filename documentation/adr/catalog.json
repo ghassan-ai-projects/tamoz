@@ -164,12 +164,12 @@
     },
     {
       "num": "009",
-      "title": "The model request prefix is byte-stable within a cache epoch",
+      "title": "Keep model request prefixes stable within a request series",
       "status": "Accepted 2026-07-30",
       "state": "accepted",
       "date": "2026-07-30",
       "tier": "C",
-      "implementation": "Complete",
+      "implementation": "Partial — settings/catalog identity and history-replacement boundaries need reconciliation",
       "file": "adr-009-the-model-request-prefix-is-byte-stable-within-a-cache-epoch.md",
       "relates_to": [
         "033"

@@ -1,29 +1,49 @@
-# ADR-009 — The model request prefix is byte-stable within a cache epoch
+# ADR-009 — Keep model request prefixes stable within a request series
 
 **Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
 **Tier:** C
-**Implementation:** Complete
-**Relates to:** [ADR-033](./adr-033-skills-use-the-open-agent-skills-format-and-stay-an-agent-recipe.md) (the skill catalog digest is part of the prefix)
+**Implementation:** Partial — settings/catalog identity and history-replacement boundaries need reconciliation
+**Relates to:** [ADR-033](./adr-033-skills-use-the-open-agent-skills-format-and-stay-an-agent-recipe.md) (skill instructions also become model request content)
 
-System content, tool schemas, model settings, and the skill catalog render to the same bytes for
-every request in a series; any change starts a new series with a recorded reason.
+Keep existing request content unchanged as a conversation grows. Append new content, and record a
+new request series when the fixed configuration changes or history is compacted.
 
 ## Context
 
-Provider prompt caching breaks silently when the prompt prefix changes: nothing errors, nothing
-logs, and cost multiplies. Common causes are invisible — tool registration order, locale-dependent
-sorting, a timestamp in the system prompt, rewriting old history. A guideline cannot catch them; a
-check over the rendered bytes can.
+Model requests repeatedly include instructions, tool definitions and earlier conversation content.
+Keeping that beginning identical lets a provider reuse cached processing when its caching
+conditions are met. Accidental changes, such as a different tool order or an added timestamp,
+can prevent reuse even when the content means the same thing.
 
 ## Decision
 
-The request header (system sections and tool schemas) renders in a fixed, locale-independent byte
-order. Each request either continues the current series with an identical header digest, or starts
-a new one with a logged reason (`initial`, `change`, `series`, compaction). History is append-only;
-compaction is the only rewrite and always starts a new series. This is invariant 16.
+Render the fixed request header in a consistent, locale-independent order. Keep system content,
+tool definitions, model settings and the skill catalog stable within a request series: consecutive
+requests that share the same fixed configuration and extend the same conversation history.
+
+A simplified example shows how a conversation grows (tool-call messages are omitted):
+
+```text
+Request 1: instructions + tool definitions + user question
+Request 2: instructions + tool definitions + user question + tool result
+Request 3: instructions + tool definitions + user question + tool result + follow-up
+```
+
+The earlier content stays exactly the same, including ordering and whitespace. New conversation
+entries go at the end; a correction is another entry, rather than an edit to an earlier one.
+
+Record the header digest, a fingerprint of its content, for each request. A changed header starts
+a new series with a recorded reason. Compaction replaces earlier conversation content with a
+shorter representation and also starts a new series. This is the rule in invariant 16.
 
 ## Consequences
 
-Every cache miss is attributable to a recorded reason. **Cost:** toolsets cannot change freely
-mid-series, and history cannot be edited in place — a correction is a new appended entry.
+Stable prefixes support cache reuse and make local changes traceable. They do not guarantee a
+provider cache hit or explain every cache miss. **Cost:** changing tools or other fixed content
+requires a new series; conversation history cannot be edited freely in place.
+
+Implementation is partial: the current header digest covers model identity, system text and tool
+schemas, but not all model settings or an explicit skill catalog digest. The work loop also prunes
+and resets context; its history-replacement boundaries need reconciliation with the append-only
+rule. These gaps do not change the accepted decision.
