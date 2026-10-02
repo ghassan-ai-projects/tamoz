@@ -1,92 +1,58 @@
 # ADR-023 — Self-improvement is candidate promotion, never live self-mutation
 
 **Status:** Accepted 2026-07-30
-**Date:** 2026-07-30 (elevated to a full page 2026-08-29)
-**Relates to:** ADR-022 (reviewed-plan gate), ADR-025 (evaluation is a non-runtime gem), ADR-026/ADR-027 (memory layers and authorization), ADR-028 (self-healing), ADR-034 (skill identity and staged activation).
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Date:** 2026-07-30
+**Tier:** F
+**Implementation:** Partial — heuristic candidates get the full holdout pipeline; profile, skill, and config candidates get a human-approved, digest-bound lifecycle without a holdout; code candidates have no path
+**Relates to:** [ADR-025](./adr-025-evaluation-is-a-first-class-non-runtime-gem.md) (the evaluator outside the subject); [ADR-034](./adr-034-skill-identity-is-a-tree-digest-activation-is-supply-chain-promotion.md), [ADR-028](./adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md) (the same rule for skills and healing rules)
 
-A learning agent that can rewrite its own prompt, evaluator, policy, or code can redefine what
-"success" means and hide its own regressions. This decision draws the boundary: improvement is
-a *promotion pipeline with a holdout and a human gate*, never a running agent editing itself.
+The running agent never edits its own prompt, policy, evaluator, capabilities, or code. Improvements
+are candidates that must pass a holdout, carry provenance, and be promoted to a new behavior version
+that can be rolled back.
 
-Current version: `0.1.0.alpha.1` (pre-release).
+## Context
 
-## 1. Context
+Trajectories suggest improvements: heuristics, prompts, skills, policies, code. Letting the running
+agent adopt them live is fatal for an evaluated system: if the subject can change its evaluator or
+permissions, no measurement of it can be trusted, and the thing that would detect a regression is
+the thing that changed.
 
-Trajectories naturally produce candidate improvements — new memories, heuristics, prompts,
-skills, policies, configuration, even code. The tempting shortcut is to let the running agent
-adopt them live. That shortcut is fatal for an evaluated system: if the subject can change its
-own evaluator or permissions, no measurement of it can be trusted, and a regression becomes
-unauditable because the thing that would detect it was the thing that changed.
+## Decision
 
-## 2. Decision
+- A candidate is generated from verified trajectories with immutable provenance. The generator
+  cannot read the holdout or the evaluator's output.
+- Promotion needs a paired evaluation on a holdout distinct from anything the generator saw, a
+  policy gate, a new behavior version, monitoring, and byte-identical rollback.
+- Capability, security, evaluator, prompt-hierarchy, and code changes need a human approval
+  artifact (`human:<actor>`, asserted by the caller — not authenticated). A candidate cannot
+  evaluate, approve, or promote itself.
+- A resumed turn runs the behavior version recorded in its checkpoint.
 
-**Self-improvement is candidate generation followed by an evaluated, versioned, reversible
-promotion — never live self-mutation of the active behavior.**
+The human gate may be relaxed only for a candidate class shown to be unable to widen authority
+or change the evaluator by construction, with a test for each.
 
-Every promotion requires, without exception:
+## Consequences
 
-- a **distinct holdout** evaluation (separate from any set the subject saw),
-- **immutable provenance** for the candidate,
-- a **policy gate**, a **behavior version**, **monitoring**, and **rollback**.
+Every promoted heuristic is attributable to provenance, a holdout result, and a named approver, and
+can be undone; profile, skill, and config candidates carry an approver but no holdout. **Cost:** improvement is slow by construction.
 
-And the hard limits:
+## Invariants
 
-- **Capability, security, evaluator, prompt-hierarchy, and code** changes require **human
-  approval**; generated content **cannot approve itself**.
-- **Resume pins the behavior version** recorded in the checkpoint — a resumed turn runs the
-  behavior it was checkpointed with, not a newer one.
+- 28 — self-improvement is evaluated and reversible.
+- 43 — skill install, update, and self-improvement are staged and evaluated.
 
-## 3. Consequences
+## Threat model
 
-- Every behavior change is attributable to a promotion with provenance, a holdout result, and
-  an approver — reproducible after the fact.
-- Regressions are catchable and reversible: monitoring plus rollback plus a pinned behavior
-  version means a bad promotion is bounded and undoable.
-- The subject cannot game its own evaluation, because the evaluator is outside the promotion it
-  is judging (ADR-025: `tamoz-evals` is non-runtime and outside the subject).
-- Cost: improvement is slow by construction — nothing lands "live." That latency is the price
-  of auditability and is intentional.
+**Asset:** the active behavior and the evaluator that judges it. **Adversary:** an optimizing
+generator (reward hacking) or a poisoned trajectory.
 
-## 4. Invariant linkage
-
-- Depends on **ADR-025** (evaluation observes behavior without being in its dependency graph;
-  Wisdom cannot activate without `tamoz-evals` and a behavior-version transition — ADR-026).
-- Shares the **reviewed-plan gate** of ADR-022: a promotion that acts does so under a reviewed
-  plan.
-- Mirrors **ADR-034** for skills (staged activation, candidates cannot self-approve) and
-  **ADR-028** for healing rules (cannot promote or reset themselves).
-
-## 5. Threat model
-
-**Asset:** the active behavior — the prompt hierarchy, evaluator, policy, capabilities, and
-code that define what the agent is and how it is judged.
-
-| Threat | Vector | Mitigation |
-|---|---|---|
-| The agent rewrites its own evaluator to pass | Live self-mutation of the judge | Evaluator changes require human approval; the evaluator is non-runtime and outside the subject (ADR-025) |
-| A candidate approves itself | Generated content ratifies its own promotion | Generated content cannot approve itself; capability/security/code/prompt changes need a human |
-| A regression ships invisibly | Live adoption with no holdout | Distinct holdout, monitoring, and rollback are mandatory before promotion |
-| Resume adopts a newer, unvetted behavior | Behavior drift across a crash | Resume pins the checkpoint's behavior version |
-| Provenance is lost, so a bad change can't be traced | Mutable candidate history | Immutable provenance is mandatory |
-
-## 6. Rejected alternatives
-
-| Rejected | Why |
+| Threat | Mitigation |
 |---|---|
-| Let the running agent rewrite its active prompt, evaluator, policy, or code | It can change its evaluator or permissions and hide regressions; makes any measurement of it untrustworthy |
-| Promote on repetition ("it worked twice, adopt it") | Repetition does not turn a claim into fact (ADR-026); a holdout, not frequency, authorizes a change |
-| Auto-approve low-risk candidates | Self-approval is the hole; the human gate on capability/security/evaluator/prompt/code is non-negotiable |
+| The agent rewrites its evaluator to pass | Evaluator tampering is refused; evaluator changes need a human |
+| A candidate approves itself | Self-evaluation and self-promotion are refused |
+| An overfit candidate ships | Holdout regression refuses promotion |
+| Resume adopts a newer, unvetted behavior | Resume pins the checkpoint's behavior version |
+| A bad promotion cannot be undone | Rollback restores the prior epoch byte-identically |
 
-## 7. Verification
-
-Verified against code: 2026-08-29 — the self-improvement vertical is `tamoz-agent-improvement`
-(gemspec: "the self-improvement vertical … candidate promotion"), separate from the runtime and
-from `tamoz-evals`. *Recommended follow-up:* cite the promotion/holdout conformance suite path
-once confirmed in `tamoz-evals`.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR index
-- [`adr-022-reviewed-plan-gate.md`](./adr-022-reviewed-plan-gate.md) — the sibling action gate
-- [ADR-025 — evaluation is a non-runtime gem](./adr-025-evaluation-is-a-first-class-non-runtime-gem.md)
+**Residual risk:** the holdout is only as representative as its tasks; a candidate that games
+something the holdout does not measure can pass.

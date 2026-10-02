@@ -1308,7 +1308,7 @@ None.
 | `bin/tamoz-stream-subscriber` | 99 (read fully) | Standalone Channel-B subscriber launcher |
 | `gems/tamoz-stream/lib/tamoz/stream/sse_transport.rb` | — (constructor, `stop`, `require_http_url!` read) | SSE transport |
 | `gems/tamoz-stream/lib/tamoz/stream/outcome_subscriber.rb` | — (`run` read) | Subscription loop |
-| `documentation/adr/approval-policy-redesign/05-implementation-plan.md:700-704` | — | Names this launcher's relay injection |
+| `docs/approval-policy-redesign-2026-08-22/05-implementation-plan.md:700-704` | — | Names this launcher's relay injection |
 
 Entry seam: `$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])`
 (`:8`) — a **glob of every gem lib**, unlike E06/E07's explicit pairs.
@@ -1495,7 +1495,7 @@ Two structural notes recorded as `info`:
   doc promises otherwise.
 - **E08-MNT-02** — nothing in this brief's scope tests the launcher. `grep` for
   `bin/tamoz-stream-subscriber` across `test/` finds only ADR prose references
-  (`documentation/adr/approval-policy-redesign/*`), never a test. The
+  (`docs/approval-policy-redesign-2026-08-22/*`), never a test. The
   `LiveLearningHandlers` and `OutcomeSubscriber` classes it wires are tested at
   the gem row; the **launcher's loop** is not. That is the coverage hole that
   let E08-REL-01 persist, and it is recorded so the coordinator can weight the

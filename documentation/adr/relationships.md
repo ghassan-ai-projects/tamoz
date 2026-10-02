@@ -12,26 +12,30 @@ graph LR
   A012["ADR-012<br/>MCP is a deferred integration stra"]:::retired
   A029["ADR-029<br/>MCP is native at the edge and uses"]
   A030["ADR-030<br/>One local capability catalog gover"]
-  A035["ADR-035<br/>Streaming input is a distinct firs"]
-  A037["ADR-037<br/>Event time, explicit backpressure,"]
+  A033["ADR-033<br/>Skills use the open Agent Skills f"]
+  A035["ADR-035<br/>Streaming input is a distinct firs"]:::retired
+  A036["ADR-036<br/>Cognition sees only a sealed Situa"]
+  A037["ADR-037<br/>Event time, explicit backpressure,"]:::retired
   A040["ADR-040<br/>One monorepo, multiple independent"]
-  A043["ADR-043<br/>Telegram v1 is deny-only and refer"]
-  A048["ADR-048<br/>One digest-bound OpenAI-compatible"]
-  A049["ADR-049<br/>Telegram approval is evidence-gate"]
-  A051["ADR-051<br/>RubyLLM is removed from the runtim"]
-  A052["ADR-052<br/>tamoz-agent is decomposed into foc"]
+  A043["ADR-043<br/>Telegram v1 is deny-only and refer"]:::retired
+  A048["ADR-048<br/>Tamoz owns the model boundary"]
+  A049["ADR-049<br/>Chat approval is evidence-gated an"]
+  A051["ADR-051<br/>RubyLLM is removed from the runtim"]:::retired
+  A052["ADR-052<br/>A gem owns one dependency boundary"]
   A054["ADR-054<br/>Websearch is the fourth capability"]
   A055["ADR-055<br/>The continuous plane is a separate"]
+  A056["ADR-056<br/>Skills are a gem, tamoz-skills, re"]
   A002 -->|superseded by| A052
   A003 -->|superseded by| A048
-  A003 -->|superseded by| A051
   A012 -->|superseded by| A029
   A030 -.->|amended by| A054
-  A035 -.->|amended by| A055
-  A037 -.->|amended by| A055
-  A040 -.->|amended by| A052
-  A043 -.->|amended by| A049
-  A048 -.->|amended by| A051
+  A033 -.->|amended by| A056
+  A035 -->|superseded by| A036
+  A035 -->|superseded by| A055
+  A037 -->|superseded by| A055
+  A040 -.->|amended by| A055
+  A043 -->|superseded by| A049
+  A051 -->|superseded by| A048
   classDef retired fill:#eee,stroke:#999,color:#666,stroke-dasharray:3 3;
 ```
 

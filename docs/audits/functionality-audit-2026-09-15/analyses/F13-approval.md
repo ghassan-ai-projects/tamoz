@@ -31,7 +31,7 @@ already accepted there.
 | `gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb` and `runtime/step_execution.rb` | durable and one-shot approval callers |
 | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb`, `cli.rb`, and `cli_schedule_commands.rb` | reload, interactive resolution, and scheduled-work entry points |
 | `gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb` and `gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb` | persisted schedule approval profile and materialization boundary |
-| `documentation/adr/approval-policy-redesign/00-acceptance-bar.md` and `03-redesign-adr.md` | normative scope, revision, grant, reload, and durable-log contracts |
+| `docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md` and `03-redesign-adr.md` | normative scope, revision, grant, reload, and durable-log contracts |
 
 ## Behavior path
 
@@ -194,7 +194,7 @@ effective revision before `Engine#reload`; test a profile-sensitive reload.
   tool-level `grant_scopes: [once, session]`; the loader accepts it, the evaluator
   offers a session grant, and the engine can persist that grant. This violates the
   no-session authority invariant for opaque or high-risk tiers.
-- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:209-228`, `239-255`; `gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256`; `documentation/adr/approval-policy-redesign/00-acceptance-bar.md:67-73`, `98-101`; `documentation/adr/approval-policy-redesign/03-redesign-adr.md:370-376`.
+- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:209-228`, `239-255`; `gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256`; `docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:67-73`, `98-101`; `docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:370-376`.
 
 Five whys:
 
@@ -220,7 +220,7 @@ rule. Add a regression with a network tool entry, not only a tier-level scope.
   engine will offer and mint it with no lifecycle or lookup semantics. The
   normative contract defines only `:once` and `:session`, so policy authors can
   create authority values that callers and stores do not understand uniformly.
-- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:116-142`, `201-255`; `gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256`; `documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-376`.
+- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:116-142`, `201-255`; `gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256`; `docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:375-376`.
 
 Five whys:
 
@@ -245,7 +245,7 @@ the Engine membership check as a defense in depth.
   recorded leaves the durable answer present but the lookupable session grant
   absent. Replays return the recorded grant before attempting insertion, so the
   worker repeatedly re-asks instead of converging.
-- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/engine.rb:73-100`; `gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:5-11`, `93-112`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:63-87`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-45`; `documentation/adr/approval-policy-redesign/00-acceptance-bar.md:76-84`.
+- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/engine.rb:73-100`; `gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:5-11`, `93-112`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:63-87`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-45`; `docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:76-84`.
 
 Five whys:
 
@@ -271,7 +271,7 @@ able to commit the resolution and grant together when both are SQLite-backed.
   the session under the new profile even though no switch is durable. A restart
   reconstructs the old mode; the inbox request may also retry after the worker has
   already changed memory.
-- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/engine.rb:135-157`, `183-199`; `gems/tamoz-agent/lib/tamoz/agent/worker.rb:988-1033`; `gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:29-43`; `documentation/adr/approval-policy-redesign/00-acceptance-bar.md:135-140`; `documentation/adr/approval-policy-redesign/03-redesign-adr.md:464-498`.
+- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/engine.rb:135-157`, `183-199`; `gems/tamoz-agent/lib/tamoz/agent/worker.rb:988-1033`; `gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:29-43`; `docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:135-140`; `docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:464-498`.
 
 Five whys:
 
@@ -297,7 +297,7 @@ retryable when audit recording fails; add a failure-injected mode-switch test.
   grant under a stable `profile:<id>` key. If the worker crashes before cleanup,
   a later worker with the same policy revision and profile key can receive an
   automatic `engine.grant_hit` allow for the old grant.
-- **Citations:** `gems/tamoz-agent/lib/tamoz/agent/worker.rb:491-500`, `106-112`; `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:1171-1176`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:160-179`, `282-296`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-55`; `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1085-1099`; `documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-386`.
+- **Citations:** `gems/tamoz-agent/lib/tamoz/agent/worker.rb:491-500`, `106-112`; `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb:1171-1176`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:160-179`, `282-296`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-55`; `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1085-1099`; `docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:375-386`.
 
 Five whys:
 
@@ -327,7 +327,7 @@ exception and add an explicit lifecycle proof.
   `tamoz_approval_decisions`, and the migration exposes no purge, archive, or
   bounded-retention operation. A long-lived worker can grow this table without
   an operator-visible resource bound.
-- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:5-11`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:43-53`, `315-334`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:31-52`; `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1101-1137`; `documentation/adr/approval-policy-redesign/04-review-simplicity.md:97-100`.
+- **Citations:** `gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:5-11`; `gems/tamoz-approval/lib/tamoz/approval/engine.rb:43-53`, `315-334`; `gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:31-52`; `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1101-1137`; `docs/approval-policy-redesign-2026-08-22/04-review-simplicity.md:97-100`.
 
 This is recorded as an informational contract/evidence gap, not a claim that a
 current run exceeds a measured limit. The review found no load or retention probe.

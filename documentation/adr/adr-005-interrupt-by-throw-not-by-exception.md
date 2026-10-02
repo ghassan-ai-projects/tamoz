@@ -1,28 +1,34 @@
 # ADR-005 — Interrupt by `throw`, not by exception
 
-**Status:** Accepted.
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Status:** Accepted 2026-07-30
+**Date:** 2026-07-30
+**Tier:** C
+**Implementation:** Complete
+
+A node signals a pause through worker-local `throw`/`catch`, keeping pause requests separate from
+execution errors.
 
 ## Context
 
-LangGraph's interrupt is exception-based, and its most-repeated user warning is *never wrap `interrupt()` in a bare `try/except`* — a rule a framework cannot enforce. Ruby offers `throw`/`catch`, which `rescue` cannot intercept.
+A node may need to pause execution to obtain input or approval. Application code routinely rescues
+exceptions to recover from errors. If a pause were represented as an exception, an error handler
+could consume it and let execution continue instead of pausing.
 
 ## Decision
 
-In Ruby, `throw` cannot be caught by `rescue`, so LangGraph's most-violated rule ("never wrap
-`interrupt()` in a bare `try/except`") becomes structurally impossible. The matching `catch`
-wraps the node inside each worker; a coordinator catch cannot receive a throw from another
-thread.
+When no resume value is available for an interrupt call, `InterruptCursor#call` throws
+`:tamoz_interrupt` with the interrupt descriptor. When a resume value is available, it returns
+that value and execution continues.
+
+`Tamoz::Pool::Base#execute` installs the matching `catch` around each task in the worker executing
+it and returns `Tamoz::TaskResult::Interrupted` to the graph executor. The signal stays within
+that task's thread; it is not a cross-thread pause mechanism.
 
 ## Consequences
 
-The most-violated rule of the reference framework becomes structurally impossible in Tamoz. **Cost:** each worker must wrap its node in the matching `catch`, and a throw cannot cross threads, so interrupt is scoped within a worker.
+Ordinary `rescue StandardError` handlers do not intercept the pause signal. Node code can still
+intercept it with its own matching `catch`; this mechanism separates control flow from errors,
+it does not isolate untrusted node code.
 
-## Verification
-
-Verified against code: 2026-08-29 — `Tamoz::Graph::Executor` (`gems/tamoz-graph/lib/tamoz/graph/executor.rb`) runs the super-step loop that wraps each node in the matching `catch`; interrupt semantics are covered by the invariant conformance suite.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Cost:** each pool implementation must catch interrupts inside the executing task, and a pause
+cannot directly interrupt work running in another thread.

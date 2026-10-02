@@ -1,94 +1,60 @@
 # ADR-022 — Every task action requires a reviewed, digest-bound plan
 
 **Status:** Accepted 2026-07-30
-**Date:** 2026-07-30 (elevated to a full page 2026-08-29)
-**Relates to:** ADR-023 (self-improvement is candidate promotion), ADR-028 (self-healing is bounded remediation), ADR-030 (capability catalog), ADR-053 (approval policy), ADR-049 (evidence-gated approval).
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Date:** 2026-07-30
+**Tier:** F
+**Implementation:** Partial — the durable deliberation path gates every action; the coding work loop gates only file mutations and checks, and lets reads, web research, and read-only delegation run before a plan is accepted
+**Relates to:** [ADR-053](./adr-053-approval-gem.md) (approval decides whether a planned action may proceed); [ADR-023](./adr-023-self-improvement-promotion.md), [ADR-028](./adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md) (neither may act outside this gate)
 
-This is the load-bearing decision behind the product's central claim: *nothing acts without a
-reviewed plan bound to its exact digest.* It was previously recorded as a single terse
-paragraph; its role in the safety story warrants the full treatment.
+No task action runs without an accepted review of the exact persisted plan version that authorizes
+it. A material change makes a new version and closes the gate until it is reviewed again.
 
-Current version: `0.1.0.alpha.1` (pre-release).
+## Context
 
-## 1. Context
+An agent that decides and acts in one step leaves no seam where a human, a critic, or a replay can
+see what was intended before it happened. A system-prompt instruction to "plan first" is not
+durable, not inspectable, and not enforceable across tools, sub-agents, resume, and replanning.
 
-An agent that decides and acts in one step has no seam a human, a critic, or a replay can
-inspect. The failure it invites is the one every autonomous agent eventually hits: it does
-something consequential that no one authorized and no record can explain. The obvious fix — a
-system-prompt instruction to "plan first" — is not durable, not inspectable, and not
-enforceable across tools, subagents, resume, and replanning. It is a suggestion, not a gate.
+## Decision
 
-Tamoz needs the *action gate* to be a structural property of the runtime, not a behavior we
-hope the model exhibits.
+- Every new task — user, scheduled, delegated, or internal — persists a plan, even a one-step one.
+- Deterministic structural and semantic review always runs; medium/high-risk plans also get an
+  independent critic; human review follows approval policy (ADR-053).
+- The accepted review binds the plan's canonical digest. A change to goal, steps, tools, effect
+  class, budget, approval, or verification is a new version; no further action runs until it is
+  accepted. Crash resume reuses the checkpointed exact version.
+- When evidence is missing, an accepted discovery plan may use only locally classified read-only
+  capabilities; its evidence feeds a separately reviewed action plan and authorizes nothing.
 
-## 2. Decision
+A proposal to loosen the plan gate must show that each ungated tool is read-only by local
+classification and state what an injected read can still leak.
 
-**Every new task — user, scheduled, delegated, or internally generated — produces a persisted
-plan, and no task action runs without an accepted review of that exact persisted plan
-version.**
+## Consequences
 
-- The plan is persisted even when the proportionate plan is one step.
-- Deterministic structural and semantic review passes always run. Medium/high-risk or complex
-  plans additionally use an independent critic role; human review remains policy-based.
-- The accepted review **binds the canonical plan digest.** Material change creates a new
-  version and blocks further task action until re-reviewed; crash resume reuses the
-  checkpointed exact version.
-- When material evidence is missing, an accepted **bounded discovery plan** may use only
-  locally classified read-only capabilities; its evidence feeds a *separately reviewed* action
-  plan. Discovery cannot mutate, delegate, execute scripts, or authorize later action.
+On the deliberation path, and for the work loop's plan-bound tools, every action has exactly one
+accepted plan version that authorized it. Replanning and resume
+cannot smuggle unreviewed work. **Cost:** every task pays for a plan and a review, including
+one-step work; the latency and token cost of that has not been measured.
 
-## 3. Consequences
+## Invariants
 
-- The action gate is enforceable and inspectable: for any action, there is exactly one accepted
-  plan version whose digest authorized it.
-- Replanning is safe: a material change re-opens the gate rather than silently proceeding on a
-  stale review.
-- Resume is safe: the checkpoint pins the exact reviewed version, so a crash cannot smuggle an
-  unreviewed plan back into execution.
-- Cost: every task carries plan + review machinery even for one-step work. This is deliberate —
-  a one-step plan is cheap, and the uniformity is what makes the gate a *structural* property
-  rather than a risk-tiered exception.
+- 25 — reviewed plan gates task action.
+- 26 — material change requires re-review.
+- 55 — discovery is reviewed, read-only, and cannot authorize action.
 
-## 4. Invariant linkage
+## Threat model
 
-- Establishes the plan/review/action separation the reviewed-plan invariants depend on.
-- Feeds ADR-053: approval decides *whether an already-planned action may proceed*; this ADR
-  guarantees a reviewed plan exists to decide about.
-- Constrains ADR-023 and ADR-028: neither self-improvement nor self-healing may act outside a
-  reviewed, digest-bound plan.
+**Asset:** the authority to act — mutate the workspace, run a command, call an effectful tool,
+delegate. **Adversary:** a mistaken or prompt-injected model.
 
-## 5. Threat model
-
-**Asset:** the authority to perform a task action (mutate the workspace, call a tool with
-effects, delegate to a subagent).
-
-| Threat | Vector | Mitigation |
-|---|---|---|
-| An action runs that no plan authorized | Model acts mid-reasoning | No action path exists without an accepted plan version whose digest is bound |
-| A reviewed plan is swapped for a different one before execution | Material edit after review | A material change makes a new version and re-blocks until re-reviewed |
-| Resume replays an unreviewed plan | Crash between replan and review | Resume reuses the exact checkpointed reviewed version |
-| Discovery escalates into action | A read-only probe mutates or delegates | Discovery is restricted to locally classified read-only capabilities and cannot authorize later action |
-| Prompt injection issues an "approved" action | Untrusted content claims authority | Authority comes from the accepted review binding a digest, not from any text in context |
-
-## 6. Rejected alternatives
-
-| Rejected | Why |
+| Threat | Mitigation |
 |---|---|
-| A system-prompt "always plan first" instruction | Not durable, inspectable, or enforceable across tools, subagents, resume, and replanning; it cannot prove which plan authorized an action |
-| Plan only for high-risk actions | Leaves a class of actions ungated; the gate must be structural, not risk-tiered, or the exception becomes the hole |
-| Let discovery and action share one plan | A read-only probe would then carry action authority; discovery must feed a separately reviewed action plan |
+| An action runs that no plan authorized | Action paths require an accepted plan version |
+| A plan is swapped after review | Material change is a new version and re-closes the gate |
+| Resume replays an unreviewed plan | Resume reuses the checkpointed reviewed version |
+| Discovery escalates into action | Discovery uses read-only capabilities and authorizes nothing |
+| Injected text claims to be approval | Authority is the review record bound to a digest, never text in context |
 
-## 7. Verification
-
-Verified against code: 2026-08-29 — `Tamoz::Agent::Deliberation` is a central high-fan-in
-symbol (enola: 21 dependents) and the deliberation substrate `tamoz-agent-kernel` owns the
-record/receipt/effect primitives the gate binds. Approval integrates via `tamoz-approval`
-(ADR-053). *Recommended follow-up:* cite the specific conformance clause/test that proves
-"no action without an accepted plan version" once the invariant suite path is confirmed.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR index
-- [`adr-023-self-improvement-promotion.md`](./adr-023-self-improvement-promotion.md) — the sibling learning gate
-- [`../architecture/invariants.md`](../architecture/invariants.md) — the invariant contract
+**Residual risk:** in the coding work loop, reads, web research, and read-only delegation run
+before any plan; they can exfiltrate context through queries (governed only by approval policy and
+egress rules, ADR-054).

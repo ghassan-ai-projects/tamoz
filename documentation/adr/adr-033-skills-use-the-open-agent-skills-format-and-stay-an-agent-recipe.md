@@ -1,37 +1,51 @@
 # ADR-033 — Skills use the open Agent Skills format and stay an agent recipe
 
-**Status:** Accepted 2026-07-30.
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** F
+**Implementation:** Complete
+**Amended by:** [ADR-056](./adr-056-skills-gem.md) (skills now live in their own gem)
+**Relates to:** [ADR-034](./adr-034-skill-identity-is-a-tree-digest-activation-is-supply-chain-promotion.md) (identity and install), [ADR-030](./adr-030-one-local-capability-catalog-governs-all-sources.md) (skills enter through the catalog)
+
+Tamoz reads portable `SKILL.md` directories as instructions and inert resources. Loading a skill
+runs nothing and grants nothing; its scripts can only run through ordinary reviewed tools.
 
 ## Context
 
-A Tamoz-only skill DSL would sacrifice portability and turn instruction packaging into a premature executable extension surface.
+Skills package know-how for an agent. A Tamoz-only skill DSL would give up portability across
+agents and turn instruction packaging into an executable extension point before the core is stable
+(ADR-014). The open Agent Skills format already defines the directory shape.
 
 ## Decision
 
-Tamoz consumes portable `SKILL.md` directories with progressive disclosure; extensions live
-under versioned flat `tamoz.*` metadata keys. Skills are a recipe/resource concern, not a new
-gem — they introduce no independent execution engine. Loading a skill is inert; scripts execute
-only through ordinary reviewed tools.
-*Note (2026-10-01):* ADR-056 moves skills into the `tamoz-skills` gem; the recipe decision stands.
-*Note (2026-08-29):* skill *sourcing* now lives in `tamoz-agent-capabilities` (ADR-052), not in
-a monolithic `tamoz-agent`; the decision (skills are a recipe, not their own engine) is
-unchanged.
+- Tamoz consumes the open Agent Skills format (`SKILL.md` frontmatter plus resources) with
+  progressive disclosure: the catalog shows names and descriptions; `load_skill` renders the body;
+  `read_skill_resource` reads indexed resources, fenced as untrusted author content.
+- Tamoz extensions live under flat `tamoz.*` keys in `metadata` (for example `tamoz.risk`).
+- A skill has no execution engine. `scripts/` is indexed for identity and never readable as a
+  resource; running a script means the model asks an ordinary reviewed tool to run it.
+- `allowed-tools` is a request that can only narrow access (ADR-030).
 
 ## Consequences
 
-Portable `SKILL.md` directories with progressive disclosure; loading a skill is inert and scripts run only through ordinary reviewed tools. **Cost:** Tamoz-specific needs live under versioned flat `tamoz.*` metadata keys constrained to string values.
+Skills written for other agents work in Tamoz, and a skill can never be a backdoor. **Cost:**
+Tamoz-specific needs are limited to flat string metadata keys.
 
-## Rejected alternatives
+## Invariants
 
-- a Tamoz-only skill DSL or plugin API — sacrifices portability and turns instruction packaging into a premature executable extension surface.
+- 41 — skills are portable, source-qualified, content-addressed snapshots.
+- 42 — skill content never grants authority or escapes its tree.
 
-## Verification
+## Threat model
 
-Verified against code: 2026-08-29 — Portable `SKILL.md` sourcing is in `gems/tamoz-skills`.
+**Asset:** the agent's authority and the host filesystem. **Adversary:** a malicious skill author.
 
-## Next reads
+| Threat | Mitigation |
+|---|---|
+| Loading a skill runs code | Compiling and loading execute nothing |
+| A skill grants itself tools | `allowed-tools` only narrows |
+| A resource read escapes the tree | Path alphabet, symlink, hard-link, and FIFO checks at compile |
+| Skill text is followed as instruction from the operator | Rendered fenced as untrusted author content |
 
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Residual risk:** a skill's instructions can still persuade the model; that is prompt injection,
+handled by the plan and approval gates, not by the skill loader.

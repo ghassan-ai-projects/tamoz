@@ -471,7 +471,7 @@ task :ci_budget_start do
 end
 
 desc 'The everyday gate — fast, and honest about what it skips'
-task ci: [:ci_budget_start, 'design:validate', 'adr:validate', :syntax, :test_fast, 'stream:proto:check',
+task ci: [:ci_budget_start, 'design:validate', 'adr:validate', 'adr:verify', :syntax, :test_fast, 'stream:proto:check',
           'quality:architecture'] do
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - CiBudget.started_at
   skipped = (SLOW_TESTS + SERIAL_TESTS).length

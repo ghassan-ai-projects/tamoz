@@ -140,7 +140,7 @@ which is restrictive but honest.
 Evidence:
 
 - `documentation/architecture/security-model.md`;
-- `documentation/adr/adr-049-telegram-approval.md`;
+- `documentation/adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md`;
 - `gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb`;
 - `gems/tamoz-core/lib/tamoz/secret.rb`;
 - `test/comms_evidence_gated_approval_test.rb`.

@@ -1,14 +1,27 @@
 # Tamoz ADR review — 2026-09-29
 
-## Current conclusion
+## Current state (round 3, 2026-10-01/02)
+
+**The corpus has been rewritten to a raised bar and is ready to be walked with the owner, one ADR at
+a time.** Round 3 rewrote all in-force ADRs against the code, retired or merged five, added three
+missing ones, raised the bar to v2, and made the tooling check what it can (structure, relations,
+and that every cited test exists). It did not change runtime behavior or approval policy.
+
+| Read | For |
+|---|---|
+| [round-3-discussion.md](./round-3-discussion.md) | **Start here.** Owner decisions D1–D22 with recommendations, then every ADR in one line: rule, what changed, what is open |
+| [round-3-revision.md](./round-3-revision.md) | What changed and why, the corrections found in code, tooling, and the verification run |
+| [`ADR_QUALITY_BAR.md`](../../documentation/adr/ADR_QUALITY_BAR.md) | The v2 bar every ADR is now written to |
+| [`documentation/adr/README.md`](../../documentation/adr/README.md) | The catalog, grouped by area |
+
+The corpus is **revised**, not **accepted**: the bar requires a semantic review by someone other
+than the author, and the owner decisions in Part 1 of the discussion are still open.
+
+## Round 2 conclusion (2026-09-29, superseded by round 3)
 
 **All 55 ADRs have been reviewed. The corpus is not yet trustworthy as a current architectural decision record.** Many core boundaries are sound, but the documents mix accepted intent, historical implementation, present behavior, and unproven guarantees. The next pass must repair decision reasoning and evidence, not just fill missing template sections.
 
-Round 2 builds on the five first-round reports. It adds decision-quality, product-fit, packaging economics, reliability, scalability, operations, evolution, privacy, and evidence/governance analysis. These lenses were applied by one primary reviewer; this round is **not an independent multi-reviewer sign-off**.
-
-The canonical ADRs and runtime were left unchanged during this review. The documents updated here are the review reports, synthesis, all-ADR disposition, evidence record, and repair program. Current policy was inspected, not changed or re-ratified.
-
-## Read round 2 first
+## Round 2 documents (history)
 
 | Document | Purpose |
 |---|---|

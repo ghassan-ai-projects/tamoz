@@ -78,9 +78,6 @@ PROMOTED_PACKAGES = %w[tamoz-mcp tamoz-scheduler tamoz-stream].freeze
 # they cannot block a release of the packages that do ship: there is no runtime
 # behavior to prove. Every other ADR is release-blocking.
 POLICY_ONLY_ADRS = {
-  "ADR-004" => "The ADR itself defers `tamoz-chain`; `Tamoz.seq`/`Tamoz.step` are " \
-               "not in the release surface (no chain gem exists), so the decision " \
-               "governs no shipped behavior.",
   "ADR-013" => "A vocabulary/review policy with no runtime behavior. The pinned " \
                "public inventory is the enforcing artifact.",
   "ADR-034" => "The tree-digest identity half ships and is directly evidenced; the " \
@@ -494,11 +491,6 @@ EVIDENCE = {
 
   # ---- ADRs ---------------------------------------------------------------
   "ADR-001" => {test: "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice"},
-  "ADR-004" => {test: "test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order",
-                classification: "indirect",
-                rationale: "Composition style decision. No `Proc#>>` surface exists to " \
-                           "test; the named test proves the explicit declaration form is " \
-                           "the only compile path."},
   "ADR-005" => {test: "test/graph_identity_test.rb#test_interrupt_cursor_is_explicit_positional_and_uses_throw",
                 supporting: ["test/core_pool_test.rb#test_interrupt_is_captured_inside_each_worker"]},
   "ADR-006" => {test: "test/graph_reducer_test.rb#test_append_merge_union_min_and_max_contracts",
@@ -507,8 +499,6 @@ EVIDENCE = {
   "ADR-008" => {test: "test/graph_execution_test.rb#test_inline_and_threads_commit_byte_identical_histories",
                 supporting: ["test/core_pool_test.rb#test_inline_and_threaded_results_preserve_submission_order"]},
   "ADR-009" => {test: "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it"},
-  "ADR-010" => {test: "test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate",
-                supporting: ["test/ci_configuration_test.rb#test_lockfile_has_a_portable_platform"]},
   "ADR-011" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection"},
   "ADR-013" => {test: "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
                 classification: "indirect",
@@ -554,14 +544,11 @@ EVIDENCE = {
                            "supply-chain activation half is the deferred P9-C/D2/E " \
                            "install pipeline — invariant 43, which the invariants " \
                            "document assigns to v0.2. No install path exists to test."},
-  "ADR-035" => {test: "test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary"},
   "ADR-036" => {test: "test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused",
                 supporting: [
                   "test/stream_situation_snapshot_test.rb#test_a_verified_snapshot_returns_the_parsed_value",
                   "test/stream_situation_snapshot_test.rb#test_the_digest_rule_agrees_with_the_shared_snapshot_vector"
                 ]},
-  "ADR-037" => {test: "test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts",
-                supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
   "ADR-038" => {test: "test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch",
                 supporting: ["test/stream_decision_builder_test.rb#test_a_proposal_for_an_allowlisted_action_uses_the_catalog_declared_risk"]},
   "ADR-039" => {test: "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
@@ -578,12 +565,6 @@ EVIDENCE = {
     rationale: "Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-" \
                "subprocess proof that the gateway never loads a model lands with the " \
                "gateway slice."
-  },
-  "ADR-043" => {
-    test: nil, classification: "pending-owner-residual",
-    rationale: "Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The " \
-               "adversarial approval suite in slice H converts this row to direct " \
-               "evidence."
   },
   "ADR-044" => {
     test: nil, classification: "pending-owner-residual",
@@ -613,8 +594,6 @@ EVIDENCE = {
     supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]
   },
   "ADR-049" => {test: "test/comms_evidence_gated_approval_test.rb#test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence"},
-  "ADR-051" => {test: "test/dependency_isolation_test.rb#test_graph_loads_no_model_eval_or_adapter_package",
-                supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]},
   "ADR-052" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
                 supporting: ["test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_agent_except_agents_own_dependents"]},
   "ADR-053" => {test: "test/approval_policy_document_test.rb#test_bundled_base_loads_and_validates"},
@@ -622,6 +601,14 @@ EVIDENCE = {
                 supporting: ["test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol"]},
   "ADR-055" => {test: "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
                 supporting: ["test/benchmark_protocol_test.rb#test_domain_data_binds_the_frozen_wire_digests"]},
+  "ADR-056" => {test: "test/skills_boundary_test.rb#test_no_file_outside_the_gem_names_an_inner_constant",
+                supporting: ["test/dependency_isolation_test.rb#test_skills_loads_only_core"]},
+  "ADR-057" => {test: "test/agent_cli_test.rb#test_cancel_routes_to_terminal",
+                supporting: ["test/cancellation_visibility_test.rb#test_a_raced_completion_says_completed_before_effect_and_never_stopped"]},
+  "ADR-058" => {test: "test/stream_episode_intent_authority_test.rb#test_gate4_a_novel_domain_produces_a_decision_with_zero_new_ruby",
+                supporting: ["test/agent_intent_catalog_test.rb#test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector"]},
+  "ADR-059" => {test: "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected",
+                supporting: ["test/agent_session_records_test.rb#test_version_one_session_record_is_rejected_without_compatibility_migration"]},
 
   # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
   "OBJ-1" => {
@@ -760,6 +747,7 @@ EVIDENCE = {
                    supporting: ["test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"]},
   "CLI-observe" => {test: "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal"},
   "CLI-trace" => {test: "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal"},
+  "CLI-skills" => {test: "test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections"},
 
   # ---- Migrations ---------------------------------------------------------
   "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",

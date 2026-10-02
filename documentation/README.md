@@ -15,6 +15,7 @@ root is the entry point; this folder contains the detailed reference material.
 ## Start here
 
 - [overview/product.md](overview/product.md): what Tamoz is, what it is not, and who it is for
+- [concepts.md](concepts.md): public concepts, when to use them, and where to learn more
 - [overview/concepts.md](overview/concepts.md): the core mental model — a graph run, a checkpoint, a review
 - [getting-started/quickstart.md](getting-started/quickstart.md): install, ask, and try an approved change
 - [getting-started/install.md](getting-started/install.md): requirements, the 29 gems, and the full install surface
@@ -46,8 +47,8 @@ root is the entry point; this folder contains the detailed reference material.
 ## Decisions
 
 - [adr/README.md](adr/README.md): the ADR index — every decision record 001–055
-- [adr/adr-049-telegram-approval.md](adr/adr-049-telegram-approval.md): evidence-gated Telegram approval
-- [adr/approval-policy-redesign/README.md](adr/approval-policy-redesign/README.md): the implemented approval-policy design and evidence package
+- [adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md](adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md): evidence-gated Telegram approval
+- [../docs/approval-policy-redesign-2026-08-22/README.md](../docs/approval-policy-redesign-2026-08-22/README.md): the implemented approval-policy design and evidence package
 
 ## Guides
 

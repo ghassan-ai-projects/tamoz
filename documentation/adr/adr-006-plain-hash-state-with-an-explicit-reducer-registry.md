@@ -1,31 +1,32 @@
 # ADR-006 — Plain Hash state with an explicit reducer registry
 
-**Status:** Accepted.
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Status:** Accepted 2026-07-30
+**Date:** 2026-07-30
+**Tier:** C
+**Implementation:** Complete
+
+Graph state is a plain `Hash`; declared reducers make each key's merge behavior explicit.
 
 ## Context
 
-State needs a record type and a merge rule. The reference systems reach for typed annotations and metaprogramming; Ruby already has `Hash` plus native pattern matching.
+Parallel nodes can update the same state key. Replacing one update with another would silently
+lose work. State should be easy to inspect, while the graph must combine updates by an explicit
+rule or reject the conflict.
 
 ## Decision
 
-`state :message_events, reduce: Tamoz::Reducers.message_events` — not type-annotation
-metaprogramming. Hashes are Ruby's record type and pattern-match natively; the reducer is a
-visible lambda.
+State is a `Hash` with keys declared through the graph's `state` API. A key that accepts updates
+from several nodes declares a reducer, for example
+`state :events, default: [], reduce: Tamoz::Reducers.append`.
+
+A reducer is a named, versioned callable that receives the current value and the writes for that
+key. Without a reducer, one write replaces the value; multiple writes to the same key in one
+superstep fail before state commit, identifying the writing tasks.
 
 ## Consequences
 
-State is inspectable and pattern-matchable with no framework-specific types, and reducers are visible lambdas rather than hidden annotations. **Cost:** no compile-time shape checking — the correctness of a partial update rests on its reducer and the invariant suite.
+State remains directly inspectable, and merge behavior is visible in each key's declaration.
+Runtime checks reject undeclared keys and unsupported values.
 
-## Rejected alternatives
-
-- `Data`/`Struct`-typed state — partial updates against a fixed-shape value object are awkward and every node would construct one.
-
-## Verification
-
-Verified against code: 2026-08-29 — The reducer registry is `Tamoz::Reducers` (`gems/tamoz-graph/lib/tamoz/reducers.rb`); state is plain Hash plus named reducers.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Cost:** Hash state provides no static guarantee of value shapes. Runtime validation does not
+establish application-level correctness; reducers and application tests must check those rules.

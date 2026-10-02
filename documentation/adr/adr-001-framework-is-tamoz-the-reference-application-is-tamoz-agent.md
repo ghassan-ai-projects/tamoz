@@ -1,31 +1,29 @@
 # ADR-001 — The framework is Tamoz; the reference application is Tamoz Agent
 
-**Status:** Accepted 2026-07-30.
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** C
+**Implementation:** Complete
+**Relates to:** [ADR-059](./adr-059-no-backward-compatibility-before-1-0.md) (the rename shipped with no aliases under the no-compatibility rule)
+
+One name for the framework, its gems, its namespace, and its CLI, fixed before anything shipped.
 
 ## Context
 
-A pre-release rename needed one canonical identity for the framework, CLI, gems, and namespaces — settled before any package shipped and any name became load-bearing.
+A pre-release rename left the framework, CLI, gems, and namespaces with more than one name. A name
+becomes load-bearing the moment a gem is published or a user writes a `require`; it had to be
+settled while changing it was still free.
 
 ## Decision
 
-Ruby namespace `Tamoz`, CLI `tamoz`, require paths `tamoz/*`, gems prefixed `tamoz-`.
-Application-owned code lives under `Tamoz::App`; reusable agent recipes under `Tamoz::Agent`.
-The rename was intentionally breaking (no runtime package had shipped); no compatibility
-aliases preserve former names.
-**Open action:** reserve the exact RubyGems names and record a trademark/domain check before
-public release (audit item O2).
+Tamoz-owned framework and application gems use the Ruby namespace `Tamoz`, require paths
+`tamoz/*`, and gem names `tamoz-*`. Third-party dependencies retain their own names. The
+operator CLI is `tamoz`. Tamoz Agent is the reference application built from those gems. No alias
+keeps a former name working.
 
 ## Consequences
 
-Every gem, require path, and public symbol is committed to the `Tamoz`/`tamoz-` shape; because nothing had shipped, the rename carries no compatibility aliases to maintain. **Cost:** a later rename would be breaking, and a pre-release action (RubyGems/trademark reservation) remains open.
-
-## Verification
-
-Verified against code: 2026-08-29 — the `Tamoz::` namespace and `tamoz-*` gem prefix hold across all 27 gems.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+A shared prefix makes the packages recognizable as one family. It does not distinguish reusable
+framework components from application components; their documented roles do that.
+**Cost:** a later rename breaks dependent imports and commands; the RubyGems names and trademark are not yet reserved
+(tracked in the [roadmap](../roadmap.md), not here).

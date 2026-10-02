@@ -1,27 +1,41 @@
 # ADR-011 — SQLite is Tamoz Agent's default persistence
 
-**Status:** Accepted.
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Status:** Accepted 2026-07-30
+**Date:** 2026-07-30
+**Tier:** C
+**Implementation:** Complete
+**Relates to:** [ADR-015](./adr-015-durable-means-synchronous-barrier-commit.md), [ADR-017](./adr-017-one-fenced-writer-per-thread-namespace.md) (durability and writer fencing)
+
+Tamoz Agent keeps its durable runtime records in a local SQLite database. Multiple processes on
+one host share it through `tamoz-sqlite`, which manages transactions, leases and backup.
 
 ## Context
 
-A single-operator durable agent needs persistence without running a server, and its workload is essentially one writer with short transactions.
+A single-operator agent needs to recover committed work after a crash without running a separate
+database server. SQLite fits this local deployment when write transactions stay short.
 
 ## Decision
 
-Single file, no server, WAL, one operator. WAL permits one writer, so transactions stay short
-and busy retries are bounded. The adapter owns leases, fencing, connection lifecycle,
-backup/restore, and file-descriptor tests.
+Use one SQLite database for durable runtime records, on one host and a local filesystem. This is
+a single-operator deployment; never share the database through a network mount. Operator
+configuration and trusted profiles remain separate files.
+
+Each connection verifies these settings and refuses to run if they are not in effect:
+
+- `journal_mode=WAL`: record database changes in a write-ahead log.
+- `synchronous=FULL`: synchronize the log to storage when a transaction commits.
+- `foreign_keys=ON`: enforce relationships between database records.
+
+Transactions use `IMMEDIATE`, acquiring write access at the start, with a bounded wait when the
+database is busy. The adapter manages connection lifecycle, leases, writer fencing and online
+backup; callers use its APIs rather than managing these directly.
 
 ## Consequences
 
-Zero-ops single-file durability with WAL, and the adapter owns leases, fencing, backup/restore, and file-descriptor behavior. **Cost:** WAL permits only one writer, so transactions must stay short and busy-retries bounded — this is not a multi-writer store.
+No separate database server is needed. Committed transactions are designed to survive process
+crashes and power loss when the filesystem and storage honor synchronization requests.
 
-## Verification
-
-Verified against code: 2026-08-29 — `tamoz-sqlite` present; `Tamoz::SQLite::Adapter` high-fan-in.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Cost:** SQLite permits one writer at a time per database, so write throughput depends on short
+transactions. WAL uses additional log and shared-memory files. Operators still need backups,
+a restore procedure, sufficient disk space and correct file permissions. This deployment does
+not support sharing the database across hosts.

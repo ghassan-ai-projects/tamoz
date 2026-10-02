@@ -1,27 +1,35 @@
 # ADR-008 — `:threads` is the default pool; `:inline` in tests
 
-**Status:** Accepted.
-**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Status:** Accepted 2026-07-30
+**Date:** 2026-07-30
+**Tier:** C
+**Implementation:** Complete
+
+Graph tasks use a thread pool by default. Inline mode runs them one at a time for tests and
+debugging; both modes use the same synchronous API.
 
 ## Context
 
-Agent work is dominated by network I/O (model and tool calls), where the GVL is released; tests and debugging need determinism instead.
+Agent tasks often wait for model or tool responses. Threads let independent tasks overlap those
+waits. Running tasks one at a time makes their execution order easier to inspect, without needing
+a separate async/await API.
 
 ## Decision
 
-Agent work is network-bound, so the GVL releases during the waits that matter. `:inline` is the
-deterministic debug/test default; `:fibers` requires `async`, lazily. All three are
-observationally equivalent by conformance test — which is why the default can change later.
+`Tamoz::Configuration` supports `:threads` (the default) and `:inline`. Inline tasks run on the
+calling thread; threaded tasks run in the worker pool. Both return through the same synchronous API.
+
+For successful executions with deterministic graph behavior and matching graph definitions, inputs
+and execution identities, both modes preserve the same ordered checkpoint state history. This does not guarantee identical
+task timing or make behavior that depends on shared mutable data or external timing deterministic.
+
+`:fibers` is rejected with a configuration error. A fiber pool may be added only after it passes
+the same pool conformance tests; there is no separate async/await API.
 
 ## Consequences
 
-Good default concurrency without threads fighting the GVL on CPU-bound work, deterministic `:inline` for tests, and optional `:fibers`. Because the three pools are conformance-equivalent, **the default can be changed later without behavioral risk** — the reason this choice is low-stakes.
+Threads suit work that waits on I/O; inline mode simplifies scheduling during tests and debugging.
+Inline execution does not make model responses or arbitrary application code deterministic.
 
-## Verification
-
-Verified against code: 2026-08-29 — `Tamoz::Pool::Threads` is present.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Cost:** threads do not generally speed up CPU-bound Ruby code under MRI's global lock, and a
+fiber pool is unavailable. Tests must exercise threaded execution when concurrency matters.

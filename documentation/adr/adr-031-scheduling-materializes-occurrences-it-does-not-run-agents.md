@@ -1,33 +1,28 @@
 # ADR-031 — Scheduling materializes occurrences; it does not run agents
 
-**Status:** Accepted 2026-07-30; **shipped** (`tamoz-scheduler`).
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** C
+**Implementation:** Complete
+**Relates to:** [ADR-032](./adr-032-scheduled-time-and-delayed-authority-are-explicit.md) (what a scheduled run may do), [ADR-022](./adr-022-reviewed-plan-gate.md) (the run is an ordinary planned task)
+
+The scheduler turns a due time into exactly one durable request in the ordinary inbox. It never
+calls a model or a tool; the agent graph plans, reviews, executes, and verifies the request like any
+other.
 
 ## Context
 
-Running model calls or business logic inside a timer callback is not durable and conflates delivery with execution, making crash and duplicate semantics impossible to state honestly.
+Running model calls or business logic inside a timer callback is not durable: a crash mid-callback
+loses or repeats work, and "the job ran" conflates delivery with success.
 
 ## Decision
 
-`tamoz-scheduler` owns strict time calculation and durable occurrence identity. A due
-occurrence is atomically claimed and delivered to the request inbox with a stable request id;
-the ordinary agent graph then plans, reviews, executes, and verifies it. Delivery success and
-task success stay separate.
+`tamoz-scheduler` owns schedule and occurrence values and the store contract; it never executes
+work. `materialize_due` atomically claims a due occurrence (identity = schedule id + immutable
+revision + nominal UTC instant), creates it, and enqueues one request with a stable request id. The
+request then follows the normal path. Delivery status and task outcome are recorded separately.
 
 ## Consequences
 
-The scheduler materializes a durable occurrence and delivers a stable request id; the ordinary agent graph then plans, reviews, executes, and verifies it. **Cost:** delivery success and task success are separate things to track.
-
-## Rejected alternatives
-
-- model calls or business execution in a timer callback — process timers are not durable, and mixing delivery with execution makes crash/duplicate semantics dishonest.
-
-## Verification
-
-Verified against code: 2026-08-29 — `tamoz-scheduler` present.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+A crash or a second poller produces at most one occurrence and one request. **Cost:** an operator
+reads two statuses — delivered, and how the task went.

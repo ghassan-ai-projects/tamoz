@@ -1,34 +1,33 @@
 # ADR-040 — One monorepo, multiple independently publishable gems
 
-**Status:** Accepted 2026-07-30; **instantiated by [ADR-052](./adr-052-agent-gem-decomposition.md).**
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
-**Relates to:** ADR-052 (see the [catalog](./README.md))
+**Tier:** C
+**Implementation:** Complete
+**Amended by:** [ADR-055](./adr-055-two-repo-authority-split.md) (the Go continuous plane is a second repository)
+**Relates to:** [ADR-052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md) (when a concern becomes a gem)
+
+Framework gems, Tamoz Agent, conformance fixtures, examples, and release tooling live in one
+repository. Each gem has its own manifest and dependency boundary and packages on its own. Being in
+the same repository grants no runtime dependency.
 
 ## Context
 
-Separate repositories from the first commit multiply cross-repo changes, CI, fixtures, and release coordination before ownership or release cadence has actually diverged.
+Separate repositories from the first commit multiply cross-repo changes, CI, fixtures, and release
+coordination before ownership or release cadence has diverged. But one repository tempts gems to
+reach into each other because the code is right there.
 
 ## Decision
 
-One repository for framework gems, Tamoz Agent, conformance fixtures, examples, and release
-tooling. Each gem has an explicit manifest and dependency boundary and can be packaged
-independently. Before 1.0, releases coordinate through one compatibility matrix but versions
-change only for affected gems. **Repository proximity grants no runtime dependency.**
+- One repository for all Ruby gems and the reference application.
+- Each gem declares its runtime dependencies in its gemspec and loads only those; a gem that
+  `require`s another must declare it. Packaging each gem alone must work.
+- Before 1.0, releases coordinate through one compatibility matrix, and versions change only for
+  affected gems.
+- A component in another language with its own release cadence may live in its own repository
+  (ADR-055 is the one case).
 
 ## Consequences
 
-One repository with per-gem manifests and independent packaging, coordinated by a single pre-1.0 compatibility matrix; repository proximity grants no runtime dependency. **Cost:** the compatibility matrix must be maintained — and ADR-055 records the one deliberate exception, where a different-language authority does warrant a second repo.
-
-## Rejected alternatives
-
-- separate repositories from the first commit — multiplies cross-repo changes, CI, fixtures, and release coordination before ownership diverged.
-
-## Verification
-
-Verified against code: 2026-08-29 — 27 gems, per-gem gemspecs. *(Audit O1: the `agentic-stream` Go authority is a second repo whose relationship to this rule needs an ADR.)*
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+Cross-gem changes land atomically with their tests. **Cost:** CI and tooling must check per-gem
+dependency closure, because the repository will not stop an undeclared `require`.

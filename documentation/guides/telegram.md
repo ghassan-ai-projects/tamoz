@@ -10,7 +10,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 The approval semantics are the load-bearing part of the design: approval is
 gated on evidence, and the base policy lets the paired chat approve. The full
 model is recorded in
-[ADR-049](../adr/adr-049-telegram-approval.md).
+[ADR-049](../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md).
 
 ## 0. Quick start (the short path)
 
@@ -204,7 +204,7 @@ chat_bound  <  filesystem_operator
 
 See [`../operations/operations.md`](../operations/operations.md) for the
 operator-side approval, delivery-resolution and revocation commands, and
-[ADR-049](../adr/adr-049-telegram-approval.md) for the threat model.
+[ADR-049](../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) for the threat model.
 
 ## 7. What the chat does
 
@@ -260,5 +260,5 @@ and `--provider`/`--model` pin one. It costs a few cents of model calls.
 ## Next reads
 
 - [`../operations/operations.md`](../operations/operations.md) — revocation, `:unknown` deliveries, approvals.
-- [`../adr/adr-049-telegram-approval.md`](../adr/adr-049-telegram-approval.md) — the evidence-gated approval decision.
+- [`../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md`](../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) — the evidence-gated approval decision.
 - [`../reference/config.md`](../reference/config.md) — env vars and the runtime directory.

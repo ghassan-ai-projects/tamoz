@@ -77,21 +77,6 @@
       "adr_status": "Accepted 2026-07-30"
     },
     {
-      "id": "ADR-004",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Explicit `Tamoz.seq`; no native `Proc#>>`",
-      "release_blocking": false,
-      "status": "unverified",
-      "named_test": "test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order",
-      "supporting_tests": [],
-      "classification": "indirect",
-      "rationale": "Composition style decision. No `Proc#>>` surface exists to test; the named test proves the explicit declaration form is the only compile path.",
-      "promotion_exclusion": null,
-      "adr_status": "Accepted (revised after an executable counterexample)",
-      "not_release_blocking_because": "The ADR itself defers `tamoz-chain`; `Tamoz.seq`/`Tamoz.step` are not in the release surface (no chain gem exists), so the decision governs no shipped behavior."
-    },
-    {
       "id": "ADR-005",
       "category": "adr",
       "source": "documentation/adr",
@@ -105,7 +90,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-006",
@@ -121,7 +106,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-007",
@@ -135,7 +120,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-008",
@@ -151,13 +136,13 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-009",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Prompt-cache stability is invariant 16",
+      "title": "Keep model request prefixes stable within a request series",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it",
@@ -165,23 +150,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
-    },
-    {
-      "id": "ADR-010",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Ruby 3.3 floor; 3.4 and 4.0 primary targets",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate",
-      "supporting_tests": [
-        "test/ci_configuration_test.rb#test_lockfile_has_a_portable_platform"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "adr_status": "Accepted (revised after support-status review)"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-011",
@@ -195,13 +164,13 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-013",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Public vocabulary is a budget, never a correctness cap",
+      "title": "Public concepts are documented and introduced when needed",
       "release_blocking": false,
       "status": "unverified",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -209,14 +178,14 @@
       "classification": "indirect",
       "rationale": "A vocabulary budget is a review policy, not a runtime behavior. The pinned public inventory is the closest direct artifact: the surface cannot grow without changing it.",
       "promotion_exclusion": null,
-      "adr_status": "Accepted (revised after review)",
+      "adr_status": "Accepted 2026-07-30",
       "not_release_blocking_because": "A vocabulary/review policy with no runtime behavior. The pinned public inventory is the enforcing artifact."
     },
     {
       "id": "ADR-014",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "No plugin API in v0.1",
+      "title": "Extensions are first-party adapter gems, not plugins",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",
@@ -227,7 +196,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-015",
@@ -241,13 +210,13 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-016",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "External effects are at-least-once unless proven otherwise",
+      "title": "Every external effect is journaled, and ambiguity stops as `:unknown`",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/sqlite_effect_journal_test.rb#test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth",
@@ -255,7 +224,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-017",
@@ -269,7 +238,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-018",
@@ -283,7 +252,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-019",
@@ -297,13 +266,13 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-020",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Sensitive-data policy is explicit and lossless",
+      "title": "Secrets are refused by type or explicitly protected, never scrubbed by name",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/core_state_codec_test.rb#test_sensitive_unsupported_cyclic_and_ambiguous_values_fail_closed",
@@ -313,7 +282,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-021",
@@ -329,7 +298,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-022",
@@ -447,7 +416,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30; **shipped** (`tamoz-mcp`)"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-030",
@@ -465,7 +434,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30; **extended by [ADR-054](./adr-054-websearch-capability-source.md).**"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-031",
@@ -481,7 +450,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30; **shipped** (`tamoz-scheduler`)"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-032",
@@ -527,24 +496,10 @@
       "not_release_blocking_because": "The tree-digest identity half ships and is directly evidenced; the supply-chain activation half is invariant 43, which the invariants document defers to v0.2 (no install path exists in v0.1)."
     },
     {
-      "id": "ADR-035",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Streaming input is a distinct first-class runtime",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30; **revised** by [ADR-055](./adr-055-two-repo-authority-split.md)"
-    },
-    {
       "id": "ADR-036",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Situation is the boundary between continuous evidence and episodic cognition",
+      "title": "Cognition sees only a sealed Situation snapshot, never raw evidence",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused",
@@ -556,22 +511,6 @@
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "Accepted 2026-07-30"
-    },
-    {
-      "id": "ADR-037",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Event time, explicit backpressure, and effect-disabled replay are contracts",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts",
-      "supporting_tests": [
-        "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30; **revised** by [ADR-055](./adr-055-two-repo-authority-split.md)"
     },
     {
       "id": "ADR-038",
@@ -617,7 +556,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-07-30; **instantiated by [ADR-052](./adr-052-agent-gem-decomposition.md).**"
+      "adr_status": "Accepted 2026-07-30"
     },
     {
       "id": "ADR-041",
@@ -646,20 +585,6 @@
       "rationale": "Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice.",
       "promotion_exclusion": null,
       "adr_status": "Accepted 2026-08-10"
-    },
-    {
-      "id": "ADR-043",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "Telegram v1 is deny-only and reference-bound",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": null,
-      "supporting_tests": [],
-      "classification": "pending-owner-residual",
-      "rationale": "Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence.",
-      "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-10; **amended by [ADR-049](./adr-049-telegram-approval.md).**"
     },
     {
       "id": "ADR-044",
@@ -707,7 +632,7 @@
       "id": "ADR-047",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Sampling applies to export only and never to safety-bearing signals",
+      "title": "Telemetry is never sampled at record time, and safety-bearing signals have a reserved lane",
       "release_blocking": true,
       "status": "unverified",
       "named_test": null,
@@ -721,7 +646,7 @@
       "id": "ADR-048",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "One digest-bound OpenAI-compatible model transport",
+      "title": "Tamoz owns the model boundary: one digest-bound OpenAI-compatible transport",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/model_client_factory_test.rb#test_provider_descriptor_exposes_the_closed_phase_three_matrix",
@@ -731,13 +656,13 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-26; **completed by [ADR-051](./adr-051-rubyllm-removed.md).**"
+      "adr_status": "Accepted 2026-08-26"
     },
     {
       "id": "ADR-049",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Telegram approval is evidence-gated, not transport-gated",
+      "title": "Chat approval is evidence-gated and bound to one exact prompt",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/comms_evidence_gated_approval_test.rb#test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence",
@@ -745,29 +670,13 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-12; policy amended 2026-09-24 (owner): `base.yaml` requires `chat_bound` to approve, so the bound correspondent can Approve. A profile can still require `filesystem_operator`"
-    },
-    {
-      "id": "ADR-051",
-      "category": "adr",
-      "source": "documentation/adr",
-      "title": "RubyLLM is removed from the runtime; message and tool fidelity are Tamoz-native",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/dependency_isolation_test.rb#test_graph_loads_no_model_eval_or_adapter_package",
-      "supporting_tests": [
-        "test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-26"
+      "adr_status": "Accepted 2026-08-12"
     },
     {
       "id": "ADR-052",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "`tamoz-agent` is decomposed into focused, independently publishable gems",
+      "title": "A gem owns one dependency boundary and is reached only through its facade",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
@@ -783,7 +692,7 @@
       "id": "ADR-053",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Approval policy is isolated into the `tamoz-approval` gem",
+      "title": "Approval policy is data, decided by one gem, `tamoz-approval`",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/approval_policy_document_test.rb#test_bundled_base_loads_and_validates",
@@ -791,7 +700,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "Accepted 2026-08-22 (implemented)"
+      "adr_status": "Accepted 2026-08-22"
     },
     {
       "id": "ADR-054",
@@ -824,6 +733,70 @@
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "Accepted 2026-08-12"
+    },
+    {
+      "id": "ADR-056",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "Skills are a gem, `tamoz-skills`, reached through one facade",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/skills_boundary_test.rb#test_no_file_outside_the_gem_names_an_inner_constant",
+      "supporting_tests": [
+        "test/dependency_isolation_test.rb#test_skills_loads_only_core"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-10-01"
+    },
+    {
+      "id": "ADR-057",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "A user's stop ends the turn; it never aborts the graph",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_test.rb#test_cancel_routes_to_terminal",
+      "supporting_tests": [
+        "test/cancellation_visibility_test.rb#test_a_raced_completion_says_completed_before_effect_and_never_stopped"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-10-01"
+    },
+    {
+      "id": "ADR-058",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "Domain knowledge is digest-pinned data, never code",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/stream_episode_intent_authority_test.rb#test_gate4_a_novel_domain_produces_a_decision_with_zero_new_ruby",
+      "supporting_tests": [
+        "test/agent_intent_catalog_test.rb#test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-10-01"
+    },
+    {
+      "id": "ADR-059",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "No backward compatibility before 1.0",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected",
+      "supporting_tests": [
+        "test/agent_session_records_test.rb#test_version_one_session_record_is_rejected_without_compatibility_migration"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-10-01"
     },
     {
       "id": "API-tamoz-agent-Tamoz::Agent.build",
@@ -1012,20 +985,6 @@
       "category": "public_api",
       "source": "docs/public-api.json",
       "title": "Tamoz::Agent::SkillSnapshotUnavailableError",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-agent"
-    },
-    {
-      "id": "API-tamoz-agent-Tamoz::Agent::Skills",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Agent::Skills",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -5306,6 +5265,440 @@
       "package": "tamoz-scheduler"
     },
     {
+      "id": "API-tamoz-skills-Tamoz::Skills",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.approve_candidate",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.approve_candidate",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.bundled_root",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.bundled_root",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.candidate_manifest",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.candidate_manifest",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.candidate_record",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.candidate_record",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.canonical",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.canonical",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.compile",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.compile",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.digest_of",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.digest_of",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.disjoint!",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.disjoint!",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.empty",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.empty",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.lint",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.lint",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.manifest_path",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.manifest_path",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.operator_snapshot",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.operator_snapshot",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.read_resource",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.read_resource",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.read_resource_entry!",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.read_resource_entry!",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.render_load",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.render_load",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.render_resource",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.render_resource",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills.scaffold",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills.scaffold",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::CATALOG_DIGEST_DOMAIN",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::CATALOG_DIGEST_DOMAIN",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::Catalog",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::Catalog",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::Error",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::Error",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::LIMITS",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::LIMITS",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SNAPSHOT_FORMAT_VERSION",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SNAPSHOT_FORMAT_VERSION",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SkillCollision",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SkillCollision",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SkillRecord",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SkillRecord",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SkillRejection",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SkillRejection",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SkillResource",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SkillResource",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SkillSnapshot",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SkillSnapshot",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::SkillSource",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::SkillSource",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::Snapshot",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::Snapshot",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
+      "id": "API-tamoz-skills-Tamoz::Skills::VERSION",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Skills::VERSION",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-skills"
+    },
+    {
       "id": "API-tamoz-sqlite-Tamoz::SQLite::VERSION",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -5702,286 +6095,6 @@
       "category": "public_api",
       "source": "docs/public-api.json",
       "title": "Tamoz::Tools::CheckReceipt",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills.canonical",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills.canonical",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills.digest_of",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills.digest_of",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills.read_resource",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills.read_resource",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills.read_resource_entry!",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills.read_resource_entry!",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills.render_load",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills.render_load",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills.render_resource",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills.render_resource",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::CATALOG_DIGEST_DOMAIN",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::CATALOG_DIGEST_DOMAIN",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::Catalog",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::Catalog",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::Compiler",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::Compiler",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::Error",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::Error",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::LIMITS",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::LIMITS",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SNAPSHOT_FORMAT_VERSION",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SNAPSHOT_FORMAT_VERSION",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SkillCollision",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SkillCollision",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SkillRecord",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SkillRecord",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SkillRejection",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SkillRejection",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SkillResource",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SkillResource",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SkillSnapshot",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SkillSnapshot",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::SkillSource",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::SkillSource",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-tools"
-    },
-    {
-      "id": "API-tamoz-tools-Tamoz::Tools::Skills::Snapshot",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Tools::Skills::Snapshot",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -6429,6 +6542,19 @@
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-skills",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz skills",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

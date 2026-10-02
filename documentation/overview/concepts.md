@@ -4,6 +4,8 @@ This page is the mental model behind Tamoz. It introduces the five ideas everyth
 
 Current version: `0.1.0.alpha.1` (pre-release). Terminology is stable within this version; the public vocabulary may move before 1.0.
 
+For definitions and when to use each concept, read the [concepts guide](../concepts.md).
+
 ## The agent turn is a graph run over a checkpoint store
 
 An agent turn is a **graph run**: a directed graph of nodes executes in barrier-synchronized super-steps (plan → execute → commit), and every committed barrier is written to a SQLite-backed checkpoint store before the next super-step begins. That single decision buys the whole durability story:

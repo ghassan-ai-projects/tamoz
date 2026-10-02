@@ -1,35 +1,31 @@
 # ADR-041 — Communication channels are a contract gem plus per-transport adapter gems
 
-**Status:** Accepted 2026-08-10.
+**Status:** Accepted 2026-08-10
 **Date:** 2026-08-10
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** C
+**Implementation:** Complete
+**Relates to:** [ADR-014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) (why transports are a closed set), [ADR-042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) (the process that runs a transport)
+
+`tamoz-comms` owns the channel vocabulary and seams and depends only on `tamoz-core`. Each transport
+is its own gem that depends only on `tamoz-comms` and passes its contract. The worker reaches a
+channel only through one nil-safe delivery sink and never makes a channel network call.
 
 ## Context
 
-A single comms gem with a lazily-required Telegram backend would leave the transport seam untested as a seam and force `net/http` into the contract gem's load graph.
+The first transport (Telegram) could have lived inside the comms gem behind a lazy `require`. That
+would leave the transport seam untested as a seam and put `net/http` in the load graph of everything
+that only needs channel values.
 
 ## Decision
 
-`tamoz-comms` owns the channel vocabulary and seams (surface/message values, identity/admission
-policy, rendering, the `Transport` adapter contract, the structural `CommsStore` contract) and
-depends only on `tamoz-core`. Each transport is a separate gem passing the `tamoz-comms`
-conformance suite; `tamoz-telegram` depends only on `tamoz-comms` and stdlib. The kind list is a
-closed set; adding a transport is a `tamoz-comms` release, not a plugin. The worker integrates
-through one nil-safe `DeliverySink` and never makes a channel network call.
+- `tamoz-comms` owns surface and message values, identity and admission policy, rendering, the
+  `Transport` contract, and the structural `CommsStore` contract. It loads no HTTP client.
+- Each transport (`tamoz-telegram` today) is a separate gem depending only on `tamoz-comms` and the
+  standard library.
+- The worker emits events to a `DeliverySink`; with no channel configured it is a null sink. Only
+  the gateway (ADR-042) talks to a transport.
 
 ## Consequences
 
-A contract gem owns the vocabulary and seams, and each transport is a separate adapter gem that must pass the conformance suite; the kind list is a closed set. **Cost:** adding a transport is a `tamoz-comms` release rather than a plugin — more ceremony, but a tested seam.
-
-## Rejected alternatives
-
-- a single gem with a lazily-required Telegram backend — leaves the transport seam untested and forces `net/http` into the contract gem's load graph (ADR-014 stands).
-
-## Verification
-
-Verified against code: 2026-08-29 — `tamoz-comms` and `tamoz-telegram` present.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+The contract gem stays dependency-free and every transport is tested against the same seam.
+**Cost:** each transport is a Tamoz release (ADR-014).

@@ -1,34 +1,52 @@
 # ADR-034 — Skill identity is a tree digest; activation is supply-chain promotion
 
-**Status:** Accepted 2026-07-30.
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** F
+**Implementation:** Partial — digest identity, staged candidates, and two-person install are built; comparative evaluation before install is not
+**Relates to:** [ADR-033](./adr-033-skills-use-the-open-agent-skills-format-and-stay-an-agent-recipe.md), [ADR-023](./adr-023-self-improvement-promotion.md) (generated skills are candidates)
+
+A skill is identified by its source and the digest of its whole directory tree, never by a path or
+a version it claims. A new or changed skill is staged, pinned by digest, and installed only by a
+named person other than its creator, exactly as staged.
 
 ## Context
 
-Path or self-claimed version as identity lets a mutable directory silently shadow or swap a skill on resume, making behavior unreproducible and enabling same-version supply-chain swaps.
+If a skill is identified by path or self-declared version, a mutable directory can silently swap
+its contents between turns or on resume — same name, same version, different instructions. That
+makes behavior unreproducible and is the classic supply-chain swap.
 
 ## Decision
 
-Executable identity is source-qualified name plus canonical tree digest, not a path or
-self-claimed version. Same-name cross-source collisions require explicit binding. Install/update
-stage in quarantine, validate paths/archives/provenance/capability changes, run comparative
-evaluation, and activate atomically as a new catalog/cache epoch. Generated skills are
-candidates and cannot evaluate or approve themselves.
+- Identity = source-qualified name + canonical tree digest of every file. Same-name skills from
+  different sources need an explicit binding.
+- A session records the digest of each skill it loads; the snapshot it ran with is pinned.
+- A drafted or generated skill is staged with a manifest pinning its digest and creator. Install
+  requires a named approver who is not the creator, re-compiles, and refuses any change since
+  staging or a skill below the authoring bar. A new version replaces the old, which is kept aside.
+- Intended, not built: comparative evaluation of the candidate against the installed version before
+  install.
 
 ## Consequences
 
-Identity is a canonical tree digest; install/update stage in quarantine and activate atomically as a new catalog epoch, and generated skills cannot self-approve. **Cost:** activation is a supply-chain promotion, not a file copy.
+Behavior is reproducible from recorded digests, and nobody — model or person — installs their own
+skill unseen. **Cost:** installing is a promotion step, not a file copy.
 
-## Rejected alternatives
+## Invariants
 
-- watching mutable skill directories and loading newest bytes on resume — makes behavior unreproducible and enables silent shadowing and same-version supply-chain swaps.
+- 41 — skills are content-addressed snapshots.
+- 43 — install, update, and self-improvement are staged and evaluated (evaluation half missing).
 
-## Verification
+## Threat model
 
-Verified against code: 2026-08-29 — Skill tree-digest identity and staged activation are in `gems/tamoz-skills`.
+**Asset:** the instructions the agent follows. **Adversary:** a supply-chain swap or a
+self-promoting generator.
 
-## Next reads
+| Threat | Mitigation |
+|---|---|
+| Contents change under the same name | Identity is the tree digest |
+| A staged candidate is edited before install | Install refuses any digest change since staging |
+| A generator installs its own skill | Creator cannot approve; approver must be named |
+| A regression ships in a new version | Not mitigated yet: no comparative evaluation |
 
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Residual risk:** an approved skill can still be harmful; review, not the digest, judges content.

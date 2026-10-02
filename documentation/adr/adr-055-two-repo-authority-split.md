@@ -1,135 +1,79 @@
 # ADR-055 — The continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker
 
 **Status:** Accepted 2026-08-12
-**Date:** 2026-08-29 (recording a shipped split; resolves audit open item O1)
-**Relates to:** ADR-035 (streaming is a distinct runtime — **revised**: the continuous plane moved out of the Ruby gem), ADR-037 (event time/backpressure/replay contracts — **revised**: now owned by the stream, not Tamoz), ADR-036 (Situation is the boundary — reinforced), ADR-038 (typed intent, never model effect — reinforced), ADR-039 (Tamoz is supervisory — reinforced), ADR-040 (one monorepo — this is the deliberate exception).
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Date:** 2026-08-12
+**Tier:** F
+**Implementation:** Partial — the worker has no transport authentication: both transports bind insecure gRPC ports, the socket's permissions are left to the process umask, and TCP mode listens on all interfaces
+**Amends:** [ADR-040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) (a second repository, in Go)
+**Supersedes:** [ADR-035](retired/adr-035-streaming-input-is-a-distinct-first-class-runtime.md), [ADR-037](retired/adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md)
+**Relates to:** [ADR-036](./adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md), [ADR-038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md), [ADR-039](./adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md)
 
-The continuous, deterministic streaming plane is not a Ruby Tamoz gem. It is a separate
-runtime, **`agentic-stream`** (Go), which owns event time, watermarks, windows, channels, and
-replay, is authoritative for budget and Decision disposition, and dials Tamoz's `tamoz-stream`
-**episode worker** to run exactly one immutable episode against a sealed Situation snapshot.
-This records the two-repo authority split and revises the parts of ADR-035/037 the migration
-outdated.
+The continuous plane — event time, watermarks, windows, channels, replay, device I/O, capability
+issuance — is `agentic-stream`, a separate Go runtime and repository. It is authoritative for budget
+and Decision disposition and dials Tamoz's `tamoz-stream` episode worker to run one episode against
+one sealed snapshot. Tamoz proposes; the stream disposes.
 
-Current version: `0.1.0.alpha.1` (pre-release).
+## Context
 
-## 1. Context
+ADR-035 originally put the continuous plane in Ruby. The P14 engine was then retired by forward
+migration (MIGRATION_13) and the plane moved to Go. Three separate choices were bundled in that move,
+and they have different justifications:
 
-ADR-035 made streaming a "distinct first-class `tamoz-stream` runtime" that owned channel
-admission, temporal/keyed state, immutable Situations, cognition admission, and replay — all in
-Ruby. ADR-037 put event-time/watermark/backpressure/replay contracts in that runtime.
+1. **Authority boundary (the load-bearing one).** An LLM-bearing process must never be authoritative
+   for budget, Decision acceptance, physical effect, or terminal state (ADR-038/039). A process
+   boundary with separate credentials enforces that.
+2. **Language.** The continuous plane is a throughput and temporal-semantics system; the team judged
+   Go a better fit. This is engineering judgment, not a measured requirement, and Go gives no
+   hard real-time guarantee (ADR-039 keeps real-time control external anyway).
+3. **Repository.** A different language, toolchain, and release cadence made a separate repository
+   simpler to own. Repository placement enforces nothing at runtime (ADR-040).
 
-The system then diverged from that shape in a way the ADR corpus never recorded. The previous
-P14 continuous engine was **retired by forward migration (MIGRATION_13)**. The continuous plane
-— event time, watermarks, windows, channels, replay, device I/O, effector control, capability
-issuance — moved into a separate Go runtime, `agentic-stream`, which is where hard real-time,
-throughput, and deterministic temporal semantics belong. Tamoz kept the part it is uniquely
-good at: bounded, evaluated, reviewable **cognition** over a sealed snapshot.
+## Decision
 
-Two forces drove the split:
+- **Roles.** `tamoz-stream` implements `agenticstream.runtime.v1.EpisodeWorker` (`Handshake`,
+  `Execute(EpisodeRequest) -> stream EpisodeEvent`) as the gRPC server; the Go executor is the
+  client and authority. Worker events are proposals and telemetry, never commands.
+- **Tamoz computes no stream-plane concept:** no event time, watermark, lateness, window membership,
+  backpressure, or replay policy. Those are `agentic-stream`'s contracts (formerly ADR-037).
+- **Sealed snapshot** per ADR-036.
+- **Containment.** Episode tools are a fixed read-only allowlist (`features.query`, `evidence.get`,
+  `situations.related`, `history.prior_incidents`, `knowledge.search`, `forecast.run`) plus
+  operator-declared read-only `probe_*` tools. The tool context carries no effect journal, store,
+  toolbox, MCP client, filesystem root, or memory write path. The episode's own model calls still go
+  through the effect journal (ADR-016).
+- **Reverse channel.** Evidence is reached through short-lived opaque capability tokens issued by
+  the stream, never persisted or logged.
+- **Transport.** Production binds a Unix domain socket; the permissions of the socket and its
+  directory are the only authentication, and the worker does not set them (umask decides). TCP mode
+  binds `0.0.0.0` unauthenticated; it is meant for development, but nothing stops `--port` in
+  production.
 
-1. **Different engineering regimes.** The continuous plane is a throughput/latency/temporal
-   system; Tamoz is a durable-cognition system. Forcing both into one Ruby runtime (ADR-035's
-   original shape) made neither clean. A Go authority is the right tool for the deterministic
-   plane; the Ruby worker is the right tool for judgment.
-2. **Authority must not sit with cognition.** An LLM-bearing process must never be authoritative
-   for budget, Decision acceptance, physical effect, or durable terminal state (ADR-038/039).
-   Putting the authority in a separate runtime makes that structural, not a matter of discipline.
+Accepting episodes from more than one local caller requires real transport authentication first.
 
-## 2. Decision
+## Consequences
 
-**The continuous plane is `agentic-stream` (a separate Go repository/runtime). Tamoz's
-`tamoz-stream` gem is the `EpisodeWorker` — a gRPC server the stream dials to run exactly one
-non-interactive episode against a sealed, digest-verified Situation snapshot.**
+The authority split is structural: the worker has no credential that could accept a Decision or
+move equipment. **Cost:** the `runtime-v1` proto is a frozen contract across two repositories;
+changing it is a coordinated two-repo release, and the Handshake refuses incompatible versions.
 
-- **Contract.** `tamoz-stream` implements `agenticstream.runtime.v1.EpisodeWorker` with two
-  RPCs: `Handshake` (protocol/feature compatibility) and `Execute(EpisodeRequest) -> stream
-  EpisodeEvent`. Tamoz is the **server**; the `agentic-stream` executor is the **client** and
-  remains authoritative for budget consumption, Decision validation, acceptance/rejection, and
-  durable terminal state. Worker-originated events are **proposals and telemetry**, never
-  commands.
-- **The stream owns the deterministic plane.** Event time, watermarks, lateness, and window
-  membership are computed by `agentic-stream`. **Tamoz computes none of them.** Tamoz receives
-  a sealed snapshot and proposes typed Decisions.
-- **Sealed snapshots.** The request carries `snapshot_json` + `snapshot_sha256`; the worker
-  recomputes and compares the digest in constant time and terminates a drifted/tampered
-  snapshot **before any model call**.
-- **Containment.** An episode runs in the episode capability host — a fixed allowlist of
-  read-only bounded tools (`features.query`, `evidence.get`, `situations.related`,
-  `history.prior_incidents`, `knowledge.search`, `forecast.run`) with no toolbox, effect
-  journal, MCP client, filesystem root, or memory write path. The worker never calls a physical
-  effector; it proposes typed `ActionIntent`s the runtime disposes of.
-- **Reverse channel.** The worker reaches evidence only via short-lived **opaque capability
-  tokens** (never logged/persisted) encoding the exact permitted tools, over the runtime's
-  reverse RPCs.
-- **Transport.** Normally a Unix domain socket (`run-live --worker-socket`), with optional mTLS.
+## Invariants
 
-## 3. Consequences
+- 49, 50, 51 — snapshot-bound cognition, typed intents, safety authority outside cognition.
 
-- **ADR-040 gets a deliberate exception.** Tamoz stays one monorepo, but the continuous
-  authority is a *second* repository in a different language. This is intentional: the two
-  planes have different engineering regimes and a hard authority boundary between them. Repo
-  proximity was never the coupling (ADR-040); a process/language boundary makes the
-  authority split structural.
-- **ADR-035 is revised, not discarded.** Its core rule — unbounded evidence never enters a
-  graph or model directly; it becomes a bounded Situation first — still holds. What changed is
-  *where* the continuous runtime lives (Go `agentic-stream`, not the Ruby gem) and what
-  `tamoz-stream` is (the episode worker, not the continuous engine).
-- **ADR-037 is revised.** Event-time/backpressure/replay contracts are the stream's, not
-  Tamoz's. The Ruby side's old channel/backpressure/replay vocabulary
-  (`queue_capacity`/`spool_capacity_bytes`/`overflow`) was deleted with MIGRATION_13.
-- **ADR-036/038/039 are reinforced.** The sealed snapshot is the Situation boundary; the worker
-  proposes typed intents and never actuates; authority (budget, disposition, effect) stays with
-  the external runtime, never with the LLM-bearing worker.
-- **Cross-repo coordination cost.** The `runtime-v1` proto is a frozen wire contract shared
-  across two repos; changing it is a coordinated two-repo release. The Handshake RPC exists
-  precisely to refuse incompatible protocol/feature versions at the boundary.
+## Threat model
 
-## 4. Invariant linkage
+**Asset:** physical and operational effect, the stream's evidence, and budget. **Adversary:** a
+compromised or mistaken worker; a process that reaches the worker socket.
 
-- **ADR-036 / Situation boundary** — the digest-verified snapshot is the exact immutable
-  boundary between continuous evidence and episodic cognition.
-- **ADR-038 R2/R3** — typed intents proposed, disposed by the authoritative runtime; the worker
-  holds no effector credentials.
-- **Prompt-cache / ADR-009, sensitive-data / ADR-020** — apply inside the episode as in any
-  Tamoz graph run.
-
-## 5. Threat model
-
-**Asset:** physical/operational effect, the evidence the runtime holds, and budget.
-
-| Threat | Vector | Mitigation |
-|---|---|---|
-| The LLM-bearing worker actuates or over-spends | A compromised/mistaken runner tries to command | The worker only *proposes*; `agentic-stream` is authoritative for budget, acceptance, and effect; the worker holds no effector credentials |
-| A drifted or tampered snapshot drives a decision | Snapshot altered in transit | `snapshot_sha256` recomputed and compared in constant time; a mismatch terminates before any model call |
-| Injection names a forbidden tool | Prompt injection requests `run_shell` etc. | The episode capability host is a fixed read-only allowlist; unknown keys are refused at construction, not at call time |
-| A leaked reverse-channel token is replayed | Capability token reused | Tokens are short-lived, opaque, encode the exact tools, and are never logged or persisted |
-| A runner bug spends model budget | Malformed event stream | `Execute` validates identity, fence, kind, budget, and the event stream (started event, sequence gaps, terminal, size) at the worker boundary before spending |
-
-## 6. Rejected alternatives
-
-| Rejected | Why |
+| Threat | Mitigation |
 |---|---|
-| Keep the continuous plane in the Ruby `tamoz-stream` gem (ADR-035's original shape) | A throughput/temporal system and a durable-cognition system in one Ruby runtime served neither; the deterministic plane wants Go |
-| One repository for both planes (strict ADR-040) | The two planes have different languages, release cadences, and — critically — an authority boundary; co-locating them would blur exactly the boundary that keeps the LLM out of the authority path |
-| Make Tamoz the gRPC client/authority | Authority would then sit in the LLM-bearing process; ADR-038/039 require the reverse — the external runtime disposes, the worker proposes |
-| A shared database instead of a sealed snapshot | A live read reintroduces staleness and an ambient trust surface; the digest-verified snapshot is the exact, attributable boundary |
+| The worker actuates or overspends | It only proposes; the stream disposes and owns budget; no effector credential |
+| A tampered snapshot drives a decision | Digest recomputed; mismatch ends the episode before any model call |
+| Injection names a forbidden tool | Allowlist fixed at construction; unknown names are refused |
+| A leaked reverse-channel token is replayed | Short-lived, opaque, scoped to exact tools, never persisted |
+| Another local process drives the worker | Only socket and directory permissions stop it; the worker does not set them |
+| A network peer drives the worker in TCP mode | **Not mitigated:** TCP binds all interfaces with no authentication |
 
-## 7. Verification
-
-Verified against code: 2026-08-29 — `gems/tamoz-stream` implements the `EpisodeWorker` per
-[`documentation/design/streaming.md`](../design/streaming.md); the sealed-snapshot, containment
-host, and reverse-channel behavior are documented there and exercised by
-`test/stream_evidence_client_test.rb` ("the stream's host lives in agentic-stream"). Cross-repo
-alignment was verified in `docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md` (agentic-stream
-`run-live --worker-socket`, native Go executor, per-dispatch opaque capability issuance).
-**Boundary caveat:** the Go side (`agentic-stream`) lives in a sibling repository not present in
-this tree; its internals are cited from that repo's audited state, not re-verified here.
-
-## Next reads
-
-- [`README.md`](./README.md) — the ADR index
-- [`../design/streaming.md`](../design/streaming.md) — the episode-worker design (current)
-- [ADR-035 — streaming is a distinct runtime](./adr-035-streaming-input-is-a-distinct-first-class-runtime.md) and [ADR-037 — event-time contracts](./adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md) — revised by this ADR
-- [`../../docs/design-v0.1/STREAMING_INPUT_DESIGN.md`](../../docs/design-v0.1/STREAMING_INPUT_DESIGN.md) — the original architecture record
+**Residual risk:** the snapshot digest proves consistency, not origin; anyone who can reach the socket — or,
+in TCP mode, the port from any network — can submit an episode and spend model budget. A compromised bound adapter is trusted by the host (it guarantees the
+call surface, not adapter internals).

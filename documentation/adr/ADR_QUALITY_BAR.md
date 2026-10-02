@@ -1,274 +1,174 @@
 # The Tamoz ADR bar
 
-This document defines what a Tamoz architecture decision record (ADR) **must be** to
-count as accepted, and the rubric the audit grades every ADR against. It is both the
-standard and the authoring template. It is the "high bar" the ADR corpus is held to and
-the definition of "the bar is met."
+What a Tamoz architecture decision record must be to count as accepted, and the rubric every
+ADR is graded against. Version 3 (2026-10-02), requested by the owner, keeps ADRs focused on decisions: no
+Rejected alternatives, Reopen when or Verification sections. Evidence lives in a separate register.
+Version 2 (2026-10-01) raised the bar set on 2026-08-29: that version
+checked that sections existed; this one checks that what the sections claim is true, scoped,
+and clear about costs and commitments.
 
-Current version: `0.1.0.alpha.1` (pre-release).
+## 0. Why the bar exists
 
----
+Tamoz sells a safety and durability claim: nothing acts without a reviewed plan bound to its
+digest, ambiguous effects stop as `:unknown`, and authority never comes from model text. That
+claim is only as good as the record behind it. The 2026-09-29 review found the old bar could be
+met by a record that contradicted the shipped policy (ADR-049 said "residual approval risk is
+zero" after the policy let a chat identity approve every asked action). A record that is
+structurally complete and wrong is worse than no record. So this bar grades three things:
 
-## 0. End goal — why this bar exists
+1. **Truth** — every present-tense sentence matches today's code, or says it does not.
+2. **Scope** — every strong claim names what enforces it, what refusal proves it, and where its
+   proof stops.
+3. **Judgment** — the reason for the decision, its cost and its commitments are stated.
 
-We are not auditing ADRs for the sake of ADRs. Tamoz's entire product thesis is a
-**safety and durability claim**: *nothing acts without a reviewed plan bound to its exact
-digest; nothing changes a file without an approval you granted for that exact diff;
-ambiguous effects stop as `:unknown` and wait for a human* ([product.md](../overview/product.md),
-[GOAL.md](../../docs/design-v0.1/GOAL.md)). That claim is only credible if the decisions
-behind it are **written down, correct, current, and enforceable**.
+## 1. What is an ADR
 
-The ADR corpus is therefore load-bearing for the mission in three concrete ways:
+One architecturally significant decision: a choice that constrains structure, is expensive to
+reverse, resolves a contested trade-off, or draws a trust, authority, or safety boundary. If it
+is *how* rather than *whether*, it is a design or a plan and is linked from the ADR.
 
-1. **It is the audit trail for a safety product.** When Tamoz tells an operator "a chat
-   identity cannot approve a destructive action," the reason that is true — and the
-   conditions under which it could change — must be a document, not folklore. ADR-049 is
-   the model: it names the invariants (INV-A..INV-E), the threat model, and *the exact bar
-   a future change must clear*. An operator, an auditor, or a future maintainer must be
-   able to reconstruct why a boundary exists from the record alone.
+**One decision per ADR.** If two parts of a record would be revised for different reasons,
+they are two decisions. If two records state the same rule, merge them and retire one. A shipped
+rule that lives only in `AGENTS.md`, a design page, or code comments is a **missing ADR**.
 
-2. **It is how the framework stays small.** GOAL.md's bet is that Tamoz is "a quarter of
-   the size with the same guarantees." Size discipline is enforced by writing down every
-   *rejection* — every abstraction we refused and why (the Rejected tables). An
-   undocumented decision is an invitation to re-add the thing we already rejected.
+## 2. Structure
 
-3. **It is the contract between the decision and the code.** A decision that no longer
-   matches the shipped code is worse than no decision: it actively misleads. An ADR that
-   says "four runtime gems" while the tree has twenty-seven does not just go stale — it
-   makes every other claim in the corpus suspect.
-
-**The end goal of this work:** a decision record that a new maintainer, a security
-reviewer, or the operator's auditor can trust on its own — every accepted decision is
-correct against today's code, every superseded decision says what replaced it and why,
-every load-bearing boundary states its invariants and the bar to change it, and there are
-no decisions that were actually made but never written down. When that holds, the safety
-claims Tamoz makes to its operator are backed by a record, not by memory.
-
-The bar is met when **every ADR passes the rubric in §4** at the tier §3 assigns it, the
-catalog in §5 is internally consistent, and the audit's re-grade (the loop) shows zero
-open blocking defects.
-
----
-
-## 1. What is an ADR (and what is not)
-
-An ADR records **one architecturally significant decision**: a choice that constrains the
-structure of the system, is expensive to reverse, resolves a contested trade-off, or draws
-a trust/authority/safety boundary.
-
-| Is an ADR | Is **not** an ADR |
-|---|---|
-| "Approval is gated on evidence strength, not transport" (ADR-049) | A plan for *how* to implement it this sprint (that is a `docs/*_PLAN.md`) |
-| "The channel gateway is a separate process" (ADR-042) | A design walkthrough of the gateway (that is a `design/*.md`) |
-| "MCP uses the official Ruby SDK, not our own protocol" (ADR-029) | A bug fix, a refactor, a test, or a milestone checklist |
-| "tamoz-graph never loads an LLM client" (invariant 11 / ADR-002) | An open product question with no decision yet (that is a *question*, kept separate) |
-
-Rule of thumb: if reversing it later would force a rewrite, break a compatibility promise,
-or reopen a safety argument, it is an ADR. If it is *how* rather than *whether*, it is a
-plan or a design and belongs elsewhere, linked from the ADR.
-
----
-
-## 2. Required structure
-
-Every ADR is a standalone page (`documentation/adr/adr-NNN-slug.md`) with the sections
-below. ADR-049 is the reference implementation of this structure.
-
-**Always required:**
-
-1. **Title** — `# ADR-NNN — <decision as a claim>`. The title states the decision, not the
-   topic. "Telegram approval is evidence-gated, not transport-gated" ✓; "Telegram
-   approval" ✗.
-2. **Status + Date** — one of the §5 status values, with the acceptance date.
-3. **Relates to** — the ADRs this amends, supersedes, depends on, or is constrained by,
-   each as a link with a one-line reason. Supersession links are bidirectional (§5).
-4. **Context** — the forces that made a decision necessary: what was true, what was
-   broken, what tension had to be resolved. A reader must understand the problem before
-   the answer. State the problem, not the solution restated.
-5. **Decision** — the choice, stated as an enforceable rule. Precise enough that you could
-   write a test that fails when the code violates it.
-6. **Consequences** — what this makes easier, what it makes harder, and what it commits us
-   to. Honest about the costs, not only the benefits.
-7. **Rejected alternatives** — at least one, each with the reason it lost. This is where
-   size discipline lives; an ADR with no rejected alternative usually has not made a real
-   choice.
-
-**Required when the decision is safety-, authority-, or effect-bearing** (touches
-approval, capabilities, credentials, effects, memory authority, physical action, or the
-trust boundary):
-
-8. **Invariant linkage** — the numbered [INVARIANTS.md](../../docs/design-v0.1/INVARIANTS.md)
-   clauses (or ADR-local INV-x) the decision establishes or depends on.
-9. **Threat model** — the assets, the adversary, and a threat→mitigation table (ADR-049 §6
-   is the model). "What is the worst thing an attacker who controls X can do, and why is it
-   tolerable?"
-10. **The bar to change it** — for a boundary that is deliberately restrictive, the exact,
-    testable conditions a future ADR must satisfy to loosen it (ADR-049 §4).
-
-**Required for any ADR whose decision is claimed to be implemented:**
-
-11. **Verification** — a dated line stating whether the shipped code matches the decision,
-    and the evidence (a gem, a symbol, a test, a conformance suite). This is what keeps the
-    record honest against drift. See §6.
-
----
-
-## 3. Tiers — how much structure an ADR needs
-
-Not every decision needs a threat model. The audit grades against the tier, not a single
-maximal template.
-
-- **Tier F (Full page).** Required for ADRs that are *load-bearing for a safety/authority
-  boundary*, *amend a shipped behavior*, or *are currently the live rule* for a subsystem.
-  Must satisfy every applicable section in §2, including invariant linkage, threat model
-  where relevant, and Verification. Examples: ADR-049, ADR-022, ADR-030, ADR-038, ADR-043,
-  ADR-048.
-- **Tier C (Core record).** Foundational decisions that are stable and not
-  authority-bearing may be recorded concisely, but still must have Title-as-claim, Status,
-  Context, Decision, Consequences, at least one Rejected alternative, correct §5 catalog
-  metadata, and (if implemented) Verification. Examples: ADR-005, ADR-006, ADR-007,
-  ADR-018.
-- **Every ADR, both tiers**, must pass the non-negotiable checks in §4 (A-group). Tier only
-  changes the depth of the E-group.
-
----
-
-## 4. The grading rubric
-
-Each ADR is scored on these checks. **A-group are blocking**: any A failure means the ADR
-does not meet the bar. E-group are graded to the ADR's tier.
-
-**A — Correctness & integrity (blocking, both tiers)**
-
-- **A1 Unique identity.** Exactly one decision holds this number. No collisions.
-- **A2 Reachable & linked.** Listed in the catalog; every outbound link resolves; every
-  deep-link anchor exists.
-- **A3 Status honesty.** Status is a real §5 value and matches reality: an "Accepted"
-  decision is in force; a "Superseded" one names its successor and the successor names it
-  back.
-- **A4 Reality-consistent.** The decision does not contradict the shipped code. If the code
-  moved, the ADR is Revised or Superseded — never silently wrong (§6).
-- **A5 Decision is a rule.** The Decision section states an enforceable rule, not a topic
-  or an aspiration.
-
-**E — Depth & craft (graded to tier)**
-
-- **E1 Context present.** The problem and forces are stated, not just the answer.
-- **E2 Consequences stated.** Costs and commitments are named, not only benefits.
-- **E3 Alternatives rejected.** ≥1 rejected alternative with its reason.
-- **E4 Invariant/evidence linkage** (Tier F, and Tier C when implemented).
-- **E5 Threat model** (Tier F when safety/authority/effect-bearing).
-- **E6 Change-bar** (Tier F when the decision is a deliberately restrictive boundary).
-- **E7 Verification line** (any implemented ADR).
-- **E8 Clean prose.** Title is a claim; no dangling "TBD"; no duplicated or contradictory
-  sentences; slug matches title.
-
-An ADR **meets the bar** when it has zero A failures and zero E failures at its tier.
-
----
-
-## 5. Catalog, numbering, and status rules
-
-- **One catalog.** [`README.md`](./README.md) is the single authoritative index. Every ADR
-  that exists appears there exactly once, with title and status.
-- **Numbers are unique and monotonic.** A number, once assigned, is never reused for a
-  different decision. The next ADR takes `max(existing) + 1`. (The 048 collision this audit
-  found — model-transport vs. observability-automation both claiming 048 — is exactly the
-  failure this rule prevents.)
-- **One authoritative home, one file per decision.** The maintained source of truth is
-  `documentation/adr/`, with **one standalone page per ADR** (`adr-<NNN>-<slug>.md`, uniform
-  structure per §2). No monolith and no per-decision log: the former
-  `docs/design-v0.1/DECISIONS.md` was **removed** (2026-08-29) — its content migrated to the
-  per-ADR pages, its dead decisions to `RETIRED.md`, its open product questions to the roadmap
-  — and the CI-validated design archive (`rake design:validate`) was updated to stop requiring
-  it. There is no second copy to drift.
-- **Status vocabulary:**
-  - **Proposed** — decided in a design but not yet ratified/implemented. Must name what
-    would ratify it.
-  - **Accepted** — in force. Implemented Accepted ADRs carry a Verification line.
-  - **Revised** — still in force but changed after review/counterexample; must state *what
-    changed* and why.
-  - **Superseded by ADR-M** — no longer in force; ADR-M must list this ADR as the one it
-    supersedes.
-  - **Retired / Superseded** — the decision is withdrawn or replaced. It does **not** keep a
-    full page. It gets (a) one line in [`RETIRED.md`](./RETIRED.md) — *what it said, when it
-    died, why* — and (b) a short **tombstone stub** `adr-<NNN>-<slug>.md` that only states the
-    retirement and points to the successor + the ledger. The stub keeps the "find by number"
-    convention total (every number resolves to a file) without cluttering the catalog with a
-    live-looking page.
-- **No orphans.** A decision that was actually made and shipped but has no ADR is a
-  **missing ADR** — a blocking gap, not an omission. It must be written or an existing ADR
-  extended.
-- **Remove old, don't preserve for its own sake.** Backward-compatibility is not a reason
-  to keep a stale decision page alive. When a decision dies, it is superseded (successor
-  named) or retired (one line in the ledger). The live catalog contains only decisions that
-  are in force.
-
----
-
-## 6. The reality-consistency rule (what keeps this honest)
-
-Tamoz is a safety product; a decision record that has drifted from the code is a liability,
-not neutral. Therefore:
-
-- Every implemented ADR carries **`Verified against code: YYYY-MM-DD — <evidence>`**.
-- The audit re-checks Verification against the tree. A decision the code contradicts is an
-  **A4 failure** and must be resolved by Revising the ADR, Superseding it, or fixing the
-  code — the ADR may not stay silently wrong.
-- "Evidence" is a gem, a symbol, a conformance clause, or a test path — something a reader
-  can open. Not "trust me."
-
----
-
-## 7. Authoring template
+Every in-force ADR is one file, `adr-NNN-<slug>.md`, in this order. Sections are unnumbered
+and referenced by name ("ADR-049 Decision"), never by `§N`.
 
 ```markdown
-# ADR-NNN — <the decision, stated as a claim>
+# ADR-NNN — <the decision as a claim>
 
-**Status:** Accepted YYYY-MM-DD
-**Date:** YYYY-MM-DD
-**Relates to:** ADR-XXX (<one line: amends / depends on / superseded by>) …
+**Status:** Accepted YYYY-MM-DD | Proposed | Retired YYYY-MM-DD — superseded by ADR-M | Retired YYYY-MM-DD — withdrawn
+**Date:** YYYY-MM-DD                      (date first decided)
+**Tier:** C | F
+**Implementation:** Complete | Complete — <scope note> | Partial — <what is not built> | Not built
+**Relates to:** ADR-X (one-line reason); …          (omit when none)
+**Amends:** ADR-X …                                 (only when it changes another ADR's rule)
+**Amended by:** ADR-Y …                             (the reverse edge; must be reciprocal)
+**Supersedes:** ADR-Z …                             (a retired ADR this one replaces; its Status names this one)
 
-<One-paragraph abstract: the decision and the single sentence of why.>
+<One sentence: the decision and why.>
 
-## 1. Context
-<The forces. What was true, what was broken, what tension forced a choice.>
-
-## 2. Decision
-<The rule, stated so a test could check it.>
-
-## 3. Consequences
-<Easier / harder / committed-to. Honest about cost.>
-
-## 4. Invariant linkage            (safety/authority/effect-bearing)
-## 5. Threat model                 (safety/authority/effect-bearing)
-## 6. The bar to change it         (deliberately restrictive boundaries)
-
-## 7. Rejected alternatives
-| Rejected | Why |
-|---|---|
-
-## 8. Verification                 (if implemented)
-Verified against code: YYYY-MM-DD — <gem / symbol / test / conformance clause>.
-
-## Next reads
-- [README.md](./README.md) — the ADR index
-- <the design doc, invariant, or guide this decision governs>
+## Context          forces and the tension; the problem, not the answer restated
+## Decision         the rule, testable; present tense = shipped behavior
+## Consequences     what it makes easier and harder; end with **Cost:**
+## Invariants       (Tier F) the INVARIANTS.md clauses it establishes or depends on
+## Threat model     (Tier F when authority/effect/data-bearing) asset, adversary, threat → mitigation, residual risk
+## History          (optional) dated one-line amendments: what changed, who decided, why
 ```
 
----
+Every ADR-N named in a header is a link to that ADR's file. ADRs record the chosen rule, its
+rationale and consequences. Alternatives, reopening criteria and evidence tables do not belong
+in the record. Evidence belongs in [`evidence.md`](./evidence.md); review findings belong in the
+review ledger under `docs/adr-review-*/`.
 
-## 8. How the loop uses this
+Not in an ADR: release-version boilerplate, implementation checklists, audit notes ("needs an
+ADR"), dependency fan-in counts, point-in-time gem counts, or a "Next reads" list that only
+points at the catalog.
 
-1. **Grade** every ADR against §4 at its §3 tier → the audit scorecard.
-2. **Fix** the A-group failures first (collisions, broken links, wrong-vs-code,
-   status lies), then the missing ADRs, then E-group gaps.
-3. **Re-grade.** Repeat until zero A failures corpus-wide and zero E failures at tier.
-4. The corpus "meets the bar" only when the re-grade is clean and §5 is internally
-   consistent.
+## 3. Tiers
+
+- **Tier F (full):** draws a safety, authority, durability, effect, credential, or data-protection boundary.
+  Needs Invariants and Threat model in addition to Context, Decision and Consequences.
+  Loosening a restrictive boundary still requires an explicit owner decision and revised threat model.
+- **Tier C (core):** stable, not authority-bearing. Needs Context, Decision and Consequences. Aim for under 40 lines.
+
+Tier F pages aim for under 120 lines; detail belongs in the linked design.
+
+## 4. Rubric
+
+**A — blocking (both tiers).** Any A failure means the ADR does not meet the bar.
+
+| Check | Passes when |
+|---|---|
+| A1 Identity | One number, one file, one decision; filename, H1, and catalog agree |
+| A2 Links | Every link and anchor resolves; replacement and amendment edges are reciprocal |
+| A3 Status | Status is a §2 value; Retired names a successor or says withdrawn |
+| A4 Truth | No present-tense sentence contradicts the code; unbuilt parts are in `Implementation: Partial` |
+| A5 Rule | The Decision is a rule a test could fail, not a topic or aspiration |
+| A6 Claim scope | Strong behavioral or trust guarantees have scoped evidence in the separate register (§5). Simple naming or organizational rules are checked during semantic review; universal wording does not exempt a guarantee from proof |
+| A7 Policy honesty | A change that loosens an authority boundary is recorded as a dated History entry with its decider and a revised threat model — never only as a Status-line note or a data edit |
+
+**E — depth (graded to tier).**
+
+| Check | Passes when |
+|---|---|
+| E1 Context | The forcing problem is stated, not the answer restated |
+| E2 Cost | Consequences name a real cost, not only benefits |
+| E4 Invariants | Tier F names the clauses it rests on |
+| E5 Threat model | Tier F names asset, adversary, mitigations, and the residual risk in words |
+| E7 Proof | Behavioral and trust claims are supported by scoped evidence outside the ADR (§5) |
+| E8 Prose | Title is a claim; no TBD, no restated paragraphs, no boilerplate; the slug names the current decision |
+
+An ADR **meets the bar** with zero A failures and zero E failures at its tier, **and** a
+recorded semantic review (§7). Green automation alone never means "meets the bar".
+
+## 5. Evidence outside the decision record
+
+The ADR states the rule. [`evidence.md`](./evidence.md) records how implemented behavioral,
+durability, security, authority and data-protection claims were checked and where proof stops.
+Simple naming or organizational decisions may rely on source inspection in the semantic review
+ledger. Removing a section does not excuse false claims or unsupported Complete status.
+
+Use one `## ADR-NNN` entry in the evidence register when proof is needed:
+
+```markdown
+## ADR-NNN
+
+Checked YYYY-MM-DD (source inspection; tests marked *run* were executed that day).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| <claim from Decision> | <enforcement seam> | <source inspection or named executed test> | <uncovered surface or deployment assumption> |
+```
+
+- Name the evidence kind: source inspection, deterministic test, real-model run or production
+  observation. These are not interchangeable; deterministic tests do not prove agent reasoning.
+- Cite enforcement and meaningful refusal scenarios; existence of a symbol or gem is insufficient.
+- Record limits and gaps honestly. An unimplemented rule stays Partial or Not built in the ADR.
+- Backticked repository paths, gem names and test names in the register are checked by
+  `rake adr:verify`. Passing this check proves citations exist, not that the claim is true.
+
+## 6. Catalog, numbering, lifecycle
+
+- **Numbers are unique and never reused.** Next number = `catalog.json` `next_number`.
+- **Files own the content.** `catalog.json`, `relationships.md`, and `traceability.md` are
+  generated; never hand-edit them. The README index is hand-written, grouped by area, and the
+  validator checks it lists every file.
+- **States:** Proposed (names what would ratify it) → Accepted → Retired. There is no
+  "Revised" state: a change in force is an Amends/Amended-by edge or a History line.
+- **Retirement:** move the file to `retired/` and update its incoming and relative links.
+  The file shrinks to a tombstone (Status, one paragraph of what it said, the
+  successor), and `RETIRED.md` gets one row: what it said, when it died, why, replaced by.
+- **Merging:** when two ADRs state one rule, the survivor absorbs the rule and its evidence, the
+  other is retired as superseded by the survivor.
+
+## 7. Acceptance and review
+
+Acceptance needs both:
+
+1. **Automated:** `rake adr:validate adr:verify` green (both run in `rake ci`). They check
+   structure, metadata, a `**Cost:**` in Consequences, linked and reciprocal relations, links, catalog
+   sync, banned boilerplate, and that every cited path and `test_*` name exists. They do not check
+   truth, and they cannot tell whether a cited test proves the claim it is cited for.
+2. **Semantic review:** a reviewer other than the author checks A4, A6, A7, and E7 against
+   the code and records the result (date, reviewer, verdict, open items) in the current review
+   ledger under `docs/adr-review-*/`.
+
+A decision that changes authority, a cross-gem interface, or a product promise also needs the
+owner's explicit decision, recorded in History.
+
+## 8. How a review loop uses this
+
+1. Grade every ADR (§4) and record findings with evidence kind (text, code, executed, judgment).
+2. Fix A failures first, then missing ADRs, then E gaps.
+3. Re-grade. Record what changed, what was decided, and what stays open.
+4. The corpus meets the bar when every in-force ADR passes and the open-items list holds only
+   owner decisions, each with a recommendation.
 
 ## Next reads
 
-- [`AUDIT_2026-08-29.md`](./AUDIT_2026-08-29.md) — the deep audit and the loop scorecard
-- [`README.md`](./README.md) — the ADR catalog
-- [`adr-049-telegram-approval.md`](./adr-049-telegram-approval.md) — the reference-quality ADR
+- [`LIFECYCLE.md`](./LIFECYCLE.md) — the authoring, amending, and retiring workflow
+- [`_TEMPLATE.md`](./_TEMPLATE.md) — the copyable skeleton
+- [`README.md`](./README.md) — the catalog

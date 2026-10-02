@@ -1,32 +1,53 @@
 # ADR-029 — MCP is native at the edge and uses the official Ruby SDK
 
-**Status:** Accepted 2026-07-30; **shipped** (`tamoz-mcp`).
+**Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
-**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+**Tier:** F
+**Implementation:** Complete
+**Supersedes:** [ADR-012](retired/adr-012-mcp-deferred-integration.md)
+**Relates to:** [ADR-030](./adr-030-one-local-capability-catalog-governs-all-sources.md) (MCP tools enter through the catalog)
+
+`tamoz-mcp` speaks MCP through the official `mcp` gem; Tamoz owns everything about what an MCP tool
+may do: catalog snapshots, effect identity, consent, content bounds, and supervision.
 
 ## Context
 
-Reimplementing MCP inside Tamoz would couple graph correctness to a fast-moving protocol, while the host's local policy, effect, and consent semantics are genuinely Tamoz's to own.
+MCP is the standard way to reach external tools, and it moves fast. Reimplementing its wire
+protocol would couple Tamoz's correctness to protocol churn. But nothing about MCP decides who may
+call a tool, whether a call is safe to retry, or how consent survives a crash — those are Tamoz's.
 
 ## Decision
 
-`tamoz-mcp` is an optional first-class host/server package using the official `mcp` gem for
-protocol, transports, OAuth, and schemas, while Tamoz owns local policy, effect identity,
-durable elicitation, content bounds, supervision, catalog epochs, and evaluation.
+- Protocol, transports, OAuth, and schemas come from the official `mcp` gem.
+- Tamoz owns: per-server configuration and protocol range (fail closed outside it), immutable
+  digest-pinned catalog snapshots, local effect classes and deterministic effect keys for every call
+  (ADR-016), durable elicitation as an interrupt, bounded and control-stripped content, credential
+  references that never appear in state or errors, process supervision, and a circuit per server.
+- Remote annotations and descriptions are untrusted text; they never set an effect class.
+- `tamoz-mcp` loads nothing but `tamoz-core` and the SDK.
 
 ## Consequences
 
-The official SDK owns wire compatibility and Tamoz owns policy, effect identity, durable consent, and catalog epochs. **Cost:** a dependency on the SDK's release cadence and explicit protocol-version compatibility windows.
+Wire compatibility tracks the SDK; safety stays Tamoz's. **Cost:** Tamoz follows the SDK's release
+cadence and must keep explicit protocol-version windows.
 
-## Rejected alternatives
+## Invariants
 
-- implementing JSON-RPC/MCP inside Tamoz — duplicates a fast-moving standard and couples graph correctness to protocol churn.
+- 36 — MCP protocol and catalog snapshots are explicit and pinned.
+- 37 — MCP calls preserve Tamoz authorization, durability, and uncertainty.
 
-## Verification
+## Threat model
 
-Verified against code: 2026-08-29 — `tamoz-mcp` and `tamoz-mcp-websearch` present (supersedes the "deferred/post-v0.1" timing of the retired ADR-012).
+**Asset:** the operator's credentials and the effects MCP tools can cause. **Adversary:** a
+malicious or compromised MCP server.
 
-## Next reads
+| Threat | Mitigation |
+|---|---|
+| Server metadata claims a tool is safe | Annotations are untrusted; the application assigns effect class |
+| Prompt injection via descriptions | Descriptions are control-stripped and byte-bounded |
+| Credential leak via errors | Credential values never appear in errors or stderr metadata |
+| Crash mid-call is retried | The call is typed `:unknown` and never retried blindly |
+| Output flood or orphan process | Output is bounded; teardown leaves no orphan |
 
-- [`README.md`](./README.md) — the ADR catalog
-- [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) — how this ADR is graded
+**Residual risk:** an MCP server is arbitrary code running with the host access the operator gave
+its process.

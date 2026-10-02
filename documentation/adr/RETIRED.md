@@ -1,37 +1,27 @@
-# Retired & superseded decisions
+# Retired decisions
 
-Decisions that are no longer in force. Per [`ADR_QUALITY_BAR.md` §5](./ADR_QUALITY_BAR.md#5-catalog-numbering-and-status-rules),
-a dead decision does not keep a full page — it collapses to one honest line here: *what it
-said, when it died, why, and what replaced it.* This keeps the history one grep away without
-cluttering the live catalog with pages nobody should follow.
+Decisions no longer in force. Each keeps a tombstone file so its number still resolves, and one row
+here: what it said, when it died, why, and what replaced it. Numbers are never reused.
 
-Numbers are **never reused** for a different decision. A retired number stays retired.
-
-## Superseded (replaced by a successor)
-
-| ADR | What it said | Died | Replaced by | Why |
+| ADR | What it said | Retired | Replaced by | Why |
 |---|---|---|---|---|
-| **002** | "v0.1 ships four runtime gems: `tamoz-core`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-agent`." | 2026-08-26 | [ADR-052](./adr-052-agent-gem-decomposition.md) | The tree grew to 27 gems; `tamoz-agent` was decomposed into eight verticals. The "four gems" count became false. |
-| **003** | "Reuse `RubyLLM::Message`/`RubyLLM::Tool` through public APIs; define a lossless durable codec." | 2026-08-26 | [ADR-048](./adr-048-one-digest-bound-openai-compatible-model-transport.md) (transport) + [ADR-051](./adr-051-rubyllm-removed.md) (RubyLLM removal) | The RubyLLM-passthrough half is retired — RubyLLM is gone entirely. The durable-codec half survives natively as `Tamoz::StateCodec`. |
-| **012** | "MCP is a **deferred** integration strategy (post-v0.1)." | 2026-07-30 (detail) / shipped since | [ADR-029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md) | MCP is native at the edge via the official SDK and has **shipped** (`tamoz-mcp`, `tamoz-mcp-websearch`). "Deferred" is no longer true. |
+| **002** | v0.1 ships four runtime gems: `tamoz-core`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-agent`. | 2026-08-26 | [ADR-052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md) | `tamoz-agent` was decomposed into focused gems; the count became false. |
+| **003** | Reuse `RubyLLM::Message` / `RubyLLM::Tool` through public APIs; keep a lossless durable codec. | 2026-08-26 | [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md) | RubyLLM left the runtime; the codec survives as `Tamoz::StateCodec`. |
+| **004** | `Tamoz.seq` / `Tamoz.step` are the canonical composition API; `tamoz-chain` is deferred. | 2026-10-01 | — (withdrawn) | The API was never built; composition is the graph plus plain Ruby. |
+| **010** | MRI 3.3 minimum; development and CI pinned to 3.3.11; 3.4 and 4.0 untested targets; JRuby deferred. | 2026-10-02 | — (withdrawn) | Owner chose to keep version policy in gem specifications, `.ruby-version` and CI rather than a separate ADR; those constraints are unchanged. |
+| **012** | MCP is a deferred, post-v0.1 integration. | 2026-07-30 | [ADR-029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md) | MCP shipped natively through the official SDK. |
+| **035** | Streaming input is a distinct first-class Ruby runtime owning admission, temporal state, and replay. | 2026-10-01 | [ADR-036](./adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md), [ADR-055](./adr-055-two-repo-authority-split.md) | The continuous plane moved to Go; the surviving rule is ADR-036's. |
+| **037** | Event time, backpressure, and effect-disabled replay are contracts of Tamoz's continuous plane. | 2026-10-01 | [ADR-055](./adr-055-two-repo-authority-split.md) | Those contracts belong to `agentic-stream`; Tamoz computes none of them. |
+| **043** | Telegram v1 is deny-only; chat grant counters must stay zero; buttons are single-use, digest-bound references. | 2026-10-01 | [ADR-049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) | Evidence-gated approval replaced deny-only; the reference binding is stated in ADR-049. |
+| **051** | RubyLLM is removed; message and tool fidelity are Tamoz-native. | 2026-10-01 | [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md) | One decision with the model transport. |
 
-## Renumbered (integrity fix)
+## Renumbered
 
 | Was | Now | Why |
 |---|---|---|
-| A second "ADR-048" in `OBSERVABILITY_DESIGN.md` §18.7 — "automated responses act only on durable evidence." | [**ADR-050**](./adr-050-automated-response-durable-evidence.md) | Two different decisions had both taken number 048 (model-transport vs. observability automation). The observability-automation decision was renumbered to the next free number, 050. The model-transport decision keeps 048. |
-
-## Notes
-
-- The historical full text of ADR-001..048 lived in `docs/design-v0.1/DECISIONS.md`, which was
-  **removed** on 2026-08-29 once its content was migrated here (the `rake design:validate`
-  archive checks were updated to match). The authoritative copies are the per-ADR standalone
-  pages, indexed in [`README.md`](./README.md); dead decisions are the rows above.
-- The open product questions that shared the old `DECISIONS.md` (first physical environment;
-  finishing the research report) were never ADRs and are now tracked in
-  [`../roadmap.md`](../roadmap.md#open-product-questions), not here.
+| A second "ADR-048" in `OBSERVABILITY_DESIGN.md` §18.7 (automated responses) | [ADR-050](./adr-050-automated-response-durable-evidence.md) | Two decisions held 048; the observability one took the next free number. |
 
 ## Next reads
 
-- [`README.md`](./README.md) — the ADR catalog
-- [`AUDIT_2026-08-29.md`](./AUDIT_2026-08-29.md) — why each of these was retired
+- [`README.md`](./README.md) — the catalog
+- [`../../docs/adr-review-2026-09-29/README.md`](../../docs/adr-review-2026-09-29/README.md) — the review that retired 004, 035, 037, 043, and 051

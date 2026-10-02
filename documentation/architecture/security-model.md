@@ -69,7 +69,7 @@ Evaluation code can exercise every public boundary but can never reach a product
 ## The governed integrations
 
 - **MCP.** Governed client/host over the official Ruby SDK: immutable server admission, pinned catalogs, invocation supervision, credential handling. Remote metadata never owns local authorization, trust, or effect safety (invariants 35–37). Websearch is an MCP server with the reserved id `websearch`, behind an egress policy and a circuit.
-- **Telegram.** A channel is a user surface, not a model-callable capability. Admission is allowlist-based; the gateway holds the bot token and never constructs a session, loads a model credential, or opens a workspace file. Approval is **evidence-gated**: `chat_bound < filesystem_operator`, and required evidence travels with the journaled engine Decision from the digest-pinned policy data, so Telegram is deny-only wherever the document does not deliberately grant it ([../adr/adr-049-telegram-approval.md](../adr/adr-049-telegram-approval.md)).
+- **Telegram.** A channel is a user surface, not a model-callable capability. Admission is allowlist-based; the gateway holds the bot token and never constructs a session, loads a model credential, or opens a workspace file. Approval is **evidence-gated**: `chat_bound < filesystem_operator`, and required evidence travels with the journaled engine Decision from the digest-pinned policy data, so Telegram is deny-only wherever the document does not deliberately grant it ([../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md](../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md)).
 
 ## Reporting vulnerabilities
 
@@ -79,6 +79,6 @@ Report vulnerabilities privately through GitHub security advisories for the repo
 
 - [../../SECURITY.md](../../SECURITY.md) — the security policy
 - [invariants.md](invariants.md) — the executable clauses behind this boundary
-- [../adr/adr-049-telegram-approval.md](../adr/adr-049-telegram-approval.md) — evidence-gated approval
+- [../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md](../adr/adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) — evidence-gated approval
 - [../design/mcp.md](../design/mcp.md) — the governed MCP design
 - [../guides/agent-operator.md](../guides/agent-operator.md) — running an agent safely

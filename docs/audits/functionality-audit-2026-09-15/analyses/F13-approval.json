@@ -69,8 +69,8 @@
         "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:239-255",
         "gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102",
         "gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256",
-        "documentation/adr/approval-policy-redesign/00-acceptance-bar.md:67-73",
-        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:370-376"
+        "docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:67-73",
+        "docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:370-376"
       ],
       "five_whys": true,
       "recommendation": "Reject :session for NO_SESSION_SCOPE_TIERS before the current next guard and validate every tool override against the tier no-session rule; add a network tool override regression."
@@ -87,7 +87,7 @@
         "gems/tamoz-approval/lib/tamoz/approval/policy_document.rb:201-255",
         "gems/tamoz-approval/lib/tamoz/approval/evaluator.rb:82-102",
         "gems/tamoz-approval/lib/tamoz/approval/engine.rb:243-256",
-        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-376"
+        "docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:375-376"
       ],
       "five_whys": true,
       "recommendation": "Validate grant_scopes against the supported :once and :session set at policy load, retaining Engine membership checks as defense in depth."
@@ -105,7 +105,7 @@
         "gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:93-112",
         "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:63-87",
         "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-45",
-        "documentation/adr/approval-policy-redesign/00-acceptance-bar.md:76-84"
+        "docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:76-84"
       ],
       "five_whys": true,
       "recommendation": "Make replay of a session resolution idempotently ensure the grant row exists before returning it, and allow SQLite-backed resolution and grant writes to commit together."
@@ -122,8 +122,8 @@
         "gems/tamoz-approval/lib/tamoz/approval/engine.rb:183-199",
         "gems/tamoz-agent/lib/tamoz/agent/worker.rb:988-1033",
         "gems/tamoz-approval/lib/tamoz/approval/decision_log.rb:29-43",
-        "documentation/adr/approval-policy-redesign/00-acceptance-bar.md:135-140",
-        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:464-498"
+        "docs/approval-policy-redesign-2026-08-22/00-acceptance-bar.md:135-140",
+        "docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:464-498"
       ],
       "five_whys": true,
       "recommendation": "Record the mode switch successfully before exposing the new in-memory revision, or roll the revision back and leave the request retryable when audit recording fails; add a failure-injected mode-switch test."
@@ -143,7 +143,7 @@
         "gems/tamoz-approval/lib/tamoz/approval/engine.rb:282-296",
         "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb:18-55",
         "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1085-1099",
-        "documentation/adr/approval-policy-redesign/03-redesign-adr.md:375-386"
+        "docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md:375-386"
       ],
       "five_whys": true,
       "recommendation": "Rotate a durable session/run epoch in the session id at worker start, or set bounded expiry tied to the session budget and revoke old epochs on startup; make cleanup failure observable."
@@ -161,7 +161,7 @@
         "gems/tamoz-approval/lib/tamoz/approval/engine.rb:315-334",
         "gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb:31-52",
         "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb:1101-1137",
-        "documentation/adr/approval-policy-redesign/04-review-simplicity.md:97-100"
+        "docs/approval-policy-redesign-2026-08-22/04-review-simplicity.md:97-100"
       ],
       "five_whys": false,
       "recommendation": "Document an operator-owned retention or archival bound for decision records, or explicitly accept unbounded retention before calling the append-only table production-complete."

@@ -17,7 +17,7 @@ Eleven dumps, one session, no other tool used during the series. Raw data: `dump
 | 01 | `gems/tamoz-stream/lib/tamoz/stream/situation_request.rb` | 39 KB | 45,579 | 113% | 23,478 | — | 11,392 | 12,086 |
 | 02 | `test/comms_gateway_test.rb` | 45 KB | 52,032 | 112% | 38,896 | 15,418 | 23,552 | 15,344 |
 | 03 | `test/memory_engine_test.rb` | 42 KB | 48,360 | 112% | 52,860 | 13,964 | 39,040 | 13,820 |
-| 04 | `documentation/adr/approval-policy-redesign/02-current-state-audit.md` | 46 KB | 51,026 | 108% | 68,114 | 15,254 | 52,992 | 15,122 |
+| 04 | `docs/approval-policy-redesign-2026-08-22/02-current-state-audit.md` | 46 KB | 51,026 | 108% | 68,114 | 15,254 | 52,992 | 15,122 |
 | 05 | `test/agent_profile_machinery_test.rb` | 48 KB | 56,147 | 112% | 84,478 | 16,364 | 68,224 | 16,254 |
 | 06 | `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb` | 63 KB | 57,628 | 89% | 98,851 | 14,373 | 84,608 | 14,243 |
 | 07 | `script/tamoz_sqlite_oracle` | 76 KB | 58,873 | 75% | 115,951 | 17,100 | 99,072 | 16,879 |
