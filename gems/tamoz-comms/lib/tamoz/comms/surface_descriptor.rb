@@ -19,8 +19,7 @@ module Tamoz
     # The descriptor's fields ARE the value and its validation is the
     # per-field rule set; splitting either would fragment the deployed
     # contract.
-    # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:disable Metrics/ParameterLists
     # The descriptor is one validated value; the smells below are the
     # per-field rule set and the fifteen facts the digest binds — splitting
     # them would fragment the deployed contract (design §6.1).
@@ -39,6 +38,8 @@ module Tamoz
       CLASSIFICATIONS = %w[restricted].freeze
       DIGEST_DOMAIN = 'tamoz.comms.surface.v1'
       MAX_IDS = 1024
+      STRUCTURED_FIELDS = %i[transport identity admission approvals rendering limits].freeze
+      private_constant :STRUCTURED_FIELDS
 
       attr_reader :surface_id, :revision, :kind, :transport, :identity,
                   :admission, :threading, :profile_id, :profile_digest, :approvals, :rendering,
@@ -49,23 +50,12 @@ module Tamoz
         threading:, profile_id:, approvals:, rendering:, limits:,
         classification:, definition_digest:, profile_digest: nil
       )
-        validate!(surface_id:, revision:, kind:, transport:, identity:,
-                  admission:, threading:, profile_id:, approvals:, rendering:,
-                  limits:, classification:, definition_digest:, profile_digest:)
-        @surface_id = surface_id
-        @revision = revision
-        @kind = kind
-        @transport = deep_freeze(transport)
-        @identity = deep_freeze(identity)
-        @admission = deep_freeze(admission)
-        @threading = threading
-        @profile_id = profile_id
-        @profile_digest = profile_digest
-        @approvals = deep_freeze(approvals)
-        @rendering = deep_freeze(rendering)
-        @limits = deep_freeze(limits)
-        @classification = classification
-        @definition_digest = definition_digest
+        fields = {
+          surface_id:, revision:, kind:, transport:, identity:, admission:, threading:, profile_id:,
+          profile_digest:, approvals:, rendering:, limits:, classification:, definition_digest:
+        }
+        validate!(fields)
+        fields.each { |name, value| instance_variable_set(:"@#{name}", stored(name, value)) }
         freeze
       end
 
@@ -111,15 +101,15 @@ module Tamoz
           surface_id: wire.fetch('surface_id'),
           revision: wire.fetch('revision'),
           kind: wire.fetch('kind'),
-          transport: strings_to_symbol_keys(wire.fetch('transport')),
-          identity: strings_to_symbol_keys(wire.fetch('identity')),
-          admission: strings_to_symbol_keys(wire.fetch('admission')),
+          transport: symbolized_field(wire, 'transport'),
+          identity: symbolized_field(wire, 'identity'),
+          admission: symbolized_field(wire, 'admission'),
           threading: wire.fetch('threading'),
           profile_id: wire.fetch('profile_id'),
           profile_digest: wire['profile_digest'],
-          approvals: strings_to_symbol_keys(wire.fetch('approvals')),
-          rendering: strings_to_symbol_keys(wire.fetch('rendering')),
-          limits: strings_to_symbol_keys(wire.fetch('limits')),
+          approvals: symbolized_field(wire, 'approvals'),
+          rendering: symbolized_field(wire, 'rendering'),
+          limits: symbolized_field(wire, 'limits'),
           classification: wire.fetch('classification'),
           definition_digest: wire.fetch('definition_digest')
         )
@@ -142,44 +132,45 @@ module Tamoz
         end
       end
 
+      def self.symbolized_field(wire, name)
+        strings_to_symbol_keys(wire.fetch(name))
+      end
+      private_class_method :symbolized_field
+
       private
 
-      def validate!(
-        surface_id:, revision:, kind:, transport:, identity:, admission:,
-        threading:, profile_id:, approvals:, rendering:, limits:,
-        classification:, definition_digest:, profile_digest:
-      )
-        unless Shapes.bounded_string?(surface_id, max_bytes: MAX_IDS)
-          raise ValidationError, 'surface_id must be a bounded string'
-        end
-        unless revision.is_a?(Integer) && revision.positive?
-          raise ValidationError,
-                'revision must be a positive integer'
-        end
-        raise ValidationError, "kind must be one of #{KINDS.join(', ')}" unless Shapes.member?(kind, KINDS)
-        raise ValidationError, "threading must be one of #{THREADING_MODES.join(', ')}" unless Shapes.member?(
-          threading, THREADING_MODES
-        )
-        raise ValidationError, "classification must be one of #{CLASSIFICATIONS.join(', ')}" unless Shapes.member?(
-          classification, CLASSIFICATIONS
-        )
-        unless Shapes.bounded_string?(profile_id, max_bytes: MAX_IDS)
-          raise ValidationError, 'profile_id must be a bounded string'
-        end
+      def stored(name, value)
+        STRUCTURED_FIELDS.include?(name) ? deep_freeze(value) : value
+      end
+
+      def validate!(fields)
+        validate_classification!(fields)
+        validate_references!(fields)
+        validate_transport!(fields.fetch(:transport))
+        validate_identity!(fields.fetch(:identity))
+        validate_admission!(fields.fetch(:admission))
+        validate_approvals!(fields.fetch(:approvals))
+        validate_rendering!(fields.fetch(:rendering))
+        validate_limits!(fields.fetch(:limits))
+      end
+
+      def validate_classification!(fields)
+        Shapes.require_string!(fields.fetch(:surface_id), 'surface_id', max_bytes: MAX_IDS)
+        Shapes.require_positive!(fields.fetch(:revision), 'revision')
+        Shapes.require_member!(fields.fetch(:kind), KINDS, 'kind')
+        Shapes.require_member!(fields.fetch(:threading), THREADING_MODES, 'threading')
+        Shapes.require_member!(fields.fetch(:classification), CLASSIFICATIONS, 'classification')
+      end
+
+      def validate_references!(fields)
+        Shapes.require_string!(fields.fetch(:profile_id), 'profile_id', max_bytes: MAX_IDS)
+        profile_digest = fields.fetch(:profile_digest)
         unless profile_digest.nil? || profile_digest.to_s.start_with?('sha256:')
           raise ValidationError, 'profile_digest must be a sha256: digest'
         end
-        unless Shapes.hex?(definition_digest.to_s)
-          raise ValidationError,
-                'definition_digest must be a 64-char hex digest'
-        end
+        return if Shapes.hex?(fields.fetch(:definition_digest).to_s)
 
-        validate_transport!(transport)
-        validate_identity!(identity)
-        validate_admission!(admission)
-        validate_approvals!(approvals)
-        validate_rendering!(rendering)
-        validate_limits!(limits)
+        raise ValidationError, 'definition_digest must be a 64-char hex digest'
       end
 
       def validate_transport!(transport)
@@ -224,20 +215,19 @@ module Tamoz
         # allowed to approve is not a deployment. The list must be an actual
         # array (a bare string is a configuration error, not a one-element
         # list) and is bounded.
-        if approvals.fetch(:mode) == 'affirmative'
-          roles = approvals[:approver_roles]
-          unless roles.is_a?(Array) && !roles.empty? && roles.length <= MAX_APPROVER_ROLES &&
-                 roles.all? { |role| Shapes.bounded_string?(role, max_bytes: MAX_IDS) }
-            raise ValidationError,
-                  'affirmative approval requires a non-empty approver_roles ' \
-                  'array with at most ' \
-                  "#{MAX_APPROVER_ROLES} bounded entries"
-          end
-        end
+        validate_approver_roles!(approvals[:approver_roles]) if approvals.fetch(:mode) == 'affirmative'
         return if approvals.fetch(:prompt_ttl_s).is_a?(Integer) && approvals.fetch(:prompt_ttl_s).positive?
 
+        raise ValidationError, 'prompt_ttl_s must be positive'
+      end
+
+      def validate_approver_roles!(roles)
+        return if roles.is_a?(Array) && !roles.empty? && roles.length <= MAX_APPROVER_ROLES &&
+                  roles.all? { |role| Shapes.bounded_string?(role, max_bytes: MAX_IDS) }
+
         raise ValidationError,
-              'prompt_ttl_s must be positive'
+              "affirmative approval requires a non-empty approver_roles array with at most #{MAX_APPROVER_ROLES} " \
+              'bounded entries'
       end
 
       def validate_rendering!(rendering)
@@ -280,5 +270,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Metrics/ParameterLists

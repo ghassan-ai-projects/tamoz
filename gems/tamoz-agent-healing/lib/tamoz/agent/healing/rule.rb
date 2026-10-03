@@ -89,48 +89,24 @@ module Tamoz
         }.freeze
 
         def initialize(
-          format_version: FORMAT_VERSION,
-          rule_id:,
-          version: 1,
-          owner:,
-          lifecycle_mode: :draft,
-          trigger:,
-          minimum_confidence: 1.0,
-          risk_class: :low,
-          effect_class: :idempotent,
-          authorized_scopes: [],
-          authorized_resources: [],
-          plan_review_policy: nil,
-          preconditions: [],
-          remediation_steps: [],
-          effect_identity: nil,
-          budgets: nil,
-          verification_oracle:,
-          compensation: nil,
-          circuit_conditions: [],
-          reset_authority: nil,
-          escalation_contract: nil,
-          eval_suite: nil,
-          promotion_evidence: nil,
-          created_at_ms: 0
+          format_version: FORMAT_VERSION, rule_id:, version: 1, owner:, lifecycle_mode: :draft, trigger:,
+          minimum_confidence: 1.0, risk_class: :low, effect_class: :idempotent, authorized_scopes: [],
+          authorized_resources: [], plan_review_policy: nil, preconditions: [], remediation_steps: [],
+          effect_identity: nil, budgets: nil, verification_oracle:, compensation: nil, circuit_conditions: [],
+          reset_authority: nil, escalation_contract: nil, eval_suite: nil, promotion_evidence: nil, created_at_ms: 0
         )
           validate_header(format_version, version, minimum_confidence)
 
           super(
-            format_version:,
-            rule_id: validate_id(rule_id, "rule_id"),
-            version:,
-            owner: validate_id(owner, "owner"),
+            format_version:, rule_id: validate_id(rule_id, "rule_id"), version:, owner: validate_id(owner, "owner"),
             lifecycle_mode: validate_member(lifecycle_mode, LIFECYCLE_MODES, "lifecycle_mode"),
-            trigger: Tamoz::Core.deep_freeze(validate_trigger(trigger)),
-            minimum_confidence: minimum_confidence.to_f,
+            trigger: Tamoz::Core.deep_freeze(validate_trigger(trigger)), minimum_confidence: minimum_confidence.to_f,
             risk_class: validate_member(risk_class, RISK_CLASSES, "risk_class"),
             effect_class: validate_member(effect_class, EFFECT_CLASSES, "effect_class"),
             authorized_scopes: Tamoz::Core.deep_freeze(validate_strings(authorized_scopes, "authorized_scopes")),
             authorized_resources: Tamoz::Core.deep_freeze(
               validate_strings(authorized_resources, "authorized_resources")
-            ),
-            plan_review_policy: Tamoz::Core.deep_freeze(validate_plan_review(plan_review_policy)),
+            ), plan_review_policy: Tamoz::Core.deep_freeze(validate_plan_review(plan_review_policy)),
             preconditions: Tamoz::Core.deep_freeze(validate_preconditions(preconditions)),
             remediation_steps: Tamoz::Core.deep_freeze(validate_steps(remediation_steps)),
             effect_identity: Tamoz::Core.deep_freeze(validate_effect_identity(effect_identity)),
@@ -139,8 +115,7 @@ module Tamoz
             compensation: Tamoz::Core.deep_freeze(validate_compensation(compensation)),
             circuit_conditions: Tamoz::Core.deep_freeze(
               validate_strings(circuit_conditions, "circuit_conditions")
-            ),
-            reset_authority: reset_authority.nil? ? nil : validate_id(reset_authority, "reset_authority"),
+            ), reset_authority: reset_authority.nil? ? nil : validate_id(reset_authority, "reset_authority"),
             escalation_contract: Tamoz::Core.deep_freeze(validate_escalation(escalation_contract)),
             eval_suite: eval_suite.nil? ? nil : validate_id(eval_suite, "eval_suite"),
             promotion_evidence: promotion_evidence.nil? ? nil : Tamoz::Core.deep_freeze(promotion_evidence),
@@ -202,30 +177,16 @@ module Tamoz
 
         def to_h
           {
-            "format_version" => format_version,
-            "rule_id" => rule_id,
-            "version" => version,
-            "owner" => owner,
-            "lifecycle_mode" => lifecycle_mode.to_s,
-            "trigger" => trigger,
-            "minimum_confidence" => minimum_confidence,
-            "risk_class" => risk_class.to_s,
-            "effect_class" => effect_class.to_s,
-            "authorized_scopes" => authorized_scopes,
-            "authorized_resources" => authorized_resources,
-            "plan_review_policy" => plan_review_policy,
-            "preconditions" => preconditions,
-            "remediation_steps" => remediation_steps,
-            "effect_identity" => effect_identity,
-            "budgets" => budgets,
-            "verification_oracle" => verification_oracle,
-            "compensation" => compensation,
-            "circuit_conditions" => circuit_conditions,
-            "reset_authority" => reset_authority,
-            "escalation_contract" => escalation_contract,
-            "eval_suite" => eval_suite,
-            "promotion_evidence" => promotion_evidence,
-            "created_at_ms" => created_at_ms
+            "format_version" => format_version, "rule_id" => rule_id, "version" => version, "owner" => owner,
+            "lifecycle_mode" => lifecycle_mode.to_s, "trigger" => trigger, "minimum_confidence" => minimum_confidence,
+            "risk_class" => risk_class.to_s, "effect_class" => effect_class.to_s,
+            "authorized_scopes" => authorized_scopes, "authorized_resources" => authorized_resources,
+            "plan_review_policy" => plan_review_policy, "preconditions" => preconditions,
+            "remediation_steps" => remediation_steps, "effect_identity" => effect_identity, "budgets" => budgets,
+            "verification_oracle" => verification_oracle, "compensation" => compensation,
+            "circuit_conditions" => circuit_conditions, "reset_authority" => reset_authority,
+            "escalation_contract" => escalation_contract, "eval_suite" => eval_suite,
+            "promotion_evidence" => promotion_evidence, "created_at_ms" => created_at_ms
           }
         end
 
@@ -255,29 +216,18 @@ module Tamoz
           end
 
           new(
-            format_version: version,
-            rule_id: hash.fetch("rule_id"),
-            version: hash.fetch("version"),
-            owner: hash.fetch("owner"),
-            lifecycle_mode: hash.fetch("lifecycle_mode").to_sym,
-            trigger: hash.fetch("trigger"),
-            minimum_confidence: hash.fetch("minimum_confidence"),
-            risk_class: hash.fetch("risk_class").to_sym,
-            effect_class: hash.fetch("effect_class").to_sym,
+            format_version: version, rule_id: hash.fetch("rule_id"), version: hash.fetch("version"),
+            owner: hash.fetch("owner"), lifecycle_mode: hash.fetch("lifecycle_mode").to_sym,
+            trigger: hash.fetch("trigger"), minimum_confidence: hash.fetch("minimum_confidence"),
+            risk_class: hash.fetch("risk_class").to_sym, effect_class: hash.fetch("effect_class").to_sym,
             authorized_scopes: hash.fetch("authorized_scopes"),
             authorized_resources: hash.fetch("authorized_resources"),
-            plan_review_policy: hash.fetch("plan_review_policy"),
-            preconditions: hash.fetch("preconditions"),
-            remediation_steps: hash.fetch("remediation_steps"),
-            effect_identity: hash.fetch("effect_identity"),
-            budgets: hash.fetch("budgets"),
-            verification_oracle: hash.fetch("verification_oracle"),
-            compensation: hash.fetch("compensation"),
-            circuit_conditions: hash.fetch("circuit_conditions"),
-            reset_authority: hash["reset_authority"],
-            escalation_contract: hash.fetch("escalation_contract"),
-            eval_suite: hash["eval_suite"],
-            promotion_evidence: hash["promotion_evidence"],
+            plan_review_policy: hash.fetch("plan_review_policy"), preconditions: hash.fetch("preconditions"),
+            remediation_steps: hash.fetch("remediation_steps"), effect_identity: hash.fetch("effect_identity"),
+            budgets: hash.fetch("budgets"), verification_oracle: hash.fetch("verification_oracle"),
+            compensation: hash.fetch("compensation"), circuit_conditions: hash.fetch("circuit_conditions"),
+            reset_authority: hash["reset_authority"], escalation_contract: hash.fetch("escalation_contract"),
+            eval_suite: hash["eval_suite"], promotion_evidence: hash["promotion_evidence"],
             created_at_ms: hash.fetch("created_at_ms", 0)
           )
         rescue KeyError => error

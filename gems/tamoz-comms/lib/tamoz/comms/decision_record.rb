@@ -58,7 +58,7 @@ module Tamoz
       # it. `evidence` and `reason` are the ADR-049 audit trail (contract
       # §7.1): the stronger operator path records the evidence level that made
       # the approve legal, and why.
-      # rubocop:disable Metrics/ParameterLists, Metrics/MethodLength, Metrics/AbcSize
+      # rubocop:disable Metrics/ParameterLists
       def initialize(
         decision_id:, thread_id:, occurrence_id:, interrupt_digest:,
         direction:, actor_kind:, actor_id:, source:,
@@ -75,26 +75,16 @@ module Tamoz
         validate_claim!(status:, claim_owner:, claim_fence:, claim_expires_at:)
         validate_consumption!(status:, consumed_at:)
         validate_id!(decision_id:)
-        @decision_id = decision_id
-        @thread_id = thread_id
-        @occurrence_id = occurrence_id
-        @interrupt_digest = interrupt_digest
+        assign_identity(decision_id:, thread_id:, occurrence_id:, interrupt_digest:)
         @direction = direction
-        @actor_kind = actor_kind
-        @actor_id = actor_id
-        @source = source
-        @decided_at = decided_at.utc
-        @expires_at = expires_at.utc
-        @status = status
-        @claim_owner = claim_owner
-        @claim_fence = claim_fence
-        @claim_expires_at = claim_expires_at&.utc
-        @consumed_at = consumed_at&.utc
+        assign_actor(actor_kind:, actor_id:, source:)
+        assign_window(decided_at:, expires_at:, status:)
+        assign_claim(claim_owner:, claim_fence:, claim_expires_at:, consumed_at:)
         @evidence = evidence
         @reason = reason
         freeze
       end
-      # rubocop:enable Metrics/ParameterLists, Metrics/MethodLength, Metrics/AbcSize
+      # rubocop:enable Metrics/ParameterLists
 
       # Builds a pending decision from a live interrupt set, deriving the
       # interrupt digest and the decision id. `decided_at` defaults to now and
@@ -217,6 +207,32 @@ module Tamoz
       end
 
       private
+
+      def assign_identity(decision_id:, thread_id:, occurrence_id:, interrupt_digest:)
+        @decision_id = decision_id
+        @thread_id = thread_id
+        @occurrence_id = occurrence_id
+        @interrupt_digest = interrupt_digest
+      end
+
+      def assign_actor(actor_kind:, actor_id:, source:)
+        @actor_kind = actor_kind
+        @actor_id = actor_id
+        @source = source
+      end
+
+      def assign_window(decided_at:, expires_at:, status:)
+        @decided_at = decided_at.utc
+        @expires_at = expires_at.utc
+        @status = status
+      end
+
+      def assign_claim(claim_owner:, claim_fence:, claim_expires_at:, consumed_at:)
+        @claim_owner = claim_owner
+        @claim_fence = claim_fence
+        @claim_expires_at = claim_expires_at&.utc
+        @consumed_at = consumed_at&.utc
+      end
 
       def validate_identity!(thread_id:, occurrence_id:, interrupt_digest:)
         unless bounded_string?(thread_id) && bounded_string?(occurrence_id)

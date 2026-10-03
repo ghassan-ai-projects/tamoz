@@ -23,7 +23,6 @@ module Tamoz
     # overload.
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:UnusedParameters
     # :reek:DataClump, :reek:FeatureEnvy, :reek:NilCheck
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- the projection pipeline.
     class OutboxDeliverySink
       EVENT_KINDS = {
         'request.approved' => 'answer',
@@ -63,51 +62,56 @@ module Tamoz
 
         return push_clarification_question(event, route, surface) if kind == 'clarification_request'
 
-        if kind == 'approval_request'
-          unless surface.fetch('approvals').fetch('mode') == 'deny_only'
-            return push_approval_unavailable_notice(event, route, surface)
-          end
+        return push_approval_request(event, route, surface) if kind == 'approval_request'
 
-          return push_approval_prompt(event, route, surface)
-        end
-
-        render_limits = surface.fetch('rendering')
-        parts = @rendering.plain(event.fetch(:text).to_s,
-                                 max_parts: render_limits.fetch('max_parts'),
-                                 part_characters: render_limits.fetch('part_characters'),
-                                 overflow: render_limits.fetch('overflow'),
-                                 thread: event.fetch(:thread_id))
+        parts = render_parts(event, surface)
         reserved_request_id = event[:request_id] if TERMINAL_KINDS.include?(kind)
-        parts.each do |part|
-          @store.append_delivery(
-            Comms::Delivery.build(
-              conversation_id: route.fetch('conversation_id'), kind:,
-              text: part.fetch('text'), part_index: part.fetch('part_index'),
-              part_count: part.fetch('part_count'), journaled: kind != 'control',
-              render_version: @rendering::RENDER_VERSION,
-              content_digest: part.fetch('content_digest'),
-              # Two occurrences may honestly produce the same text (ask twice,
-              # answered twice); the occurrence belongs in the identity so the
-              # second answer is not content-deduped into silence. A RE-PUSH of
-              # the same occurrence still dedups — that is the crash window the
-              # derived id exists for.
-              identity_key: event[:request_id]
-            ).wire,
-            surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
-            reserved_request_id:, now: Time.now.utc
-          )
-        end
-        # The terminal projection is durable; its reservation returns to
-        # intake (design §12, invariant 57). The settle kind is recorded with
-        # it so the status wording follows the task axis, never a guess.
-        if reserved_request_id
-          @store.complete_request(thread_id: event.fetch(:thread_id), request_id: reserved_request_id,
-                                  settle_kind: kind)
-        end
+        append_rendered_parts(event, route, surface, parts, kind:)
+        complete_reserved_request(event, reserved_request_id, kind) if reserved_request_id
         :accepted
       end
 
       private
+
+      def push_approval_request(event, route, surface)
+        return push_approval_prompt(event, route, surface) if surface.fetch('approvals').fetch('mode') == 'deny_only'
+
+        push_approval_unavailable_notice(event, route, surface)
+      end
+
+      def append_rendered_parts(event, route, surface, parts, kind:)
+        reserved_request_id = event[:request_id] if TERMINAL_KINDS.include?(kind)
+        parts.each do |part|
+          @store.append_delivery(
+            rendered_delivery(event, route, part, kind).wire,
+            surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
+            reserved_request_id:, now: Time.now.utc
+          )
+        end
+      end
+
+      def render_parts(event, surface)
+        limits = surface.fetch('rendering')
+        @rendering.plain(event.fetch(:text).to_s,
+                         max_parts: limits.fetch('max_parts'),
+                         part_characters: limits.fetch('part_characters'),
+                         overflow: limits.fetch('overflow'),
+                         thread: event.fetch(:thread_id))
+      end
+
+      def rendered_delivery(event, route, part, kind)
+        Comms::Delivery.build(
+          conversation_id: route.fetch('conversation_id'), kind:,
+          text: part.fetch('text'), part_index: part.fetch('part_index'),
+          part_count: part.fetch('part_count'), journaled: kind != 'control',
+          render_version: @rendering::RENDER_VERSION,
+          content_digest: part.fetch('content_digest'), identity_key: event[:request_id]
+        )
+      end
+
+      def complete_reserved_request(event, request_id, kind)
+        @store.complete_request(thread_id: event.fetch(:thread_id), request_id:, settle_kind: kind)
+      end
 
       def push_clarification_question(event, route, surface)
         request_id = event[:request_id]
@@ -172,33 +176,36 @@ module Tamoz
         return nil unless conversation_binding
 
         evidence = decision_evidence(event.fetch(:interrupts))
-        reference, prompt = Comms::ApprovalPrompt.build(
-          surface_id: route.fetch('surface_id'), surface_revision: surface.fetch('revision'),
-          thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
-          interrupts: event.fetch(:interrupts),
-          required_evidence: evidence,
-          correspondent_id: conversation_binding.fetch('correspondent_id'),
-          conversation_id: route.fetch('conversation_id'),
-          prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
-        )
+        reference, prompt = build_approval_prompt(event, route, surface, conversation_binding, evidence)
         actions = offered_actions(evidence)
         part = approval_part(event, actions, surface)
         @store.insert_prompt(prompt.wire)
         markup = JSON.generate('reference' => reference, 'actions' => actions)
-        text = part.fetch('text')
+        append_approval_delivery(event, route, surface, part, markup)
+        :accepted
+      end
+
+      def build_approval_prompt(event, route, surface, binding, evidence)
+        Comms::ApprovalPrompt.build(
+          surface_id: route.fetch('surface_id'), surface_revision: surface.fetch('revision'),
+          thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
+          interrupts: event.fetch(:interrupts), required_evidence: evidence,
+          correspondent_id: binding.fetch('correspondent_id'), conversation_id: route.fetch('conversation_id'),
+          prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
+        )
+      end
+
+      def append_approval_delivery(event, route, surface, part, markup)
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'approval_request',
-            text:, part_index: 0, part_count: 1,
+            text: part.fetch('text'), part_index: 0, part_count: 1,
             journaled: true, render_version: @rendering::RENDER_VERSION,
-            content_digest: part.fetch('content_digest'),
-            identity_key: event.fetch(:request_id),
-            markup:
+            content_digest: part.fetch('content_digest'), identity_key: event.fetch(:request_id), markup:
           ).wire,
           surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
           reserved_request_id: event.fetch(:request_id), now: Time.now.utc
         )
-        :accepted
       end
 
       def approval_part(event, actions, surface)
@@ -294,4 +301,3 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity

@@ -154,17 +154,10 @@ module Tamoz
           return if confidence < MIN_CONFIDENCE
 
           Heuristic.new(
-            heuristic_id: "heuristic.#{precursor}-before-#{subject}",
-            surface: :planning,
-            precursor_tool: precursor,
-            subject_tool: subject,
-            support:,
-            trials:,
-            confidence: (confidence * 10_000).round / 10_000.0,
-            statement:
+            heuristic_id: "heuristic.#{precursor}-before-#{subject}", surface: :planning, precursor_tool: precursor,
+            subject_tool: subject, support:, trials:, confidence: (confidence * 10_000).round / 10_000.0, statement:
               "When a plan step uses #{subject} on a path, first plan a #{precursor} step on that " \
-              "same path. Observed in #{support} of #{trials} verified trajectories.",
-            generator_principal: @principal
+              "same path. Observed in #{support} of #{trials} verified trajectories.", generator_principal: @principal
           )
         end
 

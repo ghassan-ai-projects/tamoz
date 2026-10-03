@@ -16,8 +16,6 @@ module Tamoz
     #
     # The binding's fields ARE the value and its validation is the per-field
     # rule set; splitting either would fragment the row the store persists.
-    # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:NilCheck
     class Binding
@@ -28,7 +26,7 @@ module Tamoz
                   :conversation_id, :status, :bound_at, :bound_by, :version,
                   :revocation_reason
 
-      def initialize(
+      def initialize( # rubocop:disable Metrics/ParameterLists
         surface_id:, surface_revision:, correspondent_id:, conversation_id:,
         bound_at:, bound_by:, status: 'active', version: 1, revocation_reason: nil
       )
@@ -81,123 +79,25 @@ module Tamoz
 
       private
 
-      def validate!(
-        surface_id:, surface_revision:, correspondent_id:, conversation_id:,
-        status:, bound_at:, bound_by:, version:, revocation_reason:
-      )
-        unless Shapes.bounded_string?(surface_id, max_bytes: MAX_ID_BYTES)
-          raise ValidationError, 'surface_id must be a bounded string'
-        end
-        unless surface_revision.is_a?(Integer) && surface_revision.positive?
-          raise ValidationError,
-                'surface_revision must be a positive integer'
-        end
-        unless Shapes.bounded_string?(correspondent_id,
-                                      max_bytes: MAX_ID_BYTES) && correspondent_id.start_with?('telegram:user:')
-          raise ValidationError, 'correspondent_id must be a bound telegram user id'
-        end
-        unless Shapes.bounded_string?(conversation_id,
-                                      max_bytes: MAX_ID_BYTES) && conversation_id.start_with?('telegram:chat:')
-          raise ValidationError, 'conversation_id must be a bound telegram chat id'
-        end
-        raise ValidationError, "status must be one of #{STATUSES.join(', ')}" unless Shapes.member?(status, STATUSES)
-        raise ValidationError, 'bound_at must be a Time value' unless bound_at.is_a?(Time)
-        unless Shapes.bounded_string?(bound_by, max_bytes: MAX_ID_BYTES)
-          raise ValidationError, 'bound_by must be a bounded string'
-        end
-        raise ValidationError, 'version must be a positive integer' unless version.is_a?(Integer) && version.positive?
-        return unless status == 'revoked' && revocation_reason.nil?
+      def validate!(fields)
+        Shapes.require_string!(fields.fetch(:surface_id), 'surface_id', max_bytes: MAX_ID_BYTES)
+        Shapes.require_positive!(fields.fetch(:surface_revision), 'surface_revision')
+        validate_parties!(fields.fetch(:correspondent_id), fields.fetch(:conversation_id))
+        Shapes.require_member!(fields.fetch(:status), STATUSES, 'status')
+        Shapes.require_time!(fields.fetch(:bound_at), 'bound_at')
+        Shapes.require_string!(fields.fetch(:bound_by), 'bound_by', max_bytes: MAX_ID_BYTES)
+        Shapes.require_positive!(fields.fetch(:version), 'version')
+        return unless fields.fetch(:status) == 'revoked' && fields.fetch(:revocation_reason).nil?
 
         raise ValidationError, 'a revoked binding needs a revocation_reason'
       end
-    end
 
-    # One conversation route: conversation → thread, profile, threading mode
-    # (design §13). The thread binding is write-once under the surface revision;
-    # a different profile or revision rotates to a NEW thread generation instead
-    # of rewriting an existing binding.
-    # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
-    # :reek:TooManyStatements
-    class Conversation
-      MAX_ID_BYTES = 256
-
-      attr_reader :surface_id, :surface_revision, :conversation_id, :thread_id,
-                  :profile_id, :threading, :bound_at, :version
-
-      def initialize(
-        surface_id:, surface_revision:, conversation_id:, thread_id:,
-        profile_id:, bound_at:, threading: 'conversation', version: 1
-      )
-        validate!(surface_id:, surface_revision:, conversation_id:, thread_id:,
-                  profile_id:, threading:, bound_at:, version:)
-        @surface_id = surface_id
-        @surface_revision = surface_revision
-        @conversation_id = conversation_id
-        @thread_id = thread_id
-        @profile_id = profile_id
-        @threading = threading
-        @bound_at = bound_at.utc
-        @version = version
-        freeze
-      end
-
-      def wire
-        {
-          'surface_id' => @surface_id,
-          'surface_revision' => @surface_revision,
-          'conversation_id' => @conversation_id,
-          'thread_id' => @thread_id,
-          'profile_id' => @profile_id,
-          'threading' => @threading,
-          'bound_at' => @bound_at.iso8601(6),
-          'version' => @version
-        }
-      end
-
-      def self.from_wire(wire)
-        new(
-          surface_id: wire.fetch('surface_id'),
-          surface_revision: wire.fetch('surface_revision'),
-          conversation_id: wire.fetch('conversation_id'),
-          thread_id: wire.fetch('thread_id'),
-          profile_id: wire.fetch('profile_id'),
-          threading: wire.fetch('threading'),
-          bound_at: Time.parse(wire.fetch('bound_at')),
-          version: wire.fetch('version')
-        )
-      end
-
-      private
-
-      def validate!(
-        surface_id:, surface_revision:, conversation_id:, thread_id:,
-        profile_id:, threading:, bound_at:, version:
-      )
-        unless Shapes.bounded_string?(surface_id, max_bytes: MAX_ID_BYTES)
-          raise ValidationError, 'surface_id must be a bounded string'
-        end
-        unless surface_revision.is_a?(Integer) && surface_revision.positive?
-          raise ValidationError,
-                'surface_revision must be a positive integer'
-        end
-        unless Shapes.bounded_string?(conversation_id,
-                                      max_bytes: MAX_ID_BYTES) && conversation_id.start_with?('telegram:chat:')
-          raise ValidationError, 'conversation_id must be a bound telegram chat id'
-        end
-        unless Shapes.bounded_string?(thread_id, max_bytes: MAX_ID_BYTES)
-          raise ValidationError, 'thread_id must be a bounded string'
-        end
-        unless Shapes.bounded_string?(profile_id, max_bytes: MAX_ID_BYTES)
-          raise ValidationError, 'profile_id must be a bounded string'
-        end
-        unless SurfaceDescriptor::THREADING_MODES.include?(threading)
-          raise ValidationError, "threading must be one of #{SurfaceDescriptor::THREADING_MODES.join(', ')}"
-        end
-        raise ValidationError, 'bound_at must be a Time value' unless bound_at.is_a?(Time)
-        raise ValidationError, 'version must be a positive integer' unless version.is_a?(Integer) && version.positive?
+      def validate_parties!(correspondent_id, conversation_id)
+        Shapes.require_prefixed!(correspondent_id, ['telegram:user:'],
+                                 'correspondent_id must be a bound telegram user id', max_bytes: MAX_ID_BYTES)
+        Shapes.require_prefixed!(conversation_id, ['telegram:chat:'],
+                                 'conversation_id must be a bound telegram chat id', max_bytes: MAX_ID_BYTES)
       end
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength

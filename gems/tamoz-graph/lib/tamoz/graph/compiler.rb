@@ -104,20 +104,28 @@ module Tamoz
                codec.respond_to?(:load)
           raise GraphDefinitionError, "codec must implement normalize, dump, and load"
         end
+        validate_checkpointer!
+        unless @limits.is_a?(Limits)
+          raise GraphDefinitionError, "limits must be a Tamoz::Graph::Limits value"
+        end
+      end
+
+      def validate_checkpointer!
         durable_protocol = @checkpointer.respond_to?(:checkpoint_protocol_version) &&
                            @checkpointer.checkpoint_protocol_version == CHECKPOINT_PROTOCOL_VERSION &&
                            @checkpointer.respond_to?(:durable?)
-        bound_contract = @checkpointer.respond_to?(:open_writer) &&
-                         @checkpointer.respond_to?(:latest) &&
-                         @checkpointer.respond_to?(:find) &&
-                         @checkpointer.respond_to?(:history)
+        bound_contract = bound_checkpointer?
         unless durable_protocol &&
                (bound_contract || @checkpointer.respond_to?(:bind_graph))
           raise GraphDefinitionError, "checkpointer does not implement the graph checkpoint contract"
         end
-        unless @limits.is_a?(Limits)
-          raise GraphDefinitionError, "limits must be a Tamoz::Graph::Limits value"
-        end
+      end
+
+      def bound_checkpointer?
+        @checkpointer.respond_to?(:open_writer) &&
+          @checkpointer.respond_to?(:latest) &&
+          @checkpointer.respond_to?(:find) &&
+          @checkpointer.respond_to?(:history)
       end
 
       def validate_target!(target)
@@ -197,14 +205,18 @@ module Tamoz
           "version" => definition.version,
           "channels" => definition.channels.values.map(&:descriptor).sort_by { |entry| entry.fetch("name") },
           "nodes" => definition.nodes.values.map(&:descriptor).sort_by { |entry| entry.fetch("name") },
-          "edges" => definition.edges.map do |source, target|
-            [
-              source.equal?(START) ? "__start__" : source.to_s,
-              target.equal?(Tamoz::END) ? "__end__" : target.to_s
-            ]
-          end.sort,
+          "edges" => edge_descriptors,
           "branches" => definition.branches.map(&:descriptor).sort_by { |entry| entry.fetch("name") }
         }
+      end
+
+      def edge_descriptors
+        definition.edges.map do |source, target|
+          [
+            source.equal?(START) ? "__start__" : source.to_s,
+            target.equal?(Tamoz::END) ? "__end__" : target.to_s
+          ]
+        end.sort
       end
     end
 

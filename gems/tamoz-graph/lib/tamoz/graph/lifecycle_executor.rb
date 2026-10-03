@@ -9,7 +9,7 @@ module Tamoz
     # :reek:DuplicateMethodCall :reek:UncommunicativeVariableName :reek:UtilityFunction -- the stream event sequence
     # deliberately repeats the stream context and graph identity at its boundaries.
     # rubocop:disable Metrics/ParameterLists
-    # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
+    # rubocop:disable Metrics/MethodLength
     class LifecycleExecutor
       def initialize(compiled)
         @compiled = compiled
@@ -18,15 +18,7 @@ module Tamoz
 
       def invoke(input = {}, thread:, request_id:, execution_id:, concurrency:, new_execution:, context:)
         compiled.__send__(:ensure_ephemeral_public!)
-        run_context = compiled.__send__(
-          :build_context,
-          context,
-          thread:,
-          request_id:,
-          execution_id:,
-          cancellation: context&.cancellation || CancellationToken.new,
-          emitter: context&.emitter || Emitter::Null::INSTANCE
-        )
+        run_context = invocation_context(context, thread:, request_id:, execution_id:)
         compiled.__send__(
           :invoke_at,
           input,
@@ -64,27 +56,8 @@ module Tamoz
           capacity:
         )
         Concurrency::EventStream.new(sink:, join_grace:) do
-          emitter.emit(:run_start, stream_context.namespace, {
-            'graph' => compiled.name,
-            'execution_id' => execution_id
-          }, run_id:)
-          result = compiled.invoke(
-            input,
-            thread:,
-            request_id:,
-            execution_id:,
-            concurrency:,
-            new_execution:,
-            context: stream_context
-          )
-          emitter.emit(:run_end, stream_context.namespace, {
-            'graph' => compiled.name,
-            'status' => result.status.to_s
-          }, run_id:)
-          result
-        rescue StandardError => e
-          emitter.emit(:error, stream_context.namespace, compiled.__send__(:stream_error_data, e), run_id:)
-          raise
+          emit_stream_run(input, thread:, request_id:, execution_id:, concurrency:, new_execution:,
+                                 stream_context:, emitter:, run_id:)
         end
       rescue StandardError
         sink&.finish
@@ -110,6 +83,64 @@ module Tamoz
 
       attr_reader :compiled
 
+      def invocation_context(context, thread:, request_id:, execution_id:)
+        compiled.__send__(
+          :build_context,
+          context,
+          thread:,
+          request_id:,
+          execution_id:,
+          cancellation: context&.cancellation || CancellationToken.new,
+          emitter: context&.emitter || Emitter::Null::INSTANCE
+        )
+      end
+
+      def emit_stream_run(input, thread:, request_id:, execution_id:, concurrency:, new_execution:,
+                          stream_context:, emitter:, run_id:)
+        emitter.emit(:run_start, stream_context.namespace, {
+          'graph' => compiled.name,
+          'execution_id' => execution_id
+        }, run_id:)
+        result = compiled.invoke(
+          input,
+          thread:,
+          request_id:,
+          execution_id:,
+          concurrency:,
+          new_execution:,
+          context: stream_context
+        )
+        emitter.emit(:run_end, stream_context.namespace, {
+          'graph' => compiled.name,
+          'status' => result.status.to_s
+        }, run_id:)
+        result
+      rescue StandardError => e
+        emitter.emit(:error, stream_context.namespace, compiled.__send__(:stream_error_data, e), run_id:)
+        raise
+      end
+
+      def stream_context(context, execution_id:, request_id:, thread:, cancellation:, emitter:, run_id:)
+        if context
+          context.with(
+            execution_id:,
+            request_id:,
+            thread_id: thread,
+            cancellation:,
+            emitter:
+          )
+        else
+          Context.new(
+            run_id:,
+            execution_id:,
+            request_id:,
+            thread_id: thread,
+            cancellation:,
+            emitter:
+          )
+        end
+      end
+
       def build_stream_parts(thread:, request_id:, execution_id:, context:, mode:, capacity:)
         cancellation = context&.cancellation || CancellationToken.new
         run_id = context&.run_id || SecureRandom.uuid
@@ -120,28 +151,12 @@ module Tamoz
           run_id:
         )
         emitter = StreamEmitter.new(sink:, mode:)
-        stream_context = if context
-                           context.with(
-                             execution_id:,
-                             request_id:,
-                             thread_id: thread,
-                             cancellation:,
-                             emitter:
-                           )
-                         else
-                           Context.new(
-                             run_id:,
-                             execution_id:,
-                             request_id:,
-                             thread_id: thread,
-                             cancellation:,
-                             emitter:
-                           )
-                         end
+        stream_context = stream_context(context, execution_id:, request_id:, thread:,
+                                                 cancellation:, emitter:, run_id:)
         [sink, stream_context, emitter, run_id]
       end
     end
-    # rubocop:enable Metrics/MethodLength, Metrics/AbcSize
+    # rubocop:enable Metrics/MethodLength
     # rubocop:enable Metrics/ParameterLists
   end
 end

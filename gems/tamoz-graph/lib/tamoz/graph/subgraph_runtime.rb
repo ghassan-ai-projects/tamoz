@@ -55,34 +55,25 @@ module Tamoz
           )
           return child_output(child, latest.state) if latest&.status == :completed
 
-          result = run_child(
-            bound,
-            latest,
-            child_input(child, input),
-            child_context,
-            namespace,
-            call_index
-          )
+          result = run_child(bound, latest, child_input(child, input), child_context, namespace, call_index)
           return child_output(child, result.state) if result.completed?
           next if result.paused?
 
-          if result.failed?
-            raise(result.errors.first || failed_child_error(child))
-          end
-          context.check!
-          raise CancelledError, "subgraph execution was cancelled"
+          raise_child_failure!(child, result, context)
         end
+      end
+
+      def raise_child_failure!(child, result, context)
+        if result.failed?
+          raise(result.errors.first || failed_child_error(child))
+        end
+        context.check!
+        raise CancelledError, "subgraph execution was cancelled"
       end
 
       def run_child(child, latest, input, context, namespace, call_index)
         if latest.nil?
-          return child.__send__(
-            :invoke_at,
-            input,
-            **dispatch_keywords(context, namespace),
-            execution_id: child_execution_id(child, call_index),
-            new_execution: false
-          )
+          return start_child(child, input, context, namespace, call_index)
         end
 
         child.__send__(:compatible!, latest)
@@ -102,6 +93,16 @@ module Tamoz
           raise CheckpointConflictError,
                 "subgraph checkpoint has unsupported status #{latest.status.inspect}"
         end
+      end
+
+      def start_child(child, input, context, namespace, call_index)
+        child.__send__(
+          :invoke_at,
+          input,
+          **dispatch_keywords(context, namespace),
+          execution_id: child_execution_id(child, call_index),
+          new_execution: false
+        )
       end
 
       def dispatch_keywords(context, namespace)

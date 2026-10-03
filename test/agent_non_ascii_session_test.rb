@@ -240,8 +240,8 @@ class AgentNonAsciiSessionTest < Minitest::Test
   #   effect_record_reader#decode_receipt   COVERED (the D-10 crash site)
   #   checkpoint_store#decode_request        COVERED (a non-ASCII task payload)
   #   store#get                              COVERED (application store values)
-  #   checkpoint_codec#load_value            COVERED (durable state values)
-  #   checkpoint_codec#canonical_value_bytes shadowed — `load_value` performs the
+  #   checkpoint_values#load_value           COVERED (durable state values)
+  #   checkpoint_values#verify_canonical_value_bytes shadowed — `load_value` performs the
   #     identical check first, so this one can never be the site that fires
   #   checkpoint_wire#canonical_state_value  unreachable — it guards a request's
   #     `response` and `terminal_error`, whose vocabularies are ASCII by
@@ -256,7 +256,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
   # a recorded decision rather than an accident.
   CANONICALITY_SITES = {
     "tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb" => 1,
-    "tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb" => 2,
+    "tamoz-graph/lib/tamoz/graph/checkpoint_values.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/effect_record_reader.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_wire.rb" => 2,
