@@ -119,6 +119,10 @@ module Tamoz
       text
     end
 
+    def corrupt_record!(reason)
+      raise CheckpointCorruptionError, "circuit record is invalid: #{reason}"
+    end
+
     # Recursively rejects anything that cannot cross the durable boundary before
     # it is ever digested or stored.
     def digestable(value)
@@ -139,5 +143,7 @@ module Tamoz
               "#{value.class} cannot enter a circuit record or its evidence digest"
       end
     end
+
+    private_constant :RecordSchema, :OwnerSchema, :OwnerTally
   end
 end

@@ -5,6 +5,9 @@ require "uri"
 
 require "mcp"
 
+require_relative "elicitation/fields"
+require_relative "elicitation/answers"
+
 module Tamoz
   module Mcp
     # 2026 MRTR elicitation (P10 §7): an `input_required` tool result becomes a
@@ -30,7 +33,7 @@ module Tamoz
         # shape, or asks for a credential-shaped field (never auto-filled).
         def build(descriptor:, effect_key:, input_requests:, request_state:, url_policy: nil)
           requests = validate_input_requests!(input_requests)
-          fields = requests.map { |id, params| field_descriptor(id.to_s, params) }.freeze
+          fields = requests.map { |id, params| Fields.new.field_descriptor(id.to_s, params) }.freeze
           url = checked_url(requests, url_policy)
 
           {
@@ -70,7 +73,7 @@ module Tamoz
           end
 
           responses = fields.to_h do |field|
-            [field.fetch("id"), input_response(field, answers, single_field: fields.length == 1)]
+            [field.fetch("id"), Answers.new.input_response(field, answers, single_field: fields.length == 1)]
           end
 
           merge = { "inputResponses" => responses.freeze }
@@ -80,20 +83,6 @@ module Tamoz
         end
 
         private
-
-        def input_response(field, answers, single_field:)
-          id = field.fetch("id")
-          content = single_field ? answers : answer_for_field(answers, id)
-          validate_answer_content!(field, content)
-          { "action" => "accept", "content" => content }
-        end
-
-        def answer_for_field(answers, id)
-          answers[id] || raise(
-            ToolArgumentError,
-            "the answer to an MCP elicitation is missing the fields for request #{id}"
-          )
-        end
 
         def validate_input_requests!(input_requests)
           unless input_requests.is_a?(Hash) && !input_requests.empty?
@@ -108,141 +97,16 @@ module Tamoz
           input_requests
         end
 
-        def field_descriptor(id, params)
-          request = validate_input_request!(params)
-          schema = validate_schema_present!(request["requestedSchema"])
-          # Schema content is server-controlled text that rides into the durable
-          # interrupt: every string in it (property names, descriptions, enum
-          # values, defaults, ...) gets the same control-strip + byte-bound
-          # treatment as `message`, so the interrupt can never carry raw control
-          # characters or unbounded server content.
-          schema = sanitize_schema(schema)
-          validate_field_schema!(schema)
-
-          {
-            "id" => bounded_message(id.to_s),
-            "message" => bounded_message(request["message"]),
-            "schema" => CanonicalJSON.deep_freeze(CanonicalJSON.normalize(schema))
-          }.freeze
-        end
-
-        def validate_input_request!(params)
-          unless params.is_a?(Hash) && params["method"] == ELICITATION_METHOD &&
-                 params["params"].is_a?(Hash)
-            raise ToolPolicyError,
-                  "an MCP server returned an input request that is not a supported elicitation"
-          end
-
-          params["params"]
-        end
-
-        def validate_schema_present!(schema)
-          unless schema.is_a?(Hash)
-            raise ToolPolicyError,
-                  "an MCP server returned an elicitation request without a requested schema"
-          end
-
-          schema
-        end
-
         # Deep control-strip + byte-bound over every string in the requested
         # schema (keys included — a property name may not smuggle control
         # characters either).
-        def sanitize_schema(node)
-          case node
-          when Hash
-            node.each_with_object({}) do |(key, value), out|
-              out[bounded_message(key.to_s)] = sanitize_schema(value)
-            end
-          when Array
-            node.map { |entry| sanitize_schema(entry) }
-          when String
-            bounded_message(node)
-          else
-            node
-          end
-        end
 
         # The schema is validated with the SDK's JSON Schema 2020-12 validator,
         # and credential-shaped property names reject the whole interrupt: a
         # server asking for secrets never gets them auto-filled or surfaced.
-        def validate_field_schema!(schema)
-          reject_credential_fields!(schema)
-          validate_schema_shape!(schema)
-        end
-
-        def reject_credential_fields!(schema)
-          properties = schema["properties"]
-          return unless properties.is_a?(Hash)
-
-          properties.each_key do |name|
-            next unless ServerConfig.credential_env_name?(name.to_s)
-
-            raise ToolPolicyError,
-                  "an MCP server requested a credential-shaped field; the elicitation was rejected"
-          end
-        end
-
-        def validate_schema_shape!(schema)
-          MCP::Tool::InputSchema.new(schema)
-        rescue ArgumentError
-          raise ToolPolicyError,
-                "an MCP server returned an elicitation request with an invalid schema"
-        end
-
-        def validate_answer_content!(field, content)
-          unless content.is_a?(Hash)
-            raise ToolArgumentError,
-                  "the answer to an MCP elicitation must be a JSON object of field values"
-          end
-
-          schema = field.fetch("schema")
-          begin
-            MCP::Tool::InputSchema.new(strict_schema(schema)).validate_arguments(content)
-          rescue MCP::Tool::InputSchema::ValidationError => error
-            detail = Tamoz::Error.disclosable_message(
-              error.message.sub(/\AInvalid arguments:\s*/, ""),
-              fallback: "the answer does not match the requested schema"
-            )
-            raise ToolArgumentError,
-                  "the answer to an MCP elicitation is invalid: #{detail}"
-          rescue ArgumentError, JSON::NestingError
-            raise ToolArgumentError,
-                  "the answer to an MCP elicitation is malformed or too deeply nested"
-          end
-          content
-        end
 
         # Same default-deny rule as Invocation: unknown answer fields are
         # rejected unless the schema explicitly allows them.
-        def strict_schema(schema)
-          candidate = schema.is_a?(Hash) ? schema : {}
-          root = deep_strictify(candidate)
-          root = root.merge("additionalProperties" => false) if strictable_object?(candidate)
-          root
-        end
-
-        def deep_strictify(node)
-          case node
-          when Hash
-            stricted = {}
-            node.each { |key, value| stricted[key] = deep_strictify(value) }
-            stricted["additionalProperties"] = false if strictable_object?(node)
-            stricted
-          when Array
-            node.map { |value| deep_strictify(value) }
-          else
-            node
-          end
-        end
-
-        def strictable_object?(node)
-          return false unless node.is_a?(Hash) && node.key?("properties")
-          return false if node.key?("additionalProperties") || node.key?("patternProperties")
-          return false if node.key?("$ref") || node.key?("$dynamicRef")
-
-          true
-        end
 
         # v1 egress gate for an offered elicitation URL: absolute http(s) only,
         # with a host and no embedded credentials. Broader SSRF/redirect policy
@@ -270,10 +134,6 @@ module Tamoz
           uri.is_a?(URI::HTTP) && uri.host && !uri.host.empty? && uri.userinfo.nil?
         rescue URI::InvalidURIError
           false
-        end
-
-        def bounded_message(value)
-          BoundedText.bound(value, MAX_MESSAGE_BYTES)
         end
 
       end

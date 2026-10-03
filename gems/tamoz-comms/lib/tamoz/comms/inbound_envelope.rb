@@ -14,8 +14,7 @@ module Tamoz
     #
     # The envelope's fields ARE the value and its validation is the per-field
     # rule set; splitting either would fragment the row the store persists.
-    # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:disable Metrics/ParameterLists
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:FeatureEnvy
     # :reek:NilCheck, :reek:DataClump
@@ -39,29 +38,13 @@ module Tamoz
         text: nil, command: nil, arguments: nil,
         platform_time: nil, observed_time: nil, ingestion_time: nil
       )
-        validate!(surface_id:, surface_revision:, update_id:, raw_payload_hash:,
-                  parser_version:, kind:, correspondent_id:, conversation_id:,
-                  message_id:, reply_to:, callback_message_id:, callback_query_id:,
-                  text:, command:, arguments:,
-                  platform_time:, observed_time:, ingestion_time:)
-        @surface_id = surface_id
-        @surface_revision = surface_revision
-        @update_id = update_id
-        @raw_payload_hash = raw_payload_hash
-        @parser_version = parser_version
-        @kind = kind
-        @correspondent_id = correspondent_id
-        @conversation_id = conversation_id
-        @message_id = message_id
-        @reply_to = reply_to
-        @callback_message_id = callback_message_id
-        @callback_query_id = callback_query_id
-        @text = text
-        @command = command
-        @arguments = arguments
-        @platform_time = platform_time
-        @observed_time = observed_time
-        @ingestion_time = ingestion_time
+        fields = {
+          surface_id:, surface_revision:, update_id:, raw_payload_hash:, parser_version:, kind:,
+          correspondent_id:, conversation_id:, message_id:, reply_to:, callback_message_id:,
+          callback_query_id:, text:, command:, arguments:, platform_time:, observed_time:, ingestion_time:
+        }
+        validate!(fields)
+        fields.each { |name, value| instance_variable_set(:"@#{name}", value) }
         freeze
       end
 
@@ -124,64 +107,66 @@ module Tamoz
 
       private
 
-      def validate!(
-        surface_id:, surface_revision:, update_id:, raw_payload_hash:,
-        parser_version:, kind:, correspondent_id:, conversation_id:,
-        message_id:, reply_to:, callback_message_id:, callback_query_id:,
-        text:, command:, arguments:,
-        platform_time:, observed_time:, ingestion_time:
-      )
-        validate_identity!(surface_id:, surface_revision:, update_id:,
-                           raw_payload_hash:, parser_version:, kind:,
-                           correspondent_id:, conversation_id:, message_id:,
-                           reply_to:, callback_message_id:, callback_query_id:, text:)
-        validate_command_fields!(command:, arguments:)
-        validate_times!(platform_time:, observed_time:, ingestion_time:)
+      def validate!(fields)
+        validate_surface!(fields)
+        validate_parties!(fields.fetch(:correspondent_id), fields.fetch(:conversation_id))
+        validate_message_refs!(fields)
+        validate_command_fields!(command: fields.fetch(:command), arguments: fields.fetch(:arguments))
+        validate_times!(fields.values_at(:platform_time, :observed_time, :ingestion_time))
       end
 
-      def validate_identity!(
-        surface_id:, surface_revision:, update_id:, raw_payload_hash:,
-        parser_version:, kind:, correspondent_id:, conversation_id:,
-        message_id:, reply_to:, callback_message_id:, callback_query_id:, text:
-      )
-        unless Shapes.bounded_string?(surface_id, max_bytes: MAX_ID_BYTES)
+      def validate_surface!(fields)
+        unless Shapes.bounded_string?(fields.fetch(:surface_id), max_bytes: MAX_ID_BYTES)
           raise ValidationError, 'surface_id must be a bounded string'
         end
-        unless surface_revision.is_a?(Integer) && surface_revision.positive?
-          raise ValidationError, 'surface_revision must be a positive integer'
-        end
-        unless Shapes.bounded_integer?(update_id, max: MAX_ID_VALUE)
+
+        require_positive!(fields.fetch(:surface_revision), 'surface_revision')
+        unless Shapes.bounded_integer?(fields.fetch(:update_id), max: MAX_ID_VALUE)
           raise ValidationError, 'update_id must be a bounded integer'
         end
-        raise ValidationError, 'raw_payload_hash must be a 64-char hex digest' unless Shapes.hex?(raw_payload_hash)
-        unless parser_version.is_a?(Integer) && parser_version.positive?
-          raise ValidationError, 'parser_version must be a positive integer'
+        unless Shapes.hex?(fields.fetch(:raw_payload_hash))
+          raise ValidationError, 'raw_payload_hash must be a 64-char hex digest'
         end
-        raise ValidationError, "kind must be one of #{KINDS.join(', ')}" unless Shapes.member?(kind, KINDS)
+
+        require_positive!(fields.fetch(:parser_version), 'parser_version')
+        return if Shapes.member?(fields.fetch(:kind), KINDS)
+
+        raise ValidationError, "kind must be one of #{KINDS.join(', ')}"
+      end
+
+      def validate_parties!(correspondent_id, conversation_id)
         unless Shapes.bounded_string?(correspondent_id, max_bytes: MAX_ID_BYTES) &&
                correspondent_id.start_with?('telegram:user:')
           raise ValidationError, 'correspondent_id must be a bound telegram user id'
         end
-        unless Shapes.bounded_string?(conversation_id, max_bytes: MAX_ID_BYTES) &&
-               conversation_id.start_with?('telegram:chat:', 'telegram:group:',
-                                           'telegram:supergroup:', 'telegram:channel:')
-          raise ValidationError, 'conversation_id must be a bound telegram chat id'
-        end
-        if !message_id.nil? && !Shapes.bounded_integer?(message_id, max: MAX_ID_VALUE)
-          raise ValidationError, 'message_id must be a bounded integer'
-        end
-        if !reply_to.nil? && !Shapes.bounded_integer?(reply_to, max: MAX_ID_VALUE)
-          raise ValidationError, 'reply_to must be a bounded integer'
-        end
-        if !callback_message_id.nil? && !Shapes.bounded_integer?(callback_message_id, max: MAX_ID_VALUE)
-          raise ValidationError, 'callback_message_id must be a bounded integer'
-        end
+        return if Shapes.bounded_string?(conversation_id, max_bytes: MAX_ID_BYTES) &&
+                  conversation_id.start_with?('telegram:chat:', 'telegram:group:',
+                                              'telegram:supergroup:', 'telegram:channel:')
+
+        raise ValidationError, 'conversation_id must be a bound telegram chat id'
+      end
+
+      def validate_message_refs!(fields)
+        %i[message_id reply_to callback_message_id].each { |name| optional_integer!(fields.fetch(name), name) }
+        callback_query_id = fields.fetch(:callback_query_id)
         if !callback_query_id.nil? && !Shapes.bounded_string?(callback_query_id, max_bytes: MAX_ID_BYTES)
           raise ValidationError, 'callback_query_id must be a bounded string'
         end
+
+        text = fields.fetch(:text)
         return if text.nil? || Shapes.bounded_string?(text, max_bytes: MAX_TEXT_BYTES)
 
         raise ValidationError, 'text must be a bounded string'
+      end
+
+      def require_positive!(value, name)
+        raise ValidationError, "#{name} must be a positive integer" unless value.is_a?(Integer) && value.positive?
+      end
+
+      def optional_integer!(value, name)
+        return if value.nil? || Shapes.bounded_integer?(value, max: MAX_ID_VALUE)
+
+        raise ValidationError, "#{name} must be a bounded integer"
       end
 
       def validate_command_fields!(command:, arguments:)
@@ -199,8 +184,8 @@ module Tamoz
         raise ValidationError, 'arguments must be a bounded string'
       end
 
-      def validate_times!(platform_time:, observed_time:, ingestion_time:)
-        [platform_time, observed_time, ingestion_time].each do |value|
+      def validate_times!(times)
+        times.each do |value|
           next if value.nil? || value.is_a?(Time)
 
           raise ValidationError, 'envelope times must be Time values'
@@ -209,5 +194,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Metrics/ParameterLists

@@ -18,32 +18,11 @@ module Tamoz
         routes: []
       )
         @name = Identifier.symbol(name, name: "node")
-        raise GraphDefinitionError, "node #{@name} must be callable" unless callable.respond_to?(:call) ||
-                                                                           callable.is_a?(Class)
-        unless ROUTING_MODES.include?(routing)
-          raise GraphDefinitionError, "node routing must be one of #{ROUTING_MODES.inspect}"
-        end
-        unless routes.is_a?(Array)
-          raise GraphDefinitionError, "node routes must be an Array"
-        end
-        if routes.length > MAX_ROUTES
-          raise GraphDefinitionError, "node #{@name} exceeds #{MAX_ROUTES} routes"
-        end
-        @routes = routes.map do |target|
-          target.equal?(Tamoz::END) ? Tamoz::END : Identifier.symbol(target, name: "node route")
-        end.uniq.freeze
-        if routing == :static && !@routes.empty?
-          raise GraphDefinitionError, "static node #{@name} cannot declare dynamic routes"
-        end
-        if routing != :static && @routes.empty?
-          raise GraphDefinitionError, "#{routing} node #{@name} must declare routes"
-        end
+        validate_callable!(callable)
+        @routes = normalize_routes(routes, routing)
 
         stable_name = implementation_name || named_callable(callable)
-        if stable_name.nil? || (callable.is_a?(Proc) && (implementation_name.nil? || version.nil?))
-          raise GraphDefinitionError,
-                "anonymous node #{@name} requires implementation_name and version"
-        end
+        validate_implementation!(stable_name, callable, implementation_name, version)
 
         @callable = callable
         @implementation_name = Identifier.identity(stable_name, name: "node implementation")
@@ -73,6 +52,47 @@ module Tamoz
       end
 
       private
+
+      def validate_callable!(callable)
+        return if callable.respond_to?(:call) || callable.is_a?(Class)
+
+        raise GraphDefinitionError, "node #{@name} must be callable"
+      end
+
+      def normalize_routes(routes, routing)
+        validate_routes!(routes, routing)
+        normalized = routes.map do |target|
+          target.equal?(Tamoz::END) ? Tamoz::END : Identifier.symbol(target, name: "node route")
+        end.uniq.freeze
+        validate_routing!(normalized, routing)
+        normalized
+      end
+
+      def validate_routes!(routes, routing)
+        unless ROUTING_MODES.include?(routing)
+          raise GraphDefinitionError, "node routing must be one of #{ROUTING_MODES.inspect}"
+        end
+        unless routes.is_a?(Array)
+          raise GraphDefinitionError, "node routes must be an Array"
+        end
+        return unless routes.length > MAX_ROUTES
+        raise GraphDefinitionError, "node #{@name} exceeds #{MAX_ROUTES} routes"
+      end
+
+      def validate_routing!(routes, routing)
+        if routing == :static && !routes.empty?
+          raise GraphDefinitionError, "static node #{@name} cannot declare dynamic routes"
+        end
+        return unless routing != :static && routes.empty?
+        raise GraphDefinitionError, "#{routing} node #{@name} must declare routes"
+      end
+
+      def validate_implementation!(stable_name, callable, implementation_name, version)
+        return unless stable_name.nil? || (callable.is_a?(Proc) && (implementation_name.nil? || version.nil?))
+
+        raise GraphDefinitionError,
+              "anonymous node #{@name} requires implementation_name and version"
+      end
 
       def named_callable(value)
         value.name if value.is_a?(Module)

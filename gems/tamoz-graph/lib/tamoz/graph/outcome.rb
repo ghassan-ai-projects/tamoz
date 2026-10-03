@@ -39,21 +39,25 @@ module Tamoz
           "node" => node.to_s,
           "path" => path,
           "update" => update.transform_keys(&:to_s),
-          "goto" => goto&.each_with_index&.map do |target, index|
-            if target.equal?(Tamoz::END)
-              {"kind" => "end"}
-            elsif target.is_a?(Send)
-              {
-                "kind" => "send",
-                "node" => target.node.to_s,
-                "input" => target.input,
-                "key" => target.key || index.to_s
-              }
-            else
-              {"kind" => "pull", "node" => target.to_s}
-            end
-          end
+          "goto" => goto&.each_with_index&.map { |target, index| route_descriptor(target, index) }
         }
+      end
+
+      private
+
+      def route_descriptor(target, index)
+        if target.equal?(Tamoz::END)
+          {"kind" => "end"}
+        elsif target.is_a?(Send)
+          {
+            "kind" => "send",
+            "node" => target.node.to_s,
+            "input" => target.input,
+            "key" => target.key || index.to_s
+          }
+        else
+          {"kind" => "pull", "node" => target.to_s}
+        end
       end
     end
 

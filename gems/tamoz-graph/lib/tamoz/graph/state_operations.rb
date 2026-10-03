@@ -9,8 +9,8 @@ module Tamoz
     # the checkpoint protocol and keep its state transitions explicit.
     # :reek:MissingSafeMethod :reek:UtilityFunction -- operations are boundary
     # commands and have no useful non-raising twins.
-    # rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/CyclomaticComplexity
-    # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:disable Metrics/AbcSize
+    # rubocop:disable Metrics/MethodLength
     class StateOperations
       def initialize(compiled)
         @compiled = compiled
@@ -57,28 +57,7 @@ module Tamoz
 
           compatible!(source)
           candidate = updated_state(source, update)
-          historical = source.id != latest.id
-          frontier = source.frontier.map do |entry|
-            historical ? entry.with(activation_checkpoint_id: nil) : entry
-          end.freeze
-          checkpoint = append_checkpoint(
-            writer:,
-            thread:,
-            namespace: [],
-            expected_base_id: source.id,
-            mode: historical ? :fork : :advance,
-            execution_id: historical ? execution_id : source.execution_id,
-            state: candidate,
-            status: frontier.empty? ? :completed : :running,
-            logical_step: source.logical_step,
-            frontier:,
-            pending: {},
-            interrupts: [],
-            resume_values: {},
-            attempts: historical ? {} : source.attempts,
-            failure: nil,
-            total_tasks: historical ? 0 : source.total_tasks
-          )
+          checkpoint = append_updated_checkpoint(source, latest, candidate, writer:, thread:, execution_id:)
           snapshot(checkpoint)
         end
       end
@@ -95,19 +74,7 @@ module Tamoz
         attributes.delete(:namespace)
         consumed_task_ids = attributes.delete(:consumed_task_ids) || []
         request_transition = attributes.delete(:request_transition)
-        writer.append_checkpoint(
-          expected_base_id: attributes.delete(:expected_base_id),
-          mode: attributes.delete(:mode),
-          attributes: {
-            graph_name: compiled.name,
-            graph_version: compiled.version,
-            definition_digest: compiled.definition_digest,
-            state_bytes: compiled.state_manager.state_bytes(state),
-            **attributes
-          },
-          consumed_task_ids:,
-          request_transition:
-        )
+        append_prepared_checkpoint(writer, attributes, state, consumed_task_ids, request_transition)
       end
 
       def snapshot(checkpoint)
@@ -132,6 +99,47 @@ module Tamoz
       private
 
       attr_reader :compiled
+
+      def append_prepared_checkpoint(writer, attributes, state, consumed_task_ids, request_transition)
+        writer.append_checkpoint(
+          expected_base_id: attributes.delete(:expected_base_id),
+          mode: attributes.delete(:mode),
+          attributes: {
+            graph_name: compiled.name,
+            graph_version: compiled.version,
+            definition_digest: compiled.definition_digest,
+            state_bytes: compiled.state_manager.state_bytes(state),
+            **attributes
+          },
+          consumed_task_ids:,
+          request_transition:
+        )
+      end
+
+      def append_updated_checkpoint(source, latest, candidate, writer:, thread:, execution_id:)
+        historical = source.id != latest.id
+        frontier = source.frontier.map do |entry|
+          historical ? entry.with(activation_checkpoint_id: nil) : entry
+        end.freeze
+        append_checkpoint(
+          writer:,
+          thread:,
+          namespace: [],
+          expected_base_id: source.id,
+          mode: historical ? :fork : :advance,
+          execution_id: historical ? execution_id : source.execution_id,
+          state: candidate,
+          status: frontier.empty? ? :completed : :running,
+          logical_step: source.logical_step,
+          frontier:,
+          pending: {},
+          interrupts: [],
+          resume_values: {},
+          attempts: historical ? {} : source.attempts,
+          failure: nil,
+          total_tasks: historical ? 0 : source.total_tasks
+        )
+      end
 
       def updated_state(source, update)
         manual = Outcome.new(
@@ -162,7 +170,7 @@ module Tamoz
         compiled.__send__(:open_writer, thread, namespace, &)
       end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/CyclomaticComplexity
-    # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
+    # rubocop:enable Metrics/AbcSize
+    # rubocop:enable Metrics/MethodLength
   end
 end

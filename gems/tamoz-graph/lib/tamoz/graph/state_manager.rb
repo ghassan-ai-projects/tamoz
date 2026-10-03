@@ -79,26 +79,30 @@ module Tamoz
           if channel.immutable? && !allow_immutable
             raise InvalidUpdateError, "immutable channel #{name} is read-only"
           end
-          if channel.reducer
-            begin
-              candidate[name] = channel.reducer.call(candidate.fetch(name), values.freeze)
-            rescue InvalidUpdateError
-              raise
-            rescue StandardError => error
-              raise InvalidUpdateError,
-                    "reducer #{channel.reducer.name} failed for #{name}: #{error.class}"
-            end
-          elsif values.length == 1
-            candidate[name] = values.first
-          else
-            raise InvalidUpdateError,
-                  "conflicting writes to #{name} from #{writers.fetch(name).sort.join(", ")}"
-          end
+          candidate[name] = reduced_value(channel, name, candidate, values, writers)
         end
         channels.each do |name, channel|
           candidate[name] = remaining_steps if channel.managed?
         end
         normalize_state(candidate)
+      end
+
+      def reduced_value(channel, name, candidate, values, writers)
+        if channel.reducer
+          begin
+            channel.reducer.call(candidate.fetch(name), values.freeze)
+          rescue InvalidUpdateError
+            raise
+          rescue StandardError => error
+            raise InvalidUpdateError,
+                  "reducer #{channel.reducer.name} failed for #{name}: #{error.class}"
+          end
+        elsif values.length == 1
+          values.first
+        else
+          raise InvalidUpdateError,
+                "conflicting writes to #{name} from #{writers.fetch(name).sort.join(", ")}"
+        end
       end
 
       def group_writes(records)

@@ -157,13 +157,7 @@ module Tamoz
         @config = config
         @environ = environ
         @working_directory = config.working_directory
-        @pid = nil
-        @stderr_buffer = +""
-        @stderr_mutex = Mutex.new
-        # Resolved credential values the child environment carries; `stderr_tail`
-        # redacts these (F2 — a hostile/faulty child must not be able to print a
-        # credential value into diagnostic metadata → durable records, inv 24).
-        @redaction_values = [].freeze
+        initialize_redacted_diagnostics
         @circuit_threshold = circuit_threshold
         @retry_budget = retry_budget
         @base_backoff = base_backoff.to_f
@@ -171,9 +165,7 @@ module Tamoz
         @random = random
         @circuit_store = build_circuit_store(circuit_threshold, circuit_store)
         @retired = false
-        @request_sent = false
-        @sent_mutex = Mutex.new
-        @call_lock = Monitor.new
+        initialize_call_boundary
         super(
           command: config.command,
           args: config.arguments,
@@ -254,6 +246,19 @@ module Tamoz
       alias_method :teardown, :close
 
       private
+
+      def initialize_call_boundary
+        @request_sent = false
+        @sent_mutex = Mutex.new
+        @call_lock = Monitor.new
+      end
+
+      def initialize_redacted_diagnostics
+        @pid = nil
+        @stderr_buffer = +""
+        @stderr_mutex = Mutex.new
+        @redaction_values = [].freeze
+      end
 
       def validate_config!(config)
         return if config.is_a?(ServerConfig)

@@ -1,0 +1,15 @@
+plugins:
+  - rubocop-minitest
+  - rubocop-performance
+AllCops:
+  NewCops: disable
+  TargetRubyVersion: 3.3
+  DisabledByDefault: true
+  Exclude: ["test/**/*", "vendor/**/*", "tmp/**/*", ".worktrees/**/*", ".claude/**/*", ".qwen/**/*", "agenteval/**/*", ".enola/**/*"]
+Metrics/MethodLength: {Enabled: true, Max: 20}
+Metrics/CyclomaticComplexity: {Enabled: true, Max: 8}
+Metrics/PerceivedComplexity: {Enabled: true, Max: 8}
+Metrics/ClassLength: {Enabled: true, Max: 250}
+Metrics/ModuleLength: {Enabled: true, Max: 100}
+Metrics/AbcSize: {Enabled: true, Max: 20}
+Metrics/ParameterLists: {Enabled: true, Max: 5}

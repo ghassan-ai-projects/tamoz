@@ -19,18 +19,11 @@ module Tamoz
         @name = Identifier.symbol(name, name: "state channel")
         @managed = normalize_managed(managed)
         @immutable = immutable == true
-        if @immutable && @managed
-          raise GraphDefinitionError, "channel #{@name} cannot be both immutable and managed"
-        end
+        validate_management!
         @default_name = default_name && Identifier.string(default_name, name: "default name")
         @default_version = default_version && Identifier.version(default_version, name: "default version")
         @reducer = managed ? nil : reducer
-        if managed && reducer
-          raise GraphDefinitionError, "managed channel #{@name} cannot have a reducer"
-        end
-        if @immutable && reducer
-          raise GraphDefinitionError, "immutable channel #{@name} cannot have a reducer"
-        end
+        validate_reducer!(managed, reducer)
         @default_bytes = compile_default(
           default,
           default_name:,
@@ -64,6 +57,21 @@ module Tamoz
       end
 
       private
+
+      def validate_management!
+        return unless @immutable && @managed
+
+        raise GraphDefinitionError, "channel #{@name} cannot be both immutable and managed"
+      end
+
+      def validate_reducer!(managed, reducer)
+        if managed && reducer
+          raise GraphDefinitionError, "managed channel #{@name} cannot have a reducer"
+        end
+        return unless @immutable && reducer
+
+        raise GraphDefinitionError, "immutable channel #{@name} cannot have a reducer"
+      end
 
       def normalize_managed(value)
         return nil if value.nil?

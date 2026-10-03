@@ -29,37 +29,14 @@ module Tamoz
     :emitted_at
   ) do
     def initialize(type:, namespace:, run_id:, task_id: nil, sequence:, data: {}, emitted_at:)
-      normalized_type = StreamPartContract::TYPE_LOOKUP[String(type)]
-      unless normalized_type
-        raise ConfigurationError,
-              "stream type must be one of #{StreamPartContract::CORE_TYPES.inspect}"
-      end
-      unless namespace.is_a?(Array) &&
-             namespace.length <= StreamPartContract::MAX_NAMESPACE_PARTS
-        raise ConfigurationError,
-              "stream namespace must contain at most " \
-              "#{StreamPartContract::MAX_NAMESPACE_PARTS} parts"
-      end
-      normalized_namespace = namespace.map.with_index do |part, index|
-        normalize_identity(part, "namespace[#{index}]")
-      end.freeze
-      normalized_run_id = normalize_identity(run_id, "run_id")
-      normalized_task_id = task_id.nil? ? nil : normalize_identity(task_id, "task_id")
-      unless sequence.is_a?(Integer) && !sequence.negative?
-        raise ConfigurationError, "stream sequence must be a non-negative integer"
-      end
-      unless emitted_at.is_a?(Numeric) && emitted_at.finite? && !emitted_at.negative?
-        raise ConfigurationError, "stream emitted_at must be a finite non-negative number"
-      end
-
       super(
-        type: normalized_type,
-        namespace: normalized_namespace,
-        run_id: normalized_run_id,
-        task_id: normalized_task_id,
-        sequence:,
-        data: Immutable.copy(data),
-        emitted_at:
+        type: normalize_type(type),
+        namespace: normalize_namespace(namespace),
+        run_id: normalize_identity(run_id, "run_id"),
+        task_id: task_id.nil? ? nil : normalize_identity(task_id, "task_id"),
+        sequence: validated_sequence(sequence),
+        emitted_at: validated_emitted_at(emitted_at),
+        data: Immutable.copy(data)
       )
     end
 
@@ -71,6 +48,33 @@ module Tamoz
     end
 
     private
+
+    def normalize_type(type)
+      StreamPartContract::TYPE_LOOKUP.fetch(String(type)) do
+        raise ConfigurationError, "stream type must be one of #{StreamPartContract::CORE_TYPES.inspect}"
+      end
+    end
+
+    def normalize_namespace(namespace)
+      unless namespace.is_a?(Array) && namespace.length <= StreamPartContract::MAX_NAMESPACE_PARTS
+        raise ConfigurationError,
+              "stream namespace must contain at most #{StreamPartContract::MAX_NAMESPACE_PARTS} parts"
+      end
+
+      namespace.map.with_index { |part, index| normalize_identity(part, "namespace[#{index}]") }.freeze
+    end
+
+    def validated_sequence(sequence)
+      return sequence if sequence.is_a?(Integer) && !sequence.negative?
+
+      raise ConfigurationError, "stream sequence must be a non-negative integer"
+    end
+
+    def validated_emitted_at(emitted_at)
+      return emitted_at if emitted_at.is_a?(Numeric) && emitted_at.finite? && !emitted_at.negative?
+
+      raise ConfigurationError, "stream emitted_at must be a finite non-negative number"
+    end
 
     def normalize_identity(value, name)
       SafeText.normalize(

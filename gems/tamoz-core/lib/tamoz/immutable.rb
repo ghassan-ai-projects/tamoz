@@ -20,81 +20,83 @@ module Tamoz
         max_collection_items: positive_integer!(max_collection_items, :max_collection_items),
         max_string_bytes: positive_integer!(max_string_bytes, :max_string_bytes)
       }
-      state = {items: 0, active: {}}
-      copy_value(value, reject_sensitive:, limits:, state:, depth: 0, path: "$")
+      walk = {reject_sensitive:, limits:, items: 0, active: {}}
+      copy_value(value, walk, depth: 0, path: "$")
     end
 
-    def copy_value(value, reject_sensitive:, limits:, state:, depth:, path:)
-      if reject_sensitive && value.is_a?(Secret)
-        raise SensitiveValueError, "#{path}: Tamoz::Secret is not permitted"
-      end
-      raise StateLimitError, "#{path}: nesting exceeds #{limits.fetch(:max_depth)}" if depth > limits.fetch(:max_depth)
-
+    def copy_value(value, walk, depth:, path:)
+      guard_value!(value, walk, depth:, path:)
       case value
-      when NilClass, TrueClass, FalseClass, Integer, Symbol
-        value
-      when Float
-        raise UnsupportedValueError, "#{path}: non-finite floats are unsupported" unless value.finite?
-
-        value
-      when String
-        copy_string(value, limits:, path:)
-      when Array
-        copy_container(value, state:, path:) do
-          count_items!(value.length, limits:, state:, path:)
-          value.each_with_index.map do |entry, index|
-            copy_value(
-              entry,
-              reject_sensitive:,
-              limits:,
-              state:,
-              depth: depth + 1,
-              path: "#{path}[#{index}]"
-            )
-          end.freeze
-        end
-      when Hash
-        copy_container(value, state:, path:) do
-          count_items!(value.length, limits:, state:, path:)
-          value.each_with_object({}) do |(key, entry), result|
-            unless key.is_a?(String) || key.is_a?(Symbol)
-              raise UnsupportedValueError, "#{path}: hash key #{key.inspect} must be a string or symbol"
-            end
-
-            copied_key = key.is_a?(String) ? copy_string(key, limits:, path: "#{path}.<key>") : key
-            result[copied_key] = copy_value(
-              entry,
-              reject_sensitive:,
-              limits:,
-              state:,
-              depth: depth + 1,
-              path: "#{path}.#{key}"
-            )
-          end.freeze
-        end
-      else
-        raise UnsupportedValueError, "#{path}: unsupported value #{value.class}"
+      when NilClass, TrueClass, FalseClass, Integer, Symbol then value
+      when Float then finite_float(value, path:)
+      when String then copy_string(value, walk, path:)
+      when Array then copy_array(value, walk, depth:, path:)
+      when Hash then copy_hash(value, walk, depth:, path:)
+      else raise UnsupportedValueError, "#{path}: unsupported value #{value.class}"
       end
     end
     private_class_method :copy_value
 
-    def copy_container(value, state:, path:)
-      object_id = value.object_id
-      raise UnsupportedValueError, "#{path}: cyclic containers are unsupported" if state.fetch(:active).key?(object_id)
+    def guard_value!(value, walk, depth:, path:)
+      if walk.fetch(:reject_sensitive) && value.is_a?(Secret)
+        raise SensitiveValueError, "#{path}: Tamoz::Secret is not permitted"
+      end
 
-      state.fetch(:active)[object_id] = true
+      max_depth = walk.fetch(:limits).fetch(:max_depth)
+      raise StateLimitError, "#{path}: nesting exceeds #{max_depth}" if depth > max_depth
+    end
+    private_class_method :guard_value!
+
+    def finite_float(value, path:)
+      return value if value.finite?
+
+      raise UnsupportedValueError, "#{path}: non-finite floats are unsupported"
+    end
+    private_class_method :finite_float
+
+    def copy_array(value, walk, depth:, path:)
+      copy_container(value, walk, path:) do
+        value.each_with_index.map do |entry, index|
+          copy_value(entry, walk, depth: depth + 1, path: "#{path}[#{index}]")
+        end.freeze
+      end
+    end
+    private_class_method :copy_array
+
+    def copy_hash(value, walk, depth:, path:)
+      copy_container(value, walk, path:) do
+        value.each_with_object({}) do |(key, entry), result|
+          result[copy_key(key, walk, path:)] = copy_value(entry, walk, depth: depth + 1, path: "#{path}.#{key}")
+        end.freeze
+      end
+    end
+    private_class_method :copy_hash
+
+    def copy_key(key, walk, path:)
+      return copy_string(key, walk, path: "#{path}.<key>") if key.is_a?(String)
+      return key if key.is_a?(Symbol)
+
+      raise UnsupportedValueError, "#{path}: hash key #{key.inspect} must be a string or symbol"
+    end
+    private_class_method :copy_key
+
+    def copy_container(value, walk, path:)
+      object_id = value.object_id
+      raise UnsupportedValueError, "#{path}: cyclic containers are unsupported" if walk.fetch(:active).key?(object_id)
+
+      walk.fetch(:active)[object_id] = true
+      count_items!(value.length, walk, path:)
       yield
     ensure
-      state.fetch(:active).delete(object_id)
+      walk.fetch(:active).delete(object_id)
     end
     private_class_method :copy_container
 
-    def copy_string(value, limits:, path:)
+    def copy_string(value, walk, path:)
+      max_bytes = walk.fetch(:limits).fetch(:max_string_bytes)
       utf8 = value.encode(Encoding::UTF_8)
       raise UnsupportedValueError, "#{path}: invalid UTF-8 string" unless utf8.valid_encoding?
-      if utf8.bytesize > limits.fetch(:max_string_bytes)
-        raise StateLimitError, "#{path}: string exceeds #{limits.fetch(:max_string_bytes)} bytes"
-      end
+      raise StateLimitError, "#{path}: string exceeds #{max_bytes} bytes" if utf8.bytesize > max_bytes
 
       utf8.dup.freeze
     rescue EncodingError => error
@@ -102,12 +104,12 @@ module Tamoz
     end
     private_class_method :copy_string
 
-    def count_items!(count, limits:, state:, path:)
-      state[:items] += count
-      return if state.fetch(:items) <= limits.fetch(:max_collection_items)
+    def count_items!(count, walk, path:)
+      walk[:items] += count
+      max_items = walk.fetch(:limits).fetch(:max_collection_items)
+      return if walk.fetch(:items) <= max_items
 
-      raise StateLimitError,
-            "#{path}: collections exceed #{limits.fetch(:max_collection_items)} total items"
+      raise StateLimitError, "#{path}: collections exceed #{max_items} total items"
     end
     private_class_method :count_items!
 

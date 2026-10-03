@@ -10,27 +10,31 @@ module Tamoz
     :deleted,
     :created_at_ms
   ) do
-    def initialize(
-      namespace:,
-      key:,
-      version:,
-      value:,
-      sensitive:,
-      deleted:,
-      created_at_ms:
-    )
-      unless namespace.is_a?(String) && namespace.frozen? &&
-             key.is_a?(String) && key.frozen? &&
-             version.is_a?(Integer) && version.positive? &&
-             (sensitive == true || sensitive == false) &&
-             (deleted == true || deleted == false) &&
-             created_at_ms.is_a?(Integer) && !created_at_ms.negative?
-        raise CheckpointCorruptionError, "stored entry metadata is invalid"
-      end
+    def initialize(**)
+      super
+      raise CheckpointCorruptionError, "stored entry metadata is invalid" unless valid_metadata?
       raise CheckpointCorruptionError, "deleted entry has a value" if deleted && !value.nil?
 
-      super
       freeze
+    end
+
+    private
+
+    def valid_metadata?
+      frozen_string?(namespace) && frozen_string?(key) && positive_integer?(version) &&
+        boolean?(sensitive) && boolean?(deleted) && created_at_ms.is_a?(Integer) && !created_at_ms.negative?
+    end
+
+    def frozen_string?(value)
+      value.is_a?(String) && value.frozen?
+    end
+
+    def positive_integer?(value)
+      value.is_a?(Integer) && value.positive?
+    end
+
+    def boolean?(value)
+      [true, false].include?(value)
     end
   end
 end

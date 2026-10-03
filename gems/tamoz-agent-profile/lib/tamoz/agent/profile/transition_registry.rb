@@ -114,57 +114,43 @@ module Tamoz
         # or already consumed (a lost race falls through to pinned replay — never
         # a typed terminal error). The decision is made on the CURRENT file bytes
         # inside the lock, so no stale before-image can be consumed (no TOCTOU).
-        #
-        # Deliberately NOT split into named steps (CODING_STANDARD §4). Find,
-        # guard, mark, write and return are one atomic decision taken against one
-        # read of the file; splitting them produced helpers that took the identity
-        # triple as loose parameters and made it possible to call the mark without
-        # the guard. The method-length ceiling is diagnostic, and this is the
-        # exception it allows for.
-        #
-        # :reek:TooManyStatements :reek:LongParameterList :reek:DataClump
-        # :reek:ControlParameter — the identity triple selects the entry; that is
-        # the query, not a hidden mode switch.
-        # rubocop:disable Metrics/MethodLength, Metrics/AbcSize, Metrics/BlockLength
         def consume_if_candidate!(thread_id, profile_id:, from:, to:, consumed_by:)
           raise ArgumentError, 'consumed_by is required to consume a candidate' if consumed_by.to_s.empty?
 
-          thread = String(thread_id)
-          burner = String(consumed_by)
-          with_registry_lock do
-            current = read_document
-            transitions = current.fetch('transitions')
-            list = transitions.fetch(thread, [])
-            index = list.index do |entry|
-              entry.fetch('profile_id') == profile_id &&
-                entry.fetch('from_digest') == from &&
-                entry.fetch('to_digest') == to
-            end
-            return nil unless index
-
-            candidate = list.fetch(index)
-            return nil if candidate.key?('consumed_by')
-
-            consumed_at = Time.now.utc.iso8601
-            updated_list = list.dup
-            updated_list[index] = candidate.merge(
-              'consumed_by' => burner, 'consumed_at' => consumed_at
-            )
-            write_document(current.merge('transitions' => transitions.merge(thread => updated_list)))
-            Transition.new(
-              thread_id: thread,
-              profile_id: candidate.fetch('profile_id'),
-              from_digest: candidate.fetch('from_digest'),
-              to_digest: candidate.fetch('to_digest'),
-              reason: candidate.fetch('reason'),
-              consumed_by: burner,
-              consumed_at:
-            )
-          end
+          identity = { 'profile_id' => profile_id, 'from_digest' => from, 'to_digest' => to }
+          with_registry_lock { burn_candidate_under_lock(String(thread_id), identity, String(consumed_by)) }
         end
-        # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/BlockLength
 
         private
+
+        def burn_candidate_under_lock(thread, identity, burner)
+          current = read_document
+          transitions = current.fetch('transitions')
+          list = transitions.fetch(thread, [])
+          index = list.index { |entry| matches?(entry, identity) }
+          return nil if index.nil? || list.fetch(index).key?('consumed_by')
+
+          consumed = list.fetch(index).merge('consumed_by' => burner, 'consumed_at' => Time.now.utc.iso8601)
+          write_document(current.merge('transitions' => transitions.merge(thread => replaced(list, index, consumed))))
+          consumed_transition(thread, consumed)
+        end
+
+        def matches?(entry, identity)
+          identity.all? { |key, value| entry.fetch(key) == value }
+        end
+
+        def replaced(list, index, entry)
+          list.dup.tap { |copy| copy[index] = entry }
+        end
+
+        def consumed_transition(thread, entry)
+          Transition.new(
+            thread_id: thread, profile_id: entry.fetch('profile_id'),
+            from_digest: entry.fetch('from_digest'), to_digest: entry.fetch('to_digest'),
+            reason: entry.fetch('reason'),
+            consumed_by: entry.fetch('consumed_by'), consumed_at: entry.fetch('consumed_at')
+          )
+        end
 
         # The registry's single write critical section. flock is advisory but the
         # only writers are the two paths through this class, so both serialize here.

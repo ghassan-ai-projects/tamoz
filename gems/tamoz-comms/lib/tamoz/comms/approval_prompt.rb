@@ -20,13 +20,15 @@ module Tamoz
     # The prompt's fifteen fields ARE the value and its validation is the
     # per-field rule set; splitting either would fragment the row the store
     # persists.
-    # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/MethodLength
+    # rubocop:disable Metrics/ParameterLists
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:NilCheck, :reek:DataClump
     class ApprovalPrompt
       STATUSES = %w[inactive active consumed].freeze
       REFERENCE_DOMAIN = 'tamoz.comms.prompt_ref.v1'
       MAX_ID_BYTES = 256
+      TIME_FIELDS = %i[created_at activated_at consumed_at expires_at].freeze
+      private_constant :TIME_FIELDS
 
       attr_reader :reference_digest, :surface_id, :surface_revision, :thread_id,
                   :occurrence_id, :interrupt_digest, :correspondent_id,
@@ -39,25 +41,13 @@ module Tamoz
         created_at:, expires_at:, prompt_receipt: nil, status: 'inactive',
         required_evidence:, activated_at: nil, consumed_at: nil
       )
-        validate!(reference_digest:, surface_id:, surface_revision:, thread_id:,
-                  occurrence_id:, interrupt_digest:, correspondent_id:,
-                  conversation_id:, prompt_receipt:, required_evidence:, status:,
-                  created_at:, activated_at:, consumed_at:, expires_at:)
-        @reference_digest = reference_digest
-        @surface_id = surface_id
-        @surface_revision = surface_revision
-        @thread_id = thread_id
-        @occurrence_id = occurrence_id
-        @interrupt_digest = interrupt_digest
-        @correspondent_id = correspondent_id
-        @conversation_id = conversation_id
-        @prompt_receipt = prompt_receipt
-        @required_evidence = required_evidence
-        @status = status
-        @created_at = created_at.utc
-        @activated_at = activated_at&.utc
-        @consumed_at = consumed_at&.utc
-        @expires_at = expires_at.utc
+        fields = {
+          reference_digest:, surface_id:, surface_revision:, thread_id:, occurrence_id:, interrupt_digest:,
+          correspondent_id:, conversation_id:, prompt_receipt:, required_evidence:, status:,
+          created_at:, activated_at:, consumed_at:, expires_at:
+        }
+        validate!(fields)
+        fields.each { |name, value| instance_variable_set(:"@#{name}", stored(name, value)) }
         freeze
       end
 
@@ -139,42 +129,46 @@ module Tamoz
 
       private
 
-      def validate!(
-        reference_digest:, surface_id:, surface_revision:, thread_id:,
-        occurrence_id:, interrupt_digest:, correspondent_id:, conversation_id:,
-        prompt_receipt:, required_evidence:, status:, created_at:, activated_at:,
-        consumed_at:, expires_at:
-      )
-        validate_identity!(reference_digest:, surface_id:, surface_revision:,
-                           thread_id:, occurrence_id:, interrupt_digest:,
-                           correspondent_id:, conversation_id:, prompt_receipt:,
-                           required_evidence:)
-        validate_times!(status:, created_at:, activated_at:, consumed_at:, expires_at:)
+      def stored(name, value)
+        TIME_FIELDS.include?(name) ? value&.utc : value
       end
 
-      def validate_identity!(
-        reference_digest:, surface_id:, surface_revision:, thread_id:,
-        occurrence_id:, interrupt_digest:, correspondent_id:, conversation_id:,
-        prompt_receipt:, required_evidence:
-      )
-        unless Shapes.hex?(reference_digest, bits: 256)
+      def validate!(fields)
+        validate_identity!(fields)
+        validate_lifecycle!(fields)
+      end
+
+      def validate_identity!(fields)
+        unless Shapes.hex?(fields.fetch(:reference_digest), bits: 256)
           raise ValidationError, 'reference_digest must be a 64-char hex digest'
         end
 
-        [surface_id, thread_id, occurrence_id, correspondent_id, conversation_id].each do |value|
+        validate_identity_strings!(fields.values_at(:surface_id, :thread_id, :occurrence_id, :correspondent_id,
+                                                    :conversation_id))
+        unless Shapes.hex?(fields.fetch(:interrupt_digest))
+          raise ValidationError, 'interrupt_digest must be a 64-char hex digest'
+        end
+
+        validate_surface_revision!(fields.fetch(:surface_revision))
+        validate_required_evidence!(fields.fetch(:required_evidence))
+        receipt = fields.fetch(:prompt_receipt)
+        return if receipt.nil? || Shapes.bounded_string?(receipt, max_bytes: MAX_ID_BYTES)
+
+        raise ValidationError, 'prompt_receipt must be a bounded string'
+      end
+
+      def validate_identity_strings!(values)
+        values.each do |value|
           next if value.nil? || Shapes.bounded_string?(value, max_bytes: MAX_ID_BYTES)
 
           raise ValidationError, 'prompt identity fields must be bounded strings'
         end
-        raise ValidationError, 'interrupt_digest must be a 64-char hex digest' unless Shapes.hex?(interrupt_digest)
-        unless surface_revision.nil? || (surface_revision.is_a?(Integer) && surface_revision.positive?)
-          raise ValidationError, 'surface_revision must be a positive integer'
-        end
+      end
 
-        validate_required_evidence!(required_evidence)
-        return if prompt_receipt.nil? || Shapes.bounded_string?(prompt_receipt, max_bytes: MAX_ID_BYTES)
+      def validate_surface_revision!(surface_revision)
+        return if surface_revision.nil? || (surface_revision.is_a?(Integer) && surface_revision.positive?)
 
-        raise ValidationError, 'prompt_receipt must be a bounded string'
+        raise ValidationError, 'surface_revision must be a positive integer'
       end
 
       # A non-lattice requirement is rejected, never coerced to a weaker one;
@@ -183,17 +177,26 @@ module Tamoz
         AuthorityEvidence.from(required_evidence)
       end
 
-      def validate_times!(status:, created_at:, activated_at:, consumed_at:, expires_at:)
+      def validate_lifecycle!(fields)
+        status = fields.fetch(:status)
         raise ValidationError, "status must be one of #{STATUSES.join(', ')}" unless Shapes.member?(status, STATUSES)
 
+        validate_window!(fields.fetch(:created_at), fields.fetch(:expires_at))
+        if status == 'consumed' && fields.fetch(:consumed_at).nil?
+          raise ValidationError, 'a consumed prompt needs consumed_at'
+        end
+        return unless status == 'active' && fields.fetch(:activated_at).nil?
+
+        raise ValidationError, 'an active prompt needs activated_at'
+      end
+
+      def validate_window!(created_at, expires_at)
         [created_at, expires_at].each do |time|
           raise ValidationError, 'prompt times must be Time values' unless time.is_a?(Time)
         end
         raise ValidationError, 'expires_at must follow created_at' unless expires_at > created_at
-        raise ValidationError, 'a consumed prompt needs consumed_at' if status == 'consumed' && consumed_at.nil?
-        raise ValidationError, 'an active prompt needs activated_at' if status == 'active' && activated_at.nil?
       end
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/MethodLength
+# rubocop:enable Metrics/ParameterLists

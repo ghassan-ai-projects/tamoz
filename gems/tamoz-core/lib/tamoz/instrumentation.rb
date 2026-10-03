@@ -34,34 +34,39 @@ module Tamoz
     private_class_method :notify_without_block
 
     def notify_with_guarded_block(notifier, name, payload, application)
-      executed = false
-      result = nil
-      application_error = nil
+      run = { executed: false, result: nil, error: nil }
+      instrument_guarded(notifier, name, payload, run, &guard_application(application, run))
+      raise run[:error] if run[:error]
 
-      guarded = proc do
-        raise ConfigurationError, "notifier attempted to execute the block more than once" if executed
-
-        executed = true
-        begin
-          result = application.call
-        rescue Exception => error # rubocop:disable Lint/RescueException
-          application_error = error
-          raise
-        end
-      end
-
-      begin
-        notifier.instrument(name, payload, &guarded)
-      rescue Exception => notifier_error # rubocop:disable Lint/RescueException
-        raise application_error if application_error
-        raise notifier_error unless notifier_error.is_a?(StandardError)
-      end
-
-      raise application_error if application_error
-      result = application.call unless executed
-      result
+      run[:executed] ? run[:result] : application.call
     end
     private_class_method :notify_with_guarded_block
+
+    def guard_application(application, run)
+      proc do
+        raise ConfigurationError, "notifier attempted to execute the block more than once" if run[:executed]
+
+        run[:executed] = true
+        run[:result] = call_recording_error(application, run)
+      end
+    end
+    private_class_method :guard_application
+
+    def call_recording_error(application, run)
+      application.call
+    rescue Exception => error # rubocop:disable Lint/RescueException
+      run[:error] = error
+      raise
+    end
+    private_class_method :call_recording_error
+
+    def instrument_guarded(notifier, name, payload, run, &)
+      notifier.instrument(name, payload, &)
+    rescue Exception => notifier_error # rubocop:disable Lint/RescueException
+      raise run[:error] if run[:error]
+      raise notifier_error unless notifier_error.is_a?(StandardError)
+    end
+    private_class_method :instrument_guarded
 
     def normalize_name(name)
       SafeText.normalize(

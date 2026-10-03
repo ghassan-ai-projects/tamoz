@@ -105,23 +105,28 @@ module Tamoz
         fields = @document.grant_keys[tier.fetch(:name)]
         return nil unless fields
 
-        # Key fields are opaque equality tokens; stringifying them here makes
-        # the durable (JSON-serialized) grant form identical to the in-memory
-        # one.
-        key = {}
-        fields.each do |field|
-          value = case field
-                  when :verb then request.verb.to_s
-                  when :tool then request.tool.to_s
-                  when :target_root then target_root(request)
-                  when :key_argv then key_argv(request)
-                  else nil
-                  end
-          return nil if value.nil? || (value.respond_to?(:empty?) && value.empty?)
+        fields.each_with_object({}) do |field, key|
+          value = grant_key_value(request, field)
+          return nil if blank_key_value?(value)
 
           key[field] = value
         end
-        key
+      end
+
+      # Key fields are opaque equality tokens; stringifying them here makes
+      # the durable (JSON-serialized) grant form identical to the in-memory
+      # one.
+      def grant_key_value(request, field)
+        case field
+        when :verb then request.verb.to_s
+        when :tool then request.tool.to_s
+        when :target_root then target_root(request)
+        when :key_argv then key_argv(request)
+        end
+      end
+
+      def blank_key_value?(value)
+        value.nil? || (value.respond_to?(:empty?) && value.empty?)
       end
 
       def target_root(request)

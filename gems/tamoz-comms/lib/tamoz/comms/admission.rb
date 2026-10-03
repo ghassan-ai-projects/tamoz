@@ -17,13 +17,8 @@ module Tamoz
     # never becomes model input; allowlist mode requires an active binding;
     # pairing mode requires a consumed pairing challenge; callbacks are
     # decisions (v1 deny-only, design §9), never requests.
-    # The admission decision is one deterministic function of its inputs
-    # (envelope, surface, binding, route); the metric smells measure the
-    # decision table itself, not a choice to overload.
     # :reek:LongParameterList, :reek:ControlParameter, :reek:DuplicateMethodCall, :reek:DataClump
     # :reek:TooManyStatements, :reek:NilCheck
-    # rubocop:disable Metrics/PerceivedComplexity -- the decision table IS
-    #   the admission policy; splitting it would scatter the rules.
     module Admission
       # The disposition of one update. `command_intent` is typed and bounded;
       # it is not task text and cannot be forwarded to a model.
@@ -35,18 +30,21 @@ module Tamoz
       module_function
 
       def decide(envelope, surface:, binding: nil, conversation: nil, bot_username: nil)
+        screened = screening_decision(envelope, surface:, binding:)
+        return screened if screened
+        return callback_disposition if envelope.fetch('kind') == 'callback'
+        return command_admission(envelope, surface:, binding:, bot_username:) if envelope.fetch('kind') == 'command'
+
+        text_disposition(envelope, surface:, binding:, conversation:)
+      end
+
+      def screening_decision(envelope, surface:, binding:)
         return reject(:surface_disabled, 'the surface is disabled') if surface.disabled?
         return unsupported(envelope, surface:, binding:) if envelope.fetch('kind') == 'unsupported'
         return ignore(:unsupported_kind) unless %w[text command callback].include?(envelope.fetch('kind'))
         return reject(:group_chat, 'group chats are refused in v1') if group_chat?(envelope.fetch('conversation_id'))
-        return reject(:unbound, 'the correspondent is not bound') if binding && binding.fetch('status') != 'active'
-        return callback_disposition if envelope.fetch('kind') == 'callback'
 
-        if envelope.fetch('kind') == 'command'
-          command_admission(envelope, surface:, binding:, bot_username:)
-        else
-          text_disposition(envelope, surface:, binding:, conversation:)
-        end
+        reject(:unbound, 'the correspondent is not bound') if binding && binding.fetch('status') != 'active'
       end
 
       # The deterministic per-conversation thread id (design §5):
@@ -130,4 +128,3 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/PerceivedComplexity

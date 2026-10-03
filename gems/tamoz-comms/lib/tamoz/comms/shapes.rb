@@ -24,6 +24,26 @@ module Tamoz
       def member?(value, set)
         set.include?(value)
       end
+
+      def require_string!(value, name, max_bytes:)
+        raise ValidationError, "#{name} must be a bounded string" unless bounded_string?(value, max_bytes:)
+      end
+
+      def require_positive!(value, name)
+        raise ValidationError, "#{name} must be a positive integer" unless value.is_a?(Integer) && value.positive?
+      end
+
+      def require_time!(value, name)
+        raise ValidationError, "#{name} must be a Time value" unless value.is_a?(Time)
+      end
+
+      def require_member!(value, set, name)
+        raise ValidationError, "#{name} must be one of #{set.join(', ')}" unless member?(value, set)
+      end
+
+      def require_prefixed!(value, prefixes, message, max_bytes:)
+        raise ValidationError, message unless bounded_string?(value, max_bytes:) && value.start_with?(*prefixes)
+      end
     end
   end
 end

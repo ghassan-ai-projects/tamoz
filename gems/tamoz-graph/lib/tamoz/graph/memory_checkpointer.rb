@@ -106,6 +106,12 @@ module Tamoz
 
       private
 
+      def validate_active_tip!(entries, base, expected_base_id)
+        return if base && entries.last&.id == expected_base_id
+
+        raise CheckpointConflictError, "checkpoint base is not the active tip"
+      end
+
       def normalize_address(thread_id, namespace)
         thread_value = SafeText.normalize(
           thread_id,
@@ -162,9 +168,7 @@ module Tamoz
         when :start
           raise CheckpointConflictError, "thread namespace already exists" unless entries.empty?
         when :advance, :turn
-          unless base && entries.last&.id == expected_base_id
-            raise CheckpointConflictError, "checkpoint base is not the active tip"
-          end
+          validate_active_tip!(entries, base, expected_base_id)
         when :fork
           raise CheckpointConflictError, "fork source checkpoint does not exist" unless base
         else
@@ -230,6 +234,11 @@ module Tamoz
         if value.is_a?(Frontier) || value.is_a?(Outcome) || value.is_a?(Task)
           return value.descriptor
         end
+
+        primitive_descriptor(value)
+      end
+
+      def primitive_descriptor(value)
         if value.is_a?(Hash)
           return value.to_h do |key, entry|
             [key.to_s, descriptor_for(entry)]

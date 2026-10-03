@@ -157,24 +157,11 @@ module Tamoz
 
       def build_request(call_id:, tool_name:, document:, deadline:)
         Agenticstream::Runtime::V1::EvidenceToolCall.new(
-          protocol_version: PROTOCOL_VERSION,
-          episode_id: @episode_id,
-          call_id:,
-          tool_name:,
-          arguments_json: document.to_s.b,
-          capability_token: @capability_token.to_s.b,
-          deadline: build_timestamp(deadline),
-          attempt_id: @attempt_id,
-          fence: @fence,
-          traceparent: @traceparent,
-          tracestate: @tracestate,
-          tenant_id: @tenant_id,
-          situation_id: @situation_id,
-          entity_id: @entity_id,
-          max_rows: @max_rows,
-          max_bytes: @max_bytes,
-          time_from: @time_from,
-          time_until: @time_until,
+          protocol_version: PROTOCOL_VERSION, episode_id: @episode_id, call_id:, tool_name:,
+          arguments_json: document.to_s.b, capability_token: @capability_token.to_s.b,
+          deadline: build_timestamp(deadline), attempt_id: @attempt_id, fence: @fence, traceparent: @traceparent,
+          tracestate: @tracestate, tenant_id: @tenant_id, situation_id: @situation_id, entity_id: @entity_id,
+          max_rows: @max_rows, max_bytes: @max_bytes, time_from: @time_from, time_until: @time_until,
           situation_version: @situation_version
         )
       end

@@ -71,10 +71,7 @@ module Tamoz
       end
 
       def enqueued(fence:, now:)
-        unless state == :claimed
-          raise SchedulerError,
-                "occurrence #{occurrence_id} is #{state}, not claimed"
-        end
+        raise SchedulerError, "occurrence #{occurrence_id} is #{state}, not claimed" unless state == :claimed
 
         with_state(:enqueued, now:, fence:, owner:)
       end
@@ -85,21 +82,10 @@ module Tamoz
         with_state(:running, now:, reason: execution_id)
       end
 
-      def succeeded(execution_id, evidence, now:)
-        transition_from_running(:succeeded, execution_id, evidence, now)
-      end
-
-      def failed(execution_id, evidence, now:)
-        transition_from_running(:failed, execution_id, evidence, now)
-      end
-
-      def cancelled(execution_id, evidence, now:)
-        transition_from_running(:cancelled, execution_id, evidence, now)
-      end
-
-      def unknown(execution_id, evidence, now:)
-        transition_from_running(:unknown, execution_id, evidence, now)
-      end
+      def succeeded(execution_id, evidence, now:) = transition_from_running(:succeeded, execution_id, evidence, now)
+      def failed(execution_id, evidence, now:) = transition_from_running(:failed, execution_id, evidence, now)
+      def cancelled(execution_id, evidence, now:) = transition_from_running(:cancelled, execution_id, evidence, now)
+      def unknown(execution_id, evidence, now:) = transition_from_running(:unknown, execution_id, evidence, now)
 
       def skipped(reason, now:)
         raise SchedulerError, "occurrence #{occurrence_id} is not due" unless state == :due
@@ -116,29 +102,13 @@ module Tamoz
       def terminal? = TERMINAL.include?(state)
 
       def to_h
-        {
-          "occurrence_id" => occurrence_id,
-          "schedule_id" => schedule_id,
-          "schedule_revision" => schedule_revision,
-          "nominal_fire_at_utc" => nominal_fire_at_utc,
-          "not_before" => not_before,
-          "state" => state.to_s,
-          "fence" => fence,
-          "owner" => owner,
-          "request_id" => request_id,
-          "reason" => reason,
-          "created_at" => created_at,
-          "updated_at" => updated_at
-        }
+        members.to_h { |member| [member.to_s, member == :state ? state.to_s : public_send(member)] }
       end
 
       private
 
       def transition_from_running(to, execution_id, evidence, now)
-        unless state == :running
-          raise SchedulerError,
-                "occurrence #{occurrence_id} is #{state}, not running"
-        end
+        raise SchedulerError, "occurrence #{occurrence_id} is #{state}, not running" unless state == :running
 
         with_state(to, now:, reason: {"execution_id" => execution_id, "evidence" => evidence})
       end

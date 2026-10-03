@@ -62,16 +62,24 @@ module Tamoz
       end
 
       def validate_endpoint!
+        validate_endpoint_shape!
+        return if allow_local
+        return unless local_host?(endpoint.hostname)
+
+        raise Tamoz::Observability::ValidationError, 'private and loopback OTLP endpoints require allow_local'
+      end
+
+      def validate_endpoint_shape!
         raise Tamoz::Observability::ValidationError, 'OTLP endpoint must use https' unless endpoint.scheme == 'https'
         raise Tamoz::Observability::ValidationError, 'OTLP endpoint must include a host' if endpoint.host.to_s.empty?
         raise Tamoz::Observability::ValidationError, 'OTLP endpoint cannot include credentials' if endpoint.userinfo
-        raise Tamoz::Observability::ValidationError, 'OTLP endpoint cannot include query or fragment' if endpoint.query || endpoint.fragment
-        return if allow_local
+        return unless endpoint.query || endpoint.fragment
 
-        host = endpoint.hostname
-        if %w[localhost localhost.localdomain].include?(host.downcase) || private_ip?(host)
-          raise Tamoz::Observability::ValidationError, 'private and loopback OTLP endpoints require allow_local'
-        end
+        raise Tamoz::Observability::ValidationError, 'OTLP endpoint cannot include query or fragment'
+      end
+
+      def local_host?(host)
+        %w[localhost localhost.localdomain].include?(host.downcase) || private_ip?(host)
       end
 
       def private_ip?(host)

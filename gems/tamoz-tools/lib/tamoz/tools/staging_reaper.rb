@@ -8,7 +8,6 @@ module Tamoz
     # Removes only stale, regular files left by interrupted atomic publication.
     # :reek:DataClump :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:LongParameterList
     # :reek:TooManyStatements :reek:UtilityFunction
-    # rubocop:disable Layout/LineLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     class StagingReaper
       # Only the Tempfile-produced shape is provenance: date-pid-random, which no
       # operator file wears. A file merely starting `.tamoz-` (e.g. `.tamoz-notes.tmp`)
@@ -62,11 +61,14 @@ module Tamoz
           Find.prune if path.directory?
         elsif stat.directory?
           Find.prune if IGNORED_DIRECTORIES.include?(path.basename.to_s)
-        elsif stat.file? && PATTERN.match?(path.basename.to_s) && stat.uid == Process.uid && now - stat.mtime >= older_than
+        elsif stale_staging_file?(path, stat, older_than:, now:)
           found << path
         end
       end
+
+      def stale_staging_file?(path, stat, older_than:, now:)
+        stat.file? && PATTERN.match?(path.basename.to_s) && stat.uid == Process.uid && now - stat.mtime >= older_than
+      end
     end
-    # rubocop:enable Layout/LineLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
   end
 end

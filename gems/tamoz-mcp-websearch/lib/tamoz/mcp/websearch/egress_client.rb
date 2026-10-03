@@ -92,34 +92,38 @@ module Tamoz
           target = initial_target(url, headers, body)
           hops = 0
           loop do
-            pinned = pin_address(target.fetch(:host))
-            @dials << pinned
-            response = @connector.call(
-              pinned_ip: pinned,
-              host: target.fetch(:host),
-              # Path + query is the request itself (contract on initialize), recomputed every hop.
-              path: target.fetch(:path),
-              port: DEFAULT_PORT,
-              timeout: policy.connect_timeout_s,
-              headers: target.fetch(:headers),
-              body: target[:body]
-            )
-            unless redirect?(response)
-              return bounded_result(response)
-            end
+            response = dial(target)
+            return bounded_result(response) unless redirect?(response)
 
             hops += 1
-            if hops > policy.redirect_max_hops
-              raise RedirectHopLimitError,
-                    "the websearch redirect chain exceeded the declared bound of " \
-                    "#{policy.redirect_max_hops} hops"
-            end
-
+            enforce_hop_limit!(hops)
             target = redirect_target(response, current: target)
           end
         end
 
         private
+
+        def dial(target)
+          pinned = pin_address(target.fetch(:host))
+          @dials << pinned
+          @connector.call(
+            pinned_ip: pinned,
+            host: target.fetch(:host),
+            # Path + query is the request itself (contract on initialize), recomputed every hop.
+            path: target.fetch(:path),
+            port: DEFAULT_PORT,
+            timeout: policy.connect_timeout_s,
+            headers: target.fetch(:headers),
+            body: target[:body]
+          )
+        end
+
+        def enforce_hop_limit!(hops)
+          return if hops <= policy.redirect_max_hops
+
+          raise RedirectHopLimitError,
+                "the websearch redirect chain exceeded the declared bound of #{policy.redirect_max_hops} hops"
+        end
 
         def checked_reach(reach)
           raise ValidationError, "reach must be one of #{REACHES.join(', ')}" unless REACHES.include?(reach)

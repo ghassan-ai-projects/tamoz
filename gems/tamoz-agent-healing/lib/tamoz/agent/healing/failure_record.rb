@@ -86,50 +86,30 @@ module Tamoz
         EFFECT_SAFETIES = %w[read_only idempotent transactional reconcilable unsafe].freeze
 
         def initialize(
-          format_version: FORMAT_VERSION,
-          failure_code:,
-          category:,
-          operation:,
-          tool: nil,
-          target_resource: nil,
-          expected_digest: nil,
-          observed_digest: nil,
-          effect_state: :not_attempted,
-          graph_id: nil,
-          task_id: nil,
-          execution_id: nil,
-          policy_version:,
-          behavior_version:,
-          retryability: {},
-          capability_absent: false,
-          trusted_context: {},
-          untrusted_message_ref: nil,
-          observed_at_ms: 0
+          format_version: FORMAT_VERSION, failure_code:, category:, operation:, tool: nil, target_resource: nil,
+          expected_digest: nil, observed_digest: nil, effect_state: :not_attempted, graph_id: nil, task_id: nil,
+          execution_id: nil, policy_version:, behavior_version:, retryability: {}, capability_absent: false,
+          trusted_context: {}, untrusted_message_ref: nil, observed_at_ms: 0
         )
           validate_format_version!(format_version)
           validate_boolean!(capability_absent, "capability_absent")
           validate_non_negative_integer!(observed_at_ms, "observed_at_ms")
 
           super(
-            format_version:,
-            failure_code: validate_id(failure_code, "failure_code"),
-            category: validate_member(category, CATEGORIES, "category"),
-            operation: validate_id(operation, "operation"),
+            format_version:, failure_code: validate_id(failure_code, "failure_code"),
+            category: validate_member(category, CATEGORIES, "category"), operation: validate_id(operation, "operation"),
             tool: validate_optional_id(tool, "tool"),
             target_resource: validate_optional_id(target_resource, "target_resource"),
             expected_digest: validate_optional_digest(expected_digest, "expected_digest"),
             observed_digest: validate_optional_digest(observed_digest, "observed_digest"),
             effect_state: validate_member(effect_state, EFFECT_STATES, "effect_state"),
-            graph_id: validate_optional_id(graph_id, "graph_id"),
-            task_id: validate_optional_id(task_id, "task_id"),
+            graph_id: validate_optional_id(graph_id, "graph_id"), task_id: validate_optional_id(task_id, "task_id"),
             execution_id: validate_optional_id(execution_id, "execution_id"),
             policy_version: validate_id(policy_version, "policy_version"),
             behavior_version: validate_id(behavior_version, "behavior_version"),
-            retryability: Tamoz::Core.deep_freeze(validate_retryability(retryability)),
-            capability_absent:,
+            retryability: Tamoz::Core.deep_freeze(validate_retryability(retryability)), capability_absent:,
             trusted_context: Tamoz::Core.deep_freeze(validate_trusted_context(trusted_context)),
-            untrusted_message_ref: normalize_message_ref(untrusted_message_ref),
-            observed_at_ms:
+            untrusted_message_ref: normalize_message_ref(untrusted_message_ref), observed_at_ms:
           )
         end
 
@@ -197,24 +177,13 @@ module Tamoz
 
         def to_h
           {
-            "format_version" => format_version,
-            "failure_code" => failure_code,
-            "category" => category.to_s,
-            "operation" => operation,
-            "tool" => tool,
-            "target_resource" => target_resource,
-            "expected_digest" => expected_digest,
-            "observed_digest" => observed_digest,
-            "effect_state" => effect_state.to_s,
-            "graph_id" => graph_id,
-            "task_id" => task_id,
-            "execution_id" => execution_id,
-            "policy_version" => policy_version,
-            "behavior_version" => behavior_version,
-            "retryability" => retryability,
-            "capability_absent" => capability_absent,
-            "trusted_context" => trusted_context,
-            "untrusted_message_ref" => untrusted_message_ref,
+            "format_version" => format_version, "failure_code" => failure_code, "category" => category.to_s,
+            "operation" => operation, "tool" => tool, "target_resource" => target_resource,
+            "expected_digest" => expected_digest, "observed_digest" => observed_digest,
+            "effect_state" => effect_state.to_s, "graph_id" => graph_id, "task_id" => task_id,
+            "execution_id" => execution_id, "policy_version" => policy_version, "behavior_version" => behavior_version,
+            "retryability" => retryability, "capability_absent" => capability_absent,
+            "trusted_context" => trusted_context, "untrusted_message_ref" => untrusted_message_ref,
             "observed_at_ms" => observed_at_ms
           }
         end
@@ -234,24 +203,14 @@ module Tamoz
           end
 
           new(
-            format_version: version,
-            failure_code: hash.fetch("failure_code"),
-            category: hash.fetch("category").to_sym,
-            operation: hash.fetch("operation"),
-            tool: hash["tool"],
-            target_resource: hash["target_resource"],
-            expected_digest: hash["expected_digest"],
-            observed_digest: hash["observed_digest"],
-            effect_state: hash.fetch("effect_state").to_sym,
-            graph_id: hash["graph_id"],
-            task_id: hash["task_id"],
-            execution_id: hash["execution_id"],
-            policy_version: hash.fetch("policy_version"),
-            behavior_version: hash.fetch("behavior_version"),
-            retryability: hash.fetch("retryability", {}),
+            format_version: version, failure_code: hash.fetch("failure_code"), category: hash.fetch("category").to_sym,
+            operation: hash.fetch("operation"), tool: hash["tool"], target_resource: hash["target_resource"],
+            expected_digest: hash["expected_digest"], observed_digest: hash["observed_digest"],
+            effect_state: hash.fetch("effect_state").to_sym, graph_id: hash["graph_id"], task_id: hash["task_id"],
+            execution_id: hash["execution_id"], policy_version: hash.fetch("policy_version"),
+            behavior_version: hash.fetch("behavior_version"), retryability: hash.fetch("retryability", {}),
             capability_absent: hash.fetch("capability_absent", false),
-            trusted_context: hash.fetch("trusted_context", {}),
-            untrusted_message_ref: hash["untrusted_message_ref"],
+            trusted_context: hash.fetch("trusted_context", {}), untrusted_message_ref: hash["untrusted_message_ref"],
             observed_at_ms: hash.fetch("observed_at_ms", 0)
           )
         rescue KeyError => error

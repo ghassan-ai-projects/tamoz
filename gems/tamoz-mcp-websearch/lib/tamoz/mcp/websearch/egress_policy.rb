@@ -27,6 +27,9 @@ module Tamoz
         # site-local block, discard-only and documentation. A public name's AAAA record must not reach them.
         REFUSED_IPV6 = %w[64:ff9b::/96 64:ff9b:1::/48 2002::/16 2001::/32 fec0::/10 100::/64 2001:db8::/32]
                        .map { |block| IPAddr.new(block) }.freeze
+        REFUSED_IPV4 = %w[0.0.0.0/8 100.64.0.0/10 192.0.0.0/16 198.18.0.0/15 224.0.0.0/4 240.0.0.0/4]
+                       .map { |block| IPAddr.new(block) }.freeze
+        private_constant :REFUSED_IPV4
         SCOPE_TYPE = "egress"
         MAX_REQUEST_BYTES = 8192
         MAX_RESPONSE_BYTES = 64 * 1024
@@ -220,12 +223,16 @@ module Tamoz
           if host.include?("*")
             raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} contains a wildcard; v1 allows exact FQDNs only"
           end
-          if host.include?("/") || host.include?("@") || host.include?(":") || host.match?(/\s/)
+          unless bare_hostname?(host)
             raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be a bare hostname"
           end
           return if host == host.downcase
 
           raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be lowercase"
+        end
+
+        def bare_hostname?(host)
+          !(host.include?("/") || host.include?("@") || host.include?(":") || host.match?(/\s/))
         end
 
         def reject_ip_literal_host!(host)
@@ -256,18 +263,7 @@ module Tamoz
         end
 
         def refused_private_ipv4?(ip)
-          octets = ip.to_s.split(".").map(&:to_i)
-          first, second = octets
-          # 0.0.0.0/8 (this-host / unspecified), 224.0.0.0/4 (multicast),
-          # 255.255.255.255 (limited broadcast).
-          refused = first == 0 || first.between?(224, 239) || ip.to_s == "255.255.255.255"
-          # 100.64.0.0/10 (CGNAT), 192.0.0.0/24, 198.18.0.0/15, 240.0.0.0/4 —
-          # reserved blocks no outbound search provider legitimately lives in.
-          refused ||
-            (first == 100 && second.between?(64, 127)) ||
-            (first == 192 && second == 0) ||
-            (first == 198 && second.between?(18, 19)) ||
-            first >= 240
+          REFUSED_IPV4.any? { |block| block.include?(ip) }
         end
 
         def refused_private_ipv6?(ip)

@@ -3,6 +3,8 @@
 require 'securerandom'
 
 require_relative 'canonical'
+require_relative 'errors'
+require_relative 'shapes'
 
 module Tamoz
   module Comms
@@ -14,7 +16,7 @@ module Tamoz
     # One hashed challenge value; the fields ARE the binding and the
     # validation is the per-field rule set.
     # :reek:LongParameterList, :reek:TooManyInstanceVariables, :reek:MissingSafeMethod
-    # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- the value contract.
+    # rubocop:disable Metrics/ParameterLists -- the value contract.
     class PairingChallenge
       DIGEST_DOMAIN = 'tamoz.comms.pairing.v1'
       MAX_TEXT_BYTES = 256
@@ -66,22 +68,18 @@ module Tamoz
 
       private
 
-      def validate!(challenge:, digest:, surface_id:, correspondent_id:, conversation_id:, expires_at:)
-        unless challenge.is_a?(String) && !challenge.empty? && challenge.bytesize <= MAX_TEXT_BYTES
-          raise ValidationError, 'challenge must be a bounded string'
-        end
-        unless digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
-          raise ValidationError, 'digest must be a 64-char hex digest'
-        end
+      def validate!(fields)
+        Shapes.require_string!(fields.fetch(:challenge), 'challenge', max_bytes: MAX_TEXT_BYTES)
+        raise ValidationError, 'digest must be a 64-char hex digest' unless Shapes.hex?(fields.fetch(:digest))
 
-        [surface_id, correspondent_id, conversation_id].each do |value|
-          unless value.is_a?(String) && !value.empty?
-            raise ValidationError, 'pairing identity fields must be bounded strings'
-          end
+        fields.values_at(:surface_id, :correspondent_id, :conversation_id).each do |value|
+          next if value.is_a?(String) && !value.empty?
+
+          raise ValidationError, 'pairing identity fields must be bounded strings'
         end
-        raise ValidationError, 'expires_at must be a Time value' unless expires_at.is_a?(Time)
+        Shapes.require_time!(fields.fetch(:expires_at), 'expires_at')
       end
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+# rubocop:enable Metrics/ParameterLists

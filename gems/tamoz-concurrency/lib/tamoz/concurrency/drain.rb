@@ -86,16 +86,18 @@ module Tamoz
 
       def validate_configuration!(limits, batch_size, interval)
         limits.each do |lane, limit|
-          unless limit.is_a?(Integer) && limit.positive?
-            raise ConfigurationError, "drain lane #{lane} limit must be a positive integer"
-          end
+          next if positive_integer?(limit)
+
+          raise ConfigurationError, "drain lane #{lane} limit must be a positive integer"
         end
-        unless batch_size.is_a?(Integer) && batch_size.positive?
-          raise ConfigurationError, "drain batch_size must be a positive integer"
-        end
+        raise ConfigurationError, "drain batch_size must be a positive integer" unless positive_integer?(batch_size)
         return if interval.is_a?(Numeric) && interval.finite? && interval.positive?
 
         raise ConfigurationError, "drain interval must be a positive number"
+      end
+
+      def positive_integer?(value)
+        value.is_a?(Integer) && value.positive?
       end
 
       # Callers of these helpers hold @mutex; none may re-enter the lock.

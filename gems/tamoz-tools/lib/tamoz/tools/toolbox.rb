@@ -33,6 +33,8 @@ module Tamoz
       DEFAULT_CHECK_TIMEOUT = 60.0
       READ_DESCRIPTIONS = ToolCatalog::READ_DESCRIPTIONS
       ACTION_DESCRIPTIONS = ToolCatalog::ACTION_DESCRIPTIONS
+      READ_TOOLS = %w[read_file list_directory search_text glob].freeze
+      private_constant :READ_TOOLS
       SKILL_DESCRIPTIONS = ToolCatalog::SKILL_DESCRIPTIONS
       PROMPT_SURFACE_DOMAIN = ToolCatalog::PROMPT_SURFACE_DOMAIN
       CHECK_SAFETIES = %i[read_only idempotent unsafe].freeze
@@ -119,10 +121,7 @@ module Tamoz
         normalized_name = String(name)
         normalized_arguments = validate(normalized_name, arguments)
         case normalized_name
-        when 'read_file' then ReadOperations.new(self).read_file(normalized_arguments)
-        when 'list_directory' then ReadOperations.new(self).list_directory(normalized_arguments)
-        when 'search_text' then ReadOperations.new(self).search_text(normalized_arguments)
-        when 'glob' then ReadOperations.new(self).glob(normalized_arguments)
+        when *READ_TOOLS then run_read_tool(normalized_name, normalized_arguments)
         when 'apply_patch' then PatchOperations.new(self).apply(normalized_arguments)
         when 'run_check' then CheckRunner.new(self).run(normalized_arguments)
         when 'create_file' then CreationOperations.new(self).create(normalized_arguments)
@@ -176,6 +175,16 @@ module Tamoz
       end
 
       private
+
+      def run_read_tool(name, arguments)
+        operations = ReadOperations.new(self)
+        case name
+        when 'read_file' then operations.read_file(arguments)
+        when 'list_directory' then operations.list_directory(arguments)
+        when 'search_text' then operations.search_text(arguments)
+        when 'glob' then operations.glob(arguments)
+        end
+      end
 
       attr_reader :catalog
 

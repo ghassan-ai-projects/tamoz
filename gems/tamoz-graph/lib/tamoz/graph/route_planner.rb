@@ -50,22 +50,26 @@ module Tamoz
         definition.branches.each do |branch|
           next unless branch.source == node
 
-          returned = branch.router.call(candidate)
-          values = returned.is_a?(Array) ? returned : [returned]
-          values.each do |value|
-            target = route_target(value)
-            unless declared_route?(branch.targets, target)
-              raise InvalidUpdateError,
-                    "branch #{branch.name} returned undeclared target #{target.inspect}"
-            end
-          end
-          routes.concat(values)
-        rescue InvalidUpdateError
-          raise
-        rescue StandardError => error
-          raise InvalidUpdateError, "branch #{branch.name} failed: #{error.class}"
+          routes.concat(branch_routes(branch, candidate))
         end
         routes
+      end
+
+      def branch_routes(branch, candidate)
+        returned = branch.router.call(candidate)
+        values = returned.is_a?(Array) ? returned : [returned]
+        values.each do |value|
+          target = route_target(value)
+          unless declared_route?(branch.targets, target)
+            raise InvalidUpdateError,
+                  "branch #{branch.name} returned undeclared target #{target.inspect}"
+          end
+        end
+        values
+      rescue InvalidUpdateError
+        raise
+      rescue StandardError => error
+        raise InvalidUpdateError, "branch #{branch.name} failed: #{error.class}"
       end
 
       def validate_routing_mode!(node_key, node, declared, dynamic)
@@ -87,26 +91,30 @@ module Tamoz
           if route.equal?(Tamoz::END)
             next
           elsif route.is_a?(Send)
-            validate_target!(route.node)
-            key = route.key || index.to_s
-            if effective_keys.key?(key)
-              raise InvalidUpdateError,
-                    "colliding Send key #{key.inspect} from task #{outcome.task_id}"
-            end
-            effective_keys[key] = true
-            push_entries << Frontier.new(
-              node: route.node,
-              kind: :push,
-              path: [*outcome.path, "send", route.node.to_s, key],
-              input: route.input,
-              logical_step:
-            )
+            push_entries << push_frontier(route, index, effective_keys, outcome, logical_step)
           else
             target = Identifier.symbol(route, name: "route target")
             validate_target!(target)
             pull_targets << target
           end
         end
+      end
+
+      def push_frontier(route, index, effective_keys, outcome, logical_step)
+        validate_target!(route.node)
+        key = route.key || index.to_s
+        if effective_keys.key?(key)
+          raise InvalidUpdateError,
+                "colliding Send key #{key.inspect} from task #{outcome.task_id}"
+        end
+        effective_keys[key] = true
+        Frontier.new(
+          node: route.node,
+          kind: :push,
+          path: [*outcome.path, "send", route.node.to_s, key],
+          input: route.input,
+          logical_step:
+        )
       end
 
       def validate_dynamic_routes!(node, routes)

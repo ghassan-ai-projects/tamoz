@@ -6,6 +6,13 @@ require "timeout"
 
 require "mcp"
 
+require_relative "invocation/observation"
+require_relative "invocation/arguments"
+require_relative "invocation/channel"
+require_relative "invocation/exchange"
+require_relative "invocation/transport_errors"
+require_relative "invocation/result"
+
 module Tamoz
   module Mcp
     # Executes one catalogued MCP capability through Tamoz's typed outcome
@@ -45,25 +52,6 @@ module Tamoz
       # The bounded, attributed result of a successful call. Every
       # `content_blocks` hash carries
       # `"attribution" => "remote content from server <server_id>"`.
-      Observation = Data.define(
-        :server_id, :content_blocks, :text, :structured_content, :truncated
-      ) do
-        def attributed?
-          content_blocks.all? do |block|
-            block["attribution"] == format(ATTRIBUTION_TEMPLATE, server_id)
-          end
-        end
-
-        def to_h
-          {
-            "server_id" => server_id,
-            "content_blocks" => content_blocks,
-            "text" => text,
-            "structured_content" => structured_content,
-            "truncated" => truncated
-          }.freeze
-        end
-      end
 
       # The local, policy-bearing view of one catalogued capability that `call`
       # and `reissue` act on. `call` only requires the duck-type above; slice 4
@@ -82,16 +70,16 @@ module Tamoz
         # One §6 round-trip. Returns an `Outcome` (:succeeded | :interrupt |
         # :denied); raises the taxonomy errors from the §6 table.
         def call(descriptor, arguments, snapshot:, supervisor:, client_factory: nil, headless: false, url_policy: nil)
-          validate_descriptor!(descriptor)
-          arguments = validate_arguments!(descriptor, arguments)
+          Arguments.new.validate_descriptor!(descriptor)
+          arguments = Arguments.new.validate_arguments!(descriptor, arguments)
           supervisor.exclusively do
-            client = open_pinned_channel(
+            client = Channel.new.open_pinned_channel(
               descriptor,
               snapshot: snapshot,
               supervisor: supervisor,
               client_factory: client_factory
             )
-            round_trip(
+            Exchange.new.round_trip(
               descriptor: descriptor, arguments: arguments, client: client,
               supervisor: supervisor, effect_key: effect_key(descriptor, arguments),
               headless: headless, url_policy: url_policy, input: nil
@@ -106,16 +94,16 @@ module Tamoz
         # original arguments untouched. May itself return :interrupt again if
         # the server asks for more input.
         def reissue(descriptor, arguments, snapshot:, supervisor:, interrupt:, answers:, client_factory: nil, headless: false, url_policy: nil)
-          validate_descriptor!(descriptor)
+          Arguments.new.validate_descriptor!(descriptor)
           merge = Elicitation.answer(interrupt, answers)
           supervisor.exclusively do
-            client = open_pinned_channel(
+            client = Channel.new.open_pinned_channel(
               descriptor,
               snapshot: snapshot,
               supervisor: supervisor,
               client_factory: client_factory
             )
-            round_trip(
+            Exchange.new.round_trip(
               descriptor: descriptor, arguments: arguments, client: client,
               supervisor: supervisor, effect_key: effect_key(descriptor, arguments),
               headless: headless, url_policy: url_policy, input: merge
@@ -138,8 +126,8 @@ module Tamoz
         # same path as execution so schema errors become repairable before an
         # effect is journaled.
         def validate_arguments(descriptor, arguments)
-          validate_descriptor!(descriptor)
-          validate_arguments!(descriptor, arguments)
+          Arguments.new.validate_descriptor!(descriptor)
+          Arguments.new.validate_arguments!(descriptor, arguments)
         end
 
         # Convenience constructor for the catalog path: builds a frozen
@@ -162,602 +150,6 @@ module Tamoz
             effect_class: effect_class.to_sym,
             protocol_profile: (protocol_profile || snapshot.protocol_version)
           )
-        end
-
-        private
-
-        # --- argument validation (repairable) --------------------------------
-
-        def validate_descriptor!(descriptor)
-          missing = REQUIRED_DESCRIPTOR_METHODS.reject { |method| descriptor.respond_to?(method) }
-          unless missing.empty?
-            raise ValidationError, "descriptor must respond to #{missing.join(", ")}"
-          end
-          if descriptor.id.to_s.empty? || descriptor.name.to_s.empty? || descriptor.source_id.to_s.empty?
-            raise ValidationError, "descriptor id, name, and source_id must be non-empty"
-          end
-          descriptor
-        end
-
-        # JSON Schema 2020-12 via the SDK's validator, with unknown properties
-        # rejected unless the schema explicitly allows them, and nesting bounded
-        # (schema-bomb / over-depth defenses, plan §10.2).
-        def validate_arguments!(descriptor, arguments)
-          arguments = {} if arguments.nil?
-          unless arguments.is_a?(Hash)
-            raise ToolArgumentError,
-                  "the arguments for #{descriptor.id} must be a JSON object"
-          end
-          assert_depth!(descriptor, arguments, 0)
-
-          begin
-            MCP::Tool::InputSchema.new(strict_schema(descriptor.input_schema || {})).validate_arguments(arguments)
-          rescue MCP::Tool::InputSchema::ValidationError => error
-            raise schema_validation_error(descriptor, error)
-          rescue ArgumentError, JSON::NestingError
-            raise malformed_arguments_error(descriptor)
-          end
-          arguments
-        end
-
-        def schema_validation_error(descriptor, error)
-          detail = Tamoz::Error.disclosable_message(
-            error.message.sub(/\AInvalid arguments:\s*/, ""),
-            fallback: "the arguments do not match the snapshotted schema"
-          )
-          ToolArgumentError.new("the arguments for #{descriptor.id} are invalid: #{detail}")
-        end
-
-        def malformed_arguments_error(descriptor)
-          ToolArgumentError.new(
-            "the arguments for #{descriptor.id} are malformed or too deeply nested"
-          )
-        end
-
-        def assert_depth!(descriptor, value, depth)
-          if depth > MAX_ARGUMENT_DEPTH
-            raise ToolArgumentError,
-                  "the arguments for #{descriptor.id} exceed the maximum nesting depth of #{MAX_ARGUMENT_DEPTH}"
-          end
-
-          case value
-          when Hash
-            value.each_value { |child| assert_depth!(descriptor, child, depth + 1) }
-          when Array
-            value.each { |child| assert_depth!(descriptor, child, depth + 1) }
-          end
-        end
-
-        # Deep copy with `additionalProperties: false` injected at object
-        # subschemas that declare `properties` but no explicit allowance — the
-        # root always gets the default-deny unless it opts out. Never injects
-        # into a subschema carrying `$ref`/`$dynamicRef` (2020-12 applies
-        # sibling keywords, which would break the reference) and never into a
-        # subschema that already declares `additionalProperties` or
-        # `patternProperties`. A bare `{ "type": "object" }` subschema is left
-        # open: JSON Schema treats it as an arbitrary map.
-        def strict_schema(schema)
-          deep_strictify(schema.is_a?(Hash) ? schema : {})
-        end
-
-        def deep_strictify(node)
-          case node
-          when Hash
-            stricted = {}
-            node.each { |key, value| stricted[key] = deep_strictify(value) }
-            if strictable_object?(node)
-              stricted["additionalProperties"] = false
-            end
-            stricted
-          when Array
-            node.map { |value| deep_strictify(value) }
-          else
-            node
-          end
-        end
-
-        def strictable_object?(node)
-          return false unless node.is_a?(Hash) && node.key?("properties")
-          return false if node.key?("additionalProperties") || node.key?("patternProperties")
-          return false if node.key?("$ref") || node.key?("$dynamicRef")
-
-          true
-        end
-
-        # --- pinned digest gate (stops before any I/O) ------------------------
-
-        def verify_pinned_digest!(descriptor, snapshot)
-          unless snapshot.respond_to?(:entries)
-            raise ValidationError, "snapshot must be a Tamoz::Mcp::Catalog snapshot"
-          end
-
-          entry = snapshot.entries.find { |candidate| candidate.name == descriptor.name }
-          unless entry && entry.definition_digest == descriptor.definition_digest
-            raise CatalogSnapshotUnavailableError,
-                  "the definition digest for #{descriptor.id} does not match the " \
-                  "pinned catalog snapshot; no request was sent"
-          end
-          nil
-        end
-
-        # --- supervision gate -------------------------------------------------
-
-        def open_pinned_channel(descriptor, snapshot:, supervisor:, client_factory:)
-          verify_pinned_digest!(descriptor, snapshot)
-          ensure_available!(descriptor, supervisor)
-
-          client = build_client(supervisor, client_factory)
-          ensure_connected!(descriptor, client, supervisor)
-          client
-        end
-
-        def ensure_available!(descriptor, supervisor)
-          case supervisor.state
-          when :open
-            raise UnavailableError,
-                  "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} circuit is " \
-                  "open after #{supervisor.circuit_threshold} consecutive transport failures"
-          when :retired
-            raise UnavailableError,
-                  "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} is retired"
-          end
-          nil
-        end
-
-        def build_client(supervisor, client_factory)
-          factory = client_factory || ->(sup) { MCP::Client.new(transport: sup) }
-          client = factory.call(supervisor)
-          unless client.respond_to?(:call_tool)
-            raise ValidationError, "client_factory must return an MCP client"
-          end
-          client
-        end
-
-        def ensure_connected!(descriptor, client, supervisor)
-          return if supervisor.connected?
-
-          supervisor.start unless supervisor.started?
-          _min, max = supervisor.config.protocol_range
-          begin
-            ::Timeout.timeout(supervisor.config.budgets.connect_timeout) do
-              client.connect(client_info: CLIENT_INFO, protocol_version: max)
-            end
-          rescue ::Timeout::Error, MCP::Client::RequestHandlerError,
-                 MCP::Client::ServerError, MCP::Client::ValidationError => error
-            raise handle_handshake_failure(descriptor, supervisor, error)
-          end
-          nil
-        end
-
-        def handle_handshake_failure(descriptor, supervisor, error)
-          # §6's corruption row applies to the handshake too: a server that
-          # answers initialize with malformed frames broke the protocol
-          # contract and must never become a retryable value the planner can
-          # iterate on. The corruption is detectable here exactly as in
-          # `raise_classified_transport` (RequestHandlerError wrapping a
-          # JSON::ParserError); the classification is the fix.
-          if corruption?(error)
-            supervisor.record_failure(kind: :corruption)
-            return ToolPolicyError.new(
-              "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
-              "malformed frames during the protocol handshake; the protocol " \
-              "contract was broken",
-              **stderr_metadata(supervisor)
-            )
-          end
-
-          supervisor.record_failure(kind: :connect)
-          UnavailableError.new(
-            "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed to connect",
-            **stderr_metadata(supervisor)
-          )
-        end
-
-        # --- the wire round-trip ----------------------------------------------
-
-        def round_trip(descriptor:, arguments:, client:, supervisor:, effect_key:, headless:, url_policy:, input:)
-          begin
-            response = transport_round_trip(
-              descriptor: descriptor, arguments: arguments, client: client,
-              supervisor: supervisor, input: input
-            )
-          rescue MCP::Client::ServerError => error
-            supervisor.record_success
-            raise remote_tool_error(descriptor, error.code)
-          rescue MCP::Client::ValidationError
-            supervisor.record_failure(kind: :protocol)
-            raise malformed_response_error(descriptor)
-          rescue MCP::Client::InputRequiredError => error
-            supervisor.record_success
-            return interrupt_or_deny(
-              descriptor, error,
-              effect_key: effect_key, headless: headless, url_policy: url_policy
-            )
-          end
-
-          succeeded_outcome(response, descriptor: descriptor, supervisor: supervisor, effect_key: effect_key)
-        end
-
-        def transport_round_trip(descriptor:, arguments:, client:, supervisor:, input:)
-          max_attempts = 1 + (descriptor.read_only? ? supervisor.retry_budget : 0)
-          attempts = 0
-          begin
-            response = call_with_deadline(client, descriptor, arguments, supervisor, input)
-          rescue Timeout::Error, MCP::Client::RequestHandlerError => error
-            attempts += 1
-            sent = record_transport_failure(descriptor, supervisor, error)
-            # Read-only calls may retry through the supervisor's restart budget;
-            # corruption is terminal and never retried. The restart spawns a
-            # fresh process, so the transport must be reconnected before retry.
-            if retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
-              supervisor.restart
-              ensure_connected!(descriptor, client, supervisor)
-              retry
-            end
-            # A timed-out request may still answer on this pipe; the next call must read a fresh one.
-            supervisor.restart if error.is_a?(Timeout::Error) && !supervisor.open?
-            raise_classified_transport(descriptor, supervisor, error, sent: sent)
-          end
-          response
-        end
-
-        def retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
-          attempts < max_attempts && descriptor.read_only? && !supervisor.open? && !corruption?(error)
-        end
-
-        def call_with_deadline(client, descriptor, arguments, supervisor, input)
-          ::Timeout.timeout(supervisor.config.budgets.request_timeout) do
-            input.nil? ? call_tool(client, descriptor, arguments) : resume_tool(client, descriptor, arguments, input)
-          end
-        end
-
-        def call_tool(client, descriptor, arguments)
-          client.call_tool(name: descriptor.name, arguments: arguments)
-        end
-
-        def resume_tool(client, descriptor, arguments, input)
-          params = {
-            name: descriptor.name,
-            arguments: arguments,
-            inputResponses: input.fetch("inputResponses")
-          }
-          state = input["requestState"]
-          params[:requestState] = state unless state.nil?
-          # The SDK's private `request` pipeline: JSON-RPC error raising,
-          # `_meta` handling, and `input_required` detection all stay in the
-          # official client (P10 §1: never reimplement the protocol).
-          client.send(:request, method: "tools/call", params: params)
-        end
-
-        # Records the failure and returns whether the request was fully written
-        # before the failure. `true` ⇒ the server may have acted (ambiguous for
-        # non-idempotent); `false` ⇒ provably no effect. The typed context is
-        # recorded with the failure so a caller-initiated reset carries a
-        # meaningful conditions digest (DR-2).
-        def record_transport_failure(descriptor, supervisor, error)
-          sent = supervisor.request_sent?
-          kind = if error.is_a?(OutputLimitError)
-                   :output_limit
-                 elsif corruption?(error)
-                   :corruption
-                 elsif error.is_a?(Timeout::Error)
-                   :timeout
-                 else
-                   :transport
-                 end
-          context = {
-            "tool_name" => descriptor.name,
-            "failure_class" => error.class.name
-          }
-          supervisor.record_failure(kind: kind, context: context)
-          sent
-        end
-
-        def corruption?(error)
-          error.is_a?(MCP::Client::RequestHandlerError) &&
-            error.original_error.is_a?(JSON::ParserError)
-        end
-
-        # §8: stderr is untrusted server content; the supervisor's ring bounds
-        # and control-scrubs it, and it surfaces only as typed error metadata.
-        def stderr_metadata(supervisor)
-          { stderr_tail: supervisor.stderr_tail }
-        end
-
-        # The exact §6 taxonomy rows for transport outcomes.
-        def raise_classified_transport(descriptor, supervisor, error, sent:)
-          raise corruption_error(descriptor, supervisor) if corruption?(error)
-          raise post_send_transport_error(descriptor, supervisor, sent: sent) if sent
-
-          raise pre_send_unavailable_error(descriptor, supervisor)
-        end
-
-        def corruption_error(descriptor, supervisor)
-          ToolPolicyError.new(
-            "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
-            "malformed frames for #{descriptor.id}; the protocol contract was broken",
-            **stderr_metadata(supervisor)
-          )
-        end
-
-        def malformed_response_error(descriptor)
-          ToolPolicyError.new(
-            "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned a " \
-            "malformed response for #{descriptor.id}"
-          )
-        end
-
-        def post_send_transport_error(descriptor, supervisor, sent:)
-          return read_only_unavailable_error(descriptor, supervisor) if descriptor.read_only?
-
-          ambiguous_outcome_error(descriptor, supervisor)
-        end
-
-        def read_only_unavailable_error(descriptor, supervisor)
-          UnavailableError.new(
-            "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
-            "after the request to #{descriptor.id} was sent; the call is read-only " \
-            "and may be retried by the caller",
-            **stderr_metadata(supervisor)
-          )
-        end
-
-        def ambiguous_outcome_error(descriptor, supervisor)
-          AmbiguousOutcomeError.new(
-            "the MCP server #{descriptor.source_id} failed after the request to " \
-            "#{descriptor.id} was sent; the effect is unknown and must not be guessed",
-            **stderr_metadata(supervisor)
-          )
-        end
-
-        def pre_send_unavailable_error(descriptor, supervisor)
-          ToolArgumentError.new(
-            "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
-            "before the request to #{descriptor.id} was sent; no effect occurred",
-            **stderr_metadata(supervisor)
-          )
-        end
-
-        def remote_tool_error(descriptor, code)
-          if code.nil?
-            ToolArgumentError.new(
-              "#{REMOTE_ERROR_PREFIX}: the MCP server #{descriptor.source_id} declared a " \
-              "failure for #{descriptor.id}"
-            )
-          else
-            ToolArgumentError.new(
-              "#{REMOTE_ERROR_PREFIX}: the MCP server #{descriptor.source_id} rejected the " \
-              "call to #{descriptor.id} with error code #{code}"
-            )
-          end
-        end
-
-        # --- elicitation (never a tool error) ----------------------------------
-
-        def interrupt_or_deny(descriptor, error, effect_key:, headless:, url_policy:)
-          if headless
-            denial = Elicitation.denial(
-              server_id: descriptor.source_id,
-              capability: descriptor.id,
-              reason: "unattended runs cannot answer an MCP elicitation"
-            )
-            return Outcome.new(
-              status: :denied, observation: nil, interrupt: nil,
-              denial: denial, effect_key: effect_key
-            )
-          end
-
-          interrupt = Elicitation.build(
-            descriptor: descriptor,
-            effect_key: effect_key,
-            input_requests: error.input_requests,
-            request_state: error.request_state,
-            url_policy: url_policy
-          )
-          Outcome.new(
-            status: :interrupt, observation: nil, interrupt: interrupt,
-            denial: nil, effect_key: effect_key
-          )
-        end
-
-        # --- result shape validation (protocol contract) ----------------------
-
-        def succeeded_outcome(response, descriptor:, supervisor:, effect_key:)
-          result = validate_result_shape!(response, descriptor)
-          if result["isError"] == true
-            supervisor.record_success
-            raise remote_tool_error(descriptor, nil)
-          end
-          validate_structured_content!(result, descriptor)
-
-          # The transport demonstrably worked: a successful round-trip breaks
-          # the consecutive-failure streak that feeds the circuit.
-          supervisor.record_success
-
-          observation = build_observation(result, descriptor, supervisor)
-          Outcome.new(
-            status: :succeeded, observation: observation,
-            interrupt: nil, denial: nil, effect_key: effect_key
-          )
-        end
-
-        def validate_result_shape!(response, descriptor)
-          unless response.is_a?(Hash) && response["result"].is_a?(Hash)
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned a " \
-                  "response that is not a JSON-RPC success result"
-          end
-
-          result = response["result"]
-          unless result["content"].is_a?(Array)
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned a " \
-                  "tool result without a content array"
-          end
-          result
-        end
-
-        def validate_structured_content!(result, descriptor)
-          schema = descriptor.output_schema
-          return if schema.nil?
-          return if result["structuredContent"].nil?
-
-          begin
-            MCP::Tool::OutputSchema.new(schema).validate_result(result["structuredContent"])
-          rescue MCP::Tool::OutputSchema::ValidationError, ArgumentError
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
-                  "structured content for #{descriptor.id} that violates the declared " \
-                  "output schema"
-          end
-        end
-
-        # --- output bounding / stripping / attribution -------------------------
-
-        def build_observation(result, descriptor, supervisor)
-          budget = supervisor.config.budgets.max_output_bytes
-          blocks, blocks_truncated = attribute_blocks(result["content"], descriptor.source_id, budget)
-          structured, structured_truncated = sanitize_structured(result["structuredContent"], budget)
-          text = attributed_text(blocks, descriptor.source_id)
-
-          Observation.new(
-            server_id: descriptor.source_id,
-            content_blocks: blocks,
-            text: text,
-            structured_content: structured,
-            truncated: blocks_truncated || structured_truncated
-          )
-        end
-
-        # Caller-facing convenience join over the attributed blocks. A single
-        # text block is self-attributing (the observation's `content_blocks`
-        # carry the provenance), so its content stays bare; a multi-block join
-        # would lose which block came from where, so every block in it is
-        # prefixed with the same attribution line the blocks carry.
-        def attributed_text(blocks, source_id)
-          texts = blocks.filter_map { |block| block["text"] if block["type"] == "text" }
-          return "" if texts.empty?
-          return texts.first if texts.length == 1
-
-          attribution = format(ATTRIBUTION_TEMPLATE, source_id)
-          texts.map { |text| "#{attribution}: #{text}" }.join("\n")
-        end
-
-        def attribute_blocks(content, source_id, budget)
-          attribution = format(ATTRIBUTION_TEMPLATE, source_id)
-          blocks = []
-          truncated = false
-          remaining = budget
-
-          content.each do |block|
-            break if remaining <= 0
-
-            attributed, remaining, truncated = build_attributed_block(
-              block, attribution, source_id, remaining, truncated
-            )
-            blocks << attributed.freeze
-          end
-
-          truncated = true if content.length > blocks.length
-          [blocks.freeze, truncated]
-        end
-
-        def build_attributed_block(block, attribution, source_id, remaining, truncated)
-          unless block.is_a?(Hash)
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{source_id} returned a content " \
-                  "block that is not an object"
-          end
-
-          type = block["type"]
-          attributed = { "attribution" => attribution, "type" => type }
-          case type
-          when "text"
-            build_text_block(attributed, block, remaining, truncated)
-          when "image"
-            build_image_block(attributed, block, remaining, truncated)
-          when "resource"
-            build_resource_block(attributed, block, source_id, remaining, truncated)
-          else
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{source_id} returned a content " \
-                  "block with an unknown type"
-          end
-        end
-
-        def build_text_block(attributed, block, remaining, truncated)
-          text = scrub_text(block["text"].to_s)
-          text, remaining, truncated = fit_to_budget(text, remaining, truncated)
-          attributed["text"] = text
-          [attributed, remaining, truncated]
-        end
-
-        def build_image_block(attributed, block, remaining, truncated)
-          data = block["data"].to_s
-          data, remaining, truncated = fit_to_budget(data, remaining, truncated)
-          attributed["data"] = data
-          attributed["mimeType"] = scrub_text(block["mimeType"].to_s)[0, 128]
-          [attributed, remaining, truncated]
-        end
-
-        def build_resource_block(attributed, block, source_id, remaining, truncated)
-          resource = block["resource"]
-          unless resource.is_a?(Hash)
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{source_id} returned a resource " \
-                  "content block without a resource object"
-          end
-
-          uri = scrub_text(resource["uri"].to_s)[0, MAX_STRUCTURED_FIELD_BYTES]
-          text = scrub_text(resource["text"].to_s)
-          text, remaining, truncated = fit_to_budget(text, remaining, truncated)
-          attributed["resource"] = { "uri" => uri, "text" => text }
-          [attributed, remaining, truncated]
-        end
-
-        def fit_to_budget(text, remaining, truncated)
-          return [text, remaining - text.bytesize, truncated] if text.bytesize <= remaining
-
-          [truncate_bytes(text, remaining), 0, true]
-        end
-
-        # Structured content is data, not prompt text, but it is still output:
-        # strings are control-stripped and the canonical serialization is bounded
-        # to the budget (oversized or over-deep content is bounded away and the
-        # observation is marked truncated — never passed through verbatim).
-        def sanitize_structured(structured, budget)
-          return [nil, false] if structured.nil?
-
-          copied = strip_controls_deep(structured)
-          bytes = CanonicalJSON.dump(copied).bytesize
-          return [CanonicalJSON.deep_freeze(copied), false] if bytes <= budget
-
-          [nil, true]
-        rescue ValidationError
-          [nil, true]
-        end
-
-        def strip_controls_deep(value)
-          case value
-          when Hash
-            value.each_with_object({}) { |(key, entry), out| out[key.to_s] = strip_controls_deep(entry) }
-          when Array
-            value.map { |entry| strip_controls_deep(entry) }
-          when String
-            scrub_text(value)
-          else
-            value
-          end
-        end
-
-        def scrub_text(value)
-          text = String(value).dup.force_encoding(Encoding::UTF_8)
-          text = text.scrub("") unless text.valid_encoding?
-          text.gsub(CONTROL_CHARACTER_PATTERN, " ")
-        end
-
-        def truncate_bytes(text, bytes)
-          text.byteslice(0, bytes).scrub("").rstrip
         end
 
       end

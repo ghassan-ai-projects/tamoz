@@ -58,14 +58,14 @@ module Tamoz
         created_by:, created_at:,
         definition_digest: nil
       )
-        @validated = validate!(
+        @validated = ScheduleValidator.new(
           id:, revision:, owner:, enabled:, kind:, expression:,
           start_at:, end_at:, misfire_policy:, misfire_limit:,
           overlap_policy:, max_concurrency:, jitter_window:,
           payload_ref:, thread_policy:, capability_grant:,
           behavior_version:, approval_profile:, delivery_policy:,
           budgets:, created_by:, created_at:
-        )
+        ).validate!
         @digest = definition_digest || compute_digest(@validated)
         super(**@validated, definition_digest: @digest)
       end
@@ -87,14 +87,7 @@ module Tamoz
       # The next nominal fire instant at/after `now` (UTC epoch seconds).
       # Returns nil when the schedule is done (end_at passed, one-shot fired).
       def next_fire_at(now)
-        return nil unless available_at?(now)
-
-        case kind
-        when :at
-          next_at_fire(now)
-        when :interval
-          next_interval_fire(now)
-        end
+        FireCalendar.new(self).next_fire_at(now)
       end
 
       # The due occurrence instants at/after `anchor` up to and including `now`
@@ -104,75 +97,19 @@ module Tamoz
       # catch-up after a pause or a crash. Misfire policy decides how many
       # missed occurrences materialize (see plan §4/B).
       def due_occurrences(now:, anchor: nil, limit: 10)
-        return [] unless available_at?(now)
-
-        case kind
-        when :at
-          due_at_occurrences(now)
-        when :interval
-          due_interval_occurrences(now:, anchor: anchor || interval_anchor, limit:)
-        end
+        FireCalendar.new(self).due_occurrences(now:, anchor:, limit:)
       end
 
-      # P13-B (design §6) — apply the misfire policy to a window of due
-      # instants. A misfire is an occurrence whose nominal time passed while no
-      # eligible scheduler delivered it. The policy decides what `materialize`
-      # enqueues and what it records as `skipped`; there is never unbounded
-      # catch-up (the window itself is bounded by the scan's `limit`).
-      #
-      # - :skip      — deliver only the latest instant; older ones are skipped.
-      # - :latest    — coalesce the whole missed window into the latest instant
-      #                (default for recurring).
-      # - :replay    — deliver oldest-first up to `misfire_limit`; older ones
-      #                are skipped.
-      # - :fire_once — one recovery instant for the missed window (default for
-      #                one-shots); older ones are skipped.
       def misfire_selection(due_instants)
-        return {materialize: [], skipped: []} if due_instants.empty?
-
-        case misfire_policy
-        when :skip, :latest, :fire_once
-          # The three policies coincide today by construction: the latest
-          # instant carries the work, older dues get their durable skip
-          # reason (design §6).
-          {materialize: [due_instants.last], skipped: due_instants[0...-1]}
-        when :replay
-          limit = [misfire_limit, 1].max
-          # Oldest-first up to the limit; later ones are skipped.
-          {materialize: due_instants.first(limit), skipped: due_instants[limit..] || []}
-        end
+        OccurrencePolicy.new(self).misfire_selection(due_instants)
       end
 
-      # P13-B (design §7) — the overlap decision given the durable occurrence
-      # state. `non_terminal` counts occurrences still in
-      # claimed/enqueued/running (in-flight for THIS schedule, never a
-      # process-local mutex); `pending` counts those enqueued but not yet
-      # running.
-      #
-      # - :forbid     — any in-flight occurrence skips the new one (default).
-      # - :queue_one  — one bounded pending occurrence; a later one coalesces
-      #                 into it.
-      # - :allow      — run concurrently up to `max_concurrency`.
       def overlap_decision(non_terminal:, pending:)
-        case overlap_policy
-        when :forbid
-          non_terminal.positive? ? :skip : :materialize
-        when :queue_one
-          pending.positive? ? :coalesce : :materialize
-        when :allow
-          non_terminal >= max_concurrency ? :skip : :materialize
-        end
+        OccurrencePolicy.new(self).overlap_decision(non_terminal:, pending:)
       end
 
-      # Deterministic jitter: a stable offset in [0, jitter_window) derived from
-      # the occurrence identity. Same occurrence → same offset on every call and
-      # every process; changes `not_before`, never the identity or nominal
-      # instant (design §5).
       def jitter_for(occurrence_id)
-        return 0 if jitter_window.nil? || jitter_window.zero?
-
-        digest = Digest::SHA256.hexdigest(occurrence_id)
-        (digest.to_i(16) % jitter_window)
+        OccurrencePolicy.new(self).jitter_for(occurrence_id)
       end
 
       # Parse the canonical `at` expression to a UTC epoch second.
@@ -203,222 +140,14 @@ module Tamoz
       end
 
       def to_h
-        {
-          "id" => id, "revision" => revision, "owner" => owner,
-          "enabled" => enabled, "kind" => kind.to_s,
-          "expression" => expression, "start_at" => start_at, "end_at" => end_at,
-          "misfire_policy" => misfire_policy.to_s, "misfire_limit" => misfire_limit,
-          "overlap_policy" => overlap_policy.to_s, "max_concurrency" => max_concurrency,
-          "jitter_window" => jitter_window, "payload_ref" => payload_ref,
-          "thread_policy" => thread_policy,
-          "capability_grant" => capability_grant,
-          "behavior_version" => behavior_version,
-          "approval_profile" => approval_profile,
-          "delivery_policy" => delivery_policy,
-          "budgets" => budgets, "created_by" => created_by,
-          "created_at" => created_at, "definition_digest" => definition_digest
-        }
+        members.to_h { |member| [member.to_s, wire_value(member)] }
       end
 
       private
 
-      def available_at?(now)
-        enabled && (!end_at || now <= end_at)
-      end
-
-      def next_at_fire(now)
-        instant = self.class.at_instant(expression)
-        return nil if instant <= now
-        return nil unless within_bounds?(instant)
-
-        instant
-      end
-
-      def next_interval_fire(now)
-        duration = expression.to_i
-        anchor = interval_anchor
-        return nil if end_at && anchor > end_at
-        return anchor if now < anchor
-
-        anchor + ((((now - anchor) / duration).floor + 1) * duration)
-      end
-
-      def due_at_occurrences(now)
-        instant = self.class.at_instant(expression)
-        return [] if instant > now
-        return [] unless within_bounds?(instant)
-
-        [instant]
-      end
-
-      def interval_anchor
-        start_at || created_at
-      end
-
-      def due_interval_occurrences(now:, anchor:, limit:)
-        duration = expression.to_i
-        return [] if end_at && anchor > end_at
-        return [] if anchor > now
-
-        (0...[((now - anchor) / duration) + 1, limit].min)
-          .map { |ordinal| anchor + (ordinal * duration) }
-      end
-
-      def within_bounds?(instant)
-        (!start_at || instant >= start_at) && (!end_at || instant <= end_at)
-      end
-
-      def validate!(**fields)
-        # An omitted profile is the default one, not an error, so a schedule
-        # that says nothing runs under the same policy as ordinary work.
-        fields[:approval_profile] = DEFAULT_APPROVAL_PROFILE if fields[:approval_profile].nil?
-
-        validate_identity!(fields)
-        validate_kind!(fields)
-        validate_times!(fields)
-        validate_expression!(fields[:kind], fields[:expression])
-        validate_policies!(fields)
-        validate_artifacts!(fields)
-        validate_lifecycle!(fields)
-
-        fields.freeze
-      end
-
-      def validate_identity!(fields)
-        validate_id!(fields[:id])
-        validate_revision!(fields[:revision])
-        validate_string!(fields[:owner], "owner")
-      end
-
-      def validate_policies!(fields)
-        validate_enum!(fields[:misfire_policy], MISFIRE_POLICIES, "misfire_policy")
-        validate_limit!(fields[:misfire_limit], "misfire_limit")
-        validate_enum!(fields[:overlap_policy], OVERLAP_POLICIES, "overlap_policy")
-        validate_limit!(fields[:max_concurrency], "max_concurrency")
-        validate_limit!(fields[:jitter_window], "jitter_window")
-      end
-
-      def validate_artifacts!(fields)
-        validate_digest!(fields[:payload_ref], "payload_ref")
-        validate_string!(fields[:thread_policy], "thread_policy")
-        validate_hash!(fields[:capability_grant], "capability_grant")
-        validate_string!(fields[:behavior_version], "behavior_version")
-        validate_string!(fields[:approval_profile], "approval_profile")
-        validate_hash!(fields[:delivery_policy], "delivery_policy")
-        validate_budgets!(fields[:budgets])
-      end
-
-      def validate_lifecycle!(fields)
-        validate_string!(fields[:created_by], "created_by")
-        validate_time!(fields[:created_at], "created_at")
-      end
-
-      def validate_id!(value)
-        unless value.is_a?(String) && value.match?(/\A[a-z][a-z0-9_.-]{0,255}\z/)
-          raise Tamoz::ConfigurationError,
-                "schedule id must be a bounded lowercase identifier"
-        end
-        value.freeze
-      end
-
-      def validate_revision!(value)
-        unless value.is_a?(Integer) && value >= 1
-          raise Tamoz::ConfigurationError, "schedule revision must be a positive integer"
-        end
-        value
-      end
-
-      def validate_kind!(fields)
-        unless KINDS.include?(fields[:kind])
-          raise Tamoz::ConfigurationError,
-                "schedule kind must be one of #{KINDS.inspect} (cron is a recorded deferral)"
-        end
-        expression = fields[:expression]
-        return if expression.is_a?(String) && !expression.empty?
-
-        raise Tamoz::ConfigurationError, "schedule expression must be a non-empty string"
-      end
-
-      def validate_times!(fields)
-        start_at = fields[:start_at]
-        end_at = fields[:end_at]
-        validate_time!(start_at, "start_at") unless start_at.nil?
-        validate_time!(end_at, "end_at") unless end_at.nil?
-        return unless start_at && end_at && start_at > end_at
-
-        raise Tamoz::ConfigurationError, "start_at must not exceed end_at"
-      end
-
-      def validate_expression!(kind, expression)
-        case kind
-        when :at
-          unless expression.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/)
-            raise Tamoz::ConfigurationError,
-                  "at expression must be an ISO-8601 UTC instant (YYYY-MM-DDTHH:MM:SSZ)"
-          end
-
-          # The shape is not the instant: `2024-13-99T25:61:61Z` matches the
-          # pattern and is not a time. Resolving it here means the operator
-          # learns at `schedule add`, not the poller at fire time.
-          self.class.at_instant(expression)
-        when :interval
-          unless expression.match?(/\A\d+\z/) && expression.to_i.positive?
-            raise Tamoz::ConfigurationError,
-                  "interval expression must be a positive integer duration in seconds"
-          end
-        end
-      end
-
-      def validate_enum!(value, set, name)
-        unless set.include?(value)
-          raise Tamoz::ConfigurationError, "#{name} must be one of #{set.inspect}"
-        end
-        value
-      end
-
-      def validate_limit!(value, name)
-        unless value.is_a?(Integer) && value >= 0 && value <= MAX_BUDGET_MAGNITUDE
-          raise Tamoz::ConfigurationError, "#{name} must be a bounded non-negative integer"
-        end
-        value
-      end
-
-      def validate_digest!(value, name)
-        raise Tamoz::ConfigurationError, "#{name} must be a sha256:... digest" unless Tamoz::Core.valid_digest?(value)
-
-        value.freeze
-      end
-
-      def validate_string!(value, name)
-        unless value.is_a?(String) && !value.strip.empty? && value.bytesize <= 4096
-          raise Tamoz::ConfigurationError, "#{name} must be a bounded non-empty string"
-        end
-        value.freeze
-      end
-
-      def validate_hash!(value, name)
-        unless value.is_a?(Hash) && !value.empty?
-          raise Tamoz::ConfigurationError, "#{name} must be a non-empty hash"
-        end
-        Tamoz::Core.deep_freeze(value)
-      end
-
-      def validate_budgets!(value)
-        validate_hash!(value, "budgets")
-        %w[max_steps max_wall_seconds max_cost_tokens].each do |key|
-          next unless value.key?(key)
-          next if value[key].is_a?(Integer) && value[key].positive?
-
-          raise Tamoz::ConfigurationError,
-                "budgets.#{key} must be a positive integer"
-        end
-      end
-
-      def validate_time!(value, name)
-        unless value.is_a?(Integer) && value.positive?
-          raise Tamoz::ConfigurationError, "#{name} must be a positive UTC epoch second"
-        end
-        value
+      def wire_value(member)
+        value = public_send(member)
+        %i[kind misfire_policy overlap_policy].include?(member) ? value.to_s : value
       end
     end
   end

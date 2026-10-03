@@ -33,22 +33,8 @@ module Tamoz
         encode: true
       )
         @tag = String(tag).dup.freeze
-        unless TAG_PATTERN.match?(@tag)
-          raise ConfigurationError, "codec tag must match #{TAG_PATTERN.inspect}"
-        end
-        unless version.is_a?(Integer) && version.positive?
-          raise ConfigurationError, "codec version must be a positive integer"
-        end
-        raise ConfigurationError, "codec class must be a Class" unless klass.is_a?(Class)
-        if BUILT_IN_CLASSES.include?(klass) || klass <= Secret
-          raise ConfigurationError, "codec class #{klass} is reserved by tamoz-core"
-        end
-        raise ConfigurationError, "codec encoder must respond to call" unless encoder.respond_to?(:call)
-        raise ConfigurationError, "codec decoder must respond to call" unless decoder.respond_to?(:call)
-        unless immutability.respond_to?(:call)
-          raise ConfigurationError, "codec immutability predicate must respond to call"
-        end
-
+        validate_identity!(version, klass)
+        validate_callables!(encoder:, decoder:, immutability:)
         @version = version
         @klass = klass
         @encoder = encoder
@@ -61,6 +47,26 @@ module Tamoz
       def encode?
         @encode
       end
+
+      private
+
+      def validate_identity!(version, klass)
+        raise ConfigurationError, "codec tag must match #{TAG_PATTERN.inspect}" unless TAG_PATTERN.match?(@tag)
+        unless version.is_a?(Integer) && version.positive?
+          raise ConfigurationError, "codec version must be a positive integer"
+        end
+        raise ConfigurationError, "codec class must be a Class" unless klass.is_a?(Class)
+        return unless BUILT_IN_CLASSES.include?(klass) || klass <= Secret
+
+        raise ConfigurationError, "codec class #{klass} is reserved by tamoz-core"
+      end
+
+      def validate_callables!(callables)
+        { encoder: "codec encoder", decoder: "codec decoder",
+          immutability: "codec immutability predicate" }.each do |name, label|
+          raise ConfigurationError, "#{label} must respond to call" unless callables.fetch(name).respond_to?(:call)
+        end
+      end
     end
 
     attr_reader :max_bytes, :max_depth, :max_collection_items, :max_string_bytes
@@ -72,24 +78,11 @@ module Tamoz
       max_collection_items: DEFAULT_MAX_COLLECTION_ITEMS,
       max_string_bytes: DEFAULT_MAX_STRING_BYTES
     )
-      @max_bytes = bounded_integer!(max_bytes, :max_bytes, MAX_BYTES)
-      @max_depth = bounded_integer!(max_depth, :max_depth, MAX_DEPTH)
-      @max_collection_items = bounded_integer!(
-        max_collection_items,
-        :max_collection_items,
-        MAX_COLLECTION_ITEMS
-      )
-      @max_string_bytes = bounded_integer!(
-        max_string_bytes,
-        :max_string_bytes,
-        MAX_STRING_BYTES
-      )
+      assign_limits(max_bytes:, max_depth:, max_collection_items:, max_string_bytes:)
       @registrations = registrations.map { |registration| coerce_registration(registration) }.freeze
       validate_registrations!
       @encoders = @registrations.select(&:encode?).to_h { |registration| [registration.klass, registration] }.freeze
-      @decoders = @registrations.to_h do |registration|
-        [[registration.tag, registration.version], registration]
-      end.freeze
+      @decoders = @registrations.to_h { |registration| [[registration.tag, registration.version], registration] }.freeze
       freeze
     end
 
@@ -104,12 +97,8 @@ module Tamoz
     end
 
     def dump(value)
-      state = {items: 0, active: {}}
-      encoded = encode_node(value, state:, depth: 0, path: "$")
-      bytes = JSON.generate([FORMAT, FORMAT_VERSION, encoded])
-      if bytes.bytesize > max_bytes
-        raise StateLimitError, "encoded state exceeds #{max_bytes} bytes"
-      end
+      bytes = JSON.generate([FORMAT, FORMAT_VERSION, Encoder.new(self, @encoders).encode(value)])
+      raise StateLimitError, "encoded state exceeds #{max_bytes} bytes" if bytes.bytesize > max_bytes
 
       bytes
     rescue JSON::GeneratorError => error
@@ -117,16 +106,9 @@ module Tamoz
     end
 
     def load(bytes)
-      text = validate_input_bytes(bytes)
-      wire = JSON.parse(
-        text,
-        create_additions: false,
-        max_nesting: (max_depth * 3) + 16
-      )
+      wire = JSON.parse(validate_input_bytes(bytes), create_additions: false, max_nesting: (max_depth * 3) + 16)
       validate_envelope!(wire)
-      state = {items: 0}
-      validate_node!(wire.fetch(2), state:, depth: 0, path: "$")
-      decode_node(wire.fetch(2), path: "$")
+      WireReader.new(self, @decoders).read(wire.fetch(2))
     rescue CheckpointVersionError, CheckpointCorruptionError
       raise
     rescue JSON::ParserError, JSON::NestingError => error
@@ -139,261 +121,27 @@ module Tamoz
 
     private
 
-    def encode_node(value, state:, depth:, path:)
-      raise StateLimitError, "#{path}: nesting exceeds #{max_depth}" if depth > max_depth
-      raise SensitiveValueError, "#{path}: Tamoz::Secret is not serializable" if value.is_a?(Secret)
-
-      case value
-      when Array
-        encode_array(value, state:, depth:, path:)
-      when Hash
-        encode_hash(value, state:, depth:, path:)
-      when NilClass, TrueClass, FalseClass, Integer, Float, String, Symbol
-        encode_scalar(value, path:)
-      else
-        encode_registered(value, state:, depth:, path:)
-      end
-    end
-
-    def encode_scalar(value, path:)
-      case value
-      when NilClass
-        ["nil"]
-      when TrueClass, FalseClass
-        ["boolean", value]
-      when Integer
-        ["integer", value]
-      when Float
-        raise UnsupportedValueError, "#{path}: non-finite floats are unsupported" unless value.finite?
-
-        ["float", value]
-      when String
-        ["string", encode_string(value, path:)]
-      when Symbol
-        raise UnsupportedValueError, "#{path}: symbol values are unsupported"
-      end
-    end
-
-    def encode_array(value, state:, depth:, path:)
-      encode_container(value, state:, path:) do
-        count_items!(value.length, state:, path:)
-        [
-          "array",
-          value.each_with_index.map do |entry, index|
-            encode_node(entry, state:, depth: depth + 1, path: "#{path}[#{index}]")
-          end
-        ]
-      end
-    end
-
-    def encode_hash(value, state:, depth:, path:)
-      encode_container(value, state:, path:) do
-        count_items!(value.length, state:, path:)
-        normalized = {}
-        value.each do |key, entry|
-          unless key.is_a?(String) || key.is_a?(Symbol)
-            raise UnsupportedValueError, "#{path}: hash keys must be strings or symbols"
-          end
-
-          string_key = encode_string(key.to_s, path: "#{path}.<key>")
-          if normalized.key?(string_key)
-            raise UnsupportedValueError,
-                  "#{path}: string and symbol keys collide as #{string_key.inspect}"
-          end
-          normalized[string_key] = entry
-        end
-
-        entries = normalized.keys.sort.map do |key|
-          [key, encode_node(normalized.fetch(key), state:, depth: depth + 1, path: "#{path}.#{key}")]
-        end
-        ["object", entries]
-      end
-    end
-
-    def encode_registered(value, state:, depth:, path:)
-      registration = @encoders[value.class]
-      unless registration
-        raise UnsupportedValueError, "#{path}: unsupported value #{value.class}"
-      end
-      unless registration.immutability.call(value)
-        raise InvalidUpdateError, "#{path}: registered value is mutable"
-      end
-
-      encode_container(value, state:, path:) do
-        payload = registration.encoder.call(value)
-        [
-          "registered",
-          registration.tag,
-          registration.version,
-          encode_node(payload, state:, depth: depth + 1, path: "#{path}.<payload>")
-        ]
-      rescue Error, ConfigurationError, InvalidUpdateError
-        raise
-      rescue StandardError => error
-        raise InvalidUpdateError.new(
-          "codec encoder #{registration.tag}@#{registration.version} failed: #{error.class}"
-        ), cause: error
-      end
-    end
-
-    def encode_container(value, state:, path:)
-      object_id = value.object_id
-      if state.fetch(:active).key?(object_id)
-        raise UnsupportedValueError, "#{path}: cyclic values are unsupported"
-      end
-
-      state.fetch(:active)[object_id] = true
-      yield
-    ensure
-      state.fetch(:active).delete(object_id) if object_id
+    def assign_limits(limits)
+      @max_bytes = bounded_integer!(limits.fetch(:max_bytes), :max_bytes, MAX_BYTES)
+      @max_depth = bounded_integer!(limits.fetch(:max_depth), :max_depth, MAX_DEPTH)
+      @max_collection_items = bounded_integer!(
+        limits.fetch(:max_collection_items), :max_collection_items, MAX_COLLECTION_ITEMS
+      )
+      @max_string_bytes = bounded_integer!(limits.fetch(:max_string_bytes), :max_string_bytes, MAX_STRING_BYTES)
     end
 
     def validate_envelope!(wire)
       unless wire.is_a?(Array) && wire.length == 3 && wire.first == FORMAT
         raise CheckpointCorruptionError, "state envelope is invalid"
       end
-      unless wire.fetch(1) == FORMAT_VERSION
-        raise CheckpointVersionError, "unsupported state format version #{wire.fetch(1).inspect}"
-      end
-    end
+      return if wire.fetch(1) == FORMAT_VERSION
 
-    def validate_node!(node, state:, depth:, path:)
-      raise CheckpointCorruptionError, "#{path}: nesting exceeds #{max_depth}" if depth > max_depth
-      unless node.is_a?(Array) && node.first.is_a?(String)
-        raise CheckpointCorruptionError, "#{path}: encoded node must be a tagged array"
-      end
-
-      case node.first
-      when "array"
-        validate_array_node!(node, state:, depth:, path:)
-      when "object"
-        validate_object_node!(node, state:, depth:, path:)
-      when "registered"
-        validate_registered_node!(node, state:, depth:, path:)
-      else
-        validate_scalar_node!(node, path:)
-      end
-    end
-
-    def validate_scalar_node!(node, path:)
-      case node.first
-      when "nil"
-        require_shape!(node, 1, path:)
-      when "boolean"
-        require_shape!(node, 2, path:)
-        unless node.fetch(1) == true || node.fetch(1) == false
-          raise CheckpointCorruptionError, "#{path}: invalid boolean node"
-        end
-      when "integer"
-        require_shape!(node, 2, path:)
-        raise CheckpointCorruptionError, "#{path}: invalid integer node" unless node.fetch(1).is_a?(Integer)
-      when "float"
-        require_shape!(node, 2, path:)
-        value = node.fetch(1)
-        unless value.is_a?(Float) && value.finite?
-          raise CheckpointCorruptionError, "#{path}: invalid float node"
-        end
-      when "string"
-        require_shape!(node, 2, path:)
-        validate_wire_string!(node.fetch(1), path:)
-      else
-        raise CheckpointCorruptionError, "#{path}: unknown encoded node #{node.first.inspect}"
-      end
-    end
-
-    def validate_array_node!(node, state:, depth:, path:)
-      require_shape!(node, 2, path:)
-      entries = node.fetch(1)
-      raise CheckpointCorruptionError, "#{path}: array payload must be an array" unless entries.is_a?(Array)
-
-      count_items!(entries.length, state:, path:, error: CheckpointCorruptionError)
-      entries.each_with_index do |entry, index|
-        validate_node!(entry, state:, depth: depth + 1, path: "#{path}[#{index}]")
-      end
-    end
-
-    def validate_object_node!(node, state:, depth:, path:)
-      require_shape!(node, 2, path:)
-      entries = node.fetch(1)
-      raise CheckpointCorruptionError, "#{path}: object payload must be an array" unless entries.is_a?(Array)
-
-      count_items!(entries.length, state:, path:, error: CheckpointCorruptionError)
-      keys = entries.each_with_index.map do |entry, index|
-        unless entry.is_a?(Array) && entry.length == 2
-          raise CheckpointCorruptionError, "#{path}[#{index}]: object entry is invalid"
-        end
-
-        key = entry.fetch(0)
-        validate_wire_string!(key, path: "#{path}[#{index}].<key>")
-        validate_node!(entry.fetch(1), state:, depth: depth + 1, path: "#{path}.#{key}")
-        key
-      end
-      unless keys == keys.sort && keys.uniq.length == keys.length
-        raise CheckpointCorruptionError, "#{path}: object keys must be unique and sorted"
-      end
-    end
-
-    def validate_registered_node!(node, state:, depth:, path:)
-      require_shape!(node, 4, path:)
-      tag = node.fetch(1)
-      version = node.fetch(2)
-      validate_wire_string!(tag, path: "#{path}.<tag>")
-      unless TAG_PATTERN.match?(tag) && version.is_a?(Integer) && version.positive?
-        raise CheckpointCorruptionError, "#{path}: invalid registered type identity"
-      end
-      unless @decoders.key?([tag, version])
-        raise CheckpointVersionError, "unsupported registered type #{tag}@#{version}"
-      end
-
-      validate_node!(node.fetch(3), state:, depth: depth + 1, path: "#{path}.<payload>")
-    end
-
-    def decode_node(node, path:)
-      case node.first
-      when "nil" then nil
-      when "boolean", "integer", "float" then node.fetch(1)
-      when "string" then node.fetch(1).dup.freeze
-      when "array"
-        node.fetch(1).each_with_index.map do |entry, index|
-          decode_node(entry, path: "#{path}[#{index}]")
-        end.freeze
-      when "object"
-        node.fetch(1).each_with_object({}) do |(key, entry), result|
-          result[key.dup.freeze] = decode_node(entry, path: "#{path}.#{key}")
-        end.freeze
-      when "registered"
-        decode_registered(node, path:)
-      end
-    end
-
-    def decode_registered(node, path:)
-      registration = @decoders.fetch([node.fetch(1), node.fetch(2)])
-      payload = decode_node(node.fetch(3), path: "#{path}.<payload>")
-      value = registration.decoder.call(payload)
-      unless value.class.equal?(registration.klass)
-        raise CheckpointCorruptionError,
-              "#{path}: decoder returned #{value.class}, expected #{registration.klass}"
-      end
-      unless registration.immutability.call(value)
-        raise CheckpointCorruptionError, "#{path}: decoder returned a mutable registered value"
-      end
-
-      value
-    rescue CheckpointCorruptionError
-      raise
-    rescue StandardError => error
-      raise CheckpointCorruptionError.new(
-        "codec decoder #{registration.tag}@#{registration.version} failed: #{error.class}"
-      ), cause: error
+      raise CheckpointVersionError, "unsupported state format version #{wire.fetch(1).inspect}"
     end
 
     def validate_input_bytes(bytes)
-      unless bytes.is_a?(String)
-        raise CheckpointCorruptionError, "state input must be a String"
-      end
-      if bytes.bytesize > max_bytes
-        raise CheckpointCorruptionError, "state input exceeds #{max_bytes} bytes"
-      end
+      raise CheckpointCorruptionError, "state input must be a String" unless bytes.is_a?(String)
+      raise CheckpointCorruptionError, "state input exceeds #{max_bytes} bytes" if bytes.bytesize > max_bytes
 
       text = bytes.dup.force_encoding(Encoding::UTF_8)
       raise CheckpointCorruptionError, "state input is not valid UTF-8" unless text.valid_encoding?
@@ -401,63 +149,31 @@ module Tamoz
       text
     end
 
-    def encode_string(value, path:)
-      utf8 = value.encode(Encoding::UTF_8)
-      raise UnsupportedValueError, "#{path}: invalid UTF-8 string" unless utf8.valid_encoding?
-      if utf8.bytesize > max_string_bytes
-        raise StateLimitError, "#{path}: string exceeds #{max_string_bytes} bytes"
-      end
-
-      utf8
-    rescue EncodingError => error
-      raise UnsupportedValueError, "#{path}: invalid UTF-8 string: #{error.message}"
-    end
-
-    def validate_wire_string!(value, path:)
-      unless value.is_a?(String) && value.encoding == Encoding::UTF_8 && value.valid_encoding?
-        raise CheckpointCorruptionError, "#{path}: invalid UTF-8 string"
-      end
-      if value.bytesize > max_string_bytes
-        raise CheckpointCorruptionError, "#{path}: string exceeds #{max_string_bytes} bytes"
-      end
-    end
-
-    def require_shape!(node, length, path:)
-      return if node.length == length
-
-      raise CheckpointCorruptionError, "#{path}: invalid #{node.first.inspect} node shape"
-    end
-
-    # The same total-items ceiling on both paths; only the raised class differs
-    # (a limit on encode, a corruption signal on load of untrusted bytes).
-    def count_items!(count, state:, path:, error: StateLimitError)
-      state[:items] += count
-      return if state.fetch(:items) <= max_collection_items
-
-      raise error, "#{path}: collections exceed #{max_collection_items} total items"
-    end
-
     def validate_registrations!
       if @registrations.length > MAX_REGISTRATIONS
         raise ConfigurationError, "at most #{MAX_REGISTRATIONS} codec registrations are allowed"
       end
 
-      duplicate_decoders = @registrations
-                           .group_by { |registration| [registration.tag, registration.version] }
-                           .select { |_identity, entries| entries.length > 1 }
-      unless duplicate_decoders.empty?
-        raise ConfigurationError,
-              "duplicate codec tag/version: #{duplicate_decoders.keys.sort.inspect}"
-      end
+      reject_duplicate_decoders!
+      reject_duplicate_encoders!
+    end
 
-      duplicate_encoders = @registrations
-                           .select(&:encode?)
-                           .group_by(&:klass)
-                           .select { |_klass, entries| entries.length > 1 }
-      unless duplicate_encoders.empty?
-        raise ConfigurationError,
-              "multiple active encoders for #{duplicate_encoders.keys.map(&:name).sort.inspect}"
-      end
+    def reject_duplicate_decoders!
+      duplicates = duplicated(@registrations) { |registration| [registration.tag, registration.version] }
+      return if duplicates.empty?
+
+      raise ConfigurationError, "duplicate codec tag/version: #{duplicates.sort.inspect}"
+    end
+
+    def reject_duplicate_encoders!
+      duplicates = duplicated(@registrations.select(&:encode?), &:klass)
+      return if duplicates.empty?
+
+      raise ConfigurationError, "multiple active encoders for #{duplicates.map(&:name).sort.inspect}"
+    end
+
+    def duplicated(registrations, &identity)
+      registrations.group_by(&identity).select { |_identity, entries| entries.length > 1 }.keys
     end
 
     def coerce_registration(registration)
@@ -473,6 +189,6 @@ module Tamoz
       raise ConfigurationError, "#{name} must be between 1 and #{maximum}"
     end
 
-    private_constant :BUILT_IN_CLASSES
+    private_constant :BUILT_IN_CLASSES, :Encoder, :WireReader, :ItemBudget
   end
 end

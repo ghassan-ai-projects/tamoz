@@ -60,45 +60,13 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
-        final_request = nil
-        stale_request = nil
-        stale_error = nil
-        compiled.checkpointer.open_writer(
-          thread_id: thread,
-          namespace:,
-          owner_id:,
-          ttl: compiled.checkpointer.writer_ttl
-        ) do |writer|
+        with_claimed_request(thread:, namespace:, owner_id:, concurrency:, context:) do |writer|
           request = writer.claim_next_request(validator: claim_validator)
           return nil unless request
           return request unless %i[claimed redirecting].include?(request.status)
 
-          begin
-            compiled.__send__(
-              :execute_durable_request,
-              request,
-              writer:,
-              concurrency:,
-              context:
-            )
-          rescue Tamoz::StaleRequestError => error
-            stale_request = request
-            stale_error = error
-            next
-          end
-          final_request = compiled.checkpointer.fetch_request(
-            thread_id: thread,
-            namespace:,
-            request_id: request.request_id
-          )
+          request
         end
-        if stale_request
-          final_request = terminal_fail(
-            stale_request,
-            reason: stale_error.message
-          )
-        end
-        final_request
       end
 
       def recover(
@@ -109,47 +77,12 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
-        final_request = nil
-        stale_request = nil
-        stale_error = nil
-        compiled.checkpointer.open_writer(
-          thread_id: thread,
-          namespace:,
-          owner_id:,
-          ttl: compiled.checkpointer.writer_ttl
-        ) do |writer|
-          request = writer.recover_request(
-            request_id:,
-            validator: claim_validator
-          )
+        with_claimed_request(thread:, namespace:, owner_id:, concurrency:, context:) do |writer|
+          request = writer.recover_request(request_id:, validator: claim_validator)
           return request unless %i[claimed running redirecting].include?(request.status)
 
-          begin
-            compiled.__send__(
-              :execute_durable_request,
-              request,
-              writer:,
-              concurrency:,
-              context:
-            )
-          rescue Tamoz::StaleRequestError => error
-            stale_request = request
-            stale_error = error
-            next
-          end
-          final_request = compiled.checkpointer.fetch_request(
-            thread_id: thread,
-            namespace:,
-            request_id:
-          )
+          request
         end
-        if stale_request
-          final_request = terminal_fail(
-            stale_request,
-            reason: stale_error.message
-          )
-        end
-        final_request
       end
 
       # Post-claim execution backstop (DR-4 D2): a state change between claim and
@@ -206,6 +139,32 @@ module Tamoz
       end
 
       private
+
+      def with_claimed_request(thread:, namespace:, owner_id:, concurrency:, context:)
+        final_request = nil
+        stale_request = nil
+        stale_error = nil
+        compiled.checkpointer.open_writer(
+          thread_id: thread, namespace:, owner_id:, ttl: compiled.checkpointer.writer_ttl
+        ) do |writer|
+          request = yield writer
+          error = execute_claimed_request(request, writer:, concurrency:, context:)
+          if error
+            stale_request = request
+            stale_error = error
+          else
+            final_request = fetch(thread:, namespace:, request_id: request.request_id)
+          end
+        end
+        stale_request ? terminal_fail(stale_request, reason: stale_error.message) : final_request
+      end
+
+      def execute_claimed_request(request, writer:, concurrency:, context:)
+        compiled.__send__(:execute_durable_request, request, writer:, concurrency:, context:)
+        nil
+      rescue Tamoz::StaleRequestError => error
+        error
+      end
 
       # The graph-owned staleness predicate as the pure claim/recover validator:
       # invoked with (request, checkpoint) inside the store transaction.

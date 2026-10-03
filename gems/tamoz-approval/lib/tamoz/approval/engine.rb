@@ -34,7 +34,7 @@ module Tamoz
           tool: tool.to_sym,
           verb: policy.verb_for(tool.to_sym, effect_class),
           argv: Array(argv).map(&:to_s),
-          targets: Array(targets).map { |target| canonicalize_target(target, workspace_root || @workspace_root) },
+          targets: Array(targets).map { |target| TargetPath.canonical(target, workspace_root || @workspace_root) },
           effect_class: effect_class.to_sym,
           session_id: session_id.to_s
         )
@@ -344,21 +344,6 @@ module Tamoz
 
       def conflicting_message(decision_id, recorded)
         "decision #{decision_id} already resolved as #{recorded[:answer]}/#{recorded[:scope]}"
-      end
-
-      def canonicalize_target(target, workspace_root)
-        target = target.to_s
-        return target if target.include?('://')
-
-        # A symlink whose target is gone resolves nowhere: canonicalize the
-        # literal path so glob denies still match it, rather than crashing.
-        if File.symlink?(target) && !File.exist?(target)
-          return File.expand_path(target, workspace_root)
-        end
-
-        return File.realpath(target, workspace_root) if File.exist?(target)
-
-        File.expand_path(target, workspace_root)
       end
 
       def now_ms

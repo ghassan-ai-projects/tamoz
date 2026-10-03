@@ -27,6 +27,7 @@ the source, tests, and the curated documentation before acting on them.
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |
 | Authoritative design package | `design-v0.1/` (CI-validated, see `rake design:validate`) |
 | Quality program records | `QUALITY_PROGRAM.md`, `QUALITY_PROGRAM_STATE.md`, `CODING_STANDARD.md` |
+| Templates | [`templates/QUALITY_BAR.md`](templates/QUALITY_BAR.md) — the bar every task sets before it starts and grades in a loop |
 
 ## Policy
 

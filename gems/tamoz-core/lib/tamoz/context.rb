@@ -39,37 +39,15 @@ module Tamoz
       interrupt_mode: :interactive,
       episode_tools: nil
     )
-      @run_id = identity!(run_id, :run_id)
-      @parent_run_id = optional_identity!(parent_run_id, :parent_run_id)
-      @execution_id = identity!(execution_id, :execution_id)
-      @request_id = identity!(request_id, :request_id)
-      @thread_id = optional_identity!(thread_id, :thread_id)
-      @task_id = optional_identity!(task_id, :task_id)
+      assign_identities(run_id:, parent_run_id:, execution_id:, request_id:, thread_id:, task_id:)
       validate_interrupt_mode!(interrupt_mode)
       @interrupt_mode = interrupt_mode
-      @namespace = normalize_list(namespace, :namespace, NAMESPACE_MAX_PARTS)
-      @tags = normalize_list(tags, :tags, TAGS_MAX_ITEMS)
-      @metadata = Immutable.copy(metadata)
-      raise ConfigurationError, "metadata must be a Hash" unless @metadata.is_a?(Hash)
-
-      @deadline = normalize_deadline(deadline)
-      validate_cancellation!(cancellation)
-      validate_capability!(clock, :now, "clock")
-      validate_capability!(notifier, :instrument, "notifier")
-      validate_capability!(emitter, :emit, "emitter")
-      validate_capability!(interrupts, :call, "interrupts") if interrupts
-      validate_capability!(graph_runtime, :call, "graph_runtime") if graph_runtime
-      validate_capability!(episode_tools, :execute, "episode_tools") if episode_tools
-
-      @cancellation = cancellation
-      @clock = clock
-      @notifier = notifier
-      @emitter = emitter
-      @store = store
-      @effects = effects
-      @interrupts = interrupts
-      @graph_runtime = graph_runtime
-      @episode_tools = episode_tools
+      assign_annotations(namespace:, tags:, metadata:, deadline:)
+      collaborators = {
+        cancellation:, clock:, notifier:, emitter:, store:, effects:, interrupts:, graph_runtime:, episode_tools:
+      }
+      validate_collaborators!(collaborators)
+      assign_collaborators(collaborators)
       freeze
     end
 
@@ -134,6 +112,41 @@ module Tamoz
     end
 
     private
+
+    def assign_identities(ids)
+      @run_id = identity!(ids.fetch(:run_id), :run_id)
+      @parent_run_id = optional_identity!(ids.fetch(:parent_run_id), :parent_run_id)
+      @execution_id = identity!(ids.fetch(:execution_id), :execution_id)
+      @request_id = identity!(ids.fetch(:request_id), :request_id)
+      @thread_id = optional_identity!(ids.fetch(:thread_id), :thread_id)
+      @task_id = optional_identity!(ids.fetch(:task_id), :task_id)
+    end
+
+    def assign_annotations(namespace:, tags:, metadata:, deadline:)
+      @namespace = normalize_list(namespace, :namespace, NAMESPACE_MAX_PARTS)
+      @tags = normalize_list(tags, :tags, TAGS_MAX_ITEMS)
+      @metadata = Immutable.copy(metadata)
+      raise ConfigurationError, "metadata must be a Hash" unless @metadata.is_a?(Hash)
+
+      @deadline = normalize_deadline(deadline)
+    end
+
+    def validate_collaborators!(collaborators)
+      validate_cancellation!(collaborators.fetch(:cancellation))
+      validate_capability!(collaborators.fetch(:clock), :now, "clock")
+      validate_capability!(collaborators.fetch(:notifier), :instrument, "notifier")
+      validate_capability!(collaborators.fetch(:emitter), :emit, "emitter")
+      { interrupts: :call, graph_runtime: :call, episode_tools: :execute }.each do |name, method|
+        collaborator = collaborators.fetch(name)
+        validate_capability!(collaborator, method, name.to_s) if collaborator
+      end
+    end
+
+    def assign_collaborators(collaborators)
+      @cancellation, @clock, @notifier, @emitter, @store, @effects, @interrupts, @graph_runtime, @episode_tools =
+        collaborators.values_at(:cancellation, :clock, :notifier, :emitter, :store, :effects, :interrupts,
+                                :graph_runtime, :episode_tools)
+    end
 
     def attributes
       ATTRIBUTES.to_h { |name| [name, public_send(name)] }

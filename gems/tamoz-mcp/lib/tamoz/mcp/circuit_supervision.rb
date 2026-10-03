@@ -20,12 +20,26 @@ module Tamoz
       # Validates the four circuit/backoff constructor arguments common to
       # both supervisors, raising Tamoz::Mcp::ValidationError.
       def self.validate_parameters!(circuit_threshold:, retry_budget:, base_backoff:, max_backoff:)
-        unless circuit_threshold.is_a?(Integer) && circuit_threshold >= 1
-          raise ValidationError, "circuit_threshold must be an integer >= 1"
-        end
-        unless retry_budget.is_a?(Integer) && retry_budget >= 0
-          raise ValidationError, "retry_budget must be an integer >= 0"
-        end
+        validate_circuit_threshold!(circuit_threshold)
+        validate_retry_budget!(retry_budget)
+        validate_backoff!(base_backoff, max_backoff)
+      end
+
+      def self.validate_circuit_threshold!(circuit_threshold)
+        return if circuit_threshold.is_a?(Integer) && circuit_threshold >= 1
+
+        raise ValidationError, "circuit_threshold must be an integer >= 1"
+      end
+      private_class_method :validate_circuit_threshold!
+
+      def self.validate_retry_budget!(retry_budget)
+        return if retry_budget.is_a?(Integer) && retry_budget >= 0
+
+        raise ValidationError, "retry_budget must be an integer >= 0"
+      end
+      private_class_method :validate_retry_budget!
+
+      def self.validate_backoff!(base_backoff, max_backoff)
         unless base_backoff.is_a?(Numeric) && base_backoff.finite? && base_backoff.positive?
           raise ValidationError, "base_backoff must be positive and finite"
         end
@@ -35,6 +49,7 @@ module Tamoz
         raise ValidationError, "max_backoff must be positive, finite, and >= base_backoff"
       end
 
+      private_class_method :validate_backoff!
       # Health state from the plan's lifecycle: disabled → starting → ready,
       # with degraded/open on transport failures and retired after teardown.
       def state

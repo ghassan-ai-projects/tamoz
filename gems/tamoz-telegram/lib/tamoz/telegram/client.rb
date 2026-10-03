@@ -13,9 +13,6 @@ module Tamoz
     # retry_after, a network timeout on a send is AmbiguousDeliveryError
     # (genuinely irreconcilable, design §10), and an auth failure is
     # AuthenticationError (never a retry).
-    # The client is one bounded HTTP call; the metric smells measure the
-    # HTTP boundary (timeouts, throttle, idempotent-flag), not a choice to
-    # overload.
     # :reek:TooManyStatements, :reek:BooleanParameter, :reek:ControlParameter
     # :reek:DuplicateMethodCall, :reek:LongParameterList
     class Client
@@ -37,46 +34,13 @@ module Tamoz
         @max_response_bytes = max_response_bytes || DEFAULT_MAX_RESPONSE_BYTES
       end
 
-      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one HTTP boundary with timeout and
-      #   throttle branches.
       # :reek:UncommunicativeVariableName -- `error` is the rescued exception.
       # One bounded API call. `idempotent` distinguishes reads (safe to
       # retry) from sends (a timeout must never be retried blindly).
       # @return [Hash] the parsed `ok` payload.
       def call(method, params, idempotent: false)
-        http = build_http
-        request = build_request(method, params)
-        response = nil
-        body = +''
-        http.request(request) do |partial|
-          response = partial
-          partial.read_body do |chunk|
-            body << chunk
-            raise Comms::ResponseTooLargeError if body.bytesize > @max_response_bytes
-          end
-        end
-
-        case response
-        when Net::HTTPSuccess
-          payload = JSON.parse(body, create_additions: false)
-          raise Comms::ValidationError, "#{method} response carries no ok field" unless payload.key?('ok')
-
-          if payload.fetch('ok')
-            payload.fetch('result')
-          elsif payload['error_code'] == 401
-            raise Comms::AuthenticationError, 'bot token refused'
-          else
-            raise transport_failure(idempotent, "telegram api error #{payload['error_code']}")
-          end
-        when Net::HTTPTooManyRequests
-          raise Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(body))
-        when Net::HTTPUnauthorized
-          raise Comms::AuthenticationError, 'bot token refused'
-        when Net::HTTPConflict
-          raise conflict_failure(idempotent, body)
-        else
-          raise transport_failure(idempotent, "telegram api error #{response.code}")
-        end
+        response, body = post(method, params)
+        interpret(response, body, method:, idempotent:)
       rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT, JSON::ParserError => e
         # A read observed nothing and changed nothing, so it is typed transient
         # and the caller repeats it from unchanged state. A send is the other
@@ -88,6 +52,48 @@ module Tamoz
       end
 
       private
+
+      def post(method, params)
+        http = build_http
+        request = build_request(method, params)
+        response = nil
+        body = +''
+        http.request(request) do |partial|
+          response = partial
+          read_bounded(partial, body)
+        end
+        [response, body]
+      end
+
+      def read_bounded(partial, body)
+        partial.read_body do |chunk|
+          body << chunk
+          raise Comms::ResponseTooLargeError if body.bytesize > @max_response_bytes
+        end
+      end
+
+      def interpret(response, body, method:, idempotent:)
+        case response
+        when Net::HTTPSuccess then api_result(body, method:, idempotent:)
+        when Net::HTTPTooManyRequests then raise throttled(body)
+        when Net::HTTPUnauthorized then raise Comms::AuthenticationError, 'bot token refused'
+        when Net::HTTPConflict then raise conflict_failure(idempotent, body)
+        else raise transport_failure(idempotent, "telegram api error #{response.code}")
+        end
+      end
+
+      def throttled(body)
+        Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(body))
+      end
+
+      def api_result(body, method:, idempotent:)
+        payload = JSON.parse(body, create_additions: false)
+        raise Comms::ValidationError, "#{method} response carries no ok field" unless payload.key?('ok')
+        return payload.fetch('result') if payload.fetch('ok')
+        raise Comms::AuthenticationError, 'bot token refused' if payload['error_code'] == 401
+
+        raise transport_failure(idempotent, "telegram api error #{payload['error_code']}")
+      end
 
       # A 409 on a poll (idempotent read) is the poller-conflict condition:
       # another getUpdates or a webhook holds this bot — fatal and named, never
@@ -147,4 +153,3 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
