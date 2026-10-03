@@ -1,132 +1,102 @@
 # AGENTS.md — tamoz
 
-Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, tamoz-agent, tamoz-mcp, tamoz-graph, tamoz-scheduler, tamoz-sqlite, tamoz-stream, tamoz-tools, tamoz-evals).
+Tamoz is a Ruby durable-agent framework plus its reference agent, in one monorepo of independently
+publishable gems (`gems/`, map in `README.md`; entry points in `apps/` and `bin/`). The continuous
+stream plane is a separate Go repository, `agentic-stream` (ADR-055); `*.go` references live there.
 
-- Ruby version pinned in `.ruby-version`; gems live in `gems/`, entry points in `apps/` and `bin/`.
-- Tests: `test/` (Minitest), run via `rake`. One test FILE per command — `ruby -Itest a_test.rb b_test.rb` runs only the first.
-- Rules learned in real sessions live in `.agent/rules/` (index: `.agent/README.md`).
-- **Never force-push.** No rewriting published commits, on any branch — amend locally, then
-  publish a new commit. See `.agent/rules/git.md`.
-- Ask before changing cross-gem interfaces; most bugs live at gem boundaries.
-- When delegating work to background subagents, follow the standing protocol in
-  `docs/subagent-orchestration.md` (file-ownership contracts, behavior model in the brief,
-  named gates + known-red list, fixed report format).
+| Need | Read |
+|---|---|
+| Why the system is shaped this way | `documentation/adr/README.md` — every decision, grouped by area |
+| What must always hold | `docs/design-v0.1/INVARIANTS.md` |
+| How to write Ruby here | `docs/CODING_STANDARD.md` (enforced by the gates) |
+| Lessons earned in real sessions | `.agent/README.md` → `.agent/rules/*.md` |
+| How to set the bar for a task | `docs/templates/QUALITY_BAR.md` |
+| How to delegate to subagents | `docs/subagent-orchestration.md` |
 
-## Keep these rules current (standing directive)
+## Every task runs against a quality bar
 
-- Record a reusable lesson in the SAME change that taught it — here, or in
-  `.agent/rules/<topic>.md` when it needs evidence.
-- Ground it in the real seam; rewrite a rule a new lesson contradicts, never keep both.
+1. **Set the bar before the change.** Copy `docs/templates/QUALITY_BAR.md`, pick the size (S/M/L),
+   write the outcome and the rows. A bar written afterwards grades what was built, not what was
+   needed.
+2. **Loop:** grade every row → fix what fails → re-grade, until an iteration changes nothing and no row
+   is FAIL or OPEN. A row passes only because its check ran this time. The same row failing three
+   iterations running goes to the owner.
+3. **Review before every commit:** a reviewer other than the author (a fresh subagent, per
+   `docs/subagent-orchestration.md`) checks the diff against the bar. Fix critical and high findings
+   before committing.
+4. **Report:** outcome met or not, commands and results, what is a real-model result and what is
+   plumbing, decisions still open.
 
-## Quality gates and coding standard
+## Owner rules — non-negotiable
 
-- Follow `docs/CODING_STANDARD.md` for every code change — it is the repo's Ruby/Rails
-  best-practice contract and is enforced by the quality gates.
-- The quality program (RuboCop, Reek, SimpleCov, Enola) is chartered in
-  `docs/QUALITY_PROGRAM.md`; live state and the resume point live in
-  `docs/QUALITY_PROGRAM_STATE.md`.
-- Everyday gate: `rake ci` + `rubocop` + `enola check` (see the state doc's gate
-  policy — `ci_full` both locales only for durability/MCP/packaging/evidence slices).
+Each rule's reasoning and evidence live in the ADR named; the line here is the rule.
 
-## Working conventions (owner directive)
+- **No backward compatibility before 1.0** (ADR-059). No legacy-row readers, shims, or aliases; a
+  database may be reset. Migration ordinals stay monotonic and checksummed; each new migration assumes
+  a fresh schema.
+- **Simple over complicated; no rare cases.** When two designs work, take the one with less machinery.
+  Do not write code for a case that cannot happen or has never happened.
+- **Understand before you build; extend, don't reinvent.** Map the existing path (enola
+  `explore`/`traverse`/`impact_analysis`, then read it end to end) and name the seam you extend before
+  writing a line. A class duplicating an existing effect, loop, store, or model call is a defect.
+- **Gem boundaries are absolute** (ADR-052). Use another gem only through the facade its README names —
+  never its stores, tables, key layouts, record internals, or private rules. Missing capability goes
+  into the owning facade; guard the boundary with a leak test (`test/memory_boundary_test.rb`). Ask
+  before changing a cross-gem interface.
+- **Non-deterministic and external calls go through the effect journal** (ADR-016):
+  `EffectDispatcher.run` (`SessionEffects#model_call`; `Runtime#model_generate` for the one-shot
+  runtime). Key identity on the request, never the answer; terminal receipts are immutable; an
+  unanswered unsafe call stops as `:unknown`.
+- **A user's stop ends the turn; it never aborts the graph** (ADR-057). Stops go through
+  `Tamoz::Cancellation::Stops`; cancelling the graph context's token is for shutdown and recovery.
+- **Pin authority; never re-derive it by id.** A reloaded profile must match the `canonical_digest`
+  recorded at bind time (`WorkerRuntime#child_profile_for`, `validate_thread_profile`); effect
+  mutations bind to the active lease (`EffectReconciler#reconcile`); a failed store or authority
+  lookup fails closed.
+- **Approval policy is data** (ADR-053). Verdicts and evidence live only in
+  `gems/tamoz-approval/policy/*.yaml`; never hardcode a verdict, approval constant, or bypass flag. A
+  policy edit that loosens authority is also an ADR change (`.agent/rules/adr.md`).
+- **Domain knowledge is data, never code** (ADR-058). Catalogs, prompts, intents and risk classes,
+  compensation maps, watch rules, fact templates, fixture responses, and benchmark families live only
+  in `test/fixtures/domains/*.json`, loaded by `test/support/domain_loader.rb`. The pinned wire
+  digests and the protocol SHA in `documentation/benchmark/BENCHMARK_PROTOCOL.json` change only as a
+  reviewed update; the aquaculture catalog digest is pinned in the Go repository too.
+- **Real model for real runs; fakes stay in tests** (ADR-024). Tests never call a real LLM; a stub,
+  fixture, or deterministic provider is never presented as evidence that the agent reasons.
+- **Keep the record true.** A change that alters a decided rule updates its ADR in the same change
+  (`rake adr:validate adr:verify`). Never rewrite accepted intent to match the code: mark it
+  `Implementation: Partial` and raise it with the owner.
+- **Never force-push** (`.agent/rules/git.md`). Amend locally, publish a new commit.
 
-- **No backwards compatibility.** Databases are free to be reset or cleaned whenever
-  a change needs it; never write legacy-row handling, compatibility shims, or
-  read-time tolerances for old rows. Migration ordinals are still consumed
-  monotonically (they are checksummed and manifest-pinned), but each new migration
-  assumes a fresh schema — the previous rows do not exist.
-- **Choose the simple solution over the complicated one.** When two designs both
-  work, take the one with less machinery. A plan's elaborate sub-item is not
-  obligatory if the simple path already delivers the required property.
-- **Do not cover rare cases.** If a scenario cannot happen by construction (or only
-  in a case that has never occurred), do not write code for it. Fix it when it
-  actually shows up, not preemptively.
-- **Gem boundaries are absolute; nothing leaks.** Another gem uses a gem only through its
-  published facade (named in that gem's README) — never its store namespaces, table names,
-  key layouts, repository rows, record internals, or a private rule re-implemented on the
-  caller's side. If the facade lacks what you need, add it to the owning gem; do not reach
-  past it. Guard a boundary with a test that fails on a leak (`test/memory_boundary_test.rb`).
-- **Clean house as you go.** When a file you read breaks a rule in this document, do not
-  walk past it. Fix it in the same change only if the file is already in your change, the
-  fix is small, and a test proves it; otherwise report it — file:line and the rule — in your
-  final report or as a follow-up task, never silently. Keep such fixes in their own commit. When
-  the rule can be checked mechanically, prefer adding a test that fails on it over fixing one
-  instance.
-- **Understand before you build; extend, don't reinvent.** Before writing new
-  machinery, map how Tamoz already does the thing — with enola
-  (`explore`/`traverse`/`impact_analysis`) and by reading the real path end to end.
-  Name the existing seam you are extending before you write a line. A new class that
-  duplicates a capability the codebase already has (an effect, a loop, a store, a
-  model call) is a defect, not progress. Most of what a change needs already exists.
-- **Non-deterministic and external calls go through the durable effect journal.** A
-  model or tool call is non-deterministic and a durable graph replays its nodes.
-  Never call one raw inside a node and let downstream state depend on the result —
-  route it through `EffectDispatcher.run` (see `SessionEffects#model_call`, and
-  `Runtime#model_generate` for the ephemeral one-shot runtime) so a replay
-  returns the recorded receipt, not a fresh, different answer. Key identity
-  and dedup on the request, never on the answer. Terminal receipts are immutable;
-  an unanswered call is resolved by its safety class (`:idempotent` grants a fresh
-  attempt, `:unsafe` stops as unknown). The one-shot ephemeral runtime journals
-  through the same dispatcher over in-memory stores by design.
-- **A user's stop ends the turn; it never aborts the graph.** Cancelling the graph context's
-  token makes the executor drop the running superstep and leave the request `running`, so the next
-  pass recovers it and the answer still arrives. A chat `/cancel` goes through
-  `Tamoz::Cancellation::Stops` (registered by `Worker#watching_for_stop`): the work loop's next
-  step routes to its `cancelled_by_user` terminal, and an in-flight model call is abandoned.
-- **Pin authority; never re-derive it by id.** A reloaded profile must match the
-  `canonical_digest` recorded at bind time (`WorkerRuntime#child_profile_for`,
-  `validate_thread_profile`); effect mutations bind to the active lease
-  (`EffectReconciler#reconcile`); a failed store or authority lookup fails closed — never
-  the permissive default.
-- **Approval policy is data too.** Whether an action needs approval, and under
-  what evidence, lives only in `gems/tamoz-approval/policy/*.yaml` (base +
-  digest-pinned profiles); the engine in `gems/tamoz-approval` interprets it.
-  Never hardcode a verdict, an approval constant, or a bypass flag elsewhere.
-- **Domain knowledge is data, never code (B9 / P4 gate-4).** Diagnosis catalogs,
-  operator prompts, intent types + risk classes, compensation maps, watch-property
-  rules and presets, snapshot fact templates, fixture responses, and benchmark-family
-  config are authored ONLY in `test/fixtures/domains/*.json` and loaded through
-  `test/support/domain_loader.rb` (thin loader modules; zero domain content in Ruby).
-  A new domain is a new JSON file — `DomainLoader.domains` picks it up. Never
-  reintroduce any of it as Ruby literals, in gems, `test/support/`, or tests. Data
-  edits are digest-gated: the six pinned wire digests (aqua/clim intent, diag,
-  prompt) and the protocol SHA in `documentation/benchmark/BENCHMARK_PROTOCOL.json`
-  change only as a deliberate, reviewed update (the parity digest `e4f86620…` binds
-  the same catalog on the Go side — a Ruby edit without the Go mirror fails).
-- **Real model for real runs; fakes stay in tests.** Any run meant to show the agent
-  works calls a real provider. Test code never calls a real LLM, and a test, stub,
-  fixture, or deterministic provider is never shown or described as evidence that the
-  agent reasons or is intelligent.
-- **Report in plain terms, grounded in the real code.** When explaining to the owner,
-  name actual files and seams, not invented abstractions or jargon; say plainly what
-  is a real model result versus a plumbing test, and never overclaim.
+## Working practice
 
-## Running tests and lint (fast path)
+- **Clean house as you go.** A file you read that breaks a rule here: fix it in the same change only if
+  it is already in your change, the fix is small, and a test proves it (own commit); otherwise report
+  file:line and the rule. Prefer a test that fails on the rule over fixing one instance.
+- **Record a lesson in the change that taught it** — here, or in `.agent/rules/<topic>.md` when it
+  needs evidence. Ground it in the real seam; rewrite a rule a new lesson contradicts.
+- **Report in plain terms.** Name real files and seams; say what is a real-model result and what is a
+  plumbing test; never overclaim.
 
-- Tests need the pinned Ruby on PATH, one file per command:
+## Tests, lint, gates
+
+- Ruby is pinned in `.ruby-version` (3.3.11); put it on PATH. **One test file per command** (a second file is ignored); filter with `-n`:
   `export PATH="$HOME/.rbenv/bin:$HOME/.rbenv/versions/3.3.11/bin:$PATH" && ruby -Itest test/<file>.rb`
-  (a second file on the same command line is ignored). Filter with `-n "/pattern/"`.
-- Lint a changed file directly: `bundle exec rubocop <path>...`. Check that your diff
-  adds no NEW offense — several files already carry pre-existing ones (e.g. long
-  methods); compare against `git stash` if unsure rather than autocorrecting unrelated code.
-- **Never pay real time in a test** — inject the wait; fast because it *fails early* is not
-  fast. Lanes, weights and the `ci` budget: `.agent/rules/testing.md`.
+- Real-model runs need a UTF-8 locale: `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`.
+- **Never pay real time in a test** — inject the wait. Lanes, weights, the `ci` budget, file modes:
+  `.agent/rules/testing.md`.
+- Lint changed files: `bundle exec rubocop <path>...` — add no new offense. Compare with the HEAD copy
+  (`git show HEAD:<file>`) or a detached worktree, never `git stash`.
+- Everyday gate: `rake ci` + `rubocop` + `enola check`. `rake ci_full` in both locales only for
+  durability, MCP, packaging, or evidence slices. State and policy: `docs/QUALITY_PROGRAM_STATE.md`.
+- A gate already red at HEAD is not yours to chase: prove it in a detached worktree and say so.
 
 ## Comments
 
-Default to none. Name things so the code reads without them; if it does not read,
-fix the code, not the comment. Never restate what the line below does.
-
-When a comment is genuinely needed (§11's "why": a safety invariant, a non-obvious
-failure model, a rejected alternative), write one or two lines. Not a paragraph, not
-a narrative of the bug it replaced, not a rationale for a decision the diff already
-shows. Commit messages and PR bodies carry history; source files do not.
-
-New classes and methods are the usual offenders: do not open one with a multi-line
-prose header explaining what it is for, how it fits the design, or which ADR blesses
-it. A bare name is the default; at most one line of "why" when the name cannot carry
-it. Cite an ADR/invariant only when a reader must have that identifier to change the
-code safely — never as decoration. This applies to new files as much as edits.
+Default to none: name things so the code reads without them. When a "why" is genuinely needed — a
+safety invariant, a non-obvious failure model, a rejected alternative (`CODING_STANDARD.md` §11) — write
+one or two lines. No multi-line headers on new classes or methods, no narrative of the bug a fix
+replaced, no ADR citation as decoration. History belongs in commits and PR bodies, not source.
 
 <!-- enola:begin -->
 ## enola — architecture before and after a change
