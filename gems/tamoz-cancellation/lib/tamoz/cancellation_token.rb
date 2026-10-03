@@ -99,33 +99,33 @@ module Tamoz
     def on_cancel(&callback)
       raise ArgumentError, "a cancellation callback is required" unless callback
 
-      callback_id = nil
-      reason = nil
-      @mutex.synchronize do
-        if @cancelled
-          reason = @reason
-        else
-          if @callbacks.length >= max_callbacks
-            raise StateLimitError, "cancellation token exceeds #{max_callbacks} callbacks"
-          end
-          callback_id = Object.new.freeze
-          @callbacks[callback_id] = callback
-        end
-      end
+      callback_id, reason = register_callback(callback)
+      return Subscription.new(self, callback_id) unless reason
 
-      if reason
-        begin
-          callback.call(reason)
-        rescue StandardError
-          nil
-        end
-        ClosedSubscription::INSTANCE
-      else
-        Subscription.new(self, callback_id)
-      end
+      call_late_callback(callback, reason)
+      ClosedSubscription::INSTANCE
     end
 
     private
+
+    def register_callback(callback)
+      @mutex.synchronize do
+        return [nil, @reason] if @cancelled
+        if @callbacks.length >= max_callbacks
+          raise StateLimitError, "cancellation token exceeds #{max_callbacks} callbacks"
+        end
+
+        callback_id = Object.new.freeze
+        @callbacks[callback_id] = callback
+        [callback_id, nil]
+      end
+    end
+
+    def call_late_callback(callback, reason)
+      callback.call(reason)
+    rescue StandardError
+      nil
+    end
 
     def remove_callback(callback_id)
       @mutex.synchronize { !@callbacks.delete(callback_id).nil? }

@@ -237,11 +237,14 @@ module Tamoz
         case type
         when :integer, :timestamp_ms then value.is_a?(Integer)
         when :boolean then value == true || value == false
-        when :string, :digest then value.is_a?(String) || value.is_a?(Symbol)
-        when :low_cardinality, :enum
-          (value.is_a?(String) || value.is_a?(Symbol)) && value.to_s.match?(LOW_CARDINALITY_PATTERN)
+        when :string, :digest then textual?(value)
+        when :low_cardinality, :enum then textual?(value) && value.to_s.match?(LOW_CARDINALITY_PATTERN)
         else false
         end
+      end
+
+      def textual?(value)
+        value.is_a?(String) || value.is_a?(Symbol)
       end
 
       def valid_digest_value?(value)

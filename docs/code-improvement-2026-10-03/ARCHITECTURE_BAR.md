@@ -85,6 +85,17 @@ only for its own dependency boundary).
 | 1 | `Tamoz::Circuit::*` (record, registry, evidence, new `RecordSchema`, `OwnerSchema`, `OwnerTally`) | stays in `tamoz-core` | A domain engine used by `tamoz-mcp`, `tamoz-mcp-websearch`, `tamoz-agent-healing` and `tamoz-sqlite`; it has no third-party dependency, so a gem of its own would be a boundary with nothing behind it. Candidate for its own gem only if it ever gains one. |
 | 1 | `Tamoz::StateCodec` (+ new `Encoder`, `WireReader`, `ItemBudget`) | stays in `tamoz-core` | The durable value codec under both `tamoz-graph` checkpoints and `tamoz-sqlite`. |
 | 1 | `JCS`, `Immutable`, `Context`, `Error`, `StoreEntry`, `StreamPart`, `Instrumentation` | stay in `tamoz-core` | Kernel values every gem uses. |
+| 2 | `Tamoz::Pool` (+ `ThreadRun`, `ThreadLimits`) | stays in `tamoz-concurrency` | Thread machinery is that gem's whole job. |
+| 2 | `CancellationToken` | stays in `tamoz-cancellation` | |
+| 2 | OTel `HTTPExporter`, `EgressPolicy` | stay in `tamoz-otel` | The gem owns the OTLP egress boundary. |
+| 2 | `Telegram::Client` | stays in `tamoz-telegram` | One transport, one gem (ADR-041). |
+| 2 | `Tools::Toolbox` | stays in `tamoz-tools` | |
+| 2 | `Comms::Admission` | stays in `tamoz-comms` | Pure channel policy, no transport. |
+| 2 | `Approval::PolicyValidator`, `TargetPath` (new) | `tamoz-approval` | Both are approval rules; private constants. |
+| 2 | Observability `Catalog` + `ModelSignals`/`WorkerSignals`/`CommsSignals`/`Measurements` | stay in `tamoz-observability` | The closed signal catalog is that gem's contract (ADR-044). |
+| 2 | Websearch `EgressClient`, `EgressPolicy` | stay in `tamoz-mcp-websearch` | The gem owns the websearch egress boundary. |
+| 2 | `Agent::CapabilityBinding` | stays in `tamoz-agent-capabilities` | |
+| 2 | `Comms::Gateway` and its 10 mixins | right gem (`tamoz-comms-gateway`, a separate process per ADR-042); wrong shape | One 1,500-line class assembled from mixins. Next round turns the mixins into collaborator objects. |
 
 **B5 note (round 1).** Splitting `StateCodec` into `lib/tamoz/state_codec/` moved `lib/tamoz` from
 instability 0.053 to 0.073 (distance improved, 0.932 → 0.911): a facade that delegates to its own
@@ -103,3 +114,4 @@ violation.
 |---|---|---|---|---|
 | 0 | 2026-10-03 | Bar set, baseline pinned | 1 / 50 (corrected to 50 classes + 53 modules: module ceiling fixed to 100, the real `.rubocop.yml` value, and inline disables counted) | core cycle, then the largest classes |
 | 1 | 2026-10-03 | `tamoz-core`: cycle shrunk; `Circuit::Record` (508) and `StateCodec` (374) split into named collaborators | 1 (smaller) / 36 + 38 | `tamoz-concurrency`, `tamoz-cancellation`, then by gem |
+| 2 | 2026-10-03 | `Pool`, `Approval::PolicyDocument` (294), `Approval::Engine` (258), observability `Catalog` (171-line module) split | 1 / 46 + 51 | comms-gateway, scheduler, profile, core modules |

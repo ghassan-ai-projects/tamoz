@@ -44,6 +44,12 @@ module Tamoz
       MCP_EFFECT_CLASSES = %i[read_only bounded reconcilable].freeze
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
       MCP_CAPABILITY_KINDS = %i[mcp_tool websearch].freeze
+      HOST_LIMITS = {
+        secret_handling: :reject_values,
+        request_budget: { "max_bytes" => 16 * 1024 }.freeze,
+        output_budget: { "max_bytes" => 64 * 1024 }.freeze
+      }.freeze
+      private_constant :HOST_LIMITS
 
       def self.build(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil, allowed_names: nil)
         new(toolbox:, mcp:, child_task_runtime:, profile:, allowed_names:)
@@ -225,30 +231,33 @@ module Tamoz
       # reject a conforming caller.
       def mcp_descriptor(descriptor)
         effect_class = closed_effect_class(descriptor)
-        source_id = source_id_for(descriptor)
-        input_schema = optional(descriptor, :input_schema)
-        output_schema = optional(descriptor, :output_schema)
-
         Capability::Descriptor.new(
-          id: descriptor.id,
-          kind: mcp_kind(descriptor),
-          source_id:,
-          source_digest: Capability::Descriptor.source_digest_for(source_id),
-          trust: :operator,
-          effect_class:,
+          id: descriptor.id, kind: mcp_kind(descriptor), trust: :operator, effect_class:,
           approval_policy: mcp_approval_policy(effect_class),
-          egress_policy_ref: mcp_egress_policy(descriptor),
-          egress_policy_digest: Capability::Descriptor.egress_digest_for(mcp_egress_policy(descriptor)),
-          secret_handling: :reject_values,
-          request_budget: {"max_bytes" => 16 * 1024},
-          output_budget: {"max_bytes" => 64 * 1024},
           retry_policy: mcp_retry_policy(effect_class),
           reconciliation_policy: mcp_reconciliation_policy(effect_class),
-          schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
           protocol_profile: mcp_protocol_profile(descriptor),
+          **source_fields(source_id_for(descriptor)),
+          **egress_fields(mcp_egress_policy(descriptor)),
+          **pinned_schema_fields(optional(descriptor, :input_schema), optional(descriptor, :output_schema)),
+          **HOST_LIMITS
+        )
+      end
+
+      def source_fields(source_id)
+        { source_id:, source_digest: Capability::Descriptor.source_digest_for(source_id) }
+      end
+
+      def egress_fields(reference)
+        { egress_policy_ref: reference, egress_policy_digest: Capability::Descriptor.egress_digest_for(reference) }
+      end
+
+      def pinned_schema_fields(input_schema, output_schema)
+        {
+          schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
           input_schema: schema_shape(input_schema),
           output_schema: schema_shape(output_schema)
-        )
+        }
       end
 
       def optional(descriptor, field)
@@ -315,30 +324,18 @@ module Tamoz
       end
 
       def build_toolbox_descriptor(name, source_id, read_only_names)
-        input_schema = {"type" => "object"}
-        output_schema = {"type" => "object"}
         skill = SKILL_TOOLS.include?(name)
         read_only = read_only_names.include?(name)
-
         Capability::Descriptor.new(
-          id: name,
-          kind: skill ? :skill : :tool,
-          source_id:,
-          trust: skill ? :declared : :local,
+          id: name, kind: skill ? :skill : :tool, trust: skill ? :declared : :local,
           effect_class: read_only ? :read_only : :bounded,
           approval_policy: read_only ? :none : :required,
-          egress_policy_ref: "none",
-          egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
-          secret_handling: :reject_values,
-          request_budget: {"max_bytes" => 16 * 1024},
-          output_budget: {"max_bytes" => 64 * 1024},
           retry_policy: read_only ? :read_only : :none,
           reconciliation_policy: :none,
-          schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
-          source_digest: Capability::Descriptor.source_digest_for(source_id),
-          protocol_profile: {"transport" => "in_process"},
-          input_schema:,
-          output_schema:
+          protocol_profile: { "transport" => "in_process" },
+          **source_fields(source_id), **egress_fields("none"),
+          **pinned_schema_fields({ "type" => "object" }, { "type" => "object" }),
+          **HOST_LIMITS
         )
       end
 

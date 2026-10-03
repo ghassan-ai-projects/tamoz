@@ -205,84 +205,6 @@ module Tamoz
         Canonical.hexdigest(value)
       end
 
-      def validate!
-        validate_tool_tiers!
-        validate_fallback_tier!
-        validate_tiers!
-        validate_rules!
-        validate_evidence!
-      end
-
-      def validate_tool_tiers!
-        @tool_tiers.each do |tool, entry|
-          if tool.to_s.include?("*") && !tool.to_s.match?(/\A[^*]+\*\z/)
-            raise InvalidPolicyError, "tool_tiers #{tool} may use * only as a final prefix wildcard"
-          end
-
-          tier = entry[:tier]
-          raise InvalidPolicyError, "tool_tiers #{tool} references unknown tier #{tier}" unless @tiers.key?(tier)
-
-          scopes = entry[:grant_scopes] || @tiers[tier][:grant_scopes]
-          if tier == :local_execute && tool == :child_task && scopes.include?(:session)
-            raise InvalidPolicyError, "tool_tiers #{tool} grant_scopes may not include :session"
-          end
-          next unless scopes.include?(:session) && !NO_SESSION_SCOPE_TIERS.include?(tier)
-
-          unless @grant_keys[tier]
-            raise InvalidPolicyError,
-                  "tool_tiers #{tool} maps to #{tier} with :session but grant_keys has no " \
-                  "#{tier} entry; the scope could never be minted"
-          end
-          if NO_SESSION_SCOPE_TIERS.include?(tier) && scopes.include?(:session)
-            raise InvalidPolicyError, "tool_tiers #{tool} mapped to #{tier}; grant_scopes may not include :session"
-          end
-        end
-      end
-
-      def validate_fallback_tier!
-        tier = @fallback_tier[:tier]
-        raise InvalidPolicyError, "fallback_tier references unknown tier #{tier}" unless @tiers.key?(tier)
-        if @fallback_tier[:grant_scopes].include?(:session)
-          raise InvalidPolicyError, 'fallback_tier grant_scopes may not include :session'
-        end
-      end
-
-      def validate_tiers!
-        @tiers.each do |name, tier|
-          default = tier[:default]
-          raise InvalidPolicyError, "tier #{name} default must be one of #{CLOSED_VERDICTS}" unless CLOSED_VERDICTS.include?(default)
-
-          scopes = tier[:grant_scopes]
-          if NO_SESSION_SCOPE_TIERS.include?(name) && scopes.include?(:session)
-            raise InvalidPolicyError, "tier #{name} grant_scopes may not include :session"
-          end
-          next unless scopes.include?(:session)
-
-          unless @grant_keys[name]
-            raise InvalidPolicyError,
-                  "tier #{name} advertises :session but grant_keys has no #{name} entry; " \
-                  "the scope could never be minted"
-          end
-        end
-      end
-
-      def validate_rules!
-        @rules.each do |rule|
-          raise InvalidPolicyError, "rule #{rule[:id]} verdict must be one of #{CLOSED_VERDICTS}" unless CLOSED_VERDICTS.include?(rule[:verdict])
-
-          unknown = rule[:match].keys - CLOSED_MATCHERS
-          raise InvalidPolicyError, "rule #{rule[:id]} uses unknown matchers #{unknown}" unless unknown.empty?
-        end
-      end
-
-      def validate_evidence!
-        @evidence.each_value do |symbol|
-          unless @evidence_symbols.include?(symbol)
-            raise InvalidPolicyError, "evidence symbol #{symbol.inspect} is not in the injected symbol set"
-          end
-        end
-      end
-
       def run_simulations!
         @simulations.each do |simulation|
           request = Request.new(
@@ -341,7 +263,7 @@ module Tamoz
       # it — a no-op profile overlay must not invalidate live grants.
       def recompute_digest_and_validate!
         @policy_rev = compute_digest(digest_basis)
-        validate!
+        PolicyValidator.new(self, @evidence_symbols).validate!
         run_simulations!
       end
 
@@ -358,7 +280,6 @@ module Tamoz
           'simulations' => @simulations
         }
       end
-
     end
   end
 end

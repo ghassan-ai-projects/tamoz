@@ -73,7 +73,9 @@ refactored; they run unchanged as the behavior proof. `Metrics/AbcSize` and
 | D3 | RuboCop: no new offense of any cop in a touched file | `bundle exec rubocop <files>` vs `git show HEAD:<file>` | OPEN |
 | D4 | enola: no new cycle, layer violation, or cross-gem coupling | `diff_snapshot` vs the pinned baseline; `rake quality:architecture` | OPEN |
 
-**Known-red at HEAD `c2887afa`:**
+**Known-red at HEAD `c2887afa`** (each reproduced at the base in the detached worktree):
+- `rake test_slow`: `test/sqlite_scenario_driver_test.rb` — `request.redirect_ready: SQLite failure SQLite3::SQLException`, same error at the base.
+- `rake test` under `LANG=C`: `test/agenteval_skills_optimizer_test.rb` cannot load (`invalid byte sequence in US-ASCII` at line 11); a test-file encoding issue, unchanged by this work.
 - `stream:proto:check` — `grpc_tools_ruby_protoc` ships an x86_64 `protoc`; this arm64 machine has
   no Rosetta (`Errno::EBADARCH`). Environment, not code; every other `rake ci` step passed.
 - `bundle exec rubocop` (whole repo) — 4,809 offenses in 156 files at HEAD (files never added to the
@@ -102,6 +104,7 @@ refactored; they run unchanged as the behavior proof. `Metrics/AbcSize` and
 | Round | Findings (C / H / M / L) | Resolution | Commit |
 |---|---|---|---|
 | 1 | 0 / 0 / 2 / 7 — no behavior change found (22 error-path probes byte-identical) | M1 dropped "why" comments → carried by names (`require_run_identity!`, `count_keeping_highest`), owner's no-comment rule; M2 new circuit modules made `private_constant`; L: success reset moved into `OwnerTally.record_success`, window/rate split back to plain `when`s, schema methods renamed (`validate_state_fields!`, `validate_lifecycle_fields!`), `Context#assign_annotations` takes keywords, `corrupt!` deduplicated into `Circuit.corrupt_record!`, `Record.repaired` evaluation order restored. Removed unused internals: `Record.corrupt!`, `Record::KEYS` (not public API, no callers). | round 1 |
+| 2 | 0 / 0 / 1 / 8 — no behavior change; ThreadRun keys, `on_stuck` timing, drain/deadline loop and close/join order confirmed equal | M: the deleted unreachable branch in `validate_tool_tiers!` was the only written statement of a rule nobody enforces — a tool entry on a no-session tier may declare `:session` scopes. Pre-existing gap; not fixed silently (it changes policy validation): flagged as a separate task with a failing test first, and listed for the owner. L: `REFUSED_IPV4` made private; Telegram `build_http` order restored; stale "metric smells" class comments trimmed; `Toolbox` read tools named once (`READ_TOOLS`) with an explicit `glob` arm; `ThreadRun` takes `ThreadLimits` instead of the pool; `HOST_LIMITS` inner hashes frozen. Accepted: OTel exporter now checks the timeout before building the request (differs only for a CR/LF credential header, which `open` already refuses). | round 2 |
 
 ## Loop log
 
@@ -109,3 +112,4 @@ refactored; they run unchanged as the behavior proof. `Metrics/AbcSize` and
 |---|---|---|---|---|
 | 0 | 2026-10-03 | Bars set, baseline pinned | 306 / 176 / 162; corrected in round 1 to 404 / 216 / 203 once the 107 inline `rubocop:disable Metrics/…` comments are ignored (`--ignore-disable-comments`) | smallest gems first |
 | 1 | 2026-10-03 | `tamoz-core` clean: descriptor, JCS, state codec, circuit record/registry, context, immutable, instrumentation, stream part, store entry. Byte-identical to base on randomized differential runs (JCS 30k values, StateCodec 3k round-trips, circuits 19k transitions) | 290 / 155 / 147 | `tamoz-concurrency`, `tamoz-cancellation` |
+| 2 | 2026-10-03 | `tamoz-concurrency` (`Pool` split into `Base`/`Inline`/`Threads`/`ThreadRun`/`ThreadLimits`), `tamoz-cancellation`, `tamoz-otel`, `tamoz-telegram`, `tamoz-tools`, `tamoz-comms` admission, `tamoz-approval` (`PolicyValidator`, `TargetPath`; one unreachable branch in `validate_tool_tiers!` removed), `tamoz-observability` (catalog split into signal families; registry identical to base), `tamoz-mcp-websearch` (IPv4 refusal as a CIDR table, identical to base on every /16), `tamoz-agent-capabilities`. Three stale inline `rubocop:disable Metrics/…` comments removed | 374 / 181 / 176 (with inline disables counted) | comms-gateway as collaborators; scheduler; profile; core modules over 100 |

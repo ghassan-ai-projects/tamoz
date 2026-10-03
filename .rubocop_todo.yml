@@ -109,10 +109,8 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
@@ -152,7 +150,6 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/usage.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/grant_intersector.rb'
@@ -236,7 +233,6 @@ Layout/EmptyLinesAroundBlockBody:
 # SupportedStyles: empty_lines, empty_lines_except_namespace, empty_lines_special, no_empty_lines, beginning_only, ending_only
 Layout/EmptyLinesAroundClassBody:
   Exclude:
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/elicitation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
@@ -388,13 +384,10 @@ Layout/LineLength:
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-scheduler/tamoz-scheduler.gemspec'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_grant_store.rb'
@@ -506,7 +499,6 @@ Layout/MultilineOperationIndentation:
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/memory_cell.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/node_spec.rb'
-    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/verification_store.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/verification_store.rb'
@@ -553,7 +545,6 @@ Layout/SpaceInsideHashLiteralBraces:
   Exclude:
     - 'bin/tamoz-stream-subscriber'
     - 'bin/tamoz-stream-worker'
-    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
@@ -922,7 +913,6 @@ Lint/FloatComparison:
 # Offense count: 1
 Lint/HashCompareByIdentity:
   Exclude:
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -968,7 +958,6 @@ Lint/MissingSuper:
 # Offense count: 2
 Lint/NoReturnInBeginEndBlocks:
   Exclude:
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
 
 # Offense count: 4
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -980,7 +969,6 @@ Lint/NonAtomicFileOperation:
 # This cop supports safe autocorrection (--autocorrect).
 Lint/RedundantCopDisableDirective:
   Exclude:
-    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-comms/lib/tamoz/comms/approval_prompt.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/http_supervisor.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/tool_catalog.rb'
@@ -1219,7 +1207,6 @@ Metrics/AbcSize:
   Exclude:
     - 'test/websearch_contract_test.rb'
     - 'gems/gemspec_helper.rb'
-    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
@@ -1276,8 +1263,6 @@ Metrics/AbcSize:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1333,10 +1318,7 @@ Metrics/AbcSize:
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/adapter.rb'
@@ -1642,8 +1624,6 @@ Metrics/ClassLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_memory_corpus.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/memory_treatment_profile.rb'
@@ -1771,10 +1751,6 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/evaluator.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/metrics.rb'
@@ -1809,16 +1785,12 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/notifier.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb'
@@ -1838,7 +1810,6 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_snapshot.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/verification_store.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/agent_latency_smoke'
     - 'script/generate_calibration_artifact'
     - 'script/generate_requirements_manifest'
@@ -1864,7 +1835,6 @@ Metrics/MethodLength:
   Exclude:
     - 'test/websearch_contract_test.rb'
     - 'gems/gemspec_helper.rb'
-    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
@@ -1913,10 +1883,6 @@ Metrics/MethodLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
-    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/comparison.rb'
@@ -1960,14 +1926,9 @@ Metrics/MethodLength:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_client.rb'
-    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/grant_intersector.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb'
@@ -2180,7 +2141,6 @@ Metrics/ModuleLength:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/elicitation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/catalog.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_registry.rb'
@@ -2346,9 +2306,6 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/metrics.rb'
@@ -2384,16 +2341,12 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/notifier.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb'
@@ -3212,7 +3165,6 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/core.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
@@ -3368,7 +3320,6 @@ Performance/RedundantBlockCall:
   Exclude:
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/scope.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/heuristic_corpus.rb'
     - 'test/core_instrumentation_test.rb'
@@ -3418,7 +3369,6 @@ Performance/StringReplacement:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/TimesMap:
   Exclude:
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/comparison.rb'
     - 'test/agent_profile_machinery_test.rb'
     - 'test/benchmark_controls_test.rb'
@@ -3716,7 +3666,6 @@ Style/EmptyClassDefinition:
 # SupportedStyles: empty, nil, both
 Style/EmptyElse:
   Exclude:
-    - 'gems/tamoz-approval/lib/tamoz/approval/evaluator.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/episode_stream.rb'
 
 # Offense count: 1
@@ -3821,7 +3770,6 @@ Style/GuardClause:
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-core/lib/tamoz/core/situation_recall.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/sqlite_selector_control_stopper.rb'
@@ -3832,7 +3780,6 @@ Style/GuardClause:
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/episode_worker.rb'
@@ -3944,10 +3891,7 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
@@ -3995,9 +3939,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/grant_intersector.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
@@ -4275,7 +4216,6 @@ Style/Next:
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
     - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile/document_validator.rb'
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
-    - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/verifier.rb'
     - 'script/tamoz_sqlite_oracle'
@@ -4317,7 +4257,6 @@ Style/NumericPredicate:
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/subprocess_runner.rb'
-    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/circuit_store.rb'
     - 'script/benchmark_release'
     - 'script/tamoz_sqlite_oracle'
@@ -4394,7 +4333,6 @@ Style/RedundantAssignment:
 Style/RedundantBegin:
   Exclude:
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'

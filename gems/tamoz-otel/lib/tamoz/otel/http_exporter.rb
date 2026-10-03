@@ -34,48 +34,17 @@ module Tamoz
       end
 
       def export(batch, deadline_ms: policy.timeout_ms)
-        return :rejected unless @opened
-        return :rejected unless batch.is_a?(Array) && batch.length <= policy.max_batch
-        return :rejected if proxy_configured?
+        return :rejected unless exportable?(batch)
 
         body = JSON.generate(resource_spans(batch))
         return :rejected if body.bytesize > 16 * 1_024 * 1_024
 
         addresses = policy.resolved_addresses
         policy.validate_resolved_addresses!(addresses)
-
-        request = Net::HTTP::Post.new(policy.uri.request_uri)
-        request['Content-Type'] = 'application/json'
-        @headers.each { |name, value| request[name] = value }
-        request.body = body
-        http = Net::HTTP.new(policy.uri.host, policy.uri.port)
-        http.use_ssl = true
-        http.ipaddr = addresses.first unless addresses.empty?
-        http.verify_mode = OpenSSL::SSL::VERIFY_PEER
         timeout = [Float(deadline_ms) / 1_000, policy.timeout_ms / 1_000.0].min
         return :rejected unless timeout.positive?
 
-        http.open_timeout = timeout
-        http.read_timeout = timeout
-        response = http.start do |connection|
-          connection.request(request) do |incoming|
-            if incoming.content_length && incoming.content_length > MAX_RESPONSE_BODY_BYTES
-              raise ResponseTooLarge
-            end
-
-            response_bytes = 0
-            incoming.read_body do |chunk|
-              response_bytes += chunk.bytesize
-              raise ResponseTooLarge if response_bytes > MAX_RESPONSE_BODY_BYTES
-            end
-          end
-        end
-        case response
-        when Net::HTTPSuccess then :delivered
-        when Net::HTTPTooManyRequests then :throttled
-        when Net::HTTPRedirection then :rejected
-        else :unknown
-        end
+        delivery_status(post(body, addresses, timeout))
       rescue ResponseTooLarge
         :rejected
       rescue StandardError
@@ -88,6 +57,54 @@ module Tamoz
       end
 
       private
+
+      def exportable?(batch)
+        @opened && batch.is_a?(Array) && batch.length <= policy.max_batch && !proxy_configured?
+      end
+
+      def post(body, addresses, timeout)
+        request = build_request(body)
+        connection(addresses, timeout).start do |http|
+          http.request(request) { |incoming| read_bounded(incoming) }
+        end
+      end
+
+      def build_request(body)
+        request = Net::HTTP::Post.new(policy.uri.request_uri)
+        request['Content-Type'] = 'application/json'
+        @headers.each { |name, value| request[name] = value }
+        request.body = body
+        request
+      end
+
+      def connection(addresses, timeout)
+        http = Net::HTTP.new(policy.uri.host, policy.uri.port)
+        http.use_ssl = true
+        http.ipaddr = addresses.first unless addresses.empty?
+        http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+        http.open_timeout = timeout
+        http.read_timeout = timeout
+        http
+      end
+
+      def read_bounded(incoming)
+        raise ResponseTooLarge if incoming.content_length && incoming.content_length > MAX_RESPONSE_BODY_BYTES
+
+        received = 0
+        incoming.read_body do |chunk|
+          received += chunk.bytesize
+          raise ResponseTooLarge if received > MAX_RESPONSE_BODY_BYTES
+        end
+      end
+
+      def delivery_status(response)
+        case response
+        when Net::HTTPSuccess then :delivered
+        when Net::HTTPTooManyRequests then :throttled
+        when Net::HTTPRedirection then :rejected
+        else :unknown
+        end
+      end
 
       def credential_headers(credential)
         return {} if credential.nil?
@@ -108,30 +125,37 @@ module Tamoz
       end
 
       def resource_spans(batch)
-        spans = batch.filter_map do |item|
-          document = item.respond_to?(:to_h) ? item.to_h : item
-          correlation = value(document, 'correlation') || {}
-          attributes = value(document, 'attributes') || {}
-          observed_at_ms = value(document, 'observed_at_ms')
-          name = value(document, 'name')
-          trace_id = otel_trace_id(value(correlation, 'trace_id') || derived_trace_id(correlation))
-          anchor = value(attributes, 'span_anchor') || value(correlation, 'effect_key') || observed_at_ms
-          span_id = otel_span_id(value(attributes, 'span_id') || derived_span_id(trace_id, name, anchor))
-          next unless trace_id && span_id
-
-          started_at_ms = value(document, 'started_at_ms')
-          ended_at_ms = value(document, 'ended_at_ms')
-          {
-            'name' => name,
-            'trace_id' => trace_id,
-            'span_id' => span_id,
-            'kind' => 'SPAN_KIND_INTERNAL',
-            'start_time_unix_nano' => started_at_ms && Integer(started_at_ms * 1_000_000),
-            'end_time_unix_nano' => ended_at_ms && Integer(ended_at_ms * 1_000_000),
-            'attributes' => attributes
-          }.compact
-        end
+        spans = batch.filter_map { |item| span_for(item.respond_to?(:to_h) ? item.to_h : item) }
         {'resourceSpans' => [{'resource' => {'attributes' => @descriptor || {}}, 'scopeSpans' => [{'spans' => spans}]}]}
+      end
+
+      def span_for(document)
+        trace_id, span_id = span_identity(document)
+        return unless trace_id && span_id
+
+        {
+          'name' => value(document, 'name'),
+          'trace_id' => trace_id,
+          'span_id' => span_id,
+          'kind' => 'SPAN_KIND_INTERNAL',
+          'start_time_unix_nano' => unix_nano(value(document, 'started_at_ms')),
+          'end_time_unix_nano' => unix_nano(value(document, 'ended_at_ms')),
+          'attributes' => value(document, 'attributes') || {}
+        }.compact
+      end
+
+      def span_identity(document)
+        correlation = value(document, 'correlation') || {}
+        attributes = value(document, 'attributes') || {}
+        trace_id = otel_trace_id(value(correlation, 'trace_id') || derived_trace_id(correlation))
+        anchor = value(attributes, 'span_anchor') || value(correlation, 'effect_key') ||
+                 value(document, 'observed_at_ms')
+        span_id = value(attributes, 'span_id') || derived_span_id(trace_id, value(document, 'name'), anchor)
+        [trace_id, otel_span_id(span_id)]
+      end
+
+      def unix_nano(milliseconds)
+        milliseconds && Integer(milliseconds * 1_000_000)
       end
 
       def value(document, key)
