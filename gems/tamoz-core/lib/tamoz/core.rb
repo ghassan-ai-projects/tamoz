@@ -153,97 +153,11 @@ module Tamoz
       JCS.verify(domain, value, expected)
     end
 
-    # Deep freezer for JSON-shaped values (the plan/session-records freezer, homed
-    # in core so the skills compiler and the durable records share one
-    # implementation). Scalars are returned as-is, containers are rebuilt with
-    # frozen keys/values, and anything that cannot cross a durable boundary raises.
-    def deep_freeze(value)
-      case value
-      when Hash
-        value.to_h { |key, entry| [String(key).dup.freeze, deep_freeze(entry)] }.freeze
-      when Array
-        value.map { |entry| deep_freeze(entry) }.freeze
-      when String
-        value.dup.freeze
-      when NilClass, TrueClass, FalseClass, Numeric
-        value
-      else
-        raise Tamoz::Error, "unsupported plan argument #{value.class}"
-      end
-    end
-
-    # Deep MUTABLE copy for JSON-shaped values — the counterpart of deep_freeze
-    # for the paths that must go on mutating the result. Keys and strings are
-    # duplicated so the copy shares no mutable state with the original, and key
-    # types are preserved (unlike deep_freeze, which stringifies and freezes).
-    # Homed here so the circuit record and the stream decision builder share one
-    # implementation instead of hand-rolling a spelling each.
-    def deep_dup(value)
-      case value
-      when Hash then value.to_h { |key, entry| [deep_dup(key), deep_dup(entry)] }
-      when Array then value.map { |entry| deep_dup(entry) }
-      when String then value.dup
-      else value
-      end
-    end
-
-    # Strict JSON-object parse for untrusted model documents: accepts an already
-    # parsed Hash (symbol keys normalized to strings), strips a markdown fence,
-    # and refuses non-object documents. Homed here so durable-memory
-    # consolidation and the deliberation loop share one implementation.
-    def parse_object(value)
-      return value.transform_keys(&:to_s) if value.is_a?(Hash)
-
-      text = String(value).strip
-      text = text.delete_prefix("```json").delete_prefix("```").delete_suffix("```").strip
-      document = JSON.parse(text)
-      raise ProtocolError, "model response must be a JSON object" unless document.is_a?(Hash)
-
-      document
-    rescue JSON::ParserError => error
-      raise ProtocolError, "model returned invalid JSON: #{error.message}"
-    end
-
-    # Typed string coercion for document fields: refuses non-strings under the
-    # field's name and returns a frozen copy.
-    def string(value, name:)
-      raise ProtocolError, "#{name} must be a string" unless value.is_a?(String)
-
-      value.dup.freeze
-    end
-
-    # Typed string-array coercion; every entry is validated through #string.
-    def strings(value, name:)
-      raise ProtocolError, "#{name} must be an array" unless value.is_a?(Array)
-
-      value.map { |entry| string(entry, name: "#{name} entry") }.freeze
-    end
-
-    # P6: the RECONSIDER payload normalization — a Hash with the four
-    # string-keyed members (prior_decision/commands/outcomes/correction). Homed
-    # in core so both the stream module and the agent intake node consume ONE
-    # contract (symbol- or string-keyed input, typed refusal on a half-shaped
-    # payload).
-    def normalize_reconsideration(hash)
-      unless hash.is_a?(Hash)
-        raise Tamoz::Error, "reconsideration payload is not an object"
-      end
-
-      normalized = hash.transform_keys(&:to_s)
-      missing = %w[prior_decision commands outcomes correction].reject do |key|
-        normalized.key?(key)
-      end
-      unless missing.empty?
-        raise Tamoz::Error,
-              "reconsideration payload is missing: #{missing.join(", ")}"
-      end
-
-      {
-        "prior_decision" => normalized.fetch("prior_decision"),
-        "commands" => Array(normalized["commands"]),
-        "outcomes" => Array(normalized["outcomes"]),
-        "correction" => normalized.fetch("correction")
-      }
-    end
+    def deep_freeze(value) = JsonValues.deep_freeze(value)
+    def deep_dup(value) = JsonValues.deep_dup(value)
+    def parse_object(value) = ModelDocument.parse_object(value)
+    def string(value, name:) = ModelDocument.string(value, name:)
+    def strings(value, name:) = ModelDocument.strings(value, name:)
+    def normalize_reconsideration(hash) = ReconsiderationPayload.normalize(hash)
   end
 end

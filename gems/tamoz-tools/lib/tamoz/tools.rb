@@ -6,6 +6,7 @@ require_relative "tools/version"
 require "tamoz/skills"
 require_relative "tools/toolbox"
 require_relative "tools/capability_host"
+require_relative "tools/inventory_projection"
 require_relative "tools/local_dispatcher"
 
 module Tamoz

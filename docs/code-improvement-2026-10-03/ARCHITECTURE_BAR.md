@@ -96,6 +96,13 @@ only for its own dependency boundary).
 | 2 | Websearch `EgressClient`, `EgressPolicy` | stay in `tamoz-mcp-websearch` | The gem owns the websearch egress boundary. |
 | 2 | `Agent::CapabilityBinding` | stays in `tamoz-agent-capabilities` | |
 | 2 | `Comms::Gateway` and its 10 mixins | right gem (`tamoz-comms-gateway`, a separate process per ADR-042); wrong shape | One 1,500-line class assembled from mixins. Next round turns the mixins into collaborator objects. |
+| 3 | `Scheduler::Schedule` (+ `FireCalendar`, `OccurrencePolicy`, `ScheduleValidator`) | stay in `tamoz-scheduler` | Schedule values and their rules; the gem never runs work (ADR-031). |
+| 3 | `Core::Capability::DescriptorRules`, `Source` | stay in `tamoz-core` | As round 1. |
+| 3 | `Circuit::Registry::Condition`, `Scope` | stay in `tamoz-core` | As round 1. |
+| 3 | `Core::JCS` (+ `Writer`, `NumberFormat`, `Scanner`), `JsonValues`, `ModelDocument`, `ReconsiderationPayload`, `TurnContext` | stay in `tamoz-core` | Canonical bytes and shared document shapes every gem reads. `ReconsiderationPayload` is a stream/agent contract; it stays in core because both `tamoz-stream` and `tamoz-agent-kernel` read it and neither may depend on the other. |
+| 3 | `Tools::CapabilityHost` (+ `InventoryProjection`), `StagingReaper` | stay in `tamoz-tools` | |
+| 3 | `Agent::Profile` (+ `PinnedAuthority`, `DocumentLoader`), `TransitionRegistry` | stay in `tamoz-agent-profile` | Trusted profile authority is that gem's whole job. |
+| 3 | evidence-audit `verify_findings.rb` | stays in `tamoz-skills` (bundled skill) | |
 
 **B5 note (round 1).** Splitting `StateCodec` into `lib/tamoz/state_codec/` moved `lib/tamoz` from
 instability 0.053 to 0.073 (distance improved, 0.932 → 0.911): a facade that delegates to its own
@@ -115,3 +122,4 @@ violation.
 | 0 | 2026-10-03 | Bar set, baseline pinned | 1 / 50 (corrected to 50 classes + 53 modules: module ceiling fixed to 100, the real `.rubocop.yml` value, and inline disables counted) | core cycle, then the largest classes |
 | 1 | 2026-10-03 | `tamoz-core`: cycle shrunk; `Circuit::Record` (508) and `StateCodec` (374) split into named collaborators | 1 (smaller) / 36 + 38 | `tamoz-concurrency`, `tamoz-cancellation`, then by gem |
 | 2 | 2026-10-03 | `Pool`, `Approval::PolicyDocument` (294), `Approval::Engine` (258), observability `Catalog` (171-line module) split | 1 / 46 + 51 | comms-gateway, scheduler, profile, core modules |
+| 3 | 2026-10-03 | `Agent::Profile` (368), `Scheduler` module (290), circuit `Registry` (222), `JCS` (179), `Core` facade (141), `TurnContext`, `Capability` module (239) brought under the ceilings | 1 / 45 + 44 | `tamoz-comms`, comms-gateway |

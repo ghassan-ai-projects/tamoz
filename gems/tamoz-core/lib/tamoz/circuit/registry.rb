@@ -18,164 +18,6 @@ module Tamoz
     #   rate        — failures/(failures+successes) at or above `max_rate` over
     #                 `window_ms` with at least `min_samples` observations.
     module Registry
-      CONDITION_KINDS = %w[consecutive immediate window run rate].freeze
-
-      Condition = Data.define(
-        :id, :kind, :threshold, :window_ms, :max_rate, :min_samples, :failure_kinds
-      ) do
-        def initialize(
-          id:, kind:, threshold: 1, window_ms: nil, max_rate: nil,
-          min_samples: nil, failure_kinds: nil
-        )
-          kind_text = validated_kind(kind)
-          validate_threshold!(threshold)
-          validate_window!(kind_text, window_ms)
-          validate_rate!(kind_text, max_rate, min_samples)
-          super(
-            id: Circuit.identity!(id, name: "circuit condition id"),
-            kind: kind_text.freeze,
-            threshold:,
-            window_ms:,
-            max_rate:,
-            min_samples:,
-            failure_kinds: failure_kinds&.map { |name| String(name).freeze }&.freeze
-          )
-        end
-
-        # A condition with a declared kind list consumes exactly those failure
-        # kinds; a condition without one is the scope's catch-all.
-        def specific? = !failure_kinds.nil?
-
-        def consumes?(failure_kind)
-          failure_kinds.nil? || failure_kinds.include?(String(failure_kind))
-        end
-
-        # `rate` conditions observe EVERY outcome (successes included) — they are
-        # never subject to the specific/catch-all arbitration.
-        def observes_every_outcome? = kind == "rate"
-
-        def with_threshold(value)
-          with(threshold: value)
-        end
-
-        private
-
-        def validated_kind(kind)
-          kind_text = String(kind)
-          return kind_text if CONDITION_KINDS.include?(kind_text)
-
-          raise ConfigurationError, "unknown circuit condition kind #{kind.inspect}"
-        end
-
-        def validate_threshold!(threshold)
-          return if threshold.is_a?(Integer) && threshold >= 1
-
-          raise ConfigurationError, "circuit condition threshold must be an integer >= 1"
-        end
-
-        def validate_window!(kind_text, window_ms)
-          return unless %w[window rate].include?(kind_text)
-          return if window_ms.is_a?(Integer) && window_ms.positive?
-
-          raise ConfigurationError, "a #{kind_text} circuit condition requires a positive window_ms"
-        end
-
-        def validate_rate!(kind_text, max_rate, min_samples)
-          return unless kind_text == "rate"
-          return if max_rate.is_a?(Float) && max_rate > 0.0 && max_rate <= 1.0 &&
-                    min_samples.is_a?(Integer) && min_samples >= 1
-
-          raise ConfigurationError, "a rate circuit condition requires 0 < max_rate <= 1 and min_samples >= 1"
-        end
-      end
-
-      Scope = Data.define(
-        :scope_type, :conditions, :reset_authority, :evidence_rule,
-        :in_flight_rule, :escalation_owner, :probe_window_ms, :provisional
-      ) do
-        def initialize(
-          scope_type:, conditions:, reset_authority:, evidence_rule:,
-          in_flight_rule:, escalation_owner:,
-          probe_window_ms: DEFAULT_PROBE_WINDOW_MS, provisional: false
-        )
-          unless conditions.is_a?(Array) && !conditions.empty? &&
-                 conditions.all?(Condition)
-            raise ConfigurationError, "a circuit scope requires at least one Condition"
-          end
-          unless %w[complete_and_journal abort_to_unknown].include?(String(in_flight_rule))
-            raise ConfigurationError, "unknown circuit in-flight rule #{in_flight_rule.inspect}"
-          end
-          unless probe_window_ms.is_a?(Integer) && probe_window_ms.positive?
-            raise ConfigurationError, "probe_window_ms must be a positive duration"
-          end
-
-          super(
-            scope_type: String(scope_type).freeze,
-            conditions: conditions.freeze,
-            reset_authority: String(reset_authority).freeze,
-            evidence_rule: String(evidence_rule).freeze,
-            in_flight_rule: String(in_flight_rule).freeze,
-            escalation_owner: String(escalation_owner).freeze,
-            probe_window_ms:,
-            provisional: !!provisional
-          )
-        end
-
-        def condition(id)
-          conditions.find { |entry| entry.id == id }
-        end
-
-        def consecutive_condition
-          conditions.find { |entry| entry.kind == "consecutive" }
-        end
-
-        # The scope's headline threshold (the plan's `"threshold"` record field).
-        def threshold
-          consecutive_condition&.threshold || 1
-        end
-
-        # A caller-configured threshold (P10's `circuit_threshold:`, P17's
-        # egress declaration) rebinds the consecutive condition only.
-        def with_threshold(value)
-          unless value.is_a?(Integer) && value >= 1
-            raise ConfigurationError, "circuit threshold must be an integer >= 1"
-          end
-          return self unless consecutive_condition
-
-          with(
-            conditions: conditions.map do |entry|
-              entry.kind == "consecutive" ? entry.with_threshold(value) : entry
-            end.freeze
-          )
-        end
-
-        # Drops conditions the operator did not declare (P17's
-        # `circuit.budget_breach: false` is exactly this case).
-        def without_condition(id)
-          remaining = conditions.reject { |entry| entry.id == id }
-          return self if remaining.length == conditions.length
-
-          with(conditions: remaining.freeze)
-        end
-
-        # The conditions whose predicate a `record_failure(kind:)` feeds: a
-        # specifically declared kind wins, otherwise the catch-all applies, and
-        # every rate condition always observes.
-        def conditions_for(failure_kind)
-          name = String(failure_kind)
-          rates = conditions.select(&:observes_every_outcome?)
-          specific = conditions.select do |entry|
-            !entry.observes_every_outcome? && entry.specific? && entry.consumes?(name)
-          end
-          return (specific + rates).freeze unless specific.empty?
-
-          fallback = conditions.select do |entry|
-            !entry.observes_every_outcome? && !entry.specific?
-          end
-          (fallback + rates).freeze
-        end
-      end
-
       # --- DR-2 §3 table ----------------------------------------------------
 
       SERVER = Scope.new(
@@ -288,9 +130,7 @@ module Tamoz
         provisional: true
       )
 
-      SCOPES = [SERVER, RULE_TARGET, SCHEDULE, EGRESS]
-                 .to_h { |scope| [scope.scope_type, scope] }
-                 .freeze
+      SCOPES = [SERVER, RULE_TARGET, SCHEDULE, EGRESS].to_h { |scope| [scope.scope_type, scope] }.freeze
 
       module_function
 
@@ -302,14 +142,6 @@ module Tamoz
                 "unknown circuit scope type #{scope_type.inspect}; " \
                 "DR-2 registers #{SCOPES.keys.join(", ")}"
         end
-      end
-
-      def scope_types
-        SCOPES.keys
-      end
-
-      def provisional?(scope_type)
-        fetch(scope_type).provisional
       end
     end
   end

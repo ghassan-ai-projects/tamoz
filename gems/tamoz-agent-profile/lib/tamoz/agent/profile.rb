@@ -26,6 +26,8 @@ require_relative "profile/content_scanner"
 require_relative "profile/locations"
 require_relative "profile/fields"
 require_relative "profile/secure_file"
+require_relative "profile/pinned_authority"
+require_relative "profile/document_loader"
 
 module Tamoz
   module Agent
@@ -216,7 +218,7 @@ module Tamoz
 
       def self.load(path, env: ENV, adoption_registry: nil, confirm_adoption: nil)
         expanded = File.expand_path(File.path(path))
-        document = load_document(expanded, suggestion: false, env:)
+        document = DocumentLoader.load(expanded, suggestion: false, env:)
         registry = adoption_registry || AdoptionRegistry.new(env:)
         enforce_activated!(document, registry:, confirm_adoption:)
         document
@@ -238,7 +240,7 @@ module Tamoz
       # Validation-only load used by `tamoz profile preview`. The suggestion flag
       # marks repository-provided files as evidence; it never grants authority.
       def self.preview(path, suggestion: false, env: ENV)
-        load_document(File.expand_path(File.path(path)), suggestion:, env:)
+        DocumentLoader.load(File.expand_path(File.path(path)), suggestion:, env:)
       end
 
       # The exact bytes that produced a validated document, returned alongside it.
@@ -250,83 +252,22 @@ module Tamoz
       def self.preview_source(path, suggestion: false, env: ENV)
         expanded = File.expand_path(File.path(path))
         captured = nil
-        document = load_document(expanded, suggestion:, env:) { |bytes| captured = bytes }
+        document = DocumentLoader.load(expanded, suggestion:, env:) { |bytes| captured = bytes }
         Source.new(document:, bytes: captured)
       end
-
-      AUTHORITY_KEYS = %w[
-        profile_id profile_version canonical_digest canonical_root model_roles checks tools policy egress
-      ].freeze
 
       # P8-B §5.4/§5.5: rebuild the authority a session was pinned to from its
       # own checkpoint. The snapshot is treated as untrusted input and re-runs
       # every validator, so a corrupted or tampered checkpoint can only narrow
       # or fail, never widen. Model roles may carry a credential reference NAME
-      # (DR-5 RC4), validated by the same `validate_model_roles!` gate a profile
+      # (DR-5 RC4), validated by the same `DocumentValidator.model_roles!` gate a profile
       # file passes; replay resolves that env key, never a value stored here.
       def self.from_authority(snapshot, source: "<pinned session authority>")
-        unless snapshot.is_a?(Hash)
-          raise ValidationError, "#{source}: pinned profile authority must be a mapping"
-        end
-
-        hash = normalize_keys(snapshot)
-        digest = enforce_authority_shape!(hash, source)
-        synthetic = build_synthetic_document(hash)
-        validate_profile_fields!(synthetic.fetch("profile"), source)
-        validate_roots!(synthetic, synthetic.fetch("profile"), source)
-        validate_model_roles!(synthetic, source)
-        validate_checks!(synthetic, source)
-        tools = validate_tools!(synthetic, source)
-        validate_policy!(synthetic, tools, source)
-        validate_egress!(synthetic, source)
-        new(build_fields(synthetic, digest:, suggestion: false, pinned: true))
-      end
-
-      # The refusal point for a tampered checkpoint: every field of the untrusted
-      # snapshot is shape-checked before anything is rebuilt from it. Returns the
-      # canonical digest the rebuilt profile is re-pinned to.
-      def self.enforce_authority_shape!(hash, source)
-        unknown = hash.keys - AUTHORITY_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{source}: unknown pinned authority fields #{unknown.sort.inspect}"
-        end
-        missing = AUTHORITY_KEYS - hash.keys - %w[model_roles checks egress]
-        unless missing.empty?
-          raise ValidationError, "#{source}: pinned authority is missing #{missing.sort.inspect}"
-        end
-
-        digest = hash.fetch("canonical_digest")
-        unless Tamoz::Core.valid_digest?(digest)
-          raise ValidationError, "#{source}: pinned authority digest is not a sha256: digest"
-        end
-
-        validate_strings!(hash.reject { |key, _| key == "canonical_digest" }, source)
-        digest
+        PinnedAuthority.document(snapshot, source)
       end
 
       def self.secret_shape(field, value)
         ContentScanner.classify(field, value)
-      end
-
-      def self.build_synthetic_document(hash)
-        synthetic = {
-          "profile" => {
-            "schema_version" => SCHEMA_VERSION,
-            "profile_id" => hash.fetch("profile_id"),
-            "profile_version" => hash.fetch("profile_version"),
-            "canonical_root" => hash.fetch("canonical_root")
-          },
-          "roots" => {"workspace" => hash.fetch("canonical_root")},
-          "model_roles" => hash["model_roles"] || {},
-          "checks" => hash["checks"] || {},
-          "tools" => hash.fetch("tools"),
-          "policy" => hash.fetch("policy")
-        }
-        # P17 (correction 5): the pinned egress declaration joins the document
-        # when the checkpoint carries one; absence stays "no egress", and the
-        # fail-closed validator below replays it either way.
-        synthetic["egress"] = hash["egress"] if hash.key?("egress")
-        synthetic
       end
 
       # P8-E: macOS and Windows resolve `.Tamoz/suggested-profile.yaml` to the very
@@ -346,49 +287,12 @@ module Tamoz
         expanded_path.start_with?("#{profiles}#{File::SEPARATOR}")
       end
 
-      # P8-E: a profile stored inside the very root it grants authority over is
-      # repository-controlled content. Editing the repository would then edit the
-      # authority; the digest check makes that fail closed rather than silently
-      # widen, but §3.1 requires operator-owned storage outside the project, so the
-      # arrangement is refused outright. Suggestions are exempt: being inside the
-      # repository is exactly what makes them evidence.
-      def self.verify_outside_root!(expanded_path, canonical_root, path)
-        directory = File.dirname(expanded_path)
-        loop do
-          if File.identical?(directory, canonical_root)
-            raise ValidationError,
-                  "#{path}: profile must not live inside its own canonical_root " \
-                  "#{canonical_root.inspect}; operator profiles live outside the project"
-          end
-
-          parent = File.dirname(directory)
-          break if parent == directory
-
-          directory = parent
-        end
-      rescue SystemCallError => error
-        # Containment is a fail-closed boundary: if the ancestor walk cannot
-        # complete (permission, missing inode), we cannot assert the profile is
-        # outside its canonical_root, so we refuse rather than silently admit it.
-        raise ValidationError,
-              "#{path}: cannot verify the profile lives outside its canonical_root " \
-              "#{canonical_root.inspect}: #{error.message}"
-      end
-
       # Where the operator config tree is, and how a requested profile resolves
       # inside it, are Locations' — every answer is a function of the environment.
       # These stay as class methods because the CLI, the evals harness and both
       # registries reach them through Profile.
       def self.resolve_path(profile: nil, profile_id: nil, env: ENV)
         Locations.resolve_path(profile:, profile_id:, env:)
-      end
-
-      def self.resolve_explicit(value, env: ENV)
-        Locations.resolve_explicit(value, env:)
-      end
-
-      def self.config_dir(env: ENV)
-        Locations.config_dir(env:)
       end
 
       def self.profiles_dir(env: ENV)
@@ -403,59 +307,8 @@ module Tamoz
         Locations.transitions_path(env:)
       end
 
-      def self.load_document(expanded_path, suggestion:, env: ENV)
-        refuse_evidence_only_activation!(expanded_path, env:) unless suggestion
-        # P8-E: the same open file description is permission-checked and read, so
-        # replacing the path with a symlink between the two cannot be exploited.
-        bytes = open_verified(expanded_path, permissions: !suggestion) do |handle|
-          read_bytes(handle, expanded_path)
-        end
-        yield bytes if block_given?
-        YamlScanner.call(bytes, expanded_path)
-        data = safe_parse(bytes, expanded_path)
-        unless data.is_a?(Hash)
-          raise ValidationError, "#{expanded_path}: profile must be a YAML mapping"
-        end
-
-        hash = normalize_keys(data)
-        hash.delete("adoption")
-        validate_schema!(hash, expanded_path)
-        digest = canonical_digest(hash)
-        fields = build_fields(hash, digest:, suggestion:)
-        verify_outside_root!(expanded_path, fields.canonical_root, expanded_path) unless suggestion
-        new(fields)
-      end
-
-      def self.refuse_evidence_only_activation!(path, env: ENV)
-        return unless suggestion_path?(path, env:)
-
-        raise ValidationError,
-              "#{path} is inside #{SUGGESTION_DIRECTORY}/ and is evidence " \
-              "only; preview or import it instead of activating it"
-      end
-
-      # Opening and reading an operator-owned file safely — O_NOFOLLOW, fstat on
-      # the open descriptor, size and encoding limits, and the parent-directory
-      # permission walk — is SecureFile's. These stay as class methods because
-      # both operator-side registries call verify_permissions! through Profile.
-      def self.read_bytes(handle, path)
-        SecureFile.read_bytes(handle, path)
-      end
-
-      def self.open_verified(path, permissions: true, &)
-        SecureFile.open_verified(path, permissions:, &)
-      end
-
       def self.verify_permissions!(path)
         SecureFile.verify_permissions!(path)
-      end
-
-      # Refuses object deserialization only (classes, symbols); the YAML
-      # event-stream scan — tags, alias budget, duplicate keys — is YamlScanner's.
-      def self.safe_parse(text, path)
-        Psych.safe_load(text, permitted_classes: [], permitted_symbols: [], aliases: true)
-      rescue Psych::Exception => error
-        raise ValidationError, "#{path}: invalid YAML: #{error.message}"
       end
 
       def self.normalize_keys(value)
@@ -471,113 +324,11 @@ module Tamoz
         end
       end
 
-      def self.validate_schema!(hash, path)
-        unknown = hash.keys - TOP_LEVEL_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown sections #{unknown.sort.inspect}"
-        end
-
-        profile = required_hash(hash, "profile", path)
-        enforce_schema_version!(profile, path)
-
-        unknown_profile = profile.keys - PROFILE_KEYS
-        unless unknown_profile.empty?
-          raise ValidationError, "#{path}: unknown profile fields #{unknown_profile.sort.inspect}"
-        end
-
-        validate_strings!(hash, path)
-        validate_profile_fields!(profile, path)
-        validate_roots!(hash, profile, path)
-        validate_model_roles!(hash, path)
-        validate_budgets!(hash, path)
-        validate_checks!(hash, path)
-        tools = validate_tools!(hash, path)
-        validate_policy!(hash, tools, path)
-        validate_egress!(hash, path)
-        hash
-      end
-
-      def self.enforce_schema_version!(profile, path)
-        version = profile["schema_version"]
-        unless version.is_a?(Integer)
-          raise ValidationError, "#{path}: profile.schema_version must be an integer"
-        end
-        if version > SCHEMA_VERSION
-          raise ValidationError,
-                "#{path}: profile schema version #{version} is newer than supported #{SCHEMA_VERSION}"
-        end
-        return if version == SCHEMA_VERSION
-
-        raise ValidationError, "#{path}: no migration registered from schema version #{version}"
-      end
-
       def self.required_hash(hash, key, path)
         value = hash[key]
         raise ValidationError, "#{path}: missing required section #{key.inspect}" unless value.is_a?(Hash)
 
         value
-      end
-
-      # The value-level content scan (secrets, interpolation, entropy) is
-      # ContentScanner's; YamlScanner is its companion at the event-stream level.
-      def self.validate_strings!(value, path, key_path = [])
-        ContentScanner.call(value, path, key_path)
-      end
-
-      # The declared sections' shapes live in DocumentValidator; these stay as
-      # named steps so validate_schema! still reads as the list of checks it runs.
-      def self.validate_profile_fields!(profile, path)
-        DocumentValidator.profile_fields!(profile, path)
-      end
-
-      def self.validate_root!(root, path, field)
-        DocumentValidator.root!(root, path, field)
-      end
-
-      def self.validate_roots!(hash, profile, path)
-        DocumentValidator.roots!(hash, profile, path)
-      end
-
-      def self.validate_model_roles!(hash, path)
-        DocumentValidator.model_roles!(hash, path)
-      end
-
-      def self.validate_budgets!(hash, path)
-        DocumentValidator.budgets!(hash, path)
-      end
-
-      # A configured check is the profile's execution surface, with its own
-      # anti-injection rules; CheckSpecValidator owns them.
-      def self.validate_checks!(hash, path)
-        CheckSpecValidator.call(hash, path)
-      end
-
-      # `tools` and `policy` constrain each other, so AuthorityValidator
-      # owns both. They stay two entry points because the loader calls them at
-      # different points and the ORDER decides which error an operator sees first.
-      def self.validate_tools!(hash, path)
-        AuthorityValidator.tools!(hash, path)
-      end
-
-      def self.validate_policy!(hash, tools, path)
-        AuthorityValidator.policy!(hash, tools, path)
-      end
-
-      # P17 §3: the operator-declared egress policy, validated fail-closed.
-      # Absent (`nil`) is the pre-P17 state and means "no governed egress
-      # declaration"; present means every field is exact and bounded. The
-      # declaration is part of the canonical digest, so any edit is a new
-      # profile version that the session-authority machinery re-pins.
-      # The egress declaration is one cohesive, fail-closed check with its own
-      # vocabulary, so it lives in EgressValidator. Kept as a class method here
-      # because both callers — the file loader and the pinned-authority replay —
-      # read as a list of validators.
-      def self.validate_egress!(hash, path)
-        EgressValidator.call(hash, path)
-      end
-
-      def self.canonical_digest(hash)
-        Tamoz::Core.digest(DIGEST_DOMAIN, hash)
       end
 
       def self.deep_freeze(value)
@@ -589,11 +340,6 @@ module Tamoz
         end
 
         value.freeze
-      end
-
-      # Fields owns the mapping from validated document to immutable value.
-      def self.build_fields(hash, digest:, suggestion:, pinned: false)
-        Fields.build(hash, digest:, suggestion:, pinned:)
       end
     end
   end

@@ -29,22 +29,18 @@ module Tamoz
         normalized_fragments = normalize_fragments(fitting(clipped(fragments), text))
         return { 'task' => normalize_text(text, 'task', MAX_TEXT_BYTES) } if normalized_fragments.empty?
 
-        normalized_thread_id = normalize_text(thread_id, 'thread_id', MAX_ID_BYTES)
-        normalized_request_id = normalize_text(request_id, 'request_id', MAX_ID_BYTES)
-        context = {
-          'version' => VERSION,
-          'thread_id' => normalized_thread_id,
-          'request_id' => normalized_request_id,
-          'fragments' => normalized_fragments
-        }
-        context['digest'] = digest(context)
+        context = signed_context(thread_id, request_id, normalized_fragments)
         task = { 'text' => normalize_text(text, 'task', MAX_TEXT_BYTES), 'context' => context }
-        if Core.jcs(task).bytesize > MAX_CONTEXT_BYTES
-          raise ConfigurationError,
-                "turn context exceeds #{MAX_CONTEXT_BYTES} bytes"
-        end
+        limit = MAX_CONTEXT_BYTES
+        raise ConfigurationError, "turn context exceeds #{limit} bytes" if Core.jcs(task).bytesize > limit
 
         { 'task' => Core.canonical(task) }
+      end
+
+      def signed_context(thread_id, request_id, fragments)
+        context = { 'version' => VERSION, 'thread_id' => normalize_text(thread_id, 'thread_id', MAX_ID_BYTES),
+                    'request_id' => normalize_text(request_id, 'request_id', MAX_ID_BYTES), 'fragments' => fragments }
+        context.merge('digest' => digest(context))
       end
 
       def fragments_from(context, thread_id:, request_id:)
@@ -64,10 +60,8 @@ module Tamoz
           'request_id' => normalize_text(request_id, 'request_id', MAX_ID_BYTES)
         }
         unknown = context.keys - %w[version thread_id request_id fragments digest]
-        unless unknown.empty?
-          raise CheckpointCorruptionError,
-                "turn context has unknown keys: #{unknown.sort.join(', ')}"
-        end
+        listed = unknown.sort.join(', ')
+        raise CheckpointCorruptionError, "turn context has unknown keys: #{listed}" unless unknown.empty?
 
         expected.each do |key, value|
           raise CheckpointCorruptionError, "turn context #{key.inspect} does not match" unless context[key] == value
@@ -80,8 +74,7 @@ module Tamoz
         unsigned_context.delete('digest')
         return if actual_digest == digest(unsigned_context)
 
-        raise CheckpointCorruptionError,
-              'turn context digest is invalid'
+        raise CheckpointCorruptionError, 'turn context digest is invalid'
       end
 
       def digest(context)
@@ -127,18 +120,11 @@ module Tamoz
       end
 
       def normalize_text(value, name, maximum)
-        text = String(value).encode(Encoding::UTF_8)
-        raise ConfigurationError, "#{name} cannot be empty" if text.empty?
-        raise ConfigurationError, "#{name} exceeds #{maximum} bytes" if text.bytesize > maximum
-        raise ConfigurationError, "#{name} must be valid UTF-8" unless text.valid_encoding?
-        raise ConfigurationError, "#{name} cannot contain control characters" if text.match?(/[\u0000-\u001f\u007f]/u)
-
-        text.freeze
-      rescue EncodingError => e
-        raise ConfigurationError, "#{name} must be valid UTF-8: #{e.message}"
+        SafeText.normalize(value, name:, max_bytes: maximum, error_class: ConfigurationError)
       end
       private_class_method(
-        :normalize_fragments, :normalize_text, :validate_context_identity, :validate_context_digest, :clipped, :fitting
+        :normalize_fragments, :normalize_text, :signed_context,
+        :validate_context_identity, :validate_context_digest, :clipped, :fitting
       )
     end
   end
