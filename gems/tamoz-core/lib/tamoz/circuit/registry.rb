@@ -27,24 +27,10 @@ module Tamoz
           id:, kind:, threshold: 1, window_ms: nil, max_rate: nil,
           min_samples: nil, failure_kinds: nil
         )
-          kind_text = String(kind)
-          unless CONDITION_KINDS.include?(kind_text)
-            raise ConfigurationError, "unknown circuit condition kind #{kind.inspect}"
-          end
-          unless threshold.is_a?(Integer) && threshold >= 1
-            raise ConfigurationError, "circuit condition threshold must be an integer >= 1"
-          end
-          if %w[window rate].include?(kind_text) &&
-             !(window_ms.is_a?(Integer) && window_ms.positive?)
-            raise ConfigurationError, "a #{kind_text} circuit condition requires a positive window_ms"
-          end
-          if kind_text == "rate" &&
-             !(max_rate.is_a?(Float) && max_rate > 0.0 && max_rate <= 1.0 &&
-               min_samples.is_a?(Integer) && min_samples >= 1)
-            raise ConfigurationError,
-                  "a rate circuit condition requires 0 < max_rate <= 1 and min_samples >= 1"
-          end
-
+          kind_text = validated_kind(kind)
+          validate_threshold!(threshold)
+          validate_window!(kind_text, window_ms)
+          validate_rate!(kind_text, max_rate, min_samples)
           super(
             id: Circuit.identity!(id, name: "circuit condition id"),
             kind: kind_text.freeze,
@@ -70,6 +56,36 @@ module Tamoz
 
         def with_threshold(value)
           with(threshold: value)
+        end
+
+        private
+
+        def validated_kind(kind)
+          kind_text = String(kind)
+          return kind_text if CONDITION_KINDS.include?(kind_text)
+
+          raise ConfigurationError, "unknown circuit condition kind #{kind.inspect}"
+        end
+
+        def validate_threshold!(threshold)
+          return if threshold.is_a?(Integer) && threshold >= 1
+
+          raise ConfigurationError, "circuit condition threshold must be an integer >= 1"
+        end
+
+        def validate_window!(kind_text, window_ms)
+          return unless %w[window rate].include?(kind_text)
+          return if window_ms.is_a?(Integer) && window_ms.positive?
+
+          raise ConfigurationError, "a #{kind_text} circuit condition requires a positive window_ms"
+        end
+
+        def validate_rate!(kind_text, max_rate, min_samples)
+          return unless kind_text == "rate"
+          return if max_rate.is_a?(Float) && max_rate > 0.0 && max_rate <= 1.0 &&
+                    min_samples.is_a?(Integer) && min_samples >= 1
+
+          raise ConfigurationError, "a rate circuit condition requires 0 < max_rate <= 1 and min_samples >= 1"
         end
       end
 

@@ -42,6 +42,11 @@ module Tamoz
       # for this check — reference it instead of re-deriving the regex.
       DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
 
+      STRING_ESCAPES = {
+        0x22 => '\"', 0x5C => "\\\\", 0x08 => "\\b", 0x09 => "\\t", 0x0A => "\\n", 0x0C => "\\f", 0x0D => "\\r"
+      }.freeze
+      private_constant :STRING_ESCAPES
+
       module_function
 
       def canonicalize(value)
@@ -113,42 +118,44 @@ module Tamoz
         case value
         when Hash then emit_object(value, out)
         when Array then emit_array(value, out)
-        when String
-          emit_string(value, out)
-        when Symbol
-          emit_string(value.to_s, out)
-        when Integer
-          out << integer_to_s(value)
-        when Float
-          out << float_to_s(value)
-        when TrueClass then out << "true"
-        when FalseClass then out << "false"
-        when NilClass then out << "null"
-        else
-          raise Error, "unsupported canonical value: #{value.class}"
+        when String, Symbol then emit_string(value.to_s, out)
+        when Integer then out << integer_to_s(value)
+        when Float then out << float_to_s(value)
+        else out << literal_for(value)
         end
         out
       end
 
-      def emit_object(value, out)
-        pairs = []
-        seen = {}
-        value.each do |key, entry|
-          key = String(key)
-          raise Error, "duplicate canonical key after stringification: #{key}" if seen[key]
-
-          seen[key] = true
-          pairs << [key, entry]
+      def literal_for(value)
+        case value
+        when true then "true"
+        when false then "false"
+        when nil then "null"
+        else raise Error, "unsupported canonical value: #{value.class}"
         end
-        pairs.sort_by! { |(key, _)| key.encode("UTF-16BE").b }
+      end
+
+      def emit_object(value, out)
         out << "{"
-        pairs.each_with_index do |(key, entry), index|
+        sorted_pairs(value).each_with_index do |(key, entry), index|
           out << "," if index.positive?
           emit_string(key, out)
           out << ":"
           emit(entry, out)
         end
         out << "}"
+      end
+
+      def sorted_pairs(value)
+        seen = {}
+        pairs = value.map do |key, entry|
+          key = String(key)
+          raise Error, "duplicate canonical key after stringification: #{key}" if seen[key]
+
+          seen[key] = true
+          [key, entry]
+        end
+        pairs.sort_by { |(key, _)| key.encode("UTF-16BE").b }
       end
 
       def emit_array(value, out)
@@ -162,30 +169,18 @@ module Tamoz
 
       def emit_string(value, out)
         out << '"'
-        begin
-          value.each_codepoint do |code|
-            case code
-            when 0x22 then out << '\\"'
-            when 0x5C then out << "\\\\"
-            when 0x08 then out << "\\b"
-            when 0x09 then out << "\\t"
-            when 0x0A then out << "\\n"
-            when 0x0C then out << "\\f"
-            when 0x0D then out << "\\r"
-            else
-              if code < 0x20
-                out << format("\\u%04x", code)
-              elsif code.between?(0xD800, 0xDFFF)
-                raise Error, "unpaired surrogate in string"
-              else
-                out << code.chr(Encoding::UTF_8)
-              end
-            end
-          end
-        rescue ArgumentError, Encoding::InvalidByteSequenceError, Encoding::UndefinedConversionError
-          raise Error, "string is not valid UTF-8"
-        end
+        value.each_codepoint { |code| out << escape_codepoint(code) }
         out << '"'
+      rescue ArgumentError, Encoding::InvalidByteSequenceError, Encoding::UndefinedConversionError
+        raise Error, "string is not valid UTF-8"
+      end
+
+      def escape_codepoint(code)
+        STRING_ESCAPES.fetch(code) do
+          raise Error, "unpaired surrogate in string" if code.between?(0xD800, 0xDFFF)
+
+          code < 0x20 ? format("\\u%04x", code) : code.chr(Encoding::UTF_8)
+        end
       end
 
       def integer_to_s(value)
@@ -218,53 +213,51 @@ module Tamoz
       def shortest_digits(value)
         return ["0", 1] if value.zero?
 
-        body = value.to_s
-        body = body[1..] if body.start_with?("-")
-        mantissa, exponent = body.split(/[eE]/, 2)
-        exponent = (exponent || 0).to_i
-        integer_part, fraction = mantissa.split(".", 2)
-        fraction ||= ""
-        digits = integer_part + fraction
-        stripped = digits.sub(/\A0+/, "")
-        stripped_zeros = digits.length - stripped.length
-        digits = stripped.empty? ? "0" : stripped
-        n = integer_part.length + exponent - stripped_zeros
+        digits, n = decimal_digits(value)
+        [trim_trailing_zeros(digits, n, value), n]
+      end
 
+      def decimal_digits(value)
+        mantissa, exponent = value.to_s.delete_prefix("-").split(/[eE]/, 2)
+        integer_part, fraction = mantissa.split(".", 2)
+        digits = integer_part + (fraction || "")
+        stripped = digits.sub(/\A0+/, "")
+        n = integer_part.length + exponent.to_i - (digits.length - stripped.length)
+        [stripped.empty? ? "0" : stripped, n]
+      end
+
+      def trim_trailing_zeros(digits, n, value)
         while digits.length > 1 && digits.end_with?("0")
           trimmed = digits[0...-1]
           break unless round_trips?(trimmed, n, value)
 
           digits = trimmed
         end
-        [digits, n]
+        digits
       end
 
       def round_trips?(digits, n, value)
-        k = digits.length
-        candidate =
-          if k <= n
-            digits + ("0" * (n - k))
-          elsif n.positive?
-            digits[0...n] + "." + digits[n..]
-          else
-            "0." + ("0" * -n) + digits
-          end
-        candidate.to_f == value.abs
+        plain_decimal(digits, n).to_f == value.abs
       end
 
       def format_number(digits, n)
-        k = digits.length
-        if k <= n && n <= 21
-          digits + ("0" * (n - k))
-        elsif n.positive? && n <= 21
-          digits[0...n] + "." + digits[n..]
-        elsif n > -6 && n <= 0
-          "0." + ("0" * -n) + digits
-        else
-          exponent = n - 1
-          digits[0] + (k > 1 ? "." + digits[1..] : "") +
-            "e" + (exponent.negative? ? "-" : "+") + exponent.abs.to_s
+        return plain_decimal(digits, n) if n.between?(-5, 21)
+
+        exponential_decimal(digits, n)
+      end
+
+      def plain_decimal(digits, n)
+        if digits.length <= n then digits + ("0" * (n - digits.length))
+        elsif n.positive? then digits[0...n] + "." + digits[n..]
+        else "0." + ("0" * -n) + digits
         end
+      end
+
+      def exponential_decimal(digits, n)
+        exponent = n - 1
+        fraction = digits.length > 1 ? "." + digits[1..] : ""
+        sign = exponent.negative? ? "-" : "+"
+        digits[0] + fraction + "e" + sign + exponent.abs.to_s
       end
 
       # Strict JSON scanner. Refuses duplicate keys, unpaired surrogates,
@@ -274,6 +267,10 @@ module Tamoz
       # the shared vectors.
       class Scanner
         MAX_NESTING = 512
+        SIMPLE_ESCAPES = {
+          '"' => '"', "\\" => "\\", "/" => "/", "b" => "\b", "f" => "\f", "n" => "\n", "r" => "\r", "t" => "\t"
+        }.freeze
+        private_constant :SIMPLE_ESCAPES
 
         def initialize(raw)
           @raw = raw
@@ -283,23 +280,11 @@ module Tamoz
 
         def parse_value
           skip_ws
-          if @depth >= MAX_NESTING
-            raise Error, "maximum nesting depth exceeded"
-          end
+          raise Error, "maximum nesting depth exceeded" if @depth >= MAX_NESTING
 
           @depth += 1
           begin
-            case peek
-            when "{" then parse_object
-            when "[" then parse_array
-            when '"' then parse_string
-            when "t" then parse_literal("true", true)
-            when "f" then parse_literal("false", false)
-            when "n" then parse_literal("null", nil)
-            when "-", "0".."9" then parse_number
-            else
-              raise Error, "unexpected token at #{@pos}"
-            end
+            parse_token
           ensure
             @depth -= 1
           end
@@ -312,6 +297,19 @@ module Tamoz
 
         private
 
+        def parse_token
+          case peek
+          when "{" then parse_object
+          when "[" then parse_array
+          when '"' then parse_string
+          when "t" then parse_literal("true", true)
+          when "f" then parse_literal("false", false)
+          when "n" then parse_literal("null", nil)
+          when "-", "0".."9" then parse_number
+          else raise Error, "unexpected token at #{@pos}"
+          end
+        end
+
         def parse_object
           @pos += 1
           skip_ws
@@ -319,26 +317,23 @@ module Tamoz
           return object if consume("}")
 
           loop do
-            skip_ws
-            raise Error, "expected string key at #{@pos}" unless peek == '"'
-
-            key = parse_string
-            skip_ws
-            raise Error, "expected ':' at #{@pos}" unless consume(":")
-
-            value = parse_value
+            key, value = parse_member
             raise Error, "duplicate key #{key}" if object.key?(key)
 
             object[key] = value
-            skip_ws
-            if consume(",")
-              next
-            elsif consume("}")
-              return object
-            else
-              raise Error, "expected ',' or '}' at #{@pos}"
-            end
+            return object if container_closed?("}")
           end
+        end
+
+        def parse_member
+          skip_ws
+          raise Error, "expected string key at #{@pos}" unless peek == '"'
+
+          key = parse_string
+          skip_ws
+          raise Error, "expected ':' at #{@pos}" unless consume(":")
+
+          [key, parse_value]
         end
 
         def parse_array
@@ -349,15 +344,16 @@ module Tamoz
 
           loop do
             array << parse_value
-            skip_ws
-            if consume(",")
-              next
-            elsif consume("]")
-              return array
-            else
-              raise Error, "expected ',' or ']' at #{@pos}"
-            end
+            return array if container_closed?("]")
           end
+        end
+
+        def container_closed?(closer)
+          skip_ws
+          return false if consume(",")
+          return true if consume(closer)
+
+          raise Error, "expected ',' or '#{closer}' at #{@pos}"
         end
 
         def parse_string
@@ -389,19 +385,9 @@ module Tamoz
 
           char = @raw[@pos]
           @pos += 1
-          case char
-          when '"' then '"'
-          when "\\" then "\\"
-          when "/" then "/"
-          when "b" then "\b"
-          when "f" then "\f"
-          when "n" then "\n"
-          when "r" then "\r"
-          when "t" then "\t"
-          when "u" then parse_unicode_escape
-          else
-            raise Error, "invalid escape \\#{char}"
-          end
+          return parse_unicode_escape if char == "u"
+
+          SIMPLE_ESCAPES.fetch(char) { raise Error, "invalid escape \\#{char}" }
         end
 
         def parse_unicode_escape
@@ -438,31 +424,40 @@ module Tamoz
         def parse_number
           start = @pos
           consume("-")
+          scan_integer_part
+          scan_fraction
+          scan_exponent
+          number_from(@raw[start...@pos])
+        end
+
+        def scan_integer_part
           raise Error, "bad number at #{@pos}" unless digit?(peek)
 
           if consume("0")
             raise Error, "leading zero at #{@pos}" if digit?(peek)
           else
-            @pos += 1 while digit?(peek)
+            skip_digits
           end
+        end
 
-          if peek == "."
-            @pos += 1
-            raise Error, "missing fraction at #{@pos}" unless digit?(peek)
+        def scan_fraction
+          return unless consume(".")
+          raise Error, "missing fraction at #{@pos}" unless digit?(peek)
 
-            @pos += 1 while digit?(peek)
-          end
+          skip_digits
+        end
 
-          if peek == "e" || peek == "E"
-            @pos += 1
-            @pos += 1 if peek == "+" || peek == "-"
-            raise Error, "missing exponent at #{@pos}" unless digit?(peek)
+        def scan_exponent
+          return unless consume("e") || consume("E")
 
-            @pos += 1 while digit?(peek)
-          end
+          consume("+") || consume("-")
+          raise Error, "missing exponent at #{@pos}" unless digit?(peek)
 
-          text = @raw[start...@pos]
-          number_from(text)
+          skip_digits
+        end
+
+        def skip_digits
+          @pos += 1 while digit?(peek)
         end
 
         def number_from(text)

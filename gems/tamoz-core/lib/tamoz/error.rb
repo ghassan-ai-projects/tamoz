@@ -100,10 +100,10 @@ module Tamoz
       attempt_id: nil,
       original: nil
     )
-      @graph_name = graph_name&.to_s&.dup&.freeze
-      @node = node&.to_s&.dup&.freeze
-      @task_id = task_id&.to_s&.dup&.freeze
-      @attempt_id = attempt_id&.to_s&.dup&.freeze
+      @graph_name = frozen_text(graph_name)
+      @node = frozen_text(node)
+      @task_id = frozen_text(task_id)
+      @attempt_id = frozen_text(attempt_id)
       @original = original
       super(message)
       set_backtrace(original.backtrace) if original&.backtrace
@@ -118,6 +118,12 @@ module Tamoz
       return generic unless @original.is_a?(DisclosableMessage)
 
       Error.disclosable_message(@original.message, fallback: generic)
+    end
+
+    private
+
+    def frozen_text(value)
+      value&.to_s&.dup&.freeze
     end
   end
 

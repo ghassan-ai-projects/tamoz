@@ -59,8 +59,8 @@ refactored; they run unchanged as the behavior proof. `Metrics/AbcSize` and
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| B1 | No production method over 20 lines | `bundle exec rubocop -c docs/code-improvement-2026-10-03/metrics.rubocop.yml --only Metrics/MethodLength gems apps bin script` → 0 offenses | FAIL (306) |
-| B2 | No production method over cyclomatic/perceived 8 | same command, `--only Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity` → 0 | FAIL (176 / 162) |
+| B1 | No production method over 20 lines, counting methods hidden behind an inline `rubocop:disable` | `bundle exec rubocop -c docs/code-improvement-2026-10-03/metrics.rubocop.yml --ignore-disable-comments --only Metrics/MethodLength gems apps bin script` → 0 offenses | FAIL |
+| B2 | No production method over cyclomatic/perceived 8 | same command, `--only Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity` → 0 | FAIL |
 | B3 | The debt list excuses no production file for these cops | `awk '/^Metrics\/(MethodLength\|CyclomaticComplexity\|PerceivedComplexity):/,/^$/' .rubocop_todo.yml \| grep -E "'(gems\|apps\|bin\|script)"` → empty | FAIL |
 | B4 | Principles 1–5 hold in every refactored method: intent names, one level of abstraction, top-level reads as domain language, step-down order | reviewer subagent per round; findings in the review log | OPEN |
 
@@ -85,7 +85,7 @@ refactored; they run unchanged as the behavior proof. `Metrics/AbcSize` and
 |---|---|---|---|
 | E1 | Extracted methods are private, named for intent; no new class created just to hold a split | review | OPEN |
 | E2 | No shim, alias, or compatibility wrapper | diff review | OPEN |
-| E3 | No new comments (`AGENTS.md` §Comments); a comment moves with the line it explains | review | OPEN |
+| E3 | No new comments (owner, 2026-10-03: "try not to write comments"); the only addition allowed is the one-line class doc `Style/Documentation` forces on a new class. A "why" comment on a line that moves is replaced by a name that carries it (`require_run_identity!`, `count_keeping_highest`), not dropped silently | review | OPEN |
 | E4 | No scratch files; modes unchanged | `git status`, `git ls-files -s` | OPEN |
 | E6 | No domain literal added to Ruby | review | OPEN |
 
@@ -101,9 +101,11 @@ refactored; they run unchanged as the behavior proof. `Metrics/AbcSize` and
 
 | Round | Findings (C / H / M / L) | Resolution | Commit |
 |---|---|---|---|
+| 1 | 0 / 0 / 2 / 7 — no behavior change found (22 error-path probes byte-identical) | M1 dropped "why" comments → carried by names (`require_run_identity!`, `count_keeping_highest`), owner's no-comment rule; M2 new circuit modules made `private_constant`; L: success reset moved into `OwnerTally.record_success`, window/rate split back to plain `when`s, schema methods renamed (`validate_state_fields!`, `validate_lifecycle_fields!`), `Context#assign_annotations` takes keywords, `corrupt!` deduplicated into `Circuit.corrupt_record!`, `Record.repaired` evaluation order restored. Removed unused internals: `Record.corrupt!`, `Record::KEYS` (not public API, no callers). | round 1 |
 
 ## Loop log
 
 | Round | Date | What changed | B1 / B2 (MethodLength / Cyclo / Perceived) | Next |
 |---|---|---|---|---|
-| 0 | 2026-10-03 | Bars set, baseline pinned | 306 / 176 / 162 | smallest gems first |
+| 0 | 2026-10-03 | Bars set, baseline pinned | 306 / 176 / 162; corrected in round 1 to 404 / 216 / 203 once the 107 inline `rubocop:disable Metrics/…` comments are ignored (`--ignore-disable-comments`) | smallest gems first |
+| 1 | 2026-10-03 | `tamoz-core` clean: descriptor, JCS, state codec, circuit record/registry, context, immutable, instrumentation, stream part, store entry. Byte-identical to base on randomized differential runs (JCS 30k values, StateCodec 3k round-trips, circuits 19k transitions) | 290 / 155 / 147 | `tamoz-concurrency`, `tamoz-cancellation` |

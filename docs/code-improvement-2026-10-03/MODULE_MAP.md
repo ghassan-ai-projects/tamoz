@@ -44,8 +44,11 @@ responsibilities should become its own small class named for the business concep
 
 ## Owner decisions (not taken in this change)
 
-Both are cross-gem interface changes, which `AGENTS.md` says to ask about first:
+Each changes a cross-gem interface or public constant, which `AGENTS.md` says to ask about first:
 
 - **D1.** Group `tamoz-sqlite` stores by domain sub-namespace.
 - **D2.** Give each `tamoz-agent-*` gem its own sub-namespace (`Tamoz::Agent::Session::…`,
   `Tamoz::Agent::CLI::…`), so the constant names the owning gem.
+- **D3.** The last directory cycle, inside `tamoz-core` (`ARCHITECTURE_BAR.md` B1 note): break it by
+  changing the core error ancestry or the `Tamoz::Core` facade, or accept it as Ruby's
+  namespace-file layout.
