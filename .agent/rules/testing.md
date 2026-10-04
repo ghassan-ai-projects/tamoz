@@ -88,3 +88,7 @@
 - Shared scripted models must retain their consumer class names: runtime and worker
   use `model.class.name` as fallback effect identity. Use a named subclass of the
   shared implementation; a constant alias changes the recorded identity.
+
+- CLI refusal tests create their own manifests in temporary directories. A local
+  real-run artifact can hide a CI dependency: scoreboard_cli_test now builds a
+  failed-controls manifest and keeps the report absent to prove refusal order.

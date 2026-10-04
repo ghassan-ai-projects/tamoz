@@ -4,6 +4,10 @@
 **Owner:** repository owner · **Standards:** [testing standard](TESTING_STANDARD.md).
 **Prior evidence:** [original bar](QUALITY_BAR.md), which this follow-up re-verifies.
 
+**Later CI finding:** Linux CI exposed a developer-home manifest dependency missed
+by this review. The local macOS full-suite results below do not prove Linux portability.
+The correction and current evidence are in [CI_PORTABILITY_BAR.md](CI_PORTABILITY_BAR.md).
+
 ## Outcome and fence
 
 Finish every pending file disposition; repair observed test defects without deleting,

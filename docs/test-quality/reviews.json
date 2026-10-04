@@ -30,9 +30,9 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   "gems/tamoz-evals/test/scoreboard_cli_test.rb": {
-    "status": "fine",
-    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
-    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+    "status": "done",
+    "reason": "Linux CI exposed a developer-home manifest dependency missed by the prior review. The failed-controls refusal now uses the existing owned manifest fixture; accepted cases keep their defaults.",
+    "verification": "Focused CLI 3/23 in both locales and isolated checkout; bypassing controls guard fails; restored refusal 1/8; sibling suites and lint pass. Linux rerun is not yet claimed."
   },
   "gems/tamoz-evals/test/scoreboard_test.rb": {
     "status": "fine",

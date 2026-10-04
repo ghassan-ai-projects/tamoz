@@ -65,5 +65,7 @@
       "command": "bundle exec rake quality:architecture",
       "status": "passed"
     }
-  ]
+  ],
+  "environment": "Historical local macOS verification; not a Linux CI result",
+  "portability_followup": "Linux CI exposed a developer-home scoreboard manifest dependency. Corrected by an owned refusal fixture; see CI_PORTABILITY_BAR.md. No Linux rerun result is claimed here."
 }

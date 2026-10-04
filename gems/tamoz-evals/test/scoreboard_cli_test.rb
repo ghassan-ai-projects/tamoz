@@ -10,18 +10,19 @@ require_relative '../../../test/test_helper'
 class ScoreboardCLITest < Minitest::Test
   SCOREBOARD_SCRIPT = ROOT.join('script', 'benchmark_openclaw_scoreboard')
   REGRESSION_SCRIPT = ROOT.join('script', 'benchmark_openclaw_regression')
-  EXISTING_MANIFEST = Pathname.new(
-    '/Users/ghassan/my-projects/.e2e-run/round-006-b1/artifacts/real-provider/20260821T141500Z-e05b1f6/manifest.json'
-  )
-
-  def test_scoreboard_command_refuses_the_existing_unaccepted_real_run
+  def test_scoreboard_command_refuses_a_manifest_with_failed_controls
     RunnerInputs.with_manifest do |input_manifest|
       Dir.mktmpdir('scoreboard-cli') do |directory|
+        root = Pathname.new(directory)
+        manifest_path = write_manifest(
+          root, artifact_root: 'real-provider/2026-08-21T120000Z-unaccepted', controls_passed: false
+        )
+        scoreboard_path = root.join('scoreboard.json')
         stdout, stderr, status = Open3.capture3(
           RbConfig.ruby, SCOREBOARD_SCRIPT.to_s,
-          '--manifest', EXISTING_MANIFEST.to_s,
+          '--manifest', manifest_path.to_s,
           '--report', Pathname.new(directory).join('does-not-exist.json').to_s,
-          '--scoreboard', Pathname.new(directory).join('scoreboard.json').to_s,
+          '--scoreboard', scoreboard_path.to_s,
           '--input-manifest', input_manifest,
           chdir: ROOT.to_s
         )
@@ -29,6 +30,8 @@ class ScoreboardCLITest < Minitest::Test
         refute_predicate status, :success?
         assert_empty stdout
         assert_includes stderr, 'controls_passed must be true'
+        assert_equal 2, status.exitstatus
+        refute_path_exists scoreboard_path
       end
     end
   end
@@ -107,11 +110,12 @@ class ScoreboardCLITest < Minitest::Test
 
   private
 
-  def write_manifest(root, artifact_root:, score: 1_000)
+  def write_manifest(root, artifact_root:, score: 1_000, controls_passed: true)
     path = root.join("#{artifact_root.tr('/', '_')}-manifest.json")
     File.write(path, JSON.generate(
                        {
-                         'run_kind' => 'real_provider', 'controls_passed' => true, 'artifact_root' => artifact_root,
+                         'run_kind' => 'real_provider', 'controls_passed' => controls_passed,
+                         'artifact_root' => artifact_root,
                          'git_revision' => 'abc123', 'protocol_sha256' => "sha256:#{'a' * 64}",
                          'provider' => 'openrouter', 'model' => 'deepseek/deepseek-chat',
                          'missions' => missions(score)
