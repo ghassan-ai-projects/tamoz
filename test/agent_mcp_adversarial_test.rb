@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/session_plan"
 
 # P10 §10.2 adversarial rows driven through the slice-4 glue: the caller-supplied
 # McpCapabilitySource inside the durable session, against the REAL test server on
@@ -9,6 +10,8 @@ require_relative "test_helper"
 # journal grants one attempt, the circuit counts across callers, and teardown
 # leaves no process behind.
 class AgentMcpAdversarialTest < Minitest::Test
+  include SessionPlan
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Catalog = Tamoz::Mcp::Catalog
   Supervisor = Tamoz::Mcp::Supervisor
@@ -148,22 +151,6 @@ class AgentMcpAdversarialTest < Minitest::Test
   # the default engine's ask.
   def ungated_approval_engine
     Tamoz::Agent.build_approval_engine(profile_name: "auto")
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def accepted_review

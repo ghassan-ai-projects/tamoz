@@ -1,8 +1,13 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/session_plan"
 
 class AgentSessionTest < Minitest::Test
+  include SessionPlan
+
+  private :plan_for
+
   class ScriptedModel
     attr_reader :calls
 
@@ -354,22 +359,6 @@ class AgentSessionTest < Minitest::Test
 
   def check_argv
     [RbConfig.ruby, "-e", %q{abort("wrong") unless File.read("app.rb") == "value = 2\n"}]
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def repair_model(digest)

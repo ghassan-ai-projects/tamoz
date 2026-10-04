@@ -131,9 +131,9 @@ class McpInvocationTest < Minitest::Test
     assert_equal "test-server", observation.server_id
     assert_equal "hello", observation.text
     assert observation.attributed?
-    assert observation.content_blocks.all? do |block|
-      block["attribution"] == "remote content from server test-server"
-    end
+    refute_empty observation.content_blocks
+    assert_equal ["remote content from server test-server"],
+                 observation.content_blocks.map { |block| block.fetch("attribution") }.uniq
     refute observation.truncated
     assert_match(/\Asha256:[0-9a-f]{64}\z/, outcome.effect_key)
     assert_equal 0, supervisor.consecutive_failures

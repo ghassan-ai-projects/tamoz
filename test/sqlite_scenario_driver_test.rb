@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/deep_freeze_assertions"
 
 class SQLiteScenarioDriverTest < Minitest::Test
+  include DeepFreezeAssertions
+
   REGISTRY_DIGEST =
     "sha256:a2b591135254351bd4893d2a1eef79b10d90000fdc9cc70f92d4595e19a41c07"
   DRIVER_DIGEST =
@@ -653,18 +656,5 @@ class SQLiteScenarioDriverTest < Minitest::Test
       document,
       domain: "eval.sqlite_trace_manifest"
     )
-  end
-
-  def assert_deeply_frozen(value)
-    assert value.frozen?
-    case value
-    when Hash
-      value.each do |key, entry|
-        assert_deeply_frozen(key)
-        assert_deeply_frozen(entry)
-      end
-    when Array
-      value.each { |entry| assert_deeply_frozen(entry) }
-    end
   end
 end

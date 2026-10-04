@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/session_plan"
 require "digest"
 
 # D-8 Fix A/B/C behavioural cases. See docs/D8_ACTION_PLAN_DIGEST_PLAN.md §3.
@@ -18,6 +19,10 @@ require "digest"
 #   T8  repeated identical absent-digest plans stop on `repeated_action`;
 #   T9  create_file absent content digest resolves from `hexdigest(content)`.
 class AgentDigestResolutionTest < Minitest::Test
+  include SessionPlan
+
+  private :plan_for
+
   class ScriptedModel
     attr_reader :calls
 
@@ -74,9 +79,8 @@ class AgentDigestResolutionTest < Minitest::Test
       assert completed
       assert_includes completed.data.fetch("output"), "before_sha256: #{observed}"
       # The check ran and passed.
-      assert events.any? do |event|
-        event.type == :tool_completed && event.data.dig("check", "passed") == true
-      end
+      assert_includes events.map { |event| [event.type, event.data.dig("check", "passed")] },
+                      [:tool_completed, true]
     end
   end
 
@@ -161,8 +165,8 @@ class AgentDigestResolutionTest < Minitest::Test
       File.write(File.join(root, "note.txt"), "content\n")
       model = scripted_model(
         plans: [
-          plan_for("read_file", {"path" => "<path from search result>"}),
-          plan_for("read_file", {"path" => "note.txt"})
+          plan_for("read_file", {"path" => "<path from search result>"}, id: "inspect"),
+          plan_for("read_file", {"path" => "note.txt"}, id: "inspect")
         ],
         reviews: 0,
         final_satisfied: false
@@ -190,8 +194,8 @@ class AgentDigestResolutionTest < Minitest::Test
       # digest-shaped arguments (the critic-hardened scope).
       model = scripted_model(
         plans: [
-          plan_for("read_file", {"path" => "to be filled from search result"}),
-          plan_for("read_file", {"path" => "note.txt"})
+          plan_for("read_file", {"path" => "to be filled from search result"}, id: "inspect"),
+          plan_for("read_file", {"path" => "note.txt"}, id: "inspect")
         ],
         reviews: 0,
         final_satisfied: false
@@ -218,7 +222,7 @@ class AgentDigestResolutionTest < Minitest::Test
             "expected_sha256" => Digest::SHA256.hexdigest("answer = a < b\n"),
             "before" => "a < b",
             "after" => "a >= b"
-          })
+          }, id: "inspect")
         ],
         reviews: 2,
         final_satisfied: true
@@ -268,7 +272,7 @@ class AgentDigestResolutionTest < Minitest::Test
             "expected_sha256" => Digest::SHA256.hexdigest("from step 1\n"),
             "before" => "from step 1",
             "after" => "from step 2"
-          })
+          }, id: "inspect")
         ],
         reviews: 2,
         final_satisfied: true
@@ -291,7 +295,7 @@ class AgentDigestResolutionTest < Minitest::Test
   def test_structural_rejection_discloses_bounded_tamoz_issues_only
     Dir.mktmpdir("tamoz-disclose-structural") do |root|
       model = scripted_model(
-        plans: Array.new(3) { plan_for("read_file", {"path" => "<path from search result>"}) },
+        plans: Array.new(3) { plan_for("read_file", {"path" => "<path from search result>"}, id: "inspect") },
         reviews: 0,
         final_satisfied: false
       )
@@ -309,7 +313,7 @@ class AgentDigestResolutionTest < Minitest::Test
   def test_semantic_rejection_discloses_only_the_generic_phrase
     Dir.mktmpdir("tamoz-disclose-semantic") do |root|
       model = ScriptedModel.new(
-        plan: Array.new(3) { plan_for(nil, {}) },
+        plan: Array.new(3) { plan_for(nil, {}, id: "inspect") },
         review: Array.new(3) do
           {"decision" => "revise", "issues" => ["model-authored secret: sk-abcdef"], "rationale" => "x"}
         end,
@@ -377,7 +381,7 @@ class AgentDigestResolutionTest < Minitest::Test
       workspace = File.realpath(workspace)
       File.write(File.join(workspace, "note.txt"), "content\n")
       model = ScriptedModel.new(
-        plan: Array.new(3) { plan_for("read_file", {"path" => "<path from search result>"}) },
+        plan: Array.new(3) { plan_for("read_file", {"path" => "<path from search result>"}, id: "inspect") },
         review: [],
         verify: []
       )
@@ -497,7 +501,7 @@ class AgentDigestResolutionTest < Minitest::Test
       desired = "hello\n"
       model = scripted_model(
         plans: [
-          plan_for("list_directory", {"path" => "."}),
+          plan_for("list_directory", {"path" => "."}, id: "inspect"),
           {
             "goal" => "create the file",
             "done_when" => ["greeting.txt exists with the exact bytes and the check passes"],
@@ -711,22 +715,6 @@ class AgentDigestResolutionTest < Minitest::Test
           "tool" => "run_check",
           "arguments" => {"name" => "answer"},
           "verification" => "the check receipt is observed"
-        }
-      ]
-    }
-  end
-
-  def plan_for(tool, arguments, id: "inspect")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
         }
       ]
     }

@@ -1,11 +1,16 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/session_plan"
 
 # P10 slice 4: the caller-supplied McpCapabilitySource and its session wiring —
 # catalog pinning in the session record, the resume guard (fails closed), and the
 # caller-level exactly-once proof for the MCP reissue path (invariant 21, advB).
 class AgentMcpCapabilitySourceTest < Minitest::Test
+  include SessionPlan
+
+  private :plan_for
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Budgets = ServerConfig::Budgets
   Catalog = Tamoz::Mcp::Catalog
@@ -784,22 +789,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       File.join(root, "broken.rb"),
       "module Broken\n  def self.answer = #{value}\nend\n"
     )
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def accepted_review

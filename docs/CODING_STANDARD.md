@@ -231,6 +231,7 @@ consumers or a clearly isolated responsibility.
 
 ## 9. Testing (Minitest)
 
+- The detailed suite contract is [Testing standard](test-quality/TESTING_STANDARD.md).
 - Behavior-first: test through the narrowest stable boundary. Do not test private
   implementation merely to raise coverage.
 - Characterization tests precede any hotspot extraction; each must fail under at least

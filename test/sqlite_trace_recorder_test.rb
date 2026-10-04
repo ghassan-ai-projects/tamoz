@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/deep_freeze_assertions"
 
 class SQLiteTraceRecorderTest < Minitest::Test
+  include DeepFreezeAssertions
+
   RECORDER_DIGEST =
     "sha256:ebf5a908b273654e63a35bd1ba98c06a57b0ee41cb88e14f4b843983c8153a47"
   # The recorder is constructed WITH the boundary registry, so this manifest
@@ -125,9 +128,9 @@ class SQLiteTraceRecorderTest < Minitest::Test
     refute(manifest.fetch("selectors").any? do |selector|
       selector.fetch("statement") == "checkpoint.writes.item.2"
     end)
-    assert manifest.fetch("events").all? do |event|
+    assert(manifest.fetch("events").all? do |event|
       event.fetch("occurrence") == 1
-    end
+    end)
     assert_equal 12, manifest.fetch("events").length
     assert_equal 10, manifest.fetch("selectors").length
   end
@@ -566,18 +569,5 @@ class SQLiteTraceRecorderTest < Minitest::Test
       domain: "eval.sqlite_trace_manifest"
     )
     document
-  end
-
-  def assert_deeply_frozen(value)
-    assert value.frozen?
-    case value
-    when Hash
-      value.each do |key, entry|
-        assert_deeply_frozen(key)
-        assert_deeply_frozen(entry)
-      end
-    when Array
-      value.each { |entry| assert_deeply_frozen(entry) }
-    end
   end
 end

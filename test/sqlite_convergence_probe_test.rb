@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/deep_freeze_assertions"
 
 class SQLiteConvergenceProbeTest < Minitest::Test
+  include DeepFreezeAssertions
+
   PROBE_DIGEST =
     "sha256:7d016bab925eb8ad88ad2af5cd6d1c8bb519fd435e4761c54f2f00dd57277594"
   REPORT_FIELDS = %w[
@@ -370,18 +373,5 @@ class SQLiteConvergenceProbeTest < Minitest::Test
     sensitive_paths.each { |path| refute_includes encoded, path }
     refute_match(/owner\.phase2|thread\.phase2|request\.phase2|execution\.phase2/, encoded)
     assert_operator encoded.bytesize, :<, 4_096
-  end
-
-  def assert_deeply_frozen(value)
-    assert value.frozen?
-    case value
-    when Hash
-      value.each do |key, entry|
-        assert_deeply_frozen(key)
-        assert_deeply_frozen(entry)
-      end
-    when Array
-      value.each { |entry| assert_deeply_frozen(entry) }
-    end
   end
 end

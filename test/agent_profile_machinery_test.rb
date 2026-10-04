@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/session_plan"
 
 # DR-5 P8 profile machinery completion (accepted rev3 plan): post-override
 # role-resolution recording (D1), registry codec v2 + flocked consumption (D2),
 # resume credential-ref hardening (D3). Maps to acceptance R1-R5 and the
 # DR5-01..A5 probe spec.
 class AgentProfileMachineryTest < Minitest::Test
+  include SessionPlan
+
   Profile = Tamoz::Agent::Profile
   ProfilePolicyError = Tamoz::Agent::ProfilePolicyError
   ProfileRoleUnavailableError = Tamoz::Agent::ProfileRoleUnavailableError
@@ -1113,22 +1116,6 @@ class AgentProfileMachineryTest < Minitest::Test
         verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
       )
     end
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def accepted_review

@@ -1,8 +1,13 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/session_plan"
 
 class AgentCLIProfileTest < Minitest::Test
+  include SessionPlan
+
+  private :plan_for
+
   Profile = Tamoz::Agent::Profile
 
   class ScriptedModel
@@ -457,22 +462,6 @@ class AgentCLIProfileTest < Minitest::Test
         verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
       )
     end
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def accepted_review
