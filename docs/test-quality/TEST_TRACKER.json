@@ -1675,9 +1675,9 @@
   },
   {
     "path": "test/sqlite_kernel_test.rb",
-    "status": "fine",
-    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
-    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+    "status": "done",
+    "reason": "Explicit failure-path regressions retain SQL/busy causes, rollback schema mutations and return pooled connections. Existing kernel cases are unchanged.",
+    "verification": "2026-10-04: kernel 10/74; removing causes fails both new regressions; restored 2/9. Local review; final full lanes in FOLLOWUP_BAR.md."
   },
   {
     "path": "test/sqlite_raw_oracle_test.rb",
