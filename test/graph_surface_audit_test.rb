@@ -15,7 +15,7 @@ class GraphSurfaceAuditTest < Minitest::Test
   def run_generator(*arguments)
     script = ROOT.join("script", "generate_graph_surface_audit")
     Open3.capture3(
-      RbConfig.ruby, script.to_s, *arguments, chdir: ROOT.to_s
+      { 'RUN_COVERAGE' => nil }, RbConfig.ruby, script.to_s, *arguments, chdir: ROOT.to_s
     )
   end
 

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/comms_cli_fixture'
 
 # Slice I (COMMS_TELEGRAM_PLAN §3) — the pinned CLI surface (COMMS_DESIGN
 # §14): `tamoz comms serve|list|doctor`, the `channels` section of `tamoz
@@ -10,8 +11,10 @@ require_relative 'test_helper'
 # never weakened, exactly as the design requires.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 # rubocop:disable Metrics/CyclomaticComplexity
-# rubocop:disable Naming/MethodParameterName, Lint/UnusedMethodArgument, Lint/UnderscorePrefixedVariableName
+# rubocop:disable Lint/UnusedMethodArgument, Lint/UnderscorePrefixedVariableName
 class CommsCliTest < Minitest::Test
+  include CommsCliFixture
+
   BOT_ID = 7_463_512_990
 
   def channel_entry(admission: 'allowlist', expected_bot_id: BOT_ID)
@@ -257,52 +260,11 @@ class CommsCliTest < Minitest::Test
     )
   end
 
-  def with_store(rt)
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(rt.dir, 'runtime.sqlite3'))
-    definition = Tamoz.graph(name: 't', version: '1') do
-      state :ready, default: true
-      node(:finish, implementation_name: 't.finish', version: '1') { |_s, _c| { ready: true } }
-      edge Tamoz::START, :finish
-      edge :finish, Tamoz::END
-    end
-    checkpoints = definition.compile(checkpointer: adapter).checkpointer
-    yield adapter.bind_comms_store(checkpoints)
-  ensure
-    adapter&.close
-  end
-
   def message_update(id, text:, user_id: 111_111_11)
     { 'update_id' => id,
       'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
                      'chat' => { 'id' => 222_222_22, 'type' => 'private' },
                      'from' => { 'id' => user_id }, 'text' => text } }
-  end
-
-  def binding_wire
-    Tamoz::Comms::Binding.new(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      correspondent_id: 'telegram:user:11111111',
-      conversation_id: 'telegram:chat:22222222',
-      bound_at: Time.utc(2026, 8, 10, 12, 0, 0), bound_by: 'operator:test'
-    ).wire
-  end
-
-  def conversation_wire
-    Tamoz::Comms::Conversation.new(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      conversation_id: 'telegram:chat:22222222',
-      thread_id: Tamoz::Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222'),
-      profile_id: 'ops', bound_at: Time.utc(2026, 8, 10, 12, 0, 0)
-    ).wire
-  end
-
-  def delivery_wire
-    Tamoz::Comms::Delivery.build(
-      conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'hello',
-      part_index: 0, part_count: 1, journaled: true,
-      render_version: Tamoz::Comms::Rendering::RENDER_VERSION,
-      content_digest: Tamoz::Comms::Rendering.content_digest('hello')
-    ).wire
   end
 
   class Harness
@@ -361,4 +323,4 @@ class CommsCliTest < Minitest::Test
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize
 # rubocop:enable Metrics/CyclomaticComplexity
-# rubocop:enable Naming/MethodParameterName, Lint/UnusedMethodArgument, Lint/UnderscorePrefixedVariableName
+# rubocop:enable Lint/UnusedMethodArgument, Lint/UnderscorePrefixedVariableName

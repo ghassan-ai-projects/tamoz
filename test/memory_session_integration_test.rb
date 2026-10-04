@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/scripted_generation"
 
 # P11 probes P11-03, P11-19, P11-20: the session integration — the memory_epoch
 # sentinel, BehaviorTransition consumption at the FIRST INTAKE OF A THREAD
@@ -11,20 +12,13 @@ class MemorySessionIntegrationTest < Minitest::Test
   Memory = Tamoz::Agent::Memory
 
   class ScriptedModel
+    include ScriptedGeneration
+
     attr_reader :calls
 
     def initialize(**responses)
       @responses = responses.transform_values(&:dup)
       @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
     end
   end
 

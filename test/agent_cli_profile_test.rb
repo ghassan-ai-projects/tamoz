@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/scripted_generation"
 require_relative "support/session_plan"
 
 class AgentCLIProfileTest < Minitest::Test
@@ -11,20 +12,13 @@ class AgentCLIProfileTest < Minitest::Test
   Profile = Tamoz::Agent::Profile
 
   class ScriptedModel
+    include ScriptedGeneration
+
     attr_reader :calls
 
     def initialize(**responses)
       @responses = responses.transform_values(&:dup)
       @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
     end
   end
 
