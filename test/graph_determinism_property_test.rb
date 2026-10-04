@@ -10,8 +10,8 @@ class GraphDeterminismPropertyTest < Minitest::Test
 
     SCHEDULES.times do |seed|
       layers = generated_layers(random)
-      delays = Random.new(seed + 91)
-      definition = dag_definition(seed, layers, delays)
+      yields = Random.new(seed + 91)
+      definition = dag_definition(seed, layers, yields)
       inline = definition.compile
       threaded = definition.compile
       identity = {
@@ -60,7 +60,8 @@ class GraphDeterminismPropertyTest < Minitest::Test
     end
   end
 
-  def dag_definition(seed, layers, delays)
+  def dag_definition(seed, layers, random)
+    yields = layers.flatten.to_h { |name| [name, random.rand(0..4)] }
     Tamoz.graph(name: "property-dag-#{seed}", version: "1") do
       state :events, reduce: :append, default: []
       layers.flatten.each do |node_name|
@@ -69,7 +70,7 @@ class GraphDeterminismPropertyTest < Minitest::Test
           implementation_name: "property.#{seed}.#{node_name}",
           version: "1"
         ) do |state, _context|
-          sleep(delays.rand * 0.0003)
+          yields.fetch(node_name).times { Thread.pass }
           {events: ["#{node_name}@#{state[:events].length}"]}
         end
       end

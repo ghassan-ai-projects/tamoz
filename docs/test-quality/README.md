@@ -54,3 +54,11 @@ is the known SQLite scenario. These failed runs do not establish complete covera
 The existing protocol compiler also fails with `Errno::EBADARCH` on this Mac.
 
 All normal test providers are deterministic fixtures; this work makes no reasoning claim.
+
+Round three preserves all 120 generated DAGs and their independent model while replacing
+synthetic delays with scheduling yields. A bounded barrier proves concurrent participation
+in pool and subgraph tests. A separate probe records reverse callback completion and verifies
+ordered public results; it does not claim to control the pool's internal publication order.
+Missing participants and wrong result order produce failures. One-sample pool/DAG runtimes
+were 0.646/1.966 seconds at HEAD and 0.629/1.737 afterwards; those are directional samples,
+not a stable whole-suite performance comparison.
