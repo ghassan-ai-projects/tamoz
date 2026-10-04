@@ -1,8 +1,12 @@
 # Testing — never pay real time
 
 - Inject the wait; never `sleep`. The gateway drainer paces for real: pass `sleeper: ->(_) {}`.
+- In `assert rows.all? do ... end`, Ruby gives the block to `assert` and never checks the
+  predicate. Use braces, parentheses, or an expected collection; `test_source_audit_test.rb`
+  checks this binding across every test root.
 - Fast because it *fails early* is not fast.
-- A regression test you have not seen fail proves nothing: stash the fix, watch it fail.
+- A regression test you have not seen fail proves nothing: temporarily mutate the guarded
+  behavior, watch it fail, restore it, and rerun; never use `git stash`.
 - Don't weaken the property under test for speed — keep `WAL` + `synchronous=FULL`.
 - Irreducible process/kill/socket tests go in `SLOW_TESTS`.
 - A deadline the child's own startup must fit inside is a race, not a test — Ruby boot can

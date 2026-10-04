@@ -36,5 +36,21 @@ test and why the deleted case adds no distinct input, failure mode or boundary.
 
 ## Evidence
 
-Current results and remaining gaps will be recorded here as batches finish. All model
-providers used by tests are deterministic fixtures; this work makes no reasoning claim.
+Round one committed as `945a05a1`. It removed repeated plans and recursive assertions
+from twelve files. Eleven consumer suites passed; the SQLite scenario driver retains
+the detached HEAD `request.redirect_ready` SQL error. Missing cancellation/journal rows,
+incorrect check status, wrong attribution and incorrect event occurrence are now detected.
+
+Round two expands discovery to all roots and adds identity and assertion-block checks.
+All 318 fast files pass across nine workers. The grader runs separately because its
+`ROOT` conflicts with the shared helper. Manual real-model evidence is excluded from
+automated gates. Static identity checks include `def` and literal `define_method` names;
+computed names still need case-table review.
+
+The detached baseline executed 3,008 main tests (29,659 assertions, five skips) and
+287 slow tests (27,630 assertions, two failures and one error). The slow failures expose
+competing SimpleCov and raw Coverage instrumentation in graph-audit children; the error
+is the known SQLite scenario. These failed runs do not establish complete coverage.
+The existing protocol compiler also fails with `Errno::EBADARCH` on this Mac.
+
+All normal test providers are deterministic fixtures; this work makes no reasoning claim.

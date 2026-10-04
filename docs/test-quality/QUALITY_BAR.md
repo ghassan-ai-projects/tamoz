@@ -76,6 +76,7 @@ Baseline outputs are kept under `/tmp/tamoz-test-baseline-*`; record results in 
 | --- | --- | --- | --- |
 | Initial audit | Read-only suite auditor running | Pending | — |
 | 1: helpers and assertion correctness | Independent suite auditor: no critical/high findings; all 15 existing files retain test methods | Corrected helper privacy and audit wording; mutation proofs recorded | Pending commit |
+| 2: discovery and executable source checks | Independent helper author reviewed runner/source audit; no critical/high findings | Added duplicate literal generated-method regression; 15/29 identity checks and 6/10 predicate checks pass | Pending commit |
 
 ## Loop log
 
@@ -83,6 +84,7 @@ Baseline outputs are kept under `/tmp/tamoz-test-baseline-*`; record results in 
 | --- | --- | --- | --- | --- |
 | 0 | Research and baseline; no test edits | Ruby 3.3.11, Minitest 6.0.6; 349 test files; restricted ci failed on local socket permission | All implementation rows | Rerun with local socket access; inventory and bounded batches |
 | 1 | Two shared helpers replace twelve implementations; five underchecked properties strengthened | Eleven consumer suites pass; driver retains detached HEAD error; helper 8/52; experience 17/74; observability 13/55; MCP 33/213; twelve mutation probes fail as intended | Complete gates, naming, waits, semantic review, coverage | Commit reviewed batch; repair discovery |
+| 2 | Complete discovery, isolated grader/manual lanes, argument-vector execution, duplicate identities and ignored-predicate guards | Expanded fast lane: 318 files / nine workers pass; grader 16/94 and gem adapter 12/59 pass; inventory/syntax pass; four new files have zero lint offenses | Full-lane baseline fails on driver and competing coverage instrumentation; semantic review, naming and timing remain open | Commit reviewed runner; improve test bodies |
 
 **Known red at HEAD:** permitted `rake ci` passes all 309 fast files, then fails
 `stream:proto:check` with `Errno::EBADARCH` for bundled x86_64 protoc. Detached
