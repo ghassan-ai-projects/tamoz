@@ -12,7 +12,8 @@ class AgentDigestResolutionTest < Minitest::Test
 
   private :plan_for
 
-  ScriptedModel = ScriptedGeneration::QueueModel
+  class ScriptedModel < ScriptedGeneration::QueueModel
+  end
 
   # --- Absent digest, single resolution, preview == execution (Runtime) -------------
 

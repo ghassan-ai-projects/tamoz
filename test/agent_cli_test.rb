@@ -9,7 +9,8 @@ class AgentCLITest < Minitest::Test
 
   private :plan_for
 
-  ScriptedModel = ScriptedGeneration::Model
+  class ScriptedModel < ScriptedGeneration::Model
+  end
 
   def test_version_needs_no_provider_configuration
     out = StringIO.new

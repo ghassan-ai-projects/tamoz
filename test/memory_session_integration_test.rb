@@ -6,7 +6,8 @@ require_relative "support/scripted_generation"
 class MemorySessionIntegrationTest < Minitest::Test
   Memory = Tamoz::Agent::Memory
 
-  ScriptedModel = ScriptedGeneration::Model
+  class ScriptedModel < ScriptedGeneration::Model
+  end
 
   def with_memory_workspace
     Dir.mktmpdir("tamoz-mem-session") do |directory|

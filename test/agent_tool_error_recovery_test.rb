@@ -8,7 +8,8 @@ require "digest"
 class AgentToolErrorRecoveryTest < Minitest::Test
   include ToolRecoveryFixture
 
-  ScriptedModel = ScriptedGeneration::QueueModel
+  class ScriptedModel < ScriptedGeneration::QueueModel
+  end
 
   def test_tool_error_discloses_its_own_message_and_other_errors_do_not
     disclosed = Tamoz::NodeError.new(

@@ -40,7 +40,8 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  ScriptedModel = ScriptedGeneration::Model
+  class ScriptedModel < ScriptedGeneration::Model
+  end
 
   def setup
     @dir = Dir.mktmpdir("tamoz-machinery")

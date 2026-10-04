@@ -9,7 +9,8 @@ class AgentSessionTest < Minitest::Test
 
   private :plan_for
 
-  ScriptedModel = ScriptedGeneration::Model
+  class ScriptedModel < ScriptedGeneration::Model
+  end
 
   ToolPolicy = Data.define(:allow_changes, :checks) do
     def self.default = new(allow_changes: false, checks: {})

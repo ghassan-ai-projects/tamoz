@@ -9,7 +9,14 @@ class TestFixtureHelpersTest < Minitest::Test
   include ApprovalCase
   include CommsCliFixture
 
-  ResponseModel = ScriptedGeneration::Model
+  class ResponseModel < ScriptedGeneration::Model
+  end
+
+  def test_shared_generation_preserves_the_named_model_identity_used_by_effects
+    model = ResponseModel.new(plan: ['response'])
+
+    assert_equal 'TestFixtureHelpersTest::ResponseModel', model.class.name
+  end
 
   def test_scripted_generation_consumes_the_prefix_and_repeats_the_final_response
     model = ResponseModel.new(plan: [{ 'answer' => 1 }, 'raw response'])

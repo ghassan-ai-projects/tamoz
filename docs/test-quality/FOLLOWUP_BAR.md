@@ -89,4 +89,7 @@ change their behavior; it remains a separately recorded testing-standard concern
 Review is local throughout this follow-up, as the owner explicitly prohibited
 subagents. Historical independent reviews remain historical evidence only.
 
-| 6 | Complete the remaining per-file source dispositions with explicit limits on behavioral proof; correct tracker wording so local review is not called independent review. Existing real-process timing and source-audit rescue concerns are recorded separately. | Inventory 355 rows: 215 done / 140 fine; inventory regressions 4/9; generator lint adds no offense; local diff review and diff check pass. | This round |
+| 6 | Complete the remaining per-file source dispositions with explicit limits on behavioral proof; correct tracker wording so local review is not called independent review. Existing real-process timing and source-audit rescue concerns are recorded separately. | Inventory 355 rows: 215 done / 140 fine; inventory regressions 4/9; generator lint adds no offense; local diff review and diff check pass. | dc3cc394 |
+
+
+| 7 | Final behavior review found that the runtime uses model.class.name as fallback effect identity. Replace shared-class aliases with thin named subclasses, preserving every original provider name as well as queue behavior. Local review confirms both runtime/worker identity seams; no production change. | All nine consumer suites pass separately; helper 11/25; alias mutation fails the new identity regression; ten Ruby files add no cop offenses; existing test names retained. | This round |

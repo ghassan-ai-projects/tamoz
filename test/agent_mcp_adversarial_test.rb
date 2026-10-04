@@ -30,7 +30,8 @@ class AgentMcpAdversarialTest < Minitest::Test
     MCP_TEST_SERVER_PROTOCOL_VERSION MCP_TEST_SERVER_GRANDCHILD
   ].freeze
 
-  ScriptedModel = ScriptedGeneration::Model
+  class ScriptedModel < ScriptedGeneration::Model
+  end
 
   def setup
     @dir = Dir.mktmpdir("tamoz-agent-mcp-adv")

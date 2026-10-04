@@ -13,7 +13,8 @@ class AgentCLIProfileTest < Minitest::Test
 
   Profile = Tamoz::Agent::Profile
 
-  ScriptedModel = ScriptedGeneration::Model
+  class ScriptedModel < ScriptedGeneration::Model
+  end
 
   READ_ONLY_TOOLS = %w[read_file list_directory search_text].freeze
 

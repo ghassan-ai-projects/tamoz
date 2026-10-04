@@ -84,3 +84,7 @@
   `TestSuite.coverage_environment`; its subprocess regression verifies the actual run
   options. A private helper must not use the reserved `test_` prefix: the runner
   rejects non-public test methods after loading every selected file.
+
+- Shared scripted models must retain their consumer class names: runtime and worker
+  use `model.class.name` as fallback effect identity. Use a named subclass of the
+  shared implementation; a constant alias changes the recorded identity.
