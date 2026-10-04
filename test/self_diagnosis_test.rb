@@ -19,12 +19,15 @@ class SelfDiagnosisTest < Minitest::Test
     report = diagnose do |builder|
       execution = healthy_activity(builder)
       builder.effect(thread: 'thread.a', execution_id: execution, operation: 'tool.mcp.write',
-                     outcome: :unknown, error: { 'class' => 'Tamoz::MCP::TransportError', 'message' => 'timeout' })
+                     outcome: :unknown, error: { 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout',
+                                                 'message' => 'timeout' })
     end
     finding = finding(report, 'effect.outcome_unknown')
 
     assert_equal 'critical', finding.severity
     assert_equal(['tool.mcp.write'], finding.evidence.map { |entry| entry.fetch('operation') })
+    assert_equal({ 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout' },
+                 finding.evidence.first.fetch('failure'))
     assert_equal report.findings.first, finding
   end
 

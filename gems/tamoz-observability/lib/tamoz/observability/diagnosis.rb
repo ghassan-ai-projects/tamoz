@@ -44,7 +44,21 @@ module Tamoz
           rows = sources.flat_map do |source|
             source.records.fetch(kind.to_s, []).map { |row| row.merge('source' => source.name) }
           end
-          [kind.to_s, kind == :effect_attempts ? with_operations(rows, sources) : rows]
+          [kind.to_s, rows]
+        end.then { |records| joined(records, sources) }
+      end
+
+      def joined(records, sources)
+        records.merge('effect_attempts' => with_operations(records.fetch('effect_attempts'), sources),
+                      'effects' => with_latest_failures(records.fetch('effects'), records.fetch('effect_attempts')))
+      end
+
+      def with_latest_failures(effects, attempts)
+        latest = attempts.group_by { |attempt| [attempt['source'], attempt['effect_key']] }
+                         .transform_values { |rows| rows.max_by { |attempt| attempt['attempt_number'].to_i } }
+        effects.map do |effect|
+          failure = latest[[effect['source'], effect['effect_key']]]&.fetch('failure', nil)
+          failure ? effect.merge('failure' => failure) : effect
         end
       end
 

@@ -94,8 +94,9 @@ class SelfInvestigationEval
     end
 
     def diagnosis_json(runtime)
-      text, = tamoz('--runtime-dir', runtime, 'diagnose', '--json', '--since', '24h')
-      text
+      out, = Open3.capture3(RbConfig.ruby, *LIBS, TAMOZ, '--runtime-dir', runtime, 'diagnose', '--json', '--since', '24h',
+                            stdin_data: '')
+      out
     end
 
     def named?(output, truth) = truth.nil? ? false : output.include?(truth)

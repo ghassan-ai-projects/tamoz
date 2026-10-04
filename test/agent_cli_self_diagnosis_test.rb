@@ -73,7 +73,7 @@ class AgentCLISelfDiagnosisTest < Minitest::Test
 
   def test_postmortem_writes_files_and_embeds_an_analysis
     with_postmortem do |status, paths, _out_dir|
-      document = JSON.parse(File.read(paths.fetch('json')))
+      document = JSON.parse(File.read(paths.fetch('json'), encoding: Encoding::UTF_8))
 
       assert_equal 0, status
       assert_equal 'insufficient_balance', document.dig('analysis', 'hypothesis')
@@ -83,7 +83,7 @@ class AgentCLISelfDiagnosisTest < Minitest::Test
 
   def test_postmortem_markdown_names_the_failure_and_writes_only_in_out
     with_postmortem do |_status, paths, out_dir|
-      markdown = File.read(paths.fetch('markdown'))
+      markdown = File.read(paths.fetch('markdown'), encoding: Encoding::UTF_8)
 
       assert_includes markdown, '# Postmortem: Provider outage'
       assert_includes markdown, 'model.generate.plan failed — Tamoz::Agent::ModelCallError/insufficient_balance'
@@ -152,7 +152,7 @@ class AgentCLISelfDiagnosisTest < Minitest::Test
   def test_explain_declares_when_an_independent_row_limit_is_reached
     with_runtime do |directory|
       observation = Tamoz::Agent::SelfObservation.open(runtime_dir: directory, limit: 2)
-      explained = observation.explain(thread: 'thread.a')
+      explained = observation.explain(thread: 'thread.a', now_ms: (Time.now.to_f * 1000).to_i)
 
       assert_includes explained.fetch('truncated'), 'effects'
     end

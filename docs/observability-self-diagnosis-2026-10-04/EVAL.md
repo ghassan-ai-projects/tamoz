@@ -14,7 +14,7 @@ Three different kinds of evidence, never mixed:
 
 ## 1. The corpus
 
-Thirteen scenarios, each a runtime database built through the real APIs (`DurableRecordBuilder`:
+Fifteen scenarios, each a runtime database built through the real APIs (`DurableRecordBuilder`:
 graph turns through `durable_runner`, effects through `open_writer` → `effects.prepare/start/complete`,
 approvals through the approval decision log, journal events through the real `Recorder::Journal`).
 Every scenario sits inside the same healthy noise: 6 completed turns, 18 successful model calls,
@@ -34,22 +34,24 @@ sidecar file the journal itself writes).
 | `websearch_egress` | 4 searches refused `destination_not_allowed` | `destination_not_allowed` |
 | `telemetry_loss` | 240 journal drops (`queue_full`) | `queue_full` |
 | `single_model_failure` | 1 model call fails `http_failure` (added after run 2, see §4) | `http_failure` |
+| `unknown_write_among_misses` (trap) | 8 routine reads fail `not_found`; 1 aerator write ends `unknown`, `transport_timeout` — the code appears only in the timeline | `transport_timeout` |
+| `unknown_feeder_among_empty_searches` (trap) | 5 searches fail `no_results`; 1 feeder write ends `unknown`, `connection_reset` — timeline only | `connection_reset` |
 | `approval_stall` | 2 approvals unanswered (judged 5 h later) | `approval.waiting` |
 | `stuck_effect` | 1 shell effect running (judged 45 min later) | `effect.stuck` |
 | `clean` | none | — |
 
 ## 2. Detector accuracy (C3, plumbing)
 
-`ruby -Itest test/self_diagnosis_corpus_test.rb` — 14 runs (13 scenarios + the digest pin),
-38 assertions, 0 failures. Each scenario must fire **exactly** its expected rules, and the diagnose
-output must contain the marker.
+`ruby -Itest test/self_diagnosis_corpus_test.rb` — 16 runs (15 scenarios + the digest pin),
+44 assertions, 0 failures. Each scenario must fire **exactly** its expected rules, and the marker must
+be in the output of the probe that decides it (`diagnose`, or `timeline` for the two traps).
 
 | | Result |
 |---|---|
-| Fault scenarios whose expected rules all fired | 12 / 12 (100%) |
+| Fault scenarios whose expected rules all fired | 14 / 14 (100%) |
 | Rules fired that were not expected | 0 |
 | Findings on the clean runtime | 0 |
-| Marker present in the `diagnose` output (so a model *can* find it) | 12 / 12 |
+| Marker present in its deciding probe's output (so a model *can* find it) | 14 / 14 |
 
 **Expectation error caught by the first run, recorded rather than hidden.** Before any run, the
 corpus expected `model.failure_rate` / `tool.failure_rate` to fire in four scenarios. They did not:
@@ -62,7 +64,8 @@ were not touched. `effect.repeated_failure` named the cause in all four.
 
 `script/self_investigation_eval value` builds each scenario into a real runtime directory
 (`tamoz init`), then asks the existing operator surface and the new command whether they *name* the
-root-cause marker. Raw output: [`runs/value-2026-10-04.json`](runs/value-2026-10-04.json).
+root-cause marker. Raw output (clean tree, `e542237d`):
+[`runs/value-2026-10-04-final.json`](runs/value-2026-10-04-final.json).
 
 | Scenario | `tamoz status --json` | `tamoz observe metrics` | `tamoz diagnose` |
 |---|---|---|---|
@@ -76,7 +79,9 @@ root-cause marker. Raw output: [`runs/value-2026-10-04.json`](runs/value-2026-10
 | websearch_egress | no | no | **yes** |
 | telemetry_loss | no (shows a total drop count) | no | **yes** |
 | single_model_failure | no | no | **yes** |
-| **Total** | **0 / 10** | **0 / 10** | **10 / 10** |
+| unknown_write_among_misses (trap) | no | no | no — the code is only in `timeline` |
+| unknown_feeder_among_empty_searches (trap) | no | no | no — the code is only in `timeline` |
+| **Total** | **0 / 12** | **0 / 12** | **10 / 12** (the traps are found through `timeline`, §4) |
 
 `approval_stall` and `stuck_effect` need real elapsed time from the CLI (the command uses the wall
 clock); they are covered by the injected-clock tests above. **Harness defect caught:** the first value
@@ -106,16 +111,63 @@ and a finding's cited result must contain the decisive marker. Controls reject e
 fabricated citation hidden beside a valid one, and the earlier wrong-cause/ungrounded cases. Future
 runs retain the full grading inputs, question, corpus/rules digests and implementation provenance.
 The question changed, so the corpus digest was reviewed and repinned; historical run digests remain
-unchanged. Final-design real-model C5 remains BLOCKED until a funded provider run completes.
+unchanged. A second review found a model-free "most frequent code" policy also scored 9/9, so the
+grader now scores two deterministic baselines beside the model, and two trap scenarios hide the cause
+from `diagnose` (`test_model_free_baselines_solve_an_ordinary_scenario_and_fail_the_trap`).
 
-**Model:** `deepseek/deepseek-v4.1-flash` via OpenRouter. **Set:** development, not held out.
+### Final-design run — [`runs/real-2026-10-04-run4-zai-final.json`](runs/real-2026-10-04-run4-zai-final.json) — C5
+
+**Model:** `zai/glm-5.3-flash` (Z.ai coding-plan endpoint). **Code:** `e542237d` (the record says
+`dirty: true` because EVAL.md and one test's file-read encoding were being edited during the run; no
+file under `gems/` or `script/` differed). **Corpus:** `sha256:60437638…`, 11 real-model scenarios,
+development set. Every investigation got the same question; the hypothesis field must be exactly the
+root-cause code. Graded by `test/support/self_investigation_grader.rb`; next to the model, two
+model-free baselines are scored by the same grader on the same `diagnose` output: **frequency** (the
+most frequent known code) and **ranked** (the first known code in the top-ranked finding).
+
+| Scenario | Model | Frequency baseline | Ranked baseline | Probe calls | Model calls | Seconds |
+|---|---|---|---|---|---|---|
+| provider_balance | success | success | success | 5 | 4 | 143 |
+| rate_limited | success | success | success | 3 | 7 | 106 |
+| mcp_transport | success | success | success | 3 | 4 | 86 |
+| check_failing | success | success | success | 4 | 5 | 192 |
+| tool_not_found | success | success | success | 4 | 5 | 185 |
+| worker_claim_errors | success | success | success | 4 | 6 | 185 |
+| auth_refused | success | success | success | 4 | 5 | 154 |
+| websearch_egress | success | success | success | 3 | 4 | 71 |
+| telemetry_loss | success | success | success | 5 | 5 | 150 |
+| unknown_write_among_misses (trap) | **wrong cause** (`not_found`) | fail | fail | 3 | 5 | 257 |
+| unknown_feeder_among_empty_searches (trap) | **success** (`connection_reset`) | fail | fail | 3 | 4 | 110 |
+
+| Measure | Model | Baselines | Threshold (bar C5) |
+|---|---|---|---|
+| Correct, grounded in a cited probe result | **10 / 11** | 9 / 11 each | ≥ 6 / 8 |
+| Fabricated codes or citations | **0** | — | 0 |
+| Model calls | 54 (4.9 per investigation) | 0 | — |
+
+What this does and does not show:
+
+- **It finds its own failures, cites what it read, and invents nothing**: 10/11, no fabricated code
+  or citation, every turn ended `reported`.
+- **On the nine ordinary scenarios a model-free baseline does as well.** The diagnosis engine already
+  ranks the cause first, which is the design: detection is deterministic, the model reads it,
+  explains it and cites it. Those nine scenarios show faithful reporting, not independent reasoning.
+- **The traps are where reasoning is needed.** The root cause (an `unknown` outcome on an external
+  write) is absent from `diagnose` and visible only through `timeline` or `explain_turn`, and both
+  baselines fail. The model solved one of the two here and the other in a separate earlier run
+  ([`runs/real-2026-10-04-trap-zai.json`](runs/real-2026-10-04-trap-zai.json)): 2 of 3 trap attempts,
+  too few to quote a rate. Where it failed, it fell for the frequent, harmless `not_found` reads.
+- Development set, one model, one run per scenario. Not held out; not a benchmark.
+
+Earlier run on the same final design but the previous corpus (9 scenarios, no traps):
+[`runs/real-2026-10-04-run3-zai.json`](runs/real-2026-10-04-run3-zai.json) — 9/9, 0 fabricated.
 
 ### Run 1 — [`runs/real-2026-10-04-run1.json`](runs/real-2026-10-04-run1.json)
 
 Design at the time: the reader still returned a bounded failure message, and the question did not
 yet say "name exactly one code".
 
-| Scenario | Outcome (corrected grader) | Probe calls | Model calls | Seconds |
+| Scenario | Outcome (old token-search grader; hedging applied by hand) | Probe calls | Model calls | Seconds |
 |---|---|---|---|---|
 | provider_balance | success | 10 | 7 | 75 |
 | rate_limited | success | 11 | 17 | 534 |
@@ -127,13 +179,16 @@ yet say "name exactly one code".
 | websearch_egress | success | 10 | 6 | 110 |
 | telemetry_loss | **no report** — exit 2 after 16 probe and 11 model calls; most likely the provider credit ran out (run 2 failed that way from its first call), not confirmed | 16 | 11 | 242 |
 
-| Measure | Value | Threshold (bar C5) |
-|---|---|---|
-| Root cause correct, grounded in a cited probe result, one code named | **7 / 9** | ≥ 6 / 8 |
-| Same, without the one-code rule (grader at run time) | 8 / 9 | — |
-| Fabricated codes (named but never served by any probe) | **0** | 0 |
-| Model calls | 78 (8.7 per investigation) | — |
-| Spend | not measured (lesson recorded in `.agent/rules/evaluation.md`) | — |
+Not a C5 measurement: the grader, question and reader have changed since, and the run kept too
+little to regrade. Recorded so it is not dropped.
+
+| Measure (historical) | Value |
+|---|---|
+| Correct under the old grader, hedging counted as failure | 7 / 9 |
+| Correct under the old grader as it ran | 8 / 9 |
+| Fabricated codes | 0 |
+| Model calls | 78 (8.7 per investigation) |
+| Spend | not measured (lesson recorded in `.agent/rules/evaluation.md`) |
 
 In every successful run the model named the error class and code and, where there was one, set the
 red herring aside in its findings. The first real run before these (on `provider_balance`) found the
@@ -155,7 +210,15 @@ under every count threshold, though one is enough to end a turn. The `model.call
 
 ## 5. Real postmortem with a real-model analysis (C6)
 
-[`runs/postmortem-provider-balance.md`](runs/postmortem-provider-balance.md) is unedited output of
+**Final design:** [`runs/postmortem-provider-balance-zai.md`](runs/postmortem-provider-balance-zai.md)
+is unedited output of `tamoz postmortem --analysis` embedding a real `tamoz investigate` turn
+(`zai/glm-5.3-flash`, current reader: class and code only) on the `provider_balance` runtime. The
+model set the hypothesis to `insufficient_balance`, cited the probes that showed it, set aside the
+`not_found` read as non-actionable, and flagged on its own that the fixture's turn is recorded
+`completed` with a timestamp earlier than its failed effects — a real artefact of how the corpus
+builder writes effects after the turn, recorded in §6.
+
+**Historical:** [`runs/postmortem-provider-balance.md`](runs/postmortem-provider-balance.md) is unedited output of
 `tamoz postmortem --analysis` (final code) embedding the findings report of a real `tamoz
 investigate` turn (DeepSeek v4.1 flash via OpenRouter, run before the reader stopped returning
 failure messages) on the `provider_balance` runtime. The model named `insufficient_balance`, cited
@@ -164,6 +227,10 @@ postmortem labels the analysis as not verified by the postmortem command itself.
 
 ## 6. What it cannot do yet
 
+- **The model's added value over the deterministic ranking is small in this corpus**: model-free
+  baselines match it on every ordinary scenario; it beats them only on the traps, 2 of 3 attempts.
+- **Corpus realism:** the builder writes failed effects after their turn completed, so turns read
+  `completed` with failures inside them (the model noticed). Real runtimes order these differently.
 - **Failure messages are not shown**, only class and code: the model and the operator see
   `ModelCallError/http_failure`, not "402 out of credit". This is the price of keeping content out.
 - **Grounding is checked per probe, not per call.** A finding counts as grounded when a probe it
@@ -182,36 +249,36 @@ postmortem labels the analysis as not verified by the postmortem command itself.
 - **No regulatory evidence yet**: no tamper-evident seal, retention or reporting clock
   (`FUTURE_PLAN.md`).
 
-## 7. Historical real-model postmortem, verbatim (C6)
+## 7. Final-design real-model postmortem, verbatim (C6)
 
-This is the existing recorded artifact, not a new final-design real-model run.
+Unedited copy of [`runs/postmortem-provider-balance-zai.md`](runs/postmortem-provider-balance-zai.md) (headings demoted to fit this page). The historical DeepSeek-era postmortem is kept in [`runs/postmortem-provider-balance.md`](runs/postmortem-provider-balance.md).
 
-```markdown
-# Postmortem: Model calls refused: provider balance
+#### Postmortem: Model calls refused: provider balance
 
-Window: 2026-10-03T15:27:20Z → 2026-10-04T15:27:20Z · generated 2026-10-04T15:27:20Z
+Window: 2026-10-03T19:35:55Z → 2026-10-04T19:35:55Z · generated 2026-10-04T19:35:55Z
 
 Blameless; assembled read-only from the durable record. Proposed actions are never executed.
 
-## Impact
+#### Impact
 
 - Failed turns: 0
 - Threads with failures: thread.noise.5
 - Findings by severity: high 2
 
-## Analysis (the attached findings report; this command does not verify it)
+#### Analysis (the attached findings report; this command does not verify it)
 
-**Summary:** The runtime's own record over the last 24h shows 6 turns requested and completed, 35 effect attempts (30 succeeded, 5 failed). Four of the five failures are the same model call failing repeatedly in thread.noise.5, and the self-diagnosis rule effect.repeated_failure fired at high severity on exactly that group. The workspace is empty, so the record is the only evidence.
+**Summary:** Investigated the Tamoz runtime's durable record over the last 24 hours after a 4-hour lookback showed an empty recent window. All five effect failures in the record are concentrated in one turn (thread.noise.5) at ~1791125835196-1791125835202, about 4.6 hours before diagnosis: four model.generate.plan attempts failed with Tamoz::Agent::ModelCallError code insufficient_balance, and one tool.read_file attempt failed with ToolError code not_found. The runtime's own high-severity rules fired only on the balance failure.
 
-**Hypothesis (high):** The root cause is the model provider rejecting calls for non-payment: every failing model.generate.plan attempt carries error class Tamoz::Agent::ModelCallError with code insufficient_balance and reason "402 Payment Required: the account balance is empty". The exact error code identifying the root cause is insufficient_balance (class Tamoz::Agent::ModelCallError, rule effect.repeated_failure). The single tool.read_file failure (code not_found, "notes.md does not exist") is a separate, unrelated one-off and not the cause.
+**Hypothesis (high):** insufficient_balance
 
-- Four model.generate.plan effect attempts failed in thread.noise.5 with the identical failure: class Tamoz::Agent::ModelCallError, code insufficient_balance, reason '402 Payment Required: the account balance is empty'. [call-af411c37-bf7d-4f98-b04d-8ab726f85bd8, call-a3c7e1f9-deda-42c4-adc7-5c26922e0a71, call-169bc01d-3bfa-4db1-949b-3109a8236ae1]
-- The self-diagnosis rule effect.repeated_failure fired at severity high, category dependency_unavailable, count 4, first_seen 1791125835197 and last_seen 1791125835201, with detail failure 'Tamoz::Agent::ModelCallError/insufficient_balance'. [call-a3c7e1f9-deda-42c4-adc7-5c26922e0a71, call-4aeb3d16-5558-40ff-aee8-588aaca5d5bf]
-- The failures are confined to thread.noise.5; threads noise.0 through noise.4 each requested and completed a turn without a model failure, and the runtime reports 6/6 requests completed with no degraded sources. [call-af411c37-bf7d-4f98-b04d-8ab726f85bd8, call-a3c7e1f9-deda-42c4-adc7-5c26922e0a71]
-- A fifth, distinct failure occurred in the same thread: tool.read_file failed with class Tamoz::Agent::ToolError, code not_found, reason 'notes.md does not exist' — a one-off missing-file error, not part of the repeated group. [call-af411c37-bf7d-4f98-b04d-8ab726f85bd8, call-169bc01d-3bfa-4db1-949b-3109a8236ae1]
-- The failing model calls are idempotent effects that each failed on attempt 1 with duration 0-1 ms, consistent with an immediate provider-side rejection rather than a timeout or retry exhaustion. [call-169bc01d-3bfa-4db1-949b-3109a8236ae1, call-a3c7e1f9-deda-42c4-adc7-5c26922e0a71]
+- The runtime's own rules fired twice with high severity on the same failure: rule effect.repeated_failure and rule model.call_failed, each count 4, category dependency_unavailable, detail Tamoz::Agent::ModelCallError/insufficient_balance. Both rules name a provider/account condition, not a Tamoz defect. [call_-7218248447135049513]
+- Timeline inside thread.noise.5: three model.generate.plan successes and two tool.read_file successes at ~1791125835190-5195, then four consecutive model.generate.plan failures with code insufficient_balance at ~1791125835196-5200, all distinct effect keys, each a single attempt with duration 0 ms (refused immediately, no retries). The account crossed its balance threshold mid-burst: model calls worked until 5195 and every model call after 5196 failed. These are the last model calls in the record. [call_-7218248447135049512, call_-7218263805938099576]
+- The only other error code in the window is ToolError/not_found: a single tool.read_file attempt at ~1791125835202 in the same thread, after the balance failures. It occurs once, fires no rule, and no other thread had any failure. It cannot explain four model calls failing with a balance code; it is best read as collateral of the planner losing the model (a path that was never produced) or an unrelated missing file. [call_-7218248447135049512, call_-7218263805938099576]
+- Nothing else in the runtime is degraded: degraded=false, no worker-error occurrences, journal empty, and the sibling turns (thread.noise.0 through thread.noise.4) completed with all their effects succeeding. The failure is isolated to one thread at one instant, which matches a shared account hitting zero rather than a runtime fault. [call_-7218248447135049513, call_-7218263805938099575]
+- A 240-minute lookback returned an empty timeline and empty summary even though rows exist; the 1440-minute lookback contains the incident. The burst is at 1791125835196 and diagnosis ran at 1791142396000, about 276 minutes earlier, so 'the last few hours' sits just outside the 4-hour window. [call_-7218296997445368582, call_-7218296997445368581, call_-7218248447135049512]
+- Turn accounting is odd but secondary: thread.noise.5's request and final checkpoint are recorded completed at ~1791125835189, before the five failed effects at 5196-5202, and the turn outcome is 'completed' despite four failed planner effects. No attempt was retried, so there was no retry storm. [call_-7218263805938099576]
 
-## Timeline
+#### Timeline
 
 - 2026-10-04T14:57:15Z `durable` turn requested (`thread.noise.0#request.d53a9484`)
 - 2026-10-04T14:57:15Z `durable` turn completed (`thread.noise.0#request.d53a9484`)
@@ -243,9 +310,9 @@ Blameless; assembled read-only from the durable record. Proposed actions are nev
 - 2026-10-04T14:57:15Z `durable` model.generate.plan failed — Tamoz::Agent::ModelCallError/insufficient_balance (`sha256:6b5f1a06739e0756a0ca80311473543652496a3e37467a35725e2cae2b678fe6#1`)
 - 2026-10-04T14:57:15Z `durable` tool.read_file failed — Tamoz::Agent::ToolError/not_found (`sha256:c5cda6aa674d4de60c4f8e317932dab581e66fa93fc4e602b4a9fa238aff4332#1`)
 
-## Findings
+#### Findings
 
-### [high] The same failure is repeating (4)
+##### [high] The same failure is repeating (4)
 
 Rule `effect.repeated_failure` · category `dependency_unavailable` · finding `sha256:8146d08bf5ca58b809f31da9796f7777b9a554472a1db3f61b9eeabe710cd0f5`  
 Seen 2026-10-04T14:57:15Z → 2026-10-04T14:57:15Z
@@ -257,40 +324,40 @@ Seen 2026-10-04T14:57:15Z → 2026-10-04T14:57:15Z
 - `effect_attempts` `sha256:f37cd3c8dfd3f6beb3395e3c04ca63604241e9dd9b5f39cad0e57ed201ed123b#1` — model.generate.plan · failed · Tamoz::Agent::ModelCallError · insufficient_balance
 - `effect_attempts` `sha256:26fd998ea674d71ec786f1b263a8466a84e9a659378223bb6b343cd512013d0a#1` — model.generate.plan · failed · Tamoz::Agent::ModelCallError · insufficient_balance
 
-### [high] A model call failed (4)
+##### [high] A model call failed (4)
 
 Rule `model.call_failed` · category `dependency_unavailable` · finding `sha256:99be8bdd0b0664008aac074cce4b4b917fdba03769ffca2e0a98c6b251b6434f`  
 Seen 2026-10-04T14:57:15Z → 2026-10-04T14:57:15Z
 
-**Action:** One failed model call ends the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
+**Action:** A failed model call can end or degrade the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
 
 - `effect_attempts` `sha256:6b5f1a06739e0756a0ca80311473543652496a3e37467a35725e2cae2b678fe6#1` — model.generate.plan · failed · Tamoz::Agent::ModelCallError · insufficient_balance
 - `effect_attempts` `sha256:47da65c43e58aef0b0f8e63b04b7e058125def876cdafa712a5b4160997bc741#1` — model.generate.plan · failed · Tamoz::Agent::ModelCallError · insufficient_balance
 - `effect_attempts` `sha256:f37cd3c8dfd3f6beb3395e3c04ca63604241e9dd9b5f39cad0e57ed201ed123b#1` — model.generate.plan · failed · Tamoz::Agent::ModelCallError · insufficient_balance
 - `effect_attempts` `sha256:26fd998ea674d71ec786f1b263a8466a84e9a659378223bb6b343cd512013d0a#1` — model.generate.plan · failed · Tamoz::Agent::ModelCallError · insufficient_balance
 
-## Unknowns
+#### Unknowns
 
 None.
 
-## Proposed actions (not executed)
+#### Proposed actions (not executed)
 
 - One error class and code keeps recurring; fix that cause once instead of retrying the calls.
-- One failed model call ends the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
-```
+- A failed model call can end or degrade the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
 
-## 8. Continuation validation (2026-10-04)
+## 8. Validation history
 
-The corpus still detects all 12 fault scenarios with no extra rule and no clean-runtime finding
-(14 tests, 38 assertions). The current value comparison is retained separately in
-[`runs/value-2026-10-04-continuation.json`](runs/value-2026-10-04-continuation.json); all ten measured
-fault markers are named by diagnosis and by neither existing command.
+**Continuation (another agent, 2026-10-04).** At that point the corpus held 12 fault scenarios; its
+value run is [`runs/value-2026-10-04-continuation.json`](runs/value-2026-10-04-continuation.json) and
+its mutation record [`runs/mutations-2026-10-04.json`](runs/mutations-2026-10-04.json). It made no
+paid call: OpenRouter had $0.45 left and refused calls
+([`runs/provider-credit-2026-10-04.json`](runs/provider-credit-2026-10-04.json)).
 
-Nine guard mutations in an isolated copy each produced a failing regression test; the working
-worktree was never mutated during full-suite validation. Evidence:
-[`runs/mutations-2026-10-04.json`](runs/mutations-2026-10-04.json).
-
-The provider credit was checked live without making a model call:
-[`runs/provider-credit-2026-10-04.json`](runs/provider-credit-2026-10-04.json). OpenRouter has
-$0.451297018 remaining; its prior run was refused at this balance. No further paid calls were
-attempted. C5 remains BLOCKED, and this continuation claims no new real-model result.
+**Round 3 (2026-10-04).** The funded provider is Z.ai's coding-plan endpoint
+(`ZAI_API_BASE=https://api.z.ai/api/coding/paas/v4`; the default endpoint answers `1113 Insufficient
+balance`, which Tamoz mislabels `model_rate_limited` — raised as a separate task). Safety mutations
+were re-run in a scratch copy of `e542237d` with each mutation written down
+([`runs/mutations-2026-10-04-round3.json`](runs/mutations-2026-10-04-round3.json)): every property's
+test goes red under its mutation and green after restore. One honest exception: removing *either*
+`readonly` or `PRAGMA query_only` alone is not caught, because the other guard still refuses the write;
+removing both is (A1c).

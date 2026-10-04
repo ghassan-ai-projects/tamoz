@@ -6,7 +6,6 @@ module Tamoz
       # Counts and latencies over the window, computed from durable rows only.
       module Summary
         MAX_OPERATIONS = 15
-        FAILED = %w[failed unknown].freeze
 
         module_function
 
@@ -37,7 +36,8 @@ module Tamoz
           {
             'operation' => operation,
             'attempts' => rows.length,
-            'failed' => rows.count { |row| FAILED.include?(row['status']) },
+            'failed' => rows.count { |row| row['status'] == 'failed' },
+            'unknown' => rows.count { |row| row['status'] == 'unknown' },
             'p50_ms' => percentile(durations, 0.5),
             'p95_ms' => percentile(durations, 0.95)
           }

@@ -1,0 +1,376 @@
+{
+  "mode": "value",
+  "model": null,
+  "corpus_digest": "sha256:60437638b522464448e8e7dff15b09b1ce1dfb85fa3aec0aa681a151ecca6552",
+  "question": "Something went wrong with this Tamoz runtime in the last few hours. Use the probes to investigate its own record and report the root cause. Set the hypothesis field to exactly one error code identifying the root cause, with no other words or punctuation. Discuss your reasoning and other codes in the findings.",
+  "rules_digest": "sha256:db8a96fb72c2b0a6dac5d32b8c107d18ba2248a2810bd9878c31a2319c55b01e",
+  "implementation": {
+    "revision": "e542237d1572a1f5ec0dcb1dd7b4021d0c6d3599",
+    "dirty": false
+  },
+  "results": [
+    {
+      "scenario": "provider_balance",
+      "truth": "insufficient_balance",
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "insufficient_balance",
+          "success": true
+        },
+        "ranked": {
+          "choice": "insufficient_balance",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "rate_limited",
+      "truth": "rate_limited",
+      "expected_rules": [
+        "model.failure_rate",
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "rate_limited",
+          "success": true
+        },
+        "ranked": {
+          "choice": "rate_limited",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.failure_rate"
+      ]
+    },
+    {
+      "scenario": "mcp_transport",
+      "truth": "transport_timeout",
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "transport_timeout",
+          "success": true
+        },
+        "ranked": {
+          "choice": "transport_timeout",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1155,
+      "diagnose_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "check_failing",
+      "truth": "check_exit_nonzero",
+      "expected_rules": [
+        "check.failure_rate",
+        "effect.repeated_failure"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "check_exit_nonzero",
+          "success": true
+        },
+        "ranked": {
+          "choice": "check_exit_nonzero",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "check.failure_rate"
+      ]
+    },
+    {
+      "scenario": "tool_not_found",
+      "truth": "path_outside_workspace",
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "path_outside_workspace",
+          "success": true
+        },
+        "ranked": {
+          "choice": "path_outside_workspace",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "worker_claim_errors",
+      "truth": "lease_lost",
+      "expected_rules": [
+        "worker.errors",
+        "request.failed"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "lease_lost",
+          "success": true
+        },
+        "ranked": {
+          "choice": "lease_lost",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1051,
+      "diagnose_rules": [
+        "worker.errors",
+        "request.failed"
+      ]
+    },
+    {
+      "scenario": "auth_refused",
+      "truth": "authentication_failed",
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "authentication_failed",
+          "success": true
+        },
+        "ranked": {
+          "choice": "authentication_failed",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "websearch_egress",
+      "truth": "destination_not_allowed",
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "destination_not_allowed",
+          "success": true
+        },
+        "ranked": {
+          "choice": "destination_not_allowed",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "telemetry_loss",
+      "truth": "queue_full",
+      "expected_rules": [
+        "telemetry.loss"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "queue_full",
+          "success": true
+        },
+        "ranked": {
+          "choice": "queue_full",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1050,
+      "diagnose_rules": [
+        "telemetry.loss"
+      ]
+    },
+    {
+      "scenario": "single_model_failure",
+      "truth": "http_failure",
+      "expected_rules": [
+        "model.call_failed"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "http_failure",
+          "success": true
+        },
+        "ranked": {
+          "choice": "http_failure",
+          "success": true
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "unknown_write_among_misses",
+      "truth": "transport_timeout",
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "not_found",
+          "success": false
+        },
+        "ranked": {
+          "choice": "not_found",
+          "success": false
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1155,
+      "diagnose_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "unknown_feeder_among_empty_searches",
+      "truth": "connection_reset",
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": "no_results",
+          "success": false
+        },
+        "ranked": {
+          "choice": "no_results",
+          "success": false
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1155,
+      "diagnose_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "approval_stall",
+      "truth": "approval.waiting",
+      "expected_rules": [
+        "approval.waiting"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": null,
+          "success": false
+        },
+        "ranked": {
+          "choice": null,
+          "success": false
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1048,
+      "diagnose_rules": []
+    },
+    {
+      "scenario": "stuck_effect",
+      "truth": "effect.stuck",
+      "expected_rules": [
+        "effect.stuck"
+      ],
+      "baselines": {
+        "frequency": {
+          "choice": null,
+          "success": false
+        },
+        "ranked": {
+          "choice": null,
+          "success": false
+        }
+      },
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1048,
+      "diagnose_rules": []
+    },
+    {
+      "scenario": "clean",
+      "truth": null,
+      "expected_rules": [],
+      "baselines": null,
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1048,
+      "diagnose_rules": []
+    }
+  ]
+}

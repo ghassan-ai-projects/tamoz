@@ -77,14 +77,16 @@ class SelfInvestigationGraderTest < Minitest::Test
                                               [%w[probe_self_diagnose probe_invented]]).outcome
   end
 
-  def test_model_free_baselines_solve_an_ordinary_scenario_and_fail_the_trap
+  def test_frequency_fails_both_traps_and_ranking_solves_every_scenario
     ordinary = baselines_for('provider_balance')
-    trap = baselines_for('unknown_write_among_misses')
+    traps = %w[unknown_write_among_misses unknown_feeder_among_empty_searches].map { |id| baselines_for(id) }
 
     assert ordinary.fetch('frequency').fetch('success')
     assert ordinary.fetch('ranked').fetch('success')
-    refute trap.fetch('frequency').fetch('success')
-    refute trap.fetch('ranked').fetch('success')
+    traps.each do |trap|
+      refute trap.fetch('frequency').fetch('success')
+      assert trap.fetch('ranked').fetch('success')
+    end
   end
 
   private

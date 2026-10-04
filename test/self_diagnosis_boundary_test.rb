@@ -73,7 +73,7 @@ class SelfDiagnosisBoundaryTest < Minitest::Test
     observation = Tamoz::Agent::SelfObservation.open(runtime_dir: directory)
     now = now_ms
     [observation.diagnose(now_ms: now, since_ms: now - 3_600_000).to_json,
-     JSON.generate(observation.explain(thread: SECRET)),
+     JSON.generate(observation.explain(thread: SECRET, now_ms: 0)),
      JSON.generate(observation.timeline(since_ms: now - 3_600_000, until_ms: now)),
      Tamoz::Observability::Postmortem.to_markdown(
        observation.postmortem(title: SECRET, now_ms: now, since_ms: now - 3_600_000, until_ms: now)

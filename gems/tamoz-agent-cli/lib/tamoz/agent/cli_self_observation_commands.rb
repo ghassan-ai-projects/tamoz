@@ -35,7 +35,7 @@ module Tamoz
         end
         parser.parse!(argv)
         thread = argv.shift or raise OptionParser::MissingArgument, 'THREAD'
-        record = self_observation(options).explain(thread:, request:)
+        record = self_observation(options).explain(thread:, request:, now_ms:)
         @out.puts(options[:json] ? JSON.generate(record) : JSON.pretty_generate(record))
         0
       end

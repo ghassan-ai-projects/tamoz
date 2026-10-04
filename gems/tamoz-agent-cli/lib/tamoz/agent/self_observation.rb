@@ -55,13 +55,13 @@ module Tamoz
         Tamoz::Observability::Diagnosis.run(sources:, journal: @journal, now_ms:, since_ms:, rules:)
       end
 
-      def explain(thread:, request: nil)
+      def explain(thread:, now_ms:, request: nil)
         database, records = @databases.lazy.map { |entry| [entry, thread_records(entry, thread)] }
                                            .find { |_entry, rows| rows.fetch('requests').any? }
         raise Error, "no durable request for thread #{thread}" unless database
 
         Tamoz::Observability::Explanation.build(records, thread:, request:, approval_link: database.approval_link,
-                                                         now_ms: (Time.now.to_f * 1000).to_i)
+                                                         now_ms:)
                                          .merge('database' => Tamoz::Core.scrub_secrets(database.name),
                                                 'truncated' => records.select do |_kind, rows|
                                                   rows.length >= @limit

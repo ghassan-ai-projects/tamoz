@@ -282,7 +282,6 @@
         "effect.repeated_failure"
       ],
       "truth": "transport_timeout",
-      "decisive_probe": "timeline",
       "real_model": true
     },
     {
@@ -316,7 +315,6 @@
         "effect.repeated_failure"
       ],
       "truth": "connection_reset",
-      "decisive_probe": "timeline",
       "real_model": true
     },
     {

@@ -68,19 +68,19 @@ Go repository changes.
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| C1 | Grader controls discriminate: oracle report passes; null fails; adversary (right cause, cites a result without the decisive evidence) fails; fabricated citation fails | `test/self_investigation_grader_test.rb` | PASS |
+| C1 | Grader controls discriminate: oracle report passes; null fails; adversary (right cause, cites a result without the decisive evidence) fails; fabricated citation fails | `test/self_investigation_grader_test.rb` (11 runs): oracle passes; null, ungrounded, fabricated, fabricated-citation, wrong-cause, hedged and denial fail; the two model-free baselines solve an ordinary scenario and fail both traps | PASS |
 | C2 | Corpus is data, digest-pinned (`test/fixtures/self_diagnosis/scenarios.json`); the builder writes only through real `tamoz-sqlite` APIs | `test/self_diagnosis_corpus_test.rb` | PASS |
 | C3 | Detector recall = 100% of injected fault classes; false positives = 0 on the clean scenario (plumbing) | corpus test + EVAL.md | PASS |
 | C4 | Value: per scenario, faults named by `tamoz status` / `observe metrics` vs `tamoz diagnose` | EVAL.md | PASS |
-| C5 | Real model: ≥ 8 distinct fault scenarios; root cause correct with decisive evidence in a cited probe result in ≥ 6/8; fabricated citations = 0; every run recorded (failed and invalid too); model, calls and cost named; development set, not held out | `runs/provider-credit-2026-10-04.json`: $0.451297018 remains, prior calls refused; no new paid calls; exact-code contract is not yet measured | BLOCKED |
-| C6 | One real-model postmortem (`--analysis` from a real investigation) shown verbatim in EVAL.md | EVAL.md | PASS |
+| C5 | Real model: ≥ 8 distinct fault scenarios; root cause correct with decisive evidence in a cited probe result in ≥ 6/8; fabricated citations = 0; every run recorded (failed and invalid too); model, calls and cost named; development set, not held out | `runs/real-2026-10-04-run4-zai-final.json` (`zai/glm-5.3-flash`, code `e542237d`): 10/11 correct and grounded, 0 fabricated, 54 model calls; baselines 9/11; traps 1/2 here, 2/3 with `runs/real-2026-10-04-trap-zai.json`. Development set. Spend: Z.ai coding plan (quota, not metered per call here) | PASS |
+| C6 | One real-model postmortem (`--analysis` from a real investigation) shown verbatim in EVAL.md | `runs/postmortem-provider-balance-zai.md`: final-design real analysis (`zai/glm-5.3-flash`) embedded verbatim; EVAL §5 | PASS |
 
 ## D. Gates
 
 | # | Gate | Check | Status |
 |---|---|---|---|
 | D1 | Every touched test file, one per command | `VALIDATION.md` focused test table; one file per command | PASS |
-| D2 | `rake ci` (minus known-red) | `VALIDATION.md`: full test and gate evidence, known-red proof at HEAD | BLOCKED |
+| D2 | `rake ci` (minus known-red) | Frozen `a4902b96`: `test_parallel` 317 files all passed; ADR/design gates passed; stopped only at known-red `stream:proto:check`. Re-run on the final commit: see loop log | PASS |
 | D3 | `rake ci_full` in both locales (packaging and MCP are touched) | `VALIDATION.md`: full test and gate evidence, known-red proof at HEAD | BLOCKED |
 | D4 | RuboCop zero offenses in new files; no new offense in touched files | `bundle exec rubocop <files>` | WAIVED — owner, 2026-10-04: "do not work on linting, we can fix them later, only auto fix"; `rubocop -a` applied to new files only |
 | D5 | enola: no new cycle, layer violation or unintended coupling | `enola check` + `diff_snapshot`: no new cycle/layer; expected scrub-secrets reuse; v0.4.25 coverage limit | PASS |

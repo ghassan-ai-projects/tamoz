@@ -58,13 +58,13 @@ module Tamoz
           lines = report.dig('summary', 'operations')
           return [] if lines.empty?
 
-          ['## Operations in the window', '', '| Operation | Attempts | Failed | p50 ms | p95 ms |',
-           '|---|---|---|---|---|', lines.map { |line| operation_row(line) }, '']
+          ['## Operations in the window', '', '| Operation | Attempts | Failed | Unknown | p50 ms | p95 ms |',
+           '|---|---|---|---|---|---|', lines.map { |line| operation_row(line) }, '']
         end
 
         def operation_row(line)
           cells = [
-            "`#{line['operation']}`", line['attempts'], line['failed'], line['p50_ms'], line['p95_ms']
+            "`#{line['operation']}`", line['attempts'], line['failed'], line['unknown'], line['p50_ms'], line['p95_ms']
           ]
           "| #{cells.join(' | ')} |"
         end

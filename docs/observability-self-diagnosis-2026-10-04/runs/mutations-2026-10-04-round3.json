@@ -1,0 +1,136 @@
+[
+  {
+    "property": "A1",
+    "mutation": "open the reader read-write",
+    "file": "gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb",
+    "applied": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_reader_never_writes_the_database",
+    "red_under_mutation": false,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 0 failures, 0 errors, 0 skips",
+    "note": "Not caught alone: the other guard still refuses the write. Defence in depth; see A1c."
+  },
+  {
+    "property": "A1b",
+    "mutation": "drop PRAGMA query_only (readonly kept)",
+    "file": "gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb",
+    "applied": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_reader_never_writes_the_database",
+    "red_under_mutation": false,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 0 failures, 0 errors, 0 skips",
+    "note": "Not caught alone: the other guard still refuses the write. Defence in depth; see A1c."
+  },
+  {
+    "property": "A1c",
+    "mutation": "open read-write and drop PRAGMA query_only",
+    "file": "gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb",
+    "applied": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_reader_never_writes_the_database",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 1 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A2",
+    "mutation": "select the request payload",
+    "file": "gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb",
+    "applied": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_reader_returns_no_content_columns",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A3",
+    "mutation": "add a file writer to Timeline",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/timeline.rb",
+    "applied": true,
+    "test": "test/self_diagnosis_boundary_test.rb",
+    "name": "test_the_pure_modules_reference_no_store_and_no_actor",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 34 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A4",
+    "mutation": "default a missing approval answer to approve",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/explanation.rb",
+    "applied": true,
+    "test": "test/agent_cli_self_diagnosis_test.rb",
+    "name": "test_explain_attributes_policy_and_actor_and_marks_unanswered_approval",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A5",
+    "mutation": "derive a class from the message prefix",
+    "file": "gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb",
+    "applied": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_a_failure_exposes_only_its_class_and_code",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 1 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A7",
+    "mutation": "ignore counted journal drops",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/diagnosis.rb",
+    "applied": true,
+    "test": "test/self_diagnosis_test.rb",
+    "name": "test_telemetry_loss_marks_the_report_degraded",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A8",
+    "mutation": "inline a numeric threshold in failure_groups",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/diagnosis/detectors.rb",
+    "applied": true,
+    "test": "test/diagnosis_rules_test.rb",
+    "name": "test_detectors_compare_against_rule_parameters_never_numeric_literals",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "M2",
+    "mutation": "keep only approvals created inside the window",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/explanation.rb",
+    "applied": true,
+    "test": "test/agent_cli_self_diagnosis_test.rb",
+    "name": "test_an_approval_answered_during_a_resume_or_asked_while_running_is_kept",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 1 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "A6",
+    "mutation": "reference Tamoz::SQLite::Adapter from Diagnosis",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/diagnosis.rb",
+    "applied": true,
+    "test": "test/self_diagnosis_boundary_test.rb",
+    "name": "test_the_pure_modules_reference_no_store_and_no_actor",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 4 assertions, 1 failures, 0 errors, 0 skips"
+  },
+  {
+    "property": "evidence-join",
+    "mutation": "drop the latest attempt failure from effect rows (with_latest_failures returns the effect unchanged)",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/diagnosis.rb",
+    "applied": true,
+    "test": "test/self_diagnosis_test.rb",
+    "name": "test_unknown_effect_is_a_critical_finding_with_its_row_as_evidence",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 2 assertions, 0 failures, 1 errors, 0 skips (run in the working tree on the round-4 code, restored before any other test)"
+  }
+]

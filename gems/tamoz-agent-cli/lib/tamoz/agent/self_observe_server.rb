@@ -70,8 +70,10 @@ module Tamoz
 
       def answer(name, arguments)
         observation = SelfObservation.open(runtime_dir: @runtime_dir, session_dir: @session_dir)
-        return observation.explain(thread: arguments.fetch('thread_id'), request: arguments['request_id']) if
-          name == 'explain_turn'
+        if name == 'explain_turn'
+          return observation.explain(thread: arguments.fetch('thread_id'), request: arguments['request_id'],
+                                     now_ms: (@clock.call.to_f * 1000).to_i)
+        end
 
         since_ms, until_ms = window(arguments)
         return observation.timeline(since_ms:, until_ms:) if name == 'timeline'
