@@ -4,15 +4,21 @@ module CommsCliFixture
   private
 
   def with_store(runtime)
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(runtime.dir, 'runtime.sqlite3'))
-    definition = Tamoz.graph(name: 't', version: '1') do
+    with_checkpoints(runtime.dir, graph_name: 't') do |adapter, checkpoints|
+      yield adapter.bind_comms_store(checkpoints)
+    end
+  end
+
+  def with_checkpoints(directory, graph_name:)
+    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
+    definition = Tamoz.graph(name: graph_name, version: '1') do
       state :ready, default: true
-      node(:finish, implementation_name: 't.finish', version: '1') { |_s, _c| { ready: true } }
+      node(:finish, implementation_name: "#{graph_name}.finish", version: '1') { |_s, _c| { ready: true } }
       edge Tamoz::START, :finish
       edge :finish, Tamoz::END
     end
     checkpoints = definition.compile(checkpointer: adapter).checkpointer
-    yield adapter.bind_comms_store(checkpoints)
+    yield adapter, checkpoints
   ensure
     adapter&.close
   end

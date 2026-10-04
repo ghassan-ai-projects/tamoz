@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
+require_relative 'comms_cli_fixture'
+
 module CommsApprovalFixture
+  include CommsCliFixture
+
   private
 
   def descriptor

@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/read_note_plan'
 require "tamoz/mcp/websearch"
 
 class WebsearchEgressTest < Minitest::Test
+  include ReadNotePlan
+
   Profile = Tamoz::Agent::Profile
   Session = Tamoz::Agent::Session
 
@@ -184,19 +187,6 @@ class WebsearchEgressTest < Minitest::Test
       adapter.close
       raise
     end
-  end
-
-  def read_plan
-    {
-      "goal" => "explain",
-      "done_when" => ["read the note"],
-      "steps" => [
-        {
-          "id" => "s1", "purpose" => "read", "tool" => "read_file",
-          "arguments" => {"path" => "note.txt"}, "verification" => "output present"
-        }
-      ]
-    }
   end
 
   def test_session_record_pins_the_canonical_egress_declaration

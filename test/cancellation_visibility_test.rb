@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/comms_cli_fixture'
+require_relative 'support/runtime_cli_fixture'
 require_relative 'support/autonomy_case'
 require_relative 'support/comms_gateway_harness'
 
@@ -565,35 +567,18 @@ class CancellationVisibilityTest < Minitest::Test
   end
 
   class Harness
+    include CommsCliFixture
+
+    include RuntimeCliFixture
+
     attr_reader :dir
 
     def initialize(dir)
       @dir = dir
     end
 
-    def cli(argv)
-      out = StringIO.new
-      err = StringIO.new
-      exit_code = Tamoz::Agent::CLI.run(
-        ['--runtime-dir', dir] + argv,
-        out:, err:, input: StringIO.new,
-        env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' }
-      )
-      [exit_code, out.string, err.string]
-    end
-
     def with_store
-      adapter = Tamoz::SQLite::Adapter.new(path: File.join(dir, 'runtime.sqlite3'))
-      definition = Tamoz.graph(name: 't', version: '1') do
-        state :ready, default: true
-        node(:finish, implementation_name: 't.finish', version: '1') { |_s, _c| { ready: true } }
-        edge Tamoz::START, :finish
-        edge :finish, Tamoz::END
-      end
-      checkpoints = definition.compile(checkpointer: adapter).checkpointer
-      yield adapter.bind_comms_store(checkpoints)
-    ensure
-      adapter&.close
+      with_checkpoints(dir, graph_name: 't') { |adapter, checkpoints| yield adapter.bind_comms_store(checkpoints) }
     end
   end
 end

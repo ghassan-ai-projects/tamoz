@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/source_boundary_audit'
 
 # tamoz-skills is reached only through its facade: the Tamoz::Skills functions and its value types.
 class SkillsBoundaryTest < Minitest::Test
+  include SourceBoundaryAudit
+
   OWNER = 'gems/tamoz-skills/'
   INNER_CONSTANT = /Tamoz::Skills::(?:Candidates|Collisions|Compiler|Disk|Frontmatter|FrontmatterScanner|Lint|Manifest|Rejected|Rendering|Resources|Roots|Tree|Walk)\b/
   WRITE = /\b(?:FileUtils\.|File\.(?:write|binwrite|rename|delete|unlink|symlink|chmod)|Dir\.(?:mkdir|rmdir)|IO\.write)/
@@ -67,15 +70,5 @@ end
 
   def files(pattern)
     Dir[ROOT.join(pattern).to_s].select { |path| File.file?(path) }.map { |path| path.delete_prefix("#{ROOT}/") }
-  end
-
-  def matches(path, pattern)
-    File.readlines(ROOT.join(path), encoding: Encoding::UTF_8).each_with_index.filter_map do |line, index|
-      next unless line.valid_encoding? && !line.match?(/\A\s*#/)
-
-      "#{path}:#{index + 1}: #{line.strip}" if line.match?(pattern)
-    end
-  rescue ArgumentError
-    []
   end
 end

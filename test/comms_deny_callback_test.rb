@@ -10,23 +10,8 @@ class CommsDenyCallbackTest < Minitest::Test
 
   Comms = Tamoz::Comms
 
-  def with_engine
-    Dir.mktmpdir('tamoz-deny') do |directory|
-      path = File.join(directory, 'runtime.sqlite3')
-      adapter = Tamoz::SQLite::Adapter.new(path:)
-      begin
-        definition = Tamoz.graph(name: 'deny', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'deny.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
-        yield adapter, checkpoints
-      ensure
-        adapter&.close
-      end
-    end
+  def with_engine(&block)
+    Dir.mktmpdir('tamoz-deny') { |directory| with_checkpoints(directory, graph_name: 'deny', &block) }
   end
 
   def test_a_callback_resolves_one_active_prompt_to_a_deny_decision

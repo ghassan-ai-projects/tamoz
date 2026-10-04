@@ -46,7 +46,7 @@ TestSuite impact: seven dependents within two hops. Read subjects end to end bef
 
 | 3 | Share nine subject-specific storage/transport helpers across 22 suites. Replace the MCP guessed delay with a bounded signal from the real SDK client; retain real timeout/restart assertions and join its caller during cleanup. Local diff review: no test removed or softened; every new helper method meets the configured 20-line bar. | All 22 suites pass separately; final MCP 33/214; no changed-file lint increase across 31 Ruby files; diff/syntax checks pass | 9308f0df |
 
-| 4 | Include application/nested script sources in syntax discovery; use the locked Minitest SEED variable through one shared coverage environment; reject private/protected runnable tests. Rename one private source-list helper using the reserved test prefix. Repair the stale requirements evidence reference and regenerate its manifest. Local review: no existing behavioral assertions removed. | Fast lane: all 321 files pass; runner 18/42; manifest 11/3,266; skills boundary 6/42; source/seed/visibility mutations each fail; no changed-file lint increases | This round |
+| 4 | Include application/nested script sources in syntax discovery; use the locked Minitest SEED variable through one shared coverage environment; reject private/protected runnable tests. Rename one private source-list helper using the reserved test prefix. Repair the stale requirements evidence reference and regenerate its manifest. Local review: no existing behavioral assertions removed. | Fast lane: all 321 files pass; runner 18/42; manifest 11/3,266; skills boundary 6/42; source/seed/visibility mutations each fail; no changed-file lint increases | c4650805 |
 
 ## Known red at baseline
 
@@ -61,3 +61,5 @@ controlled same-seed comparison is still required.
 The proposed injected MCP concurrency failure was rejected during owner review because
 it changed the live-server evidence and retry policy. It was reverted before this commit;
 the real server, 0.5-second deadline and retry budget of one remain unchanged.
+
+| 5 | Share remaining duplicate CLI, source-audit, websearch and checkpoint setup. Extract named scorecard/change-evaluation assertions and preserve independently stored API/aggregate expectations. Local review: scenarios, callbacks, retry policy and existing assertions retained; no production edits. | All affected consumers pass individually. API 3/1,176, scorecard 6/215 and change evaluation 2/30 match baseline counts. Expected-value and event-filter mutations fail; 16 changed Ruby files have no cop increase; Enola reports zero new findings. | This round |

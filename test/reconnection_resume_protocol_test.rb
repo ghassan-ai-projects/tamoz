@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/runtime_cli_fixture'
 require_relative 'support/autonomy_case'
 
 # What reconnecting actually guarantees. A client that walks away mid-turn and
@@ -198,23 +199,14 @@ class ReconnectionResumeProtocolTest < Minitest::Test
 
   # One operator-owned runtime directory: durable rows in, CLI answers out.
   class ChannelRuntime
+    include RuntimeCliFixture
+
     include AutonomyCase
 
     attr_reader :dir
 
     def initialize(dir:)
       @dir = dir
-    end
-
-    def cli(argv)
-      out = StringIO.new
-      err = StringIO.new
-      exit_code = Tamoz::Agent::CLI.run(
-        ['--runtime-dir', dir] + argv,
-        out:, err:, input: StringIO.new,
-        env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' }
-      )
-      [exit_code, out.string, err.string]
     end
 
     def with_store

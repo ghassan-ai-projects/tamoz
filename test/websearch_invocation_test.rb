@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/read_note_plan'
 require "tamoz/mcp/websearch"
 
 class WebsearchInvocationTest < Minitest::Test
+  include ReadNotePlan
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Catalog = Tamoz::Mcp::Catalog
   Supervisor = Tamoz::Mcp::Supervisor
@@ -60,19 +63,6 @@ class WebsearchInvocationTest < Minitest::Test
       response = @inner.generate(stage:, system:, prompt:)
       response.is_a?(String) ? response : JSON.generate(response)
     end
-  end
-
-  def read_plan
-    {
-      "goal" => "explain",
-      "done_when" => ["read the note"],
-      "steps" => [
-        {
-          "id" => "s1", "purpose" => "read", "tool" => "read_file",
-          "arguments" => {"path" => "note.txt"}, "verification" => "output present"
-        }
-      ]
-    }
   end
 
   def approve_mcp_session_like(session, outcome, thread:)

@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/source_boundary_audit'
 
 # tamoz-research is reached only through its facade, and it stays pure. A caller naming an inner constant ties
 # itself to the gem's internals, and a file write or socket inside it would put I/O where only rules belong.
 class ResearchBoundaryTest < Minitest::Test
+  include SourceBoundaryAudit
+
   OWNER = 'gems/tamoz-research/'
   # The facade module and its error are the whole public surface.
   INNER_CONSTANT = /Tamoz::Research::(?!Error\b|VERSION\b)[A-Z]/
@@ -43,14 +46,4 @@ class ResearchBoundaryTest < Minitest::Test
   end
 
   def gem_files = Dir[ROOT.join(OWNER, 'lib/**/*.rb').to_s].map { |path| path.delete_prefix("#{ROOT}/") }
-
-  def matches(path, pattern)
-    File.readlines(ROOT.join(path), encoding: Encoding::UTF_8).each_with_index.filter_map do |line, index|
-      next unless line.valid_encoding? && !line.match?(/\A\s*#/)
-
-      "#{path}:#{index + 1}: #{line.strip}" if line.match?(pattern)
-    end
-  rescue ArgumentError
-    []
-  end
 end

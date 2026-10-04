@@ -25,23 +25,8 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  def with_engine
-    Dir.mktmpdir('tamoz-evidence') do |directory|
-      path = File.join(directory, 'runtime.sqlite3')
-      adapter = Tamoz::SQLite::Adapter.new(path:)
-      begin
-        definition = Tamoz.graph(name: 'evidence', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'evidence.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
-        yield adapter, checkpoints
-      ensure
-        adapter&.close
-      end
-    end
+  def with_engine(&block)
+    Dir.mktmpdir('tamoz-evidence') { |directory| with_checkpoints(directory, graph_name: 'evidence', &block) }
   end
 
   def test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence
