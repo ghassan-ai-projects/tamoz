@@ -361,9 +361,6 @@ class MemoryTreatmentProfileTest < Minitest::Test
   end
 
   def test_auditor_counts_memory_recalls_sensitive_and_unauthorized
-    # DR-3: AgentRunAudit gains the memory event class + hard-zero counters
-    # (one auditor, one report domain). The scorecard's runs never emit memory
-    # events, so its counters stay zero there.
     artifact = CORPUS.cases.first
     events = [
       memory_event("m.public", "public", authorized: true),
@@ -390,19 +387,12 @@ class MemoryTreatmentProfileTest < Minitest::Test
   end
 
   def test_scorecard_environment_declares_scripted_no_attribution
-    # Scope item 3: the scorecard's environment block is honest — it exposes
-    # that the run is controller-scripted and claims no attribution, and P17
-    # keeps network_enforcement "not_claimed" with the live-network run as a
-    # recorded deferral. No gate logic changes; the 18/15/pass pins hold.
     report = Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: RunnerInputs.smoke_corpus).run
     assert report.passed?
     document = report.to_h
     assert_equal "not_claimed", document.dig("environment", "attribution_claim")
     assert_equal "not_claimed", document.dig("environment", "network_enforcement")
     assert_equal "deferred", document.dig("environment", "live_network_validation")
-    # T8.3: the P14 streaming case was retired with the engine, so the corpus
-    # is 21 cases; the approval-policy redesign made agent.stale-digest's
-    # fail-closed refusal oracle-pass, so 19 of them are passing tasks.
     assert_equal 21, document.dig("corpus", "case_count")
     assert_equal 19, document.dig("aggregate", "task_successes")
     assert_equal 0, document.dig("aggregate", "unsafe_or_bypassed_actions")

@@ -3,12 +3,6 @@
 require_relative "test_helper"
 require "open3"
 
-# P18 (H5/C8) — audit accuracy. The Coverage + manifest-probe table
-# regenerates by running the named product tests and reconciles every graph
-# entry in `docs/public-api.json`; divergence raises AuditMismatchError.
-#
-# This test runs the generator and asserts it produces a table (deterministic
-# regeneration). The generator is the audit's executable spec.
 class GraphSurfaceAuditTest < Minitest::Test
   AUDIT_PATH = ROOT.join("docs", "GRAPH_SURFACE_AUDIT.md")
 
@@ -26,11 +20,6 @@ class GraphSurfaceAuditTest < Minitest::Test
     assert status.success?, "audit generator failed: #{stderr.to_s.lines.last(6).join}"
 
     assert_match(/wrote .*GRAPH_SURFACE_AUDIT\.md \(\d+ entries\)/, stdout)
-    # The generator confirms the inventory and rewrites it only when the bytes
-    # would change. Re-stamping on every run made `rake ci` dirty the worktree,
-    # which P15 §12 counts as a release stopper. The comparison is against the
-    # file as it was BEFORE this run — not against git HEAD, which would also
-    # fail for an uncommitted edit the generator had nothing to do with.
     assert_match(%r{docs/public-api\.json (confirmed unchanged|rewrote)}, stdout)
     assert_equal before, Digest::SHA256.hexdigest(File.binread(manifest)),
                  "running the audit generator must not change docs/public-api.json"
@@ -55,10 +44,6 @@ class GraphSurfaceAuditTest < Minitest::Test
   end
 
   def test_module_functions_are_measured_as_executed
-    # The module-function blind spot (critic finding F2): Coverage records
-    # `Tamoz.graph` as "#<Class:Tamoz>#graph"; the audit must normalize the
-    # singleton-class signature and credit the module functions that the
-    # product actually executed (agent_session/agent_runtime call them).
     audit = File.read(AUDIT_PATH)
     %w[Tamoz.graph Tamoz.interrupt].each do |entry|
       row = audit.lines.find { |line| line.include?("`#{entry}`") }
@@ -77,8 +62,6 @@ class GraphSurfaceAuditTest < Minitest::Test
   end
 
   def test_divergence_raises_audit_mismatch_error
-    # The failure model (H5/§6): a committed table that disagrees with the
-    # regeneration raises AuditMismatchError instead of silently overwriting.
     original = File.read(AUDIT_PATH)
     begin
       File.write(AUDIT_PATH, original.sub("| Entry |", "| ENTRY |"))

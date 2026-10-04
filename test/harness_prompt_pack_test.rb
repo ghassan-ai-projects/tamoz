@@ -151,7 +151,7 @@ class HarnessPromptPackTest < Minitest::Test
     ].each { |text| assert_raises(H::Error) { H::SubagentRoles.parse(text) } }
   end
 
-  def test_n4_the_delegation_note_and_its_thresholds_are_data
+  def test_the_delegation_note_and_its_thresholds_are_data
     spec_row('N4') do
       roles = H::SubagentRoles.shipped
       shipped = JSON.parse(File.read(ROLES_PATH))
@@ -162,7 +162,7 @@ class HarnessPromptPackTest < Minitest::Test
     end
   end
 
-  def test_v3_only_a_role_flagged_in_data_is_handed_the_changes
+  def test_only_a_role_flagged_in_data_is_handed_the_changes
     roles = H::SubagentRoles.shipped
 
     assert_equal [true, false], [roles.fetch('review').reviews_changes?, roles.fetch('explore').reviews_changes?]
@@ -181,7 +181,7 @@ class HarnessPromptPackTest < Minitest::Test
     JSON.generate(shipped.merge('explore' => explore.merge('tools' => explore.fetch('tools') + [tool])))
   end
 
-  def test_b9_the_shipped_role_file_loads_with_its_prompt_and_a_turn_cap
+  def test_the_shipped_role_file_loads_with_its_prompt_and_a_turn_cap
     spec_row('B9') do
       assert_path_exists ROLES_PATH
       roles = H::SubagentRoles.parse(File.read(ROLES_PATH))
@@ -191,7 +191,7 @@ class HarnessPromptPackTest < Minitest::Test
     end
   end
 
-  def test_b9_the_shipped_role_carries_a_validated_loop_policy
+  def test_the_shipped_role_carries_a_validated_loop_policy
     spec_row('B9') do
       assert_path_exists ROLES_PATH
 
@@ -201,7 +201,7 @@ class HarnessPromptPackTest < Minitest::Test
 
   # A subagent role can only narrow the parent's authority. The loader is where that stops being a convention: a role
   # file naming a tool that can change anything, start another agent, or touch memory is refused before a child exists.
-  def test_b9_a_role_file_naming_a_writing_tool_run_check_delegate_or_a_memory_tool_is_refused_at_load
+  def test_a_role_file_naming_a_writing_tool_run_check_delegate_or_a_memory_tool_is_refused_at_load
     spec_row('B9') do
       assert_path_exists ROLES_PATH
       (FORBIDDEN_IN_CHILD + %w[* apply_* run_*]).each do |tool|

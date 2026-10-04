@@ -2,9 +2,6 @@
 
 require_relative "test_helper"
 
-# T0.5 (PLAN_TAMOZ_STREAM_BUILD §6.3): the declared lane → model-tier map.
-# The episode worker selects a lane's model from config — never by inference,
-# never via a hidden default.
 class LaneConfigTest < Minitest::Test
   def test_declared_map_is_used_verbatim
     config = Tamoz::Agent::LaneConfig.build(

@@ -2,7 +2,7 @@
 
 require_relative '../../../test/test_helper'
 
-# Exercises the controller-owned T3 M1-to-M2 journal oracle.
+# Exercises the controller-owned M1-to-M2 journal oracle.
 class ScenarioDriverTest < Minitest::Test
   # Records the durable seams needed to exercise restart setup without a provider.
   class RestartAdapter

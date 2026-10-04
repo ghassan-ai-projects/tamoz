@@ -9,10 +9,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# P1 gates 1-5, 7 via the fixed graph under the in-process driver (gate 4:
-# no gRPC — the adapters are the only difference from the wire path). The
-# fixture endpoint is labeled `fixture` and proves plumbing/output-dependence
-# only; the real-model run lives in stream_episode_real_model_test.rb.
 class StreamEpisodeFixedGraphTest < Minitest::Test
   Stream = Tamoz::Stream
 
@@ -206,8 +202,6 @@ class StreamEpisodeFixedGraphTest < Minitest::Test
     end
   end
 
-  # P6: RECONSIDER is a graph route, but a reconsider episode WITHOUT the
-  # prior-decision payload is refused at admission, before any graph run.
   def test_reconsider_episode_without_a_prior_decision_fails_closed
     with_fixture_endpoint do |endpoint|
       composition = composition(endpoint: endpoint.base_url)

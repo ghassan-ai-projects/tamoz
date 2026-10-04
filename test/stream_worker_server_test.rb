@@ -7,11 +7,6 @@ require "tamoz/stream/episode_worker"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# T1.1 (deployment slice): WorkerServer is the launcher — the gRPC host that
-# serves the EpisodeWorker handler on a TCP port (development) or a UDS
-# socket (production, mTLS at the socket). This suite proves the serving
-# shape: bind → run → dial → handshake → stop, on both transports. P1: the
-# composed worker runs the FIXED graph (handshake-only — no episode runs).
 class StreamWorkerServerTest < Minitest::Test
   def composed_worker
     # The composition's endpoint is never dialed for handshakes; any

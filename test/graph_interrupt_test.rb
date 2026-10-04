@@ -138,9 +138,6 @@ class GraphInterruptTest < Minitest::Test
     end
   end
 
-  # T0.4: in a non-interactive episode an interrupt is a typed terminal
-  # failure — the graph fails fast with the interrupted task and never pauses
-  # waiting for a resume value that cannot arrive.
   def test_non_interactive_episode_turns_an_interrupt_into_a_typed_failure
     definition = Tamoz.graph(name: "non-interactive-interrupt", version: "1") do
       state :answer
@@ -178,7 +175,6 @@ class GraphInterruptTest < Minitest::Test
     assert_equal({"question" => "approve"}, failure.original.descriptor)
   end
 
-  # T0.4: interactive mode is unchanged — the same graph pauses for resume.
   def test_interactive_episode_still_pauses_on_an_interrupt
     definition = Tamoz.graph(name: "interactive-interrupt", version: "1") do
       state :answer
@@ -205,7 +201,6 @@ class GraphInterruptTest < Minitest::Test
     assert_equal 1, result.interrupts.length
   end
 
-  # T0.4: an invalid interrupt mode is refused at context construction.
   def test_invalid_interrupt_mode_is_refused
     assert_raises(Tamoz::ConfigurationError) do
       Tamoz::Context.new(
@@ -217,9 +212,6 @@ class GraphInterruptTest < Minitest::Test
     end
   end
 
-  # T0.4 through a DURABLE writer: the non-interactive interrupt lands a
-  # failed checkpoint and a non-retryable failed request transition — the
-  # semantics the episode worker depends on (no resume wait, ever).
   def test_non_interactive_interrupt_is_durable_and_non_retryable
     calls = Hash.new(0)
     definition = Tamoz.graph(name: "durable-non-interactive", version: "1") do

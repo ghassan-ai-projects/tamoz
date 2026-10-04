@@ -2,7 +2,6 @@
 
 require_relative 'test_helper'
 
-# Approval redesign phase 1 — the one shared answer vocabulary.
 class ApprovalAnswerTest < Minitest::Test
   Approval = Tamoz::Approval
 

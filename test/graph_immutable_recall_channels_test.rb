@@ -2,9 +2,6 @@
 
 require_relative "test_helper"
 
-# P5: the recall channels are written ONCE by the recall node (never reduced,
-# never seeded by the runner — the runner's pre-seed was the P2-era contract).
-# A node write is accepted; the initial value is the plain [] default.
 class GraphImmutableRecallChannelsTest < Minitest::Test
   def test_the_recall_node_writes_the_memory_channels
     app = Tamoz.graph(name: "recall-channels", version: "1") do

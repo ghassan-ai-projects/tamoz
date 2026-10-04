@@ -14,10 +14,6 @@ class McpCatalogTest < Minitest::Test
     PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
   ].freeze
 
-  # Exact digest expectations for the fixture below (6 tools — P17 added the
-  # deterministic `search` fixture tool; protocol 2026-07-28, server_id
-  # "test-server"). Pinned from a real compile; the determinism test below
-  # proves the compiler reproduces them.
   EXPECTED_SNAPSHOT_DIGEST =
     "sha256:1f6d55d7d7733b8c1a83309e23a9ca05fccaaf3b26274ceeddeb55bc71a16f8b"
   EXPECTED_ENTRY_DIGESTS = {

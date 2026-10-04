@@ -118,8 +118,6 @@ class McpInvocationTest < Minitest::Test
     true
   end
 
-  # --- §6 happy path + bounding / attribution ---------------------------------
-
   def test_success_attributes_every_content_block_and_returns_text
     _config, snapshot, supervisor = setup_environment
     descriptor = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
@@ -314,8 +312,6 @@ class McpInvocationTest < Minitest::Test
   ensure
     supervisor&.close
   end
-
-  # --- §6 taxonomy rows --------------------------------------------------------
 
   # Row: JSON-RPC invalid params / schema validation failure → ToolArgumentError
   def test_json_rpc_error_is_repairable_with_remote_error_prefix
@@ -570,8 +566,6 @@ class McpInvocationTest < Minitest::Test
     supervisor&.close
   end
 
-  # §8: stderr is untrusted server content, surfaced only as typed error
-  # metadata — bounded and control-scrubbed with the supervisor ring's bounds.
   def test_transport_failures_surface_bounded_scrubbed_stderr_as_typed_metadata
     # Compile against the healthy server so the pinned snapshot matches the
     # descriptor; the CALL runs against a child that only writes stderr.
@@ -699,8 +693,6 @@ class McpInvocationTest < Minitest::Test
     supervisor&.close
   end
 
-  # --- elicitation rows (§7) ----------------------------------------------------
-
   def test_input_required_becomes_durable_interrupt_descriptor_never_a_tool_error
     _config, snapshot, supervisor = setup_environment
     descriptor = descriptor_for(snapshot, "needs_input")
@@ -744,8 +736,6 @@ class McpInvocationTest < Minitest::Test
     supervisor&.close
   end
 
-  # --- circuit (§8) --------------------------------------------------------------
-
   def test_circuit_opens_after_threshold_and_fails_typed_until_caller_resets
     _config, snapshot, supervisor = setup_environment({}, "MCP_TEST_SERVER_EXIT_MID_CALL" => "1")
     descriptor = descriptor_for(snapshot, "sleep_ms")
@@ -781,9 +771,6 @@ class McpInvocationTest < Minitest::Test
     assert_equal "mcp_unavailable", error4.category
     assert_match(/circuit is open/, error4.message)
 
-    # Caller reset closes the circuit; calls are attempted again (typed, since
-    # the server is still dead) instead of being circuit-blocked. The reset
-    # carries operator evidence per DR-2.
     supervisor.reset(evidence: { "actor" => "operator", "command_digest" => "sha256:reset-1" })
     refute supervisor.open?
     assert_equal 0, supervisor.consecutive_failures

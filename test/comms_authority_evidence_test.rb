@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# ADR-049 / PLAN_ADR049 Phase 1 — the evidence lattice (trusted core): closed
-# total order, sanctioned minting only, persistence round-trip. The v1
-# constant policy is gone; prompts pin the symbol the engine's Decision
-# carries (plan step 8).
 # rubocop:disable Minitest/MultipleAssertions
 class CommsAuthorityEvidenceTest < Minitest::Test
   Comms = Tamoz::Comms

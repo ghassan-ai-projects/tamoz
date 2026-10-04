@@ -2,16 +2,6 @@
 
 require_relative "test_helper"
 
-# P6-E: a real repository repair survives `kill -9` at every declared seam.
-#
-# Every kill in this file is a real `Process.kill("KILL", ...)` delivered to a real
-# process. Nothing here substitutes an exception, a stub, or a simulated failure.
-#
-# Seam selection is semantic rather than ordinal: the child appends an ordered event
-# log (model calls, publications, check runs, resumes, and every fault-injector
-# callback), and the kill fires at the first matching storage seam that occurs after a
-# named marker, optionally skipping a declared number of matches. That keeps each row
-# readable and stable against unrelated changes in super-step counts.
 class AgentSessionKillMatrixTest < Minitest::Test
   CHILD = <<~'RUBY'
     require "json"
@@ -282,7 +272,7 @@ class AgentSessionKillMatrixTest < Minitest::Test
           end
           break unless request_id
 
-          # DR-4 (5c16bed): a stale continue fails as a typed terminal request
+          # A stale continue fails as a typed terminal request
           # value, never as a raised error — and never re-runs resolved work.
           # Any invented work here crashes the child loudly instead.
           outcome = session.continue(
@@ -366,10 +356,6 @@ class AgentSessionKillMatrixTest < Minitest::Test
       operation: "checkpoint.commit",
       skip: 1
     },
-    # D-8 Fix A / T7: the checkpoint that commits the APPROVAL RECORD (and the
-    # resolved effect intent), i.e. the third checkpoint.commit after the action
-    # review. A kill here leaves the committed intent in state, so a resumed
-    # dispatch re-verifies it rather than re-resolving (probe 9).
     "D8.after_approval_recorded" => {
       marker: "model:review:action",
       point: "after_commit",
@@ -483,10 +469,6 @@ class AgentSessionKillMatrixTest < Minitest::Test
     end
   end
 
-  # P6-C for the second real filesystem effect: create_file is no-clobber, so a blind
-  # retry after an ambiguous crash would report EEXIST. Reconciliation from the
-  # checkpointed intent must complete from a proven after-state and execute only from
-  # a proven before-state.
   def test_create_file_publication_kills_reconcile_and_publish_exactly_once
     {"after" => 1, "before" => 1}.each do |when_to_kill, expected_publications|
       with_scenario do |context|
@@ -521,10 +503,6 @@ class AgentSessionKillMatrixTest < Minitest::Test
     end
   end
 
-  # D-8 Fix A / T7 (review probe 9): an absent-digest plan killed between approval
-  # and dispatch re-verifies the COMMITTED intent on resume. The workspace is
-  # mutated while the child is dead; the resumed dispatch must stop (the patch is
-  # never applied to the mutated bytes) instead of silently re-binding.
   def test_absent_digest_patch_killed_between_approval_and_dispatch_rebinds_to_committed_intent
     with_scenario do |context|
       environment = {"TAMOZ_ABSENT_DIGEST" => "1"}
@@ -659,18 +637,6 @@ class AgentSessionKillMatrixTest < Minitest::Test
     (Dir.children(workspace) - expected).reject { |entry| entry.start_with?(".tamoz-") }
   end
 
-  # A killed process can orphan its *private* temporary file: `atomic_replace` and
-  # `atomic_create` publish by rename/link and only unlink the temporary name
-  # afterwards. P5 guarantees no public partial file and no overwrite, and that is
-  # what is asserted here.
-  #
-  # P15-C closed the reclamation half: `Toolbox#reap_stale_staging` sweeps stale
-  # `.tamoz-*.tmp` files at action-capable construction. It deliberately does NOT
-  # fire here — the orphans these kills produce are seconds old, and the sweep's
-  # 60-second staleness floor exists so a sibling session mid-publication is never
-  # disturbed. The orphan is therefore expected to survive THIS assertion and to
-  # be reclaimed by the next action-capable session that starts later, which
-  # `test/toolbox_staging_reaper_test.rb` proves directly.
   def assert_no_public_partial(context, expected, label)
     workspace = context.fetch(:workspace)
     assert_empty unexpected_workspace_entries(workspace, expected),
@@ -683,9 +649,11 @@ class AgentSessionKillMatrixTest < Minitest::Test
       # Whatever survives must be reclaimable by the sweep once it is stale:
       # an orphan the reaper's own pattern cannot match would be permanent.
       assert_match Tamoz::Tools::Toolbox::STAGING_PATTERN, orphan,
-                   "#{label}: orphan #{orphan} is unreclaimable by the P15-C sweep"
+                   "#{label}: orphan #{orphan} is unreclaimable by the staging sweep"
     end
-    # …and the sweep really does reclaim them once they age past the floor.
+    # The reaper only fires past the staleness floor, so nothing above was
+    # reaped while the orphan was fresh; aging them proves the sweep reclaims
+    # exactly what it matched.
     unless orphans.empty?
       aged = Time.now - (Tamoz::Tools::Toolbox::STAGING_STALE_SECONDS + 60)
       orphans.each do |orphan|

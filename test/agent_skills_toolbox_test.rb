@@ -2,22 +2,13 @@
 
 require_relative "test_helper"
 
-# P9-B: progressive disclosure through the ordinary tool boundary, the prompt
-# surface epoch, and the durable exact-digest resume rule.
 class AgentSkillsToolboxTest < Minitest::Test
   Skills = Tamoz::Skills
   Toolbox = Tamoz::Agent::Toolbox
 
-  # Measured at 6dee1b6, before skills.rb existed; re-measured when the tool
-  # catalog digest moved to the RFC 8785 rule (PLAN_TAMOZ_STREAM_BUILD T0.1),
-  # and again when approval gating left the hashed catalog surface and checks
-  # bound their argv (toolbox redesign phases 7+7B).
-  # These pin the compatibility half of plan review finding C-1: a toolbox with
-  # no skills must be byte-identical to the pre-P9 surface, so every P8 profile
-  # keeps validating.
-  PRE_P9_READ_ONLY_DIGEST =
+  SKILL_FREE_READ_ONLY_DIGEST =
     "sha256:7429be62f8618e718993339b10b4d2f06445cfc488cc6de7442aac6afdc0d536"
-  PRE_P9_READ_WRITE_DIGEST =
+  SKILL_FREE_READ_WRITE_DIGEST =
     "sha256:a63dd5d4a32382ffd296ca05eec0de3daad4357d8808da93fd7ae424f7670447"
 
   def setup
@@ -61,18 +52,18 @@ class AgentSkillsToolboxTest < Minitest::Test
     Toolbox.new(root: @workspace, skills:, **options)
   end
 
-  # ------------------------------------------------------- C-1 compatibility --
+  # ------------------------------- byte identity with the skill-free surface --
 
-  def test_a_skill_free_toolbox_is_byte_identical_to_the_pre_p9_surface
-    assert_equal PRE_P9_READ_ONLY_DIGEST, toolbox.catalog_digest
-    assert_equal PRE_P9_READ_WRITE_DIGEST,
+  def test_a_skill_free_toolbox_is_byte_identical_to_the_recorded_surface
+    assert_equal SKILL_FREE_READ_ONLY_DIGEST, toolbox.catalog_digest
+    assert_equal SKILL_FREE_READ_WRITE_DIGEST,
                  toolbox(allow_changes: true, checks: {"answer" => ["true"]}).catalog_digest
     assert_equal %w[read_file list_directory search_text glob], toolbox.names
     assert_equal %w[read_file list_directory search_text glob], toolbox.read_only_names
     assert_equal "none", toolbox.skill_epoch
   end
 
-  # The other half of C-1: adding two tools IS a capability-surface change and
+  # The other half of the contract: adding two tools IS a capability-surface change and
   # must be visible. An invisible expansion is what invariant 16 prevents.
   def test_a_skill_bearing_toolbox_changes_the_tool_surface_visibly
     write_skill("fix-answer")
@@ -80,7 +71,7 @@ class AgentSkillsToolboxTest < Minitest::Test
 
     assert_includes with_skills.names, "load_skill"
     assert_includes with_skills.names, "read_skill_resource"
-    refute_equal PRE_P9_READ_ONLY_DIGEST, with_skills.catalog_digest,
+    refute_equal SKILL_FREE_READ_ONLY_DIGEST, with_skills.catalog_digest,
                  "a two-tool expansion must not be invisible to the pinned digest"
     assert_includes with_skills.read_only_names, "load_skill"
   end
@@ -119,7 +110,7 @@ class AgentSkillsToolboxTest < Minitest::Test
   # --------------------------------------------------- H-4: profile isolation --
 
   # A profile may allow the skill tools; one whose tools.allowed does not name them exposes neither.
-  def test_a32_a_profile_that_does_not_allow_skill_tools_exposes_none
+  def test_a_profile_that_does_not_allow_skill_tools_exposes_none
     write_skill("fix-answer")
     assert_includes Tamoz::Agent::Profile::KNOWN_TOOLS, "load_skill"
 
@@ -127,7 +118,7 @@ class AgentSkillsToolboxTest < Minitest::Test
 
     refute_includes box.names, "load_skill"
     refute_includes box.names, "read_skill_resource"
-    assert_equal PRE_P9_READ_ONLY_DIGEST, box.catalog_digest
+    assert_equal SKILL_FREE_READ_ONLY_DIGEST, box.catalog_digest
     assert_raises(Tamoz::Agent::ToolError) { box.validate("load_skill", "skill" => "fix-answer") }
   end
 
@@ -156,8 +147,6 @@ class AgentSkillsToolboxTest < Minitest::Test
     refute_includes output, @dir, "no absolute path may reach a model-facing surface"
   end
 
-  # `effective_tools` tells the model the truth about the intersection
-  # (SKILLS_DESIGN §2). It is display; it is never written back.
   def test_load_skill_reports_the_honest_intersection_and_widens_nothing
     write_skill(
       "greedy",
@@ -245,7 +234,7 @@ class AgentSkillsToolboxTest < Minitest::Test
 
   # ----------------------------------------------------------- planning prompt --
 
-  def test_a_skill_free_planning_prompt_is_byte_identical_to_the_pre_p9_prompt
+  def test_a_skill_free_planning_prompt_is_byte_identical_to_the_recorded_prompt
     box = toolbox
     prompt = Tamoz::Agent::Deliberation.planning_prompt(
       "task", :read_only, box.names, [], [], {}, toolbox: box
@@ -301,15 +290,13 @@ class AgentSkillsToolboxTest < Minitest::Test
     assert_equal "none", loaded.fetch("skill_epoch")
     assert_equal "legacy:none", loaded.fetch("prompt_surface_digest")
     assert_equal "legacy", loaded.fetch("profile_id")
-    # A pre-P9 record and a new skill-free toolbox must agree, or every existing
-    # durable session would stop on resume.
     assert_equal toolbox.skill_epoch, loaded.fetch("skill_epoch")
   end
 
   # A16 end to end. The session record is written by the *real* intake node during
   # a real durable turn — nothing is hand-seeded — and the stop is asserted on
   # `continue`/`resume`, which is the path a programmatic caller actually takes.
-  def test_a16_a_content_swap_changes_the_epoch_and_stops_a_durable_resume
+  def test_a_content_swap_changes_the_epoch_and_stops_a_durable_resume
     write_skill("fix-answer")
     with_durable_session(skills: snapshot) do |session, adapter, original|
       outcome = session.start("read the note", thread: "t1", request_id: "r1")
@@ -356,18 +343,12 @@ class AgentSkillsToolboxTest < Minitest::Test
     end
   end
 
-  # The complement: a session that never had skills must keep resuming, and a
-  # skill-free P9 toolbox must agree with a pre-P9 record's "none".
   def test_a_skill_free_session_still_resumes_and_a_new_catalog_stops_it
     with_durable_session do |session, adapter, box|
       assert_equal :completed, session.start("read the note", thread: "t2", request_id: "r1").status
       assert_equal "none", session.view(thread: "t2").state.fetch(:session).fetch("skill_epoch")
       assert_equal "none", box.skill_epoch
       assert_nil build_session(adapter:).verify_skill_binding!(thread: "t2")
-      # A skill-free continuation must get *past* the skill guard. The continue is
-      # then stale (a completed thread has no runnable frontier) and terminal-fails
-      # as a typed request value (DR-4) instead of raising — which is precisely the
-      # evidence that the guard let it through.
       ordinary = build_session(adapter:).continue(thread: "t2", request_id: "r2")
       assert_equal :failed, ordinary.request_status
       request = build_session(adapter:).app.durable_runner.fetch(

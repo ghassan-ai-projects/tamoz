@@ -391,16 +391,16 @@ EVIDENCE = {
   "INV-41" => {
     test: "test/agent_skills_test.rb#test_same_version_content_swap_changes_identity_and_epoch",
     supporting: [
-      "test/agent_skills_toolbox_test.rb#test_a16_a_content_swap_changes_the_epoch_and_stops_a_durable_resume",
+      "test/agent_skills_toolbox_test.rb#test_a_content_swap_changes_the_epoch_and_stops_a_durable_resume",
       "test/agent_skills_test.rb#test_same_name_across_sources_never_shadows_silently"
     ],
     classification: "deferred-by-contract"
   },
   "INV-42" => {
-    test: "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
+    test: "test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
     supporting: [
-      "test/agent_skills_adversarial_test.rb#test_a2_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed",
-      "test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing",
+      "test/agent_skills_adversarial_test.rb#test_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed",
+      "test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing",
       "test/agent_skills_adversarial_test.rb#test_a13b_compiling_a_hostile_tree_invokes_no_execution_verb"
     ],
     classification: "deferred-by-contract"
@@ -490,7 +490,7 @@ EVIDENCE = {
   },
 
   # ---- ADRs ---------------------------------------------------------------
-  "ADR-001" => {test: "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice"},
+  "ADR-001" => {test: "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_milestone"},
   "ADR-005" => {test: "test/graph_identity_test.rb#test_interrupt_cursor_is_explicit_positional_and_uses_throw",
                 supporting: ["test/core_pool_test.rb#test_interrupt_is_captured_inside_each_worker"]},
   "ADR-006" => {test: "test/graph_reducer_test.rb#test_append_merge_union_min_and_max_contracts",
@@ -645,7 +645,7 @@ EVIDENCE = {
   "OBJ-5" => {
     test: "test/capability_host_test.rb#test_the_admission_set_bounds_the_surface",
     supporting: [
-      "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
+      "test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
       "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
       "test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
       "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
@@ -686,7 +686,7 @@ EVIDENCE = {
                         supporting: ["test/agent_cli_investigate_test.rb#test_investigate_refuses_anything_but_a_read_only_turn"]},
   "CLI-probes" => {test: "test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server"},
   "CLI-memory" => {test: "test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates",
-                   supporting: ["test/agent_cli_memory_test.rb#test_e5_threads_in_one_session_directory_share_memory_only_when_enabled"]},
+                   supporting: ["test/agent_cli_memory_test.rb#test_threads_in_one_session_directory_share_memory_only_when_enabled"]},
   "CLI-ask" => {test: "test/agent_cli_test.rb#test_ask_creates_session_file"},
   "CLI-resume" => {test: "test/agent_cli_test.rb#test_resume_collects_interrupt_answers",
                    supporting: ["test/agent_cli_test.rb#test_resume_non_interactive_with_answer"]},
@@ -786,8 +786,8 @@ EVIDENCE = {
                supporting: ["test/sqlite_effect_journal_test.rb#test_effect_census_preserves_request_association_separately_from_effect_identity",
                             "test/experience_harness_test.rb#test_request_status_is_request_local_for_two_delivery_outcomes"]},
   "MIG-23" => {test: "test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head",
-               supporting: ["test/memory_spec_test.rb#test_b5_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
-                            "test/memory_retrieval_corpus_test.rb#test_b2_the_real_retriever_meets_recall_and_precision_with_zero_violations"]},
+               supporting: ["test/memory_spec_test.rb#test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
+                            "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",
@@ -798,8 +798,8 @@ EVIDENCE = {
                                         "test/subprocess_runner_test.rb#test_rejects_shell_lookup_nul_and_ambient_environment"]},
   "NG-real-actuator" => {test: "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
                          supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
-  "NG-content-authority" => {test: "test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing",
-                             supporting: ["test/agent_skills_adversarial_test.rb#test_a29_declared_risk_is_an_author_claim_that_changes_no_classification"]},
+  "NG-content-authority" => {test: "test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing",
+                             supporting: ["test/agent_skills_adversarial_test.rb#test_declared_risk_is_an_author_claim_that_changes_no_classification"]},
   "NG-self-promotion" => {test: "test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself",
                           supporting: ["test/healing_failure_contract_test.rb#test_a_lifecycle_write_and_a_circuit_reset_are_refused_from_inside_a_remediation"]},
   "NG-second-ui" => {test: nil, classification: "indirect",
@@ -831,10 +831,10 @@ PHASE_EVIDENCE = {
   "PHASE-P12" => "test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle",
   "PHASE-P13" => "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic",
   "PHASE-P14" => "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
-  "PHASE-P16" => "test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent",
+  "PHASE-P16" => "test/tools_gem_test.rb#test_a_clean_env_runs_the_full_toolbox_surface_without_agent",
   "PHASE-P17" => "test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic",
-  "PHASE-P18" => "test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture",
-  "PHASE-DR-2" => "test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask",
+  "PHASE-P18" => "test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_recorded_start_surface",
+  "PHASE-DR-2" => "test/sqlite_circuit_store_test.rb#test_consecutive_threshold_opens_and_owner_success_does_not_mask",
   "PHASE-DR-3" => "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution",
   "PHASE-DR-4" => "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",
   "PHASE-DR-5" => "test/agent_profile_machinery_test.rb#test_flocked_consume_is_exactly_once_across_concurrent_writers"

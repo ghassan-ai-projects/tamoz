@@ -2,7 +2,6 @@
 
 require_relative "test_helper"
 
-# Phase 3 work item 1: typed context-control semantics at the session layer.
 class SessionContextControlsTest < Minitest::Test
   CONTROLS = Tamoz::Agent::SessionContextControls
   RECORDS = Tamoz::Agent::SessionRecords

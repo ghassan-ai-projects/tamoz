@@ -9,10 +9,6 @@ require "support/aquaculture_domain"
 require "support/climate_domain"
 require "support/episode_composition"
 
-# P4 (PHASE_P4_INTENT_AUTHORITY) exit gates 1, 4 + the risk-equality property:
-# the intent catalog is required and digest-bound before any model call; a
-# novel domain authored as DATA produces a decision whose intent risk EQUALS
-# the catalog's declared risk. Fixture-labeled throughout.
 class StreamEpisodeIntentAuthorityTest < Minitest::Test
   Stream = Tamoz::Stream
 

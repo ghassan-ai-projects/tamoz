@@ -4,9 +4,6 @@ require_relative "test_helper"
 require_relative "support/scripted_generation"
 require_relative "support/session_plan"
 
-# P10 slice 4: the caller-supplied McpCapabilitySource and its session wiring —
-# catalog pinning in the session record, the resume guard (fails closed), and the
-# caller-level exactly-once proof for the MCP reissue path (invariant 21, advB).
 class AgentMcpCapabilitySourceTest < Minitest::Test
   include SessionPlan
 
@@ -699,8 +696,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       supervisor.close
     end
   end
-
-  # --- planning surface (P10 §3: the MCP names must reach the planner) ---------
 
   def test_the_planning_prompt_renders_the_mcp_surface
     toolbox = Tamoz::Agent::Toolbox.new(root: @dir)

@@ -3,10 +3,6 @@
 require_relative "test_helper"
 require "tamoz/mcp/websearch"
 
-# P17 W1 / correction 5 / correction 8: the profile `egress:` section, its
-# fail-closed validation, the authority-snapshot pin, the session-record
-# `egress_pin`, `verify_egress_binding!` on resume, and the one-budget
-# vocabulary (egress budgets map onto ServerConfig::Budgets).
 class WebsearchEgressTest < Minitest::Test
   Profile = Tamoz::Agent::Profile
   Session = Tamoz::Agent::Session

@@ -2,14 +2,6 @@
 
 require_relative "test_helper"
 
-# P12-ID / P12-I1 / P12-I2 (plan §7): the candidate provenance record, the ONE
-# bounded heuristic generated from verified trajectories under a capability
-# restriction that excludes the holdout and the evaluator output, and the paired
-# baseline/holdout evaluation with its human gate and its two hard-zero gates
-# (evaluator tampering, self-promotion).
-#
-# Every gate below is proven by ATTEMPTING the violation and asserting the
-# refusal. Nothing here argues from inspection.
 class ImprovementCandidateTest < Minitest::Test
   Improvement = Tamoz::Agent::Improvement
   Harness = Tamoz::Evals::Harness
@@ -89,8 +81,6 @@ class ImprovementCandidateTest < Minitest::Test
     )
   end
 
-  # --- P12-ID: provenance completeness -------------------------------------
-
   def test_the_corpus_files_land_through_atomic_file
     writes = atomic_writes { with_corpus { |corpus| corpus } }
 
@@ -107,9 +97,6 @@ class ImprovementCandidateTest < Minitest::Test
       assert_equal complete, complete.assert_complete!
       assert complete.digest.start_with?("sha256:")
 
-      # Drive the loop from the record's own axis list: a NEW plan-§7 axis added
-      # to `REQUIRED_AXES` without a value fails this test rather than being
-      # quietly optional.
       Improvement::Provenance::REQUIRED_AXES.each do |axis|
         blanked = complete.with(axis => nil)
         error = assert_raises(Improvement::ProvenanceIncompleteError, axis.to_s) do
@@ -196,7 +183,6 @@ class ImprovementCandidateTest < Minitest::Test
       error = assert_raises(Improvement::ProvenanceIncompleteError) { no_op.assert_complete! }
       assert_includes error.message, "no-op"
 
-      # DR-1 revision 4: the only v1 activation scope is first-intake-of-thread.
       scoped = complete.with(activation_scope: "mid_thread")
       error = assert_raises(Improvement::ProvenanceIncompleteError) { scoped.assert_complete! }
       assert_includes error.message, "first_intake_of_thread"
@@ -211,8 +197,6 @@ class ImprovementCandidateTest < Minitest::Test
       assert_includes error.message, "rollback_target"
     end
   end
-
-  # --- P12-I1: one bounded candidate, holdout isolation ---------------------
 
   def test_exactly_one_bounded_candidate_from_verified_trajectories
     with_corpus do |corpus|
@@ -229,7 +213,6 @@ class ImprovementCandidateTest < Minitest::Test
       assert_equal 1.0, candidate.confidence
       assert candidate.digest.start_with?("sha256:")
 
-      # Plan §7: "at most one". The second attempt is refused, not merged.
       error = assert_raises(Improvement::ImprovementPolicyError) do
         generator.generate(trajectory_paths: corpus.train_trajectory_paths)
       end
@@ -304,8 +287,6 @@ class ImprovementCandidateTest < Minitest::Test
       end
       assert_includes error.message, "protected partition"
 
-      # A generator holding a MUTATION capability is refused outright: plan §7
-      # "never activate live prompt/code changes during the generating task".
       error = assert_raises(Improvement::HoldoutIsolationError) do
         Improvement::Generator.new(
           toolbox: Tamoz::Tools::Toolbox.new(root: corpus.train_root, allow_changes: true),
@@ -356,8 +337,6 @@ class ImprovementCandidateTest < Minitest::Test
       end
     end
   end
-
-  # --- P12-I2: paired evaluation, human gates, hard-zero gates --------------
 
   def test_paired_evaluation_scores_both_arms_on_the_identical_task_set
     with_corpus do |corpus|
@@ -508,15 +487,6 @@ class ImprovementCandidateTest < Minitest::Test
     end
   end
 
-  # --- P12-I3: the promotion surface is REVERSIBLE ------------------------
-  #
-  # The plan's DoD names "one reversible behavior candidate": promote → epoch
-  # bump → regression monitor → rollback, and then a FOLLOW-UP ROUND may promote
-  # the next candidate after the first has telemetry. The gate counting rows in
-  # `recorded|claimed|activated` forever made the contract irreversible (a
-  # rolled-back candidate stayed "live"); these tests pin the corrected
-  # semantics on a real SQLite-backed engine.
-
   def with_engine
     Dir.mktmpdir("tamoz-improvement") do |directory|
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "engine.sqlite3"))
@@ -562,10 +532,6 @@ class ImprovementCandidateTest < Minitest::Test
     )
   end
 
-  # Production baseline: before any heuristic, P11's wisdom pipeline recorded
-  # and activated the default behavior snapshot at session/2. A heuristic
-  # promoted after it has a REAL prior snapshot to roll back to — which is the
-  # production shape the "reversible candidate" DoD depends on.
   def seed_baseline(engine)
     transition, reserved = engine.transitions.record(
       kind: :wisdom_promotion,
@@ -598,8 +564,6 @@ class ImprovementCandidateTest < Minitest::Test
         activate_pending(engine, first_id)
         assert_equal "tamoz.agent.session/3", engine.transitions.active.fetch("active_version")
 
-        # Roll it back to the prior snapshot (DR-1 §7: a fresh serialized
-        # transition restoring the prior bytes).
         rollback = promotion.rollback(
           reason: "telemetry regression", actor: PROMOTER,
           human_gate_evidence: "human:operator-1"

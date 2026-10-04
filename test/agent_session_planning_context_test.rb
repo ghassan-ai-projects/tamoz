@@ -4,7 +4,7 @@ require_relative 'test_helper'
 
 # These tests pin the multi-field durable wire and its cross-boundary distinctions.
 # rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/ClassLength, Metrics/MethodLength, Minitest/MultipleAssertions
-class AgentPhase3ContextLifecycleTest < Minitest::Test
+class AgentSessionPlanningContextTest < Minitest::Test
   Request = Data.define(:request_id, :operation, :payload)
 
   def test_follow_up_payload_seals_identity_order_and_digest

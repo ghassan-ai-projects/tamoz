@@ -3,12 +3,12 @@
 require_relative 'test_helper'
 require 'support/thermal_lab_domain'
 
-# Real-world sensor WP-T1: sensor-quality and actuator-capability are first-class
+# Sensor-quality and actuator-capability are first-class
 # facts the supervisor reasons over (research platform improvements #1 and #4).
 # They are DATA in the domain snapshot, carried opaquely by ReceivedSnapshot — no
 # new stream machinery. This suite pins the data contract; the BEHAVIOURAL proof
 # (degraded quality diverges from the baseline) lives in the decision tournament
-# (WP-T2/T3), where the episode path exists.
+# (the episode suites), where the episode path exists.
 class ThermalLabFactsTest < Minitest::Test
   QUALITY_ENUM = %w[
     valid missing stale out_of_range warming_up
@@ -34,7 +34,7 @@ class ThermalLabFactsTest < Minitest::Test
   def test_an_override_outside_the_enum_is_still_carried_opaquely
     # Quality is data the model reasons over and the scorer checks by behaviour;
     # the snapshot does not schema-gate it (simple over complex). The adversarial
-    # suite (WP-T4) relies on a forged value flowing through unchanged.
+    # suite relies on a forged value flowing through unchanged.
     snapshot = ThermalLabDomain.snapshot(box_temp_quality: 'not_a_real_state')
 
     assert_equal 'not_a_real_state', snapshot.fetch('facts').fetch('box_temp_quality')
@@ -53,7 +53,7 @@ class ThermalLabFactsTest < Minitest::Test
   end
 
   def test_a_capability_can_be_withdrawn_for_a_trial
-    # WP-T4 / research #4: a mode whose capability is not registered is not
+    # A mode whose capability is not registered is not
     # proposable. The trial withdraws the fan capability by overriding it empty.
     snapshot = ThermalLabDomain.snapshot(fan_01_capability: {})
 
@@ -69,6 +69,7 @@ class ThermalLabFactsTest < Minitest::Test
 
   def test_led_intent_uses_the_agentic_selector_field
     entry = ThermalLabDomain::INTENT_CATALOG.find { |candidate| candidate.fetch('type') == 'set_indicator' }
+
     assert_equal ['state'], entry.fetch('model_writable_fields')
     assert_equal ['state'], entry.fetch('parameter_schema').fetch('required')
     assert_equal %w[off watch alert], entry.fetch('parameter_schema').fetch('properties').fetch('state').fetch('enum')
@@ -77,6 +78,7 @@ class ThermalLabFactsTest < Minitest::Test
       selected: 'already_corrected', hypothesis: 'watch the indicator',
       intent: { type: 'set_indicator', hypothesis: 'alert' }
     )
+
     assert_equal({ 'state' => 'alert' }, document.fetch('recommended_intents').fetch(0).fetch('parameters'))
   end
 end

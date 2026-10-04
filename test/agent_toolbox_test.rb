@@ -279,8 +279,6 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
-  # P8-E / invariant 24: a check's output is captured into prompts, streams, and
-  # the durable log, so the child must not inherit credential-shaped variables.
   def test_run_check_strips_credential_environment_but_keeps_the_rest
     Dir.mktmpdir("tamoz-toolbox") do |root|
       probe = 'puts [ENV.key?("TAMOZ_TEST_API_KEY"), ENV.key?("PATH")].inspect'
@@ -336,8 +334,6 @@ class AgentToolboxTest < Minitest::Test
     refute Tamoz::Agent::Toolbox.credential_env?("KEYBOARD_LAYOUT")
   end
 
-  # P8-E: a check runs with the workspace as its working directory, so a relative
-  # argv[0] carrying a separator would execute repository content.
   def test_relative_check_program_rejected
     Dir.mktmpdir("tamoz-toolbox") do |root|
       ["./bin/check", "bin/check"].each do |program|
@@ -527,8 +523,6 @@ class AgentToolboxTest < Minitest::Test
       expected = "ONE = 10\nTWO = 20\nTHREE = 3\n"
 
       preview = toolbox.preview("apply_patch", arguments)
-      # One hunk per replacement; asserted individually because the context lines F7
-      # adds sit inside each hunk, so the hunks are no longer one blank line apart.
       [
         "-ONE = 1\n+ONE = 10",
         "-TWO = 2\n+TWO = 20"
@@ -581,8 +575,6 @@ class AgentToolboxTest < Minitest::Test
       expected = "VALUE = 2\nVALUE = 3\nVALUE = 1\n"
 
       preview = toolbox.preview("apply_patch", arguments)
-      # One hunk per replacement; asserted individually because the context lines F7
-      # adds sit inside each hunk, so the hunks are no longer one blank line apart.
       [
         "-VALUE = 1\n+VALUE = 2",
         "-VALUE = 1\n+VALUE = 3"
@@ -1288,10 +1280,6 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
-  # D-8 Fix A (probe 10): an ABSENT digest is accepted by validate for both mutation
-  # tools — the structural review must never reject a plan whose read step has not
-  # run yet — while every other reject row above still leaves the workspace
-  # byte-identical.
   def test_absent_digest_is_accepted_at_validate_for_mutation_tools
     Dir.mktmpdir("tamoz-invariant17-absent") do |root|
       File.write(File.join(root, "values.rb"), "ONE = 1\n", encoding: Encoding::UTF_8)

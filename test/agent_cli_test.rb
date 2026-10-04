@@ -161,10 +161,6 @@ class AgentCLITest < Minitest::Test
     end
   end
 
-  # P15-A/P15-G (ledger gap 12): every subcommand needs one behavioural
-  # assertion on its RENDERED output. `show` was only ever exercised inside the
-  # redaction test, which asserts what is *absent* — a `show` that printed
-  # nothing at all would have passed it.
   def test_show_renders_the_thread_state_in_both_modes
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -852,7 +848,7 @@ class AgentCLITest < Minitest::Test
         assert_equal sequences.uniq.size, sequences.size
       end
       assert_operator run_sequences.values.count { |sequences| sequences.size > 1 }, :>=, 1,
-                     "at least one run must emit multiple sequenced events"
+                      "at least one run must emit multiple sequenced events"
 
       session_event = events.find { |event| event["type"] == "cli.session" }
       refute_nil session_event
@@ -865,12 +861,6 @@ class AgentCLITest < Minitest::Test
       end
     end
   end
-
-  # --- Error taxonomy (characterization of the run() rescue chain, Q2) ---
-  # Each error class has a pinned exit code and "tamoz: " message prefix; a
-  # generic error must NOT be swallowed into a clean exit — it propagates so
-  # the operator sees the backtrace. Mutating any exit code or removing a
-  # rescue here must fail the corresponding test.
 
   def test_tool_error_exits_one_with_message
     out = StringIO.new
@@ -997,7 +987,6 @@ class AgentCLITest < Minitest::Test
     assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
     assert_match(/duplicate check/, err.string)
   end
-
 
   def test_approve_tool_answer_vocabulary
     answers = Tamoz::Agent::CLI::InterruptAnswers

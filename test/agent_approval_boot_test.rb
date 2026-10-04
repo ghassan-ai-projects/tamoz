@@ -4,9 +4,6 @@ require_relative 'test_helper'
 require_relative 'support/autonomy_case'
 require 'stringio'
 
-# Phase 6 boot wiring: the worker builds the durable engine at boot, the run
-# config can point it at operator-owned policy data, and the reload-delivery
-# loop moves a validated pointer into running workers.
 class AgentApprovalBootTest < Minitest::Test
   include AutonomyCase
 

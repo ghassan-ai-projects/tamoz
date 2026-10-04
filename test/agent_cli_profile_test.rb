@@ -76,9 +76,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-B §5.5.3: an edited profile never rebinds an existing thread by itself.
-  # The thread replays the authority snapshot pinned in its own checkpoint, so
-  # the narrowed tool set in the edited file is simply not applied.
   def test_changed_profile_keeps_the_pinned_authority_of_an_existing_thread
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -109,8 +106,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-B §5.4/§6.5: only an explicit operator-recorded candidate transition moves
-  # a thread onto a new digest, and only at a turn boundary.
   def test_candidate_transition_applies_only_at_a_turn_boundary
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -150,9 +145,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-B §5.5.4: when the operator has revoked the grant for the digest a thread
-  # was created under, the thread fails closed instead of silently adopting the
-  # current file.
   def test_revoked_old_digest_fails_closed
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -239,9 +231,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-E §8.3: resume checks the profile *identity*, not just the digest — a session
-  # belongs to exactly one profile family, so a second activated profile (even over
-  # the same root and tool surface) cannot take its thread over.
   def test_resume_with_a_different_profile_id_is_rejected
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")

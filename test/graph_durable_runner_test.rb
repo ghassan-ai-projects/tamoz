@@ -268,8 +268,6 @@ class GraphDurableRunnerTest < Minitest::Test
     refute_includes store.calls.map(&:first), :fetch_request
   end
 
-  # --- terminal_fail (the DR-4 D2 backstop) --------------------------------
-
   # It takes a FRESH lease: the runner's own writer block has already closed by
   # the time a post-claim staleness is resolved, so reusing that writer would
   # be writing under an expired fence.

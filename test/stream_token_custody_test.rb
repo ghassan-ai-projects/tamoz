@@ -6,12 +6,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# T1.3 (PLAN_TAMOZ_STREAM_BUILD T1.3) — the audit's §4.5 security check: the
-# worker holds NO signing secret, only an opaque capability token it carries
-# verbatim to the stream's EvidenceTools. This suite pins the custody
-# guarantees: the token never lands in the durable payload, never crosses in
-# a wire event, never enters the durable request record, and the worker's
-# handshake never echoes it.
 class StreamTokenCustodyTest < Minitest::Test
   TOKEN = "opaque.hmac.token.7f3c"
 
@@ -97,11 +91,6 @@ class StreamTokenCustodyTest < Minitest::Test
     refute_includes response.to_proto.to_s, "capability"
   end
 
-  # The audit's §4.5 closing question: the worker holds no signing secret.
-  # The episode path carries the token verbatim to EvidenceTools but defines
-  # no key material and computes no signature anywhere on the worker. The
-  # whole stream gem is scanned (minus the vendored generated stubs), so a
-  # new file cannot silently bypass the check.
   def test_the_episode_path_holds_no_signing_secret
     episode_files = ROOT.glob(
       "gems/tamoz-stream/lib/tamoz/stream/*.rb"

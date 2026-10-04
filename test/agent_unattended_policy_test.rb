@@ -1,13 +1,5 @@
 # frozen_string_literal: true
 
-# The unattended contract, attacked from every direction (redesign plan §7):
-# headless is not consent; a denial is terminal for the effect; policy data
-# lives in the operator config, never in workspace content; an expired ask
-# resolves to the profile's on_timeout outcome; and an approval answers one
-# occurrence only.
-#
-# The scorecard proves the happy paths: gated work pauses, approval resumes.
-# This file tries to break the rule.
 require_relative "test_helper"
 require_relative "support/autonomy_case"
 

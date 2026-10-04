@@ -2,18 +2,6 @@
 
 require_relative "test_helper"
 
-# P18 (H3/C4/DC-6 + H6/C7) — closed-world composition and error identity.
-#
-# - H3: all four built-in source dispatchers run through ONE protocol with
-#   zero source-typed branches in the host; a fifth synthetic source FAILS at
-#   construction; multiple descriptors within an existing source work.
-# - H6: a typed error (repairable or policy) from any source passes through
-#   the host with class + message bytes identical — the host wraps only
-#   non-ToolError exceptions.
-#
-# The dispatcher interface (per-source): validate(descriptor, arguments) and
-# execute(descriptor, arguments, context:). The protocol below is the single
-# host dispatch body — no `case source.kind` anywhere.
 class CapabilityClosedWorldTest < Minitest::Test
   Capability = Tamoz::Core::Capability
 

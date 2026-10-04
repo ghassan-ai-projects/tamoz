@@ -103,8 +103,6 @@ class EvalsVerifierTest < Minitest::Test
     end
   end
 
-  # T8.3: the P14 streaming case was retired with the engine, so the corpus is
-  # 21 cases.
   def test_all_twenty_one_agent_smoke_cases_are_public_verified_and_digest_pinned
     cases = AGENT_SMOKE_ROOT.glob("*.case.json").sort
 

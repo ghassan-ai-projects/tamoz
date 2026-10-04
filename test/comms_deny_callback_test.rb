@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice H (COMMS_TELEGRAM_PLAN §3) — the deny-only callback path (design §9,
-# ADR-043): a prompt activates only after its send receipt is durable, a
-# button press resolves exactly one ACTIVE prompt to a deny decision, and a
-# replay, expiry, or swapped binding never resolves (invariant 58).
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:disable Metrics/BlockLength, Lint/UnusedMethodArgument
 class CommsDenyCallbackTest < Minitest::Test

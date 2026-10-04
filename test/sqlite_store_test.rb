@@ -152,11 +152,6 @@ class SQLiteStoreTest < Minitest::Test
     end
   end
 
-  # P13-A seam (invariant 38 duplicate-turn hard zero): the enqueue primitive
-  # dedups on `(thread_id, namespace, request_id)` — a repeated delivery of the
-  # SAME bytes is idempotent (one request row), and the same id with ANY byte
-  # difference is refused with CheckpointConflictError. A crash at any seam can
-  # repeat delivery; this is what makes "exactly one logical occurrence" durable.
   def test_enqueue_dedup_is_byte_exact_and_same_bytes_are_idempotent
     with_store do |_store, _path, adapter|
       definition = Tamoz.graph(name: "enqueue-dedup", version: "1") do

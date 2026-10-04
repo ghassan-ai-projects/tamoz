@@ -3,11 +3,6 @@
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
 
-# T1.2 (PLAN_TAMOZ_STREAM_BUILD T1.2): the EpisodeWorker service negotiates
-# the handshake over a real in-process gRPC round trip and refuses a contract
-# major mismatch. ONE server serves the whole class: gRPC's native runtime
-# crashes when RpcServers are created and stopped in rapid succession, so the
-# server is a class singleton and is stopped exactly once at exit.
 class StreamEpisodeWorkerTest < Minitest::Test
   Worker = Tamoz::Stream::EpisodeWorker
 

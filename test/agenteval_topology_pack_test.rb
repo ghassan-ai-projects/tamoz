@@ -13,11 +13,11 @@ class AgentevalTopologyPackTest < Minitest::Test
 
   PACK = Agenteval::TopologyPack
 
-  def test_h2_h4_every_control_trips_exactly_its_own_gate_and_grep_fails_chain_and_survey
+  def test_every_control_trips_exactly_its_own_gate_and_grep_fails_chain_and_survey
     assert_empty PACK.prove
   end
 
-  def test_h4_a_blinded_grader_is_caught_by_its_control
+  def test_a_blinded_grader_is_caught_by_its_control
     %i[redundant? unread_review?].each do |method|
       original = PACK::Graders.method(method)
       PACK::Graders.define_singleton_method(method) { |*| false }
@@ -29,7 +29,7 @@ class AgentevalTopologyPackTest < Minitest::Test
     end
   end
 
-  def test_h1_a_chain_needle_that_shares_a_word_with_the_prompt_is_refused
+  def test_a_chain_needle_that_shares_a_word_with_the_prompt_is_refused
     scenario = PACK.chain(1)
     spec = scenario.controls.fetch(:spec)
     word = PACK.words(scenario.files.fetch('a').fetch(spec.needle)).first
@@ -39,7 +39,7 @@ class AgentevalTopologyPackTest < Minitest::Test
     assert_match(/shares/, PACK.validate([hinted]).join)
   end
 
-  def test_h3_the_big_survey_overflows_a_32k_window_twice_over
+  def test_the_big_survey_overflows_a_32k_window_twice_over
     big = PACK.survey(1, padded: true)
     small = big.with(files: { 'a' => big.files.fetch('a').transform_values { |text| text[0, 200] } })
 
@@ -47,7 +47,7 @@ class AgentevalTopologyPackTest < Minitest::Test
     assert_match(/must exceed/, PACK.validate([small]).join)
   end
 
-  def test_h2_the_survey_key_is_executed_and_a_wrong_key_is_caught
+  def test_the_survey_key_is_executed_and_a_wrong_key_is_caught
     scenario = PACK.survey(1, padded: false)
     spec = scenario.controls.fetch(:spec)
     flipped = spec.with(answer: spec.answer.drop(1))
@@ -63,7 +63,7 @@ class AgentevalTopologyPackTest < Minitest::Test
     )
   end
 
-  def test_h4_a_review_that_saw_the_change_only_in_a_search_hit_is_not_unread
+  def test_a_review_that_saw_the_change_only_in_a_search_hit_is_not_unread
     started = { 'event' => 'subagent_started', 'role' => 'review', 'execution_id' => 'r',
                 'changed' => ['lib/money.rb'] }
     searched = { 'work_execution_id' => 'r', 'work_observations' => { 'lib/export/x_ledger.rb' => { 'read' => true } },
@@ -74,7 +74,7 @@ class AgentevalTopologyPackTest < Minitest::Test
     assert PACK::Graders.unread_review?(record([[started, blind]]))
   end
 
-  def test_h4_two_fanout_children_given_the_same_brief_are_redundant_whatever_they_read
+  def test_two_fanout_children_given_the_same_brief_are_redundant_whatever_they_read
     run = lambda do |id, digest, path|
       started = { 'event' => 'subagent_started', 'role' => 'explore', 'execution_id' => id, 'batch' => 'b',
                   'brief_digest' => digest }
@@ -85,7 +85,7 @@ class AgentevalTopologyPackTest < Minitest::Test
     refute PACK::Graders.redundant?(record([run.call('a', 'one', 'lib/a.rb'), run.call('b', 'two', 'lib/b.rb')]))
   end
 
-  def test_h5_the_record_of_a_real_fanout_and_review_names_each_child_and_its_handed_paths
+  def test_the_record_of_a_real_fanout_and_review_names_each_child_and_its_handed_paths
     spec_row('H5') do
       parent = lambda do |root|
         [{ calls: [plan_call(paths: %w[lib], checks: [])] }, { calls: [read_call('lib/a.rb')] },

@@ -2,8 +2,6 @@
 
 require_relative "test_helper"
 
-# P8-B: profiles bind to session/checkpoint/cache epochs. A profile edit creates a
-# candidate transition and never mutates in-flight authority.
 class AgentProfileTransitionTest < Minitest::Test
   Profile = Tamoz::Agent::Profile
   READ_ONLY_TOOLS = %w[read_file list_directory search_text].freeze
@@ -38,9 +36,6 @@ class AgentProfileTransitionTest < Minitest::Test
     assert profile.high_risk?
     assert_equal profile.canonical_digest, snapshot.fetch("canonical_digest")
     assert_equal READ_ONLY_TOOLS, snapshot.fetch("tools").fetch("allowed")
-    # DR-5 RC4: the snapshot records the credential reference NAME so replay
-    # resolves the IDENTICAL env key the original ask used; it never records a
-    # credential value (invariant 24).
     assert_equal(
       {
         "provider" => "openai",

@@ -6,7 +6,7 @@ require_relative 'thermal_lab_domain'
 require_relative 'local_model_endpoint'
 require_relative 'episode_composition'
 
-# Real-world sensor WP-T3: the shadow tournament harness — a deterministic
+# The shadow tournament harness — a deterministic
 # baseline vs the Tamoz supervisor vs the human oracle, over the SAME immutable
 # thermal cells (the round-2 trial corpus in thermal-lab.json `trials`).
 #

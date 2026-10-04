@@ -60,6 +60,11 @@
     "reason": "Static inventory only."
   },
   {
+    "path": "test/agent_capability_delegation_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/agent_change_evaluation_test.rb",
     "status": "needs review",
     "reason": "Static inventory only."
@@ -190,16 +195,6 @@
     "reason": "Static inventory only."
   },
   {
-    "path": "test/agent_phase3_context_lifecycle_test.rb",
-    "status": "needs review",
-    "reason": "Static inventory only."
-  },
-  {
-    "path": "test/agent_phase4_capability_test.rb",
-    "status": "needs review",
-    "reason": "Static inventory only."
-  },
-  {
     "path": "test/agent_probe_catalog_test.rb",
     "status": "needs review",
     "reason": "Static inventory only."
@@ -291,6 +286,11 @@
   },
   {
     "path": "test/agent_session_operations_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/agent_session_planning_context_test.rb",
     "status": "needs review",
     "reason": "Static inventory only."
   },
@@ -501,6 +501,11 @@
   },
   {
     "path": "test/benchmark_report_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/calibration_rollout_test.rb",
     "status": "needs review",
     "reason": "Static inventory only."
   },
@@ -1160,16 +1165,6 @@
     "reason": "Static inventory only."
   },
   {
-    "path": "test/p16_tools_gem_test.rb",
-    "status": "needs review",
-    "reason": "Static inventory only."
-  },
-  {
-    "path": "test/p8_rollout_test.rb",
-    "status": "needs review",
-    "reason": "Static inventory only."
-  },
-  {
     "path": "test/packaging_test.rb",
     "status": "needs review",
     "reason": "Static inventory only."
@@ -1711,6 +1706,11 @@
   },
   {
     "path": "test/tools_coding_surface_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/tools_gem_test.rb",
     "status": "needs review",
     "reason": "Static inventory only."
   },

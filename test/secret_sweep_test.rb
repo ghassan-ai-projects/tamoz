@@ -2,29 +2,9 @@
 
 require_relative "test_helper"
 
-# P15-D (docs/P15_RELEASE_PLAN.md §6) — the invariant-24 sweep over EVERY
-# durable store.
-#
-# Invariant 24: "Secret values are rejected from checkpoints, streams, and
-# instrumentation unless a named policy protects them; no lossy key-name
-# scrubbing occurs."
-#
-# Individual suites prove that for the store they own. What none of them prove
-# is COVERAGE: that the set of durable surfaces which can accept caller data is
-# the set that refuses a secret. A new durable table with a `payload` column
-# and no protection would be invisible to every existing test, because every
-# existing test knows only about the tables that existed when it was written.
-#
-# So this sweeps the surfaces by name, planting the same `Tamoz::Secret` into
-# each, and asserts every one of them fails closed. The list is pinned: adding a
-# durable payload surface without deciding its secret policy fails here.
 class SecretSweepTest < Minitest::Test
   SECRET = Tamoz::Secret.new("sk-live-DO-NOT-PERSIST-0123456789")
 
-  # Every durable surface that accepts caller-supplied data. Adding one without
-  # adding it here is the gap this test exists to prevent. T8.3: the retired
-  # P14 engine's stream_payload surface is gone with it (the worker admits
-  # only the stream-sealed, digest-verified snapshot).
   SURFACES = %w[
     application_store checkpoint_state session_record request_payload
     effect_request schedule_payload instrumentation
@@ -150,12 +130,6 @@ class SecretSweepTest < Minitest::Test
     end
   end
 
-  # T8.3: the P14 stream engine (which admitted arbitrary source payloads and
-  # swept them for secrets) is retired. The supervised worker admits only the
-  # stream-sealed snapshot, which is verified by digest and never re-parsed
-  # as an admission candidate — there is no stream payload to sweep. The
-  # memory admission path (which DOES accept agent-authored statements) keeps
-  # the secret sweep via test_a_secret_is_refused_from_episode_statement.
   def test_a_secret_is_refused_from_instrumentation
     context = Tamoz::Context.new(
       run_id: "run", execution_id: "execution", request_id: "request"

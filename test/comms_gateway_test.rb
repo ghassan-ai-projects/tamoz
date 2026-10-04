@@ -2,11 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice G (COMMS_TELEGRAM_PLAN §3) — the gateway loop (design §5/§10,
-# ADR-042): one fenced poller per bot, inbound updates resolve to durable
-# dispositions, the offset is persisted only after the whole prefix is
-# durable, and the outbox drains with honest ambiguity. The transport is
-# scripted in-memory so the loop is deterministic.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 class CommsGatewayTest < Minitest::Test
   Comms = Tamoz::Comms

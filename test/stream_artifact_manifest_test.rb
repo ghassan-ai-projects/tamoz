@@ -7,12 +7,6 @@ require "tamoz/stream/artifact_store"
 require "support/local_model_endpoint"
 require "support/episode_composition"
 
-# T2.3 (PLAN_TAMOZ_STREAM_BUILD T2.3): the artifact manifest and retention.
-# The terminal carries the per-episode manifest (prompt / skill-set /
-# tool-catalog / model-policy / contract / memory-record digests), keyed on
-# the STREAM's own digests, and the runner retains the named documents so a
-# shadow run can resolve them without re-running Tamoz. Retention is bounded.
-# P1: the runner runs the FIXED graph (gate 4).
 class StreamArtifactManifestTest < Minitest::Test
   class StubSituationRecaller
     attr_reader :calls
@@ -121,10 +115,6 @@ class StreamArtifactManifestTest < Minitest::Test
                    "the manifest names the memory records the episode grounded on"
       assert_equal 1, recaller.calls.length
 
-      # The named documents are retained, resolvable by the VERIFIED raw
-      # digest (sha256 of the exact bytes — the store's rehash-on-admission
-      # rule). The manifest names the same wire digests the retention
-      # verified against those bytes (P3: a lying wire digest fails closed).
       assert_equal tool_catalog, store.resolve(raw_sha256(tool_catalog)).fetch("bytes")
       assert_equal schema, store.resolve(raw_sha256(schema)).fetch("bytes")
       assert_equal "diagnose the pond", store.resolve(raw_sha256("diagnose the pond")).fetch("bytes")

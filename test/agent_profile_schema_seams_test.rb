@@ -2,11 +2,6 @@
 
 require_relative 'test_helper'
 
-# Q2 characterization of profile.rb's schema-validation seams (the authority
-# boundary: trusted-profile loading). The branches below were uncovered by the
-# Q0 baseline (90.9% overall): the YAML-safety, schema, and field-validation
-# failure paths. Each test is a mutation contract — removing its validation
-# must fail it: bad input raises, it never silently loads.
 class AgentProfileSchemaSeamsTest < Minitest::Test
   Profile = Tamoz::Agent::Profile
 

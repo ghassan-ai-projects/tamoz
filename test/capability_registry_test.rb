@@ -2,13 +2,6 @@
 
 require_relative "test_helper"
 
-# P18 (H1/H2) — the Capability::Descriptor/Capability::Source contract and the
-# sealed registry's invariant-35/42 guarantees.
-#
-# - H1: descriptor shape (incl. schemas), digest stability, source shape.
-# - H2 (direct): a forged source registration fails (registry sealed);
-#   no content path can produce a Capability::Source; the intersection =
-#   descriptors ∩ admission set, immutable mid-turn.
 class CapabilityRegistryTest < Minitest::Test
   Core = Tamoz::Core
   Capability = Core::Capability
@@ -134,9 +127,6 @@ class CapabilityRegistryTest < Minitest::Test
     assert_equal %w[local skill mcp websearch], Capability::BUILT_IN_SOURCES
   end
 
-  # H2f (critic F4): a source may only carry descriptors that belong to it —
-  # descriptor.source_id must match the containing source. A "local" source
-  # smuggling an "mcp:" descriptor must refuse construction.
   def test_descriptor_source_consistency_is_enforced
     smuggled = Capability::Source.new(
       source_id: "local",
@@ -153,9 +143,6 @@ class CapabilityRegistryTest < Minitest::Test
     assert_includes error.message, "does not belong to"
   end
 
-  # H2g (critic F4): the registry is constructed ONLY through build — direct
-  # value construction (Data.define `new`) is refused because it would bypass
-  # the closed-world and consistency checks.
   def test_registry_cannot_be_constructed_directly
     assert_raises(NoMethodError) do
       Capability::Registry.new(
@@ -166,8 +153,6 @@ class CapabilityRegistryTest < Minitest::Test
     end
   end
 
-  # H2h (critic F4): a prefixed built-in source id must carry a non-empty
-  # suffix — "skill:" with no name is not a valid built-in source.
   def test_empty_built_in_suffix_is_refused
     bare = Capability::Source.new(
       source_id: "skill:",

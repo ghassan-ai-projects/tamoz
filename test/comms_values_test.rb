@@ -2,12 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice B (COMMS_TELEGRAM_PLAN §3) — the tamoz-comms value layer: every
-# channel value validates and freezes all fields, round-trips its durable wire
-# form, and derives domain-separated digests deterministically (design §6).
-#
-# Each case asserts one value's whole contract — validation, digest, wire — in
-# one scenario.
 # rubocop:disable Minitest/MultipleAssertions
 class CommsValuesTest < Minitest::Test
   Comms = Tamoz::Comms

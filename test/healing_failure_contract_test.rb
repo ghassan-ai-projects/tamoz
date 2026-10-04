@@ -2,19 +2,14 @@
 
 require_relative "healing_fixtures"
 
-# P12-HD — the typed failure contract, the immutable rule contract, the §11
-# failure model, and the migration seam.
 class HealingFailureContractTest < Minitest::Test
   include HealingFixtures
 
   Healing = Tamoz::Agent::Healing
 
-  # --- design §3 field list ---------------------------------------------------
-
   def test_failure_record_carries_the_design_section_3_fields_verbatim
     record = failure_record
 
-    # The design §3 block, line by line.
     assert_equal Healing::FailureRecord::FORMAT_VERSION, record.format_version
     assert_equal "workspace.stale_precondition", record.failure_code
     assert_equal :stale_precondition, record.category
@@ -58,8 +53,6 @@ class HealingFailureContractTest < Minitest::Test
 
     assert_raises(Healing::HealingPolicyError) { failure_record(effect_state: :probably_fine) }
   end
-
-  # --- P12 §3 (C10): FIVE never-mutate classes --------------------------------
 
   def test_there_are_exactly_five_never_mutate_classes
     assert_equal 5, Healing::FailureRecord::NEVER_MUTATE_CLASSES.length
@@ -216,8 +209,6 @@ class HealingFailureContractTest < Minitest::Test
       assert_raises(Tamoz::CheckpointVersionError) { Healing::HealingRule.from_h(payload) }
     end
   end
-
-  # --- design §4 rule contract ------------------------------------------------
 
   def test_the_rule_carries_the_design_section_4_fields_and_is_frozen
     with_healing_workspace do |_dir, toolbox|
@@ -523,8 +514,6 @@ class HealingFailureContractTest < Minitest::Test
     refute Healing::Scope.in_band?, "the guard must not leak on after a raise"
   end
 
-  # --- P12 §11 failure model (invariant 17 boundary) --------------------------
-
   def test_the_failure_model_matches_the_plan_section_11_table_exactly
     expected = {
       Healing::ClassificationAbstention => [:value, false, :escalated],
@@ -564,7 +553,7 @@ class HealingFailureContractTest < Minitest::Test
 
   # --- migration safety -------------------------------------------------------
 
-  def test_a_pre_p12_session_record_loads_with_legacy_healing_semantics
+  def test_a_session_record_without_a_healing_pin_loads_with_legacy_healing_semantics
     legacy = Tamoz::Agent::SessionRecords.build(
       "session",
       session_id: "session.legacy", task: "t", task_digest: "sha256:x", root: "/tmp",
@@ -574,12 +563,11 @@ class HealingFailureContractTest < Minitest::Test
 
     refute legacy.key?("healing_pin")
     assert_equal Healing::LEGACY_HEALING_PIN, legacy.fetch("healing_pin", {})
-    # Reloading a pre-P12 record must not invent the field either.
     reloaded = Tamoz::Agent::SessionRecords.load!(legacy, kind: "session")
     refute reloaded.key?("healing_pin")
   end
 
-  def test_a_p12_session_record_pins_the_rule_set_and_a_disabled_set_is_the_legacy_state
+  def test_a_session_record_pins_the_rule_set_and_a_disabled_set_is_the_legacy_state
     with_healing_workspace do |_dir, toolbox|
       rule = healing_rule(toolbox:)
       pin = Healing.pin_for([rule])
@@ -593,7 +581,6 @@ class HealingFailureContractTest < Minitest::Test
       )
       assert_equal pin, record.fetch("healing_pin")
 
-      # "healing disabled" and "pre-P12" are deliberately the same state.
       assert_equal Healing::LEGACY_HEALING_PIN, Healing.pin_for([])
     end
   end

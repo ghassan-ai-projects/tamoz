@@ -2,8 +2,6 @@
 
 require_relative "test_helper"
 
-# Shared builders for the P12-HD/H1/H2 suites. Deliberately NOT a `_test.rb` file
-# so the Rake pattern does not load it standalone.
 module HealingFixtures
   Healing = Tamoz::Agent::Healing
 
@@ -177,8 +175,6 @@ module HealingFixtures
     end
   end
 
-  # Every one of the twelve design §3 categories, as a typed record. Used by the
-  # classification matrix so no category can quietly go untested.
   def synthetic_records
     {
       transient_pre_dispatch: failure_record(

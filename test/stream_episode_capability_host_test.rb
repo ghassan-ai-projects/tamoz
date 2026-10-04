@@ -2,19 +2,11 @@
 
 require_relative "test_helper"
 
-# T4.1 (THREAT_MODEL §4) — the stream-episode capability host. The episode
-# tool surface is the fixed allowlist from §4.1; the host holds no reference
-# to any effectful machinery; the injection corpus proves a denied tool cannot
-# be named, discovered, or bound; and the call path scrubs the context so an
-# effect journal or store is not reachable from inside the boundary.
 class StreamEpisodeCapabilityHostTest < Minitest::Test
   Host = Tamoz::Stream::EpisodeCapabilityHost
 
   PERMITTED = Host::PERMITTED
 
-  # The THREAT_MODEL §4.2 denied surface plus the real toolbox tool names an
-  # injected instruction would actually try, plus arbitrary strings — the
-  # mechanism is deny-by-default, so any name outside PERMITTED must refuse.
   DENIED_NAMES = %w[
     write_file edit_file bash read_file list_dir grep delegate interrupt
     websearch mcp_call check_runner admit_episode apply_patch delete_file
@@ -83,9 +75,6 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
     assert_equal({"knowledge.search" => "ok"}, result)
   end
 
-  # THREAT_MODEL §4.3: the call path must not expose the effect journal or the
-  # store. A tool implementation receives only the allowlisted context
-  # attributes — a full Tamoz::Context (with effects/store) is scrubbed.
   def test_the_context_passed_to_a_tool_never_carries_effects_or_store
     seen = nil
     host = Host.new(
@@ -134,9 +123,6 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
     refute_includes error.message, "secret token"
   end
 
-  # THREAT_MODEL §4.3.2: the dependency-direction test. The episode path must
-  # not reference the effectful modules — proven by source scan AND by an
-  # env-scrubbed clean-subprocess load that pulls in none of the effectful gems.
   def test_dependency_direction_episode_path_has_no_effectful_reference
     # The containment set: the episode host now, plus the worker files the
     # later phases add. A new episode-path file must be added here OR the

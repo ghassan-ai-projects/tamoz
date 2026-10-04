@@ -5,7 +5,7 @@ require "tamoz/stream/evidence_client"
 require "support/local_model_endpoint"
 require "support/episode_composition"
 
-# T3 (PLAN_TAMOZ_STREAM_BUILD T3): the reverse evidence channel. The
+# The reverse evidence channel. The
 # EvidenceClient dials a real EvidenceTools gRPC server (hosted in-process for
 # the test — the stream's host lives in agentic-stream), scopes the call to
 # the request identity + snapshot identity, and REFUSES a result that is
@@ -188,9 +188,6 @@ class StreamEvidenceClientTest < Minitest::Test
     end
   end
 
-  # T3.2: the containment host binds the evidence adapter — the episode can
-  # fetch evidence, the result stays bounded, and a call that is NOT part of
-  # the allowlist never resolves.
   def test_the_host_binds_the_evidence_adapter_read_only
     service.handler = lambda do |request|
       result(document: {"value" => 0.9}, call_id: request.call_id)
@@ -209,8 +206,6 @@ class StreamEvidenceClientTest < Minitest::Test
     assert_kind_of Tamoz::Core::ToolError, error
   end
 
-  # T3.2 fail-closed: an episode WITHOUT an evidence channel binds refusal
-  # adapters — the surface exists, evidence refuses, and no dial happens.
   def test_the_host_binds_refusal_adapters_without_a_channel
     host = Host.new(Host::PERMITTED.to_h do |name|
       [name, Tamoz::Stream::EvidenceUnavailableAdapter.new(tool_name: name)]
@@ -222,10 +217,6 @@ class StreamEvidenceClientTest < Minitest::Test
     assert_includes error.message, "not configured"
   end
 
-  # T3.2 end to end: a full episode whose graph node fetches evidence through
-  # context.episode_tools mid-reasoning. The runner binds the evidence client
-  # from the wire request; the node reads the verified result into the
-  # Decision.
   def test_an_episode_fetches_evidence_mid_reasoning_and_produces
     service.handler = lambda do |request|
       assert_equal "evidence.get", request.tool_name
@@ -236,9 +227,6 @@ class StreamEvidenceClientTest < Minitest::Test
     end
 
     directory = Dir.mktmpdir("tamoz-evidence-e2e")
-    # P1: the fixed graph's reason node does not fetch tools (P2 adds the
-    # execute_tool node); the evidence channel is bound but unused in-graph.
-    # The capability host unit tests above still exercise the tool surface.
     endpoint = LocalModelEndpoint.new(
       mode: :fixture,
       responses: [Tamoz::Core.jcs(

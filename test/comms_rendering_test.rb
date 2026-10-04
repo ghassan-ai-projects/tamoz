@@ -2,9 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice E (COMMS_TELEGRAM_PLAN §3) — deterministic chat rendering (design
-# §11): the same input produces byte-identical parts for the same render
-# version, parts never split a grapheme cluster, and overflow truncates.
 # rubocop:disable Minitest/MultipleAssertions
 class CommsRenderingTest < Minitest::Test
   Comms = Tamoz::Comms

@@ -8,7 +8,7 @@ require 'support/local_model_endpoint'
 require 'support/thermal_lab_domain'
 require 'support/episode_composition'
 
-# Real-world sensor WP-T2: the supervisor's action surface is exactly
+# The supervisor's action surface is exactly
 # {bounded mode, evidence request, abstain}, risk-governed by the CATALOG.
 #
 # Each case drives the REAL fixed episode graph (EpisodeComposition) with a
@@ -16,7 +16,7 @@ require 'support/episode_composition'
 # the builder/graph — the discipline is the existing DecisionBuilder authority
 # (B10) applied to the thermal-lab domain DATA. Fixture provider throughout: this
 # proves the plumbing invariants, NOT intelligence (that is the shadow tournament,
-# WP-T3, on a real model).
+# on a real model).
 class ThermalLabDecisionTest < Minitest::Test
   Domain = ThermalLabDomain
 

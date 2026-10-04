@@ -5,7 +5,7 @@ require 'tamoz/agent'
 require 'tamoz/sqlite'
 require 'support/thermal_tournament'
 
-# Real-world sensor WP-T3: the shadow tournament, scored end to end. The baseline
+# The shadow tournament, scored end to end. The baseline
 # is real; the supervisor's decisions are governed by the real graph over a
 # labelled fixture proposal. This pins the tournament MECHANICS — that the scoring
 # rewards a supervisor which abstains on the conflict cells over a threshold

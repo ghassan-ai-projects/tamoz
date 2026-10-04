@@ -5,6 +5,20 @@ require 'prism'
 module TestSourceAudit
   ASSERTIONS = %i[assert refute assert_equal refute_equal].freeze
   ENUMERATORS = %i[any? all? none? one? find select map].freeze
+  PLAN_VOCABULARY = [
+    /§/,
+    /\bP\d+\b/,
+    /\bDR-?\d/,
+    /\bDC-\d/,
+    /\bD-\d/,
+    /\bA-\d/,
+    /\bT\d+(?:\.\d+)?\b/,
+    /(?<![\w-])F\d\b/,
+    /\bQ\d/,
+    /\b[Ss]lice\s+[0-9A-Z]/,
+    /[Pp]hase\s*\d/,
+    /\bwave\s+[A-Z]\b/
+  ].freeze
 
   module_function
 
@@ -19,6 +33,15 @@ module TestSourceAudit
       findings << node.location.start_line
     end
     findings
+  end
+
+  def plan_vocabulary(source)
+    result = Prism.parse(source)
+    raise ArgumentError, result.errors.map(&:message).join(', ') unless result.success?
+
+    result.comments
+          .select { |comment| PLAN_VOCABULARY.any? { |pattern| comment.slice.match?(pattern) } }
+          .map { |comment| comment.location.start_line }
   end
 
   def ignored_predicate?(node)

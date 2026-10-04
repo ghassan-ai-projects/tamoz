@@ -4,12 +4,6 @@ require_relative "test_helper"
 require_relative "support/scripted_generation"
 require_relative "support/session_plan"
 
-# P10 §10.2 adversarial rows driven through the slice-4 glue: the caller-supplied
-# McpCapabilitySource inside the durable session, against the REAL test server on
-# the REAL wire. Every row proves the typed taxonomy survives the glue: the
-# caller's executor maps tamoz-mcp's taxonomy onto the agent surface, the effect
-# journal grants one attempt, the circuit counts across callers, and teardown
-# leaves no process behind.
 class AgentMcpAdversarialTest < Minitest::Test
   include SessionPlan
 

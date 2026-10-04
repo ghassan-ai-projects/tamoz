@@ -19,8 +19,6 @@ class CancellationVisibilityTest < Minitest::Test
   Comms = Tamoz::Comms
 
   CONVERSATION = 'telegram:chat:22222222'
-  # The thread the gateway itself derives for this conversation (design §5):
-  # admissions land on the deterministic thread, never on a caller-chosen one.
   THREAD = Comms::Admission.thread_id(CommsGatewayHarness::SURFACE_ID, CONVERSATION).freeze
   CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }.freeze
 

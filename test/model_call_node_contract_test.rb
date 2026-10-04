@@ -3,10 +3,6 @@
 require_relative 'test_helper'
 require 'ripper'
 
-# Phase 2 of the model-call boundary review: the node-call contract is enforced,
-# not just documented. Production libs of the four node-bearing gems may reach a
-# model only behind the journaled doors, keep raw HTTP confined to the two
-# declared seams.
 class ModelCallNodeContractTest < Minitest::Test
   ROOT = File.expand_path('..', __dir__).freeze
 

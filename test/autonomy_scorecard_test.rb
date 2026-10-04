@@ -247,8 +247,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ----------------------------------------------------- 11. channel turn
 
-  # A chat message becomes a durable turn and the answer returns to the SAME
-  # conversation (design §16 case 11).
   def test_case_11_chat_message_becomes_a_durable_turn_and_an_answer_returns
     with_runtime(channels: channel_map) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
@@ -274,8 +272,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ------------------------------------------------- 12. duplicate update
 
-  # The same update_id twice (concurrently or across a restart) makes exactly
-  # one logical turn (design §16 case 12, invariant 57's replay dedup).
   def test_case_12_the_same_update_never_makes_two_turns
     with_runtime(channels: channel_map) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
@@ -292,9 +288,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ---------------------------------------------------- 13. deny callback
 
-  # An approval pause renders a prompt, the Deny press resolves the EXACT
-  # interrupt set, and the same occurrence completes denied — nothing edited,
-  # nothing answered for the human (design §16 case 13, ADR-043, invariant 58).
   def test_case_13_a_deny_press_denies_the_exact_interrupt_set
     with_runtime(channels: channel_map(approvals: {"mode" => "deny_only", "prompt_ttl_s" => 900}),
                  approval_profile: "review") do |rt|
@@ -332,9 +325,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ---------------------------------------------------- 14. unbound sender
 
-  # An unbound sender is durably rejected: no turn, no answer, no workspace
-  # content in the channel, zero unauthorized admissions (design §16 case 14,
-  # invariant 56).
   def test_case_14_an_unbound_sender_never_reaches_a_turn
     with_runtime(channels: channel_map) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "secret content\n")
@@ -354,8 +344,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ---------------------------------------------------- 15. ambiguous send
 
-  # A send whose receipt never arrives is `:unknown` — never silently retried,
-  # never duplicated (design §16 case 15, §10 ambiguity policy).
   def test_case_15_an_ambiguous_send_becomes_unknown_and_is_never_resent
     with_runtime(channels: channel_map) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
@@ -379,9 +367,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ---------------------------------------------------- 16. capacity gate
 
-  # Capacity saturation refuses new intake while the reserved terminal answer
-  # for an admitted request still appends, and the slots return when the turn
-  # finishes (design §16 case 16, invariant 57).
   def test_case_16_saturated_capacity_refuses_intake_but_reserves_the_answer
     limits = {"outbox_capacity" => 3, "max_open_requests" => 1,
               "max_denial_prompts_per_request" => 1}
@@ -417,9 +402,6 @@ class AutonomyScorecardTest < Minitest::Test
 
   # ------------------------------------------------ 17. conversational turn
 
-  # Rapid-fire messages are not dropped and not context-free: the follow-up
-  # queues behind the running turn and is planned with the
-  # thread's transcript (design §16's channel case, conversational bar).
   def test_case_17_follow_up_messages_queue_and_carry_the_transcript
     with_runtime(channels: channel_map(limits: {"per_chat_messages_per_s" => 100.0})) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")

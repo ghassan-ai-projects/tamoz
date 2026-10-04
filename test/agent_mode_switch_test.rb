@@ -4,12 +4,6 @@ require_relative 'test_helper'
 require_relative 'support/autonomy_case'
 require 'sqlite3'
 
-# Step 7B operator flow (ADR §2.6): `tamoz approve --mode NAME --thread ID`
-# queues a durable control message; the worker's poll pass applies it at a
-# durable boundary; the new mode governs only the next decision on THAT
-# session. Every case here runs the real CLI against a real runtime directory,
-# with `run_check` as the asking tool: under `review` it asks (with a grant
-# offer), under `auto` it allows, under `plan` it denies.
 class AgentModeSwitchTest < Minitest::Test
   include AutonomyCase
 

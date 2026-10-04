@@ -3,12 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/comms_cli_fixture'
 
-# Slice I (COMMS_TELEGRAM_PLAN §3) — the pinned CLI surface (COMMS_DESIGN
-# §14): `tamoz comms serve|list|doctor`, the `channels` section of `tamoz
-# status`, and the doctor's named failures (wrong bot id, webhook/poller
-# conflict, permissions, token, TLS, adapter absence). The bot is a fixture
-# CLIENT injected through the CLI's client seam — production origin rules are
-# never weakened, exactly as the design requires.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 # rubocop:disable Metrics/CyclomaticComplexity
 # rubocop:disable Lint/UnusedMethodArgument, Lint/UnderscorePrefixedVariableName

@@ -97,8 +97,6 @@ class ModelWindowsTest < Minitest::Test
     assert_nil transport.context_window, 'an unrecorded route must not inherit a default'
   end
 
-  # F1's load-bearing assertion: the eval adapter must NOT pin the window as an override, or the
-  # registry is bypassed on the very route the eval runs and the data proves nothing.
   def test_the_eval_adapter_names_a_recorded_route_and_leaves_its_window_alone
     adapter = eval_adapter('tamoz-code')
     route = "#{adapter.provider}/#{adapter.model}"

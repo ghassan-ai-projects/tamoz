@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice I (COMMS_TELEGRAM_PLAN §3) — config schema 2 (COMMS_DESIGN §14):
-# schema 1 loads unchanged as "no channels", schema 2 is validated strictly
-# at load, and `tamoz config migrate` is explicit, backup-preserving, and
-# atomic — a refused or crashed migration leaves the original file intact.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:disable Metrics/BlockLength
 class RuntimeDirectoryConfigTest < Minitest::Test

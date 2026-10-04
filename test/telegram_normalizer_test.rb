@@ -2,12 +2,6 @@
 
 require_relative 'test_helper'
 
-# Phase 0 identity (plan 01, work items 2–3): the Telegram digest covers the
-# MEANINGFUL normalized content — not just update_id — so identical bytes
-# dedup and any content change under one update_id is a detectable integrity
-# conflict; and update_id / message_id / reply_to / callback_message_id stay
-# distinct fields carrying their intended values. Fixture updates use
-# DISTINCT update_id vs message_id values so a mixup cannot hide.
 class TelegramNormalizerTest < Minitest::Test
   def normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
 
@@ -75,8 +69,6 @@ class TelegramNormalizerTest < Minitest::Test
     assert_equal 42, Tamoz::Comms::InboundEnvelope.from_wire(wire).message_id
   end
 
-  # Contract §7.1: a callback binds the id of the message the buttons are
-  # attached to — never its own update_id, never a fresh message id.
   def test_callback_preserves_the_originating_message_id_and_digests_its_fields
     callback = { 'update_id' => 5003,
                  'callback_query' => { 'id' => 'q-9', 'from' => { 'id' => 111_111_11 },

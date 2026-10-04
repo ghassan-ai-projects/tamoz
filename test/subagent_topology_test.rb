@@ -20,7 +20,7 @@ class SubagentTopologyTest < Minitest::Test
 
   def all_answers = MARKERS.to_h { |marker| [marker, answer(marker)] }
 
-  def test_p1_a_fanout_runs_one_child_per_brief_and_no_child_sees_another_brief
+  def test_a_fanout_runs_one_child_per_brief_and_no_child_sees_another_brief
     spec_row('P1') do
       topology_run(parent: fanout_of_three, children: all_answers) do |_outcome, model|
         assert_equal 6, model.child_requests.length
@@ -34,7 +34,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_p2_fanout_children_overlap_in_time
+  def test_fanout_children_overlap_in_time
     spec_row('P2') do
       starts = overlapping(MARKERS)
       children = MARKERS.to_h { |marker| [marker, [starts.fetch(marker), { content: "#{marker} done." }]] }
@@ -46,7 +46,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_p3_one_bounded_result_with_a_section_per_brief_in_order
+  def test_one_bounded_result_with_a_section_per_brief_in_order
     spec_row('P3') do
       long = (1..300).map { |line| "finding #{line}: lib/billing/total.rb rounds half-even#{'.' * 20}" }.join("\n")
       children = all_answers.merge('CHARLIE-7' => answer('CHARLIE-7', long))
@@ -63,7 +63,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_p4_the_turn_cap_counts_children_not_calls
+  def test_the_turn_cap_counts_children_not_calls
     spec_row('P4') do
       briefs = ->(prefix, count) { (1..count).map { |index| marked_brief("#{prefix}#{index}") } }
       parent = [{ calls: [fanout_call(briefs.call('ONE-', 3))] }, { calls: [fanout_call(briefs.call('TWO-', 2))] },
@@ -80,7 +80,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_p5_malformed_fanouts_are_refused_before_any_child_runs
+  def test_malformed_fanouts_are_refused_before_any_child_runs
     spec_row('P5') do
       five = (1..5).map { |index| marked_brief("F#{index}") }
       bad = [fanout_call([marked_brief('F1')]), fanout_call(five), fanout_call([marked_brief('F1'), 'x' * 5000]),
@@ -112,7 +112,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_p6_a_rerun_gate_node_returns_the_stored_fanout_without_calling_a_child
+  def test_a_rerun_gate_node_returns_the_stored_fanout_without_calling_a_child
     spec_row('P6') do
       with_work_workspace(files: EXPLORE_FILES) do |root, adapter|
         first = TopologyTeam.new(parent: fanout_of_three, children: all_answers)
@@ -131,7 +131,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_p7_each_child_has_its_own_execution_and_journal
+  def test_each_child_has_its_own_execution_and_journal
     spec_row('P7') do
       topology_run(parent: fanout_of_three, children: all_answers) do |_outcome, _model, _root, adapter|
         by_execution = child_journal(adapter).group_by { |row| row.fetch(:execution_id) }
@@ -153,7 +153,7 @@ class SubagentTopologyTest < Minitest::Test
 
   def review_call(brief) = ['delegate', { 'role' => 'review', 'brief' => brief }]
 
-  def test_v1_the_review_child_is_handed_the_paths_the_parent_changed
+  def test_the_review_child_is_handed_the_paths_the_parent_changed
     spec_row('V1') do
       parent = edit_then(review_call('REVIEW-1: check lib/b.rb for defects.'))
       children = { 'REVIEW-1' => [{ calls: [read_call('lib/a.rb')] }, { content: 'No defects found.' }] }
@@ -170,7 +170,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_v2_a_review_before_any_change_is_refused
+  def test_a_review_before_any_change_is_refused
     spec_row('V2') do
       parent = [{ calls: [review_call('REVIEW-2: check the change.')] }, { content: 'Nothing to review.' }]
       topology_run(parent:, children: {}) do |_outcome, model|
@@ -180,7 +180,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_v3_the_review_child_reads_only_under_the_review_prompt
+  def test_the_review_child_reads_only_under_the_review_prompt
     spec_row('V3') do
       parent = edit_then(review_call('REVIEW-3: check the change.'))
       children = { 'REVIEW-3' => [{ content: 'No defects found.' }] }
@@ -198,7 +198,7 @@ class SubagentTopologyTest < Minitest::Test
 
   def reading(count) = (1..count).map { |index| { calls: [read_call("lib/m#{index}.rb")] } }
 
-  def test_n1_after_enough_reads_one_note_is_appended_and_earlier_bytes_do_not_move
+  def test_after_enough_reads_one_note_is_appended_and_earlier_bytes_do_not_move
     spec_row('N1') do
       nudge
       limit = nudge_reads
@@ -214,7 +214,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_n2_the_window_trigger_fires_once
+  def test_the_window_trigger_fires_once
     spec_row('N2') do
       nudge
       big = EXPLORE_FILES.merge('lib/big.rb' => big_file)
@@ -230,7 +230,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_n2_a_large_opening_alone_never_triggers_the_note
+  def test_a_large_opening_alone_never_triggers_the_note
     spec_row('N2') do
       task = "Answer yes. #{'context ' * 1500}"
       with_work_workspace(files: EXPLORE_FILES) do |root, adapter|
@@ -243,7 +243,7 @@ class SubagentTopologyTest < Minitest::Test
     end
   end
 
-  def test_n3_no_note_after_a_delegation_or_with_subagents_off
+  def test_no_note_after_a_delegation_or_with_subagents_off
     spec_row('N3') do
       nudge
       limit = nudge_reads

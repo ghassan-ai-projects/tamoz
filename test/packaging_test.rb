@@ -459,11 +459,6 @@ class PackagingTest < Minitest::Test
     end
   end
 
-  # P16 T6: the packaged tamoz-tools installs in isolation with only tamoz-core
-  # and NOTHING else (the agent gem is absent), then constructs AND executes a
-  # toolbox: a real configured check through Open3, a digest-bound patch, a
-  # create_file mutation, and a compiled skills catalog. The `$LOADED_FEATURES`
-  # scan proves no tamoz-agent feature was pulled in at runtime.
   def test_packaged_tools_runs_clean_with_only_core_installed
     names = %w[tamoz-cancellation tamoz-core tamoz-skills tamoz-tools]
 
@@ -543,12 +538,6 @@ class PackagingTest < Minitest::Test
     end
   end
 
-  # P15-H (c)/(d): `tamoz-scheduler` and `tamoz-stream` ship as release gems but
-  # had no isolated install proof — the workspace Gemfile resolves all nine gems
-  # via `path:`, which masks a gemspec dependency error, and every other test
-  # loads them through that Gemfile. Each is installed into its own GEM_HOME
-  # with ONLY its declared dependency (`tamoz-core`) and exercised by a named
-  # example task in a clean subprocess.
   def test_packaged_scheduler_runs_with_only_core_installed
     with_isolated_install(%w[tamoz-core tamoz-scheduler], "scheduler") do |environment|
       script = <<~'RUBY'

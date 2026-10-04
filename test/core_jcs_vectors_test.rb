@@ -3,10 +3,6 @@
 require_relative "test_helper"
 require "json"
 
-# Executable agreement with the Go side (CONTRACTS.md §12): both products read
-# the same vendored vectors file and must reproduce every value. The digests in
-# the file ARE the cross-language agreement — a Ruby digest that differs from
-# the file's digest differs from Go's.
 class CoreJcsVectorsTest < Minitest::Test
   VECTORS_PATH = ROOT.join("gems/tamoz-stream/contracts/canonicalization-vectors.json")
 

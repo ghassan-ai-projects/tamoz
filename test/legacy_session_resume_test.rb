@@ -2,21 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-B (docs/P15_RELEASE_PLAN.md §4, correction 9) — old-format resume.
-#
-# Invariant 22: a checkpoint written by an older build must resume EXACTLY, or
-# stop typed. Every existing legacy test proves that IN PROCESS — it hands a
-# Hash to `SessionRecords.load!` and checks the sentinels. None of them touch
-# bytes. A schema change, a codec change or a wire-encoding change would sail
-# past all of them and break every existing user's database on upgrade.
-#
-# `test/fixtures/legacy_session_v1.sqlite3` is a real durable session file,
-# committed, whose session record has been reduced to the PRE-P8 shape: no
-# profile identity, no skill epoch, no MCP catalogs, no egress pin, no memory
-# epoch, no prompt-surface digest. It is regenerated only by
-# `script/generate_legacy_session_fixture`, deliberately — if a format change
-# makes it unreadable, the correct response is a migration or a typed refusal,
-# never a fresh fixture.
 class LegacySessionResumeTest < Minitest::Test
   FIXTURE = ROOT.join("test", "fixtures", "legacy_session_v1.sqlite3")
   THREAD = "legacy-thread"
@@ -45,11 +30,6 @@ class LegacySessionResumeTest < Minitest::Test
     end
   end
 
-  # The load path: today's build reads yesterday's BYTES. The JCS digest-rule
-  # cutover (PLAN_TAMOZ_STREAM_BUILD T0.1) re-sealed graph definitions, so the
-  # pre-JCS fixture stops at the graph-identity guard with a typed refusal —
-  # the invariant's "resumes exactly OR stops typed" second half, never a
-  # silent reinterpretation of the old bytes.
   def test_a_current_build_reads_the_old_database
     with_fixture do |session|
       error = assert_raises(Tamoz::CheckpointVersionError) do

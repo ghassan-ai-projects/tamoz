@@ -2,8 +2,6 @@
 
 require_relative "test_helper"
 
-# QUALITY_BAR P1–P4 and O2: skills written to the open Agent Skills specification
-# (https://agentskills.io/specification) compile, and spec-invalid ones are refused.
 class SkillsSpecConformanceTest < Minitest::Test
   Skills = Tamoz::Skills
 
@@ -36,8 +34,6 @@ class SkillsSpecConformanceTest < Minitest::Test
 
   def rejection(name) = compile.rejections.find { |entry| entry.entry == name }
 
-  # ---- P1: spec-valid skills compile ---------------------------------------
-
   def test_space_separated_allowed_tools_with_scoped_and_capitalised_tools
     write("spec-tools", minimal("spec-tools", "allowed-tools: Bash(git add:*) Bash(jq:*) Read\n"))
 
@@ -67,8 +63,6 @@ class SkillsSpecConformanceTest < Minitest::Test
     assert_equal "skill_field_invalid", rejection("unicode-long").code
   end
 
-  # ---- P2: dotfiles are ignored ---------------------------------------------
-
   def test_dotfiles_are_ignored_and_do_not_change_identity
     clean = write("clean-skill", minimal("clean-skill"))
     digest = record("clean-skill").tree_digest
@@ -83,8 +77,6 @@ class SkillsSpecConformanceTest < Minitest::Test
     assert_equal digest, snapshot.records.fetch("op/clean-skill").tree_digest
     assert_equal ["SKILL.md"], snapshot.records.fetch("op/clean-skill").resource_index.keys
   end
-
-  # ---- P3: spec-invalid skills are refused ----------------------------------
 
   def test_spec_invalid_names_are_refused
     { "pdf--tools" => "skill_name_invalid", "pdf-" => "skill_name_invalid", "-pdf" => "skill_name_invalid",
@@ -107,8 +99,6 @@ class SkillsSpecConformanceTest < Minitest::Test
     %w[empty-desc empty-compat long-compat].each { |name| assert_equal "skill_field_invalid", rejection(name)&.code, name }
     assert_equal 500, record("ok-compat").compatibility.length
   end
-
-  # ---- P4: every non-script file is readable --------------------------------
 
   def test_every_non_script_file_is_readable_and_scripts_are_not
     write("readable", minimal("readable"), "forms.md" => "Form fields.\n", "templates/a.md" => "A\n",

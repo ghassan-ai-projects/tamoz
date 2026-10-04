@@ -3,8 +3,6 @@
 require_relative 'test_helper'
 require_relative '../agenteval/skills/optimizer'
 
-# PLAN phase 10: the optimizer rewrites only SKILL.md, never shows held-out scenarios to the proposer, and keeps a
-# rewrite only when it beats the current skill on them. Scripted proposer and evaluator: no model is called.
 class AgentevalSkillsOptimizerTest < Minitest::Test
   OPT = Agenteval::SkillsPack::Optimizer
   CURRENT = File.read(File.join(Agenteval::SkillsPack::SKILL_DIR, 'SKILL.md'))

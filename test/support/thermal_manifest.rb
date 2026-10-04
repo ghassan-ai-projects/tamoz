@@ -6,7 +6,7 @@ require 'tamoz/core'
 require 'tamoz/evals/runner'
 require_relative 'thermal_lab_domain'
 
-# Real-world sensor WP-T5: the single immutable evidence manifest for a thermal
+# The single immutable evidence manifest for a thermal
 # shadow run. It BINDS — in one JCS-digested document — the code (git commit +
 # dirty state), the domain (intent-catalog / snapshot / objective / prompt
 # digests), the decision schema, the exact model call (provider + model +

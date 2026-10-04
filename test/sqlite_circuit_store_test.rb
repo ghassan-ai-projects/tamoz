@@ -2,12 +2,6 @@
 
 require_relative "test_helper"
 
-# DR-2 acceptance D1–D10 against the DURABLE `Tamoz::SQLite::CircuitStore`
-# (docs/DR2_DURABLE_CIRCUIT_PLAN.md §7). The record engine itself
-# (`Tamoz::Circuit::Record`) is covered by the tamoz-core circuit tests; this
-# suite proves the durable adapter: CAS read-modify-write, restart survival,
-# owner-scoped evidence, the read-time self-heal rule, fail-closed corruption,
-# authority-gated repair, and the bounded merge protocol.
 class SQLiteCircuitStoreTest < Minitest::Test
   Circuit = Tamoz::Circuit
 
@@ -52,7 +46,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
 
   # D1a — the server scope's consecutive-transport condition opens the scope,
   # and a success inside the window does NOT mask it (the window pair, C3).
-  def test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask
+  def test_consecutive_threshold_opens_and_owner_success_does_not_mask
     with_store do |store, _adapter, _path|
       circuit = make_store(store, scope: :server, scope_id: "svc-1", owner_id: "deploy-a")
       assert_equal :degraded, circuit.record_failure(kind: :transport)
@@ -65,7 +59,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
 
   # D1b — the rule_target scope's non-consecutive WINDOW condition:
   # verification fail → success → fail in-window still opens (C3/D1).
-  def test_d1_rule_target_window_condition_is_not_consecutive
+  def test_rule_target_window_condition_is_not_consecutive
     with_store do |store, _adapter, _path|
       t0 = 1_700_000_000
       circuit = make_store(store, scope: :rule_target, scope_id: "rule.stale-edit",
@@ -85,14 +79,12 @@ class SQLiteCircuitStoreTest < Minitest::Test
   end
 
   # D2 — open disables mutation: transitions observe only, state stays open.
-  def test_d2_open_disables_mutation
+  def test_open_disables_mutation
     with_store do |store, _adapter, _path|
       circuit = make_store(store, scope: :server, scope_id: "svc-2", owner_id: "deploy-b")
       3.times { circuit.record_failure(kind: :transport) }
       assert circuit.open?
 
-      # A failure while open records evidence but never closes; a success while
-      # open never closes either (DR-2 §4).
       assert_equal :open, circuit.record_failure(kind: :transport)
       assert_equal :open, circuit.record_success
       assert circuit.open?
@@ -100,7 +92,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
   end
 
   # D3 — time alone never resets; the probe window permits observation only.
-  def test_d3_time_alone_never_resets
+  def test_time_alone_never_resets
     with_store do |store, _adapter, _path|
       t0 = 1_700_000_000
       circuit = make_store(store, scope: :server, scope_id: "svc-3", owner_id: "deploy-c",
@@ -121,7 +113,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
 
   # D4 — reset requires the scope's authority with per-scope evidence weight;
   # a self-reset (in-band actor) is refused and leaves the circuit open.
-  def test_d4_reset_requires_authority_and_self_reset_is_refused
+  def test_reset_requires_authority_and_self_reset_is_refused
     with_store do |store, _adapter, _path|
       circuit = make_store(store, scope: :server, scope_id: "svc-4", owner_id: "deploy-d")
       3.times { circuit.record_failure(kind: :transport) }
@@ -141,21 +133,16 @@ class SQLiteCircuitStoreTest < Minitest::Test
 
   # D5 — owner-scoped evidence: one owner's success does not mask another's
   # failures, and a fresh owner cannot clear the shared scope's open state.
-  def test_d5_owner_success_does_not_mask_another_owners_failures
+  def test_owner_success_does_not_mask_another_owners_failures
     with_store do |store, _adapter, _path|
       owner_a = make_store(store, scope: :server, scope_id: "svc-5", owner_id: "deploy-a")
       owner_b = make_store(store, scope: :server, scope_id: "svc-5", owner_id: "deploy-b")
 
-      # The consecutive counter is PER-OWNER (DR-2 C2/D5): each owner's
-      # predicate is evaluated against its own sub-state, and any owner meeting
-      # it opens the shared scope record.
       assert_equal :degraded, owner_a.record_failure(kind: :transport)
       assert_equal :degraded, owner_a.record_failure(kind: :transport)
       assert_equal :open, owner_a.record_failure(kind: :transport)
       assert owner_a.open?
 
-      # B's success resets B's OWN counter (0 → 0) — A's failures stay, and a
-      # success never closes an open circuit (DR-2 §4).
       assert_equal :open, owner_b.record_success
       assert_equal 3, owner_a.failures
       assert_equal 0, owner_b.failures
@@ -165,7 +152,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
 
   # D6 — concurrent writers: bounded CAS; the losing writer retries from a
   # fresh read, and both pieces of evidence land (merge by digest).
-  def test_d6_concurrent_writers_merge_by_digest
+  def test_concurrent_writers_merge_by_digest
     with_store do |store, _adapter, _path|
       barrier = Queue.new
       release = Queue.new
@@ -194,7 +181,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
   # D7 — corruption fails closed (open, observation only); repair requires the
   # authority AND the observed digest; a wrong digest refuses, the exact digest
   # recovers to a canonical closed record.
-  def test_d7_corrupt_record_fails_closed_and_repairs_with_authority
+  def test_corrupt_record_fails_closed_and_repairs_with_authority
     with_store do |store, adapter, path|
       circuit = make_store(store, scope: :server, scope_id: "svc-7", owner_id: "deploy-a")
       3.times { circuit.record_failure(kind: :transport) }
@@ -275,7 +262,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
   # D9 — crash between increment and open: a CLOSED record whose counter already
   # satisfies an open predicate reads as open from the evidence (C1 read-time
   # rule). Simulated by writing a closed payload with failures=3 directly.
-  def test_d9_closed_record_with_satisfied_predicate_reads_open
+  def test_closed_record_with_satisfied_predicate_reads_open
     with_store do |store, _adapter, _path|
       namespace = Tamoz::Circuit.namespace_for("server")
       key = Tamoz::Circuit.scope_digest(scope_type: "server", scope_id: "svc-9")
@@ -310,7 +297,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
   # D10 — restart identity: the same stable owner id reuses its own evidence
   # across a fresh store instance (the durable store is a restart by
   # construction); UUID churn is refused at the boundary.
-  def test_d10_restart_identity_and_uuid_refusal
+  def test_restart_identity_and_uuid_refusal
     with_store do |store, _adapter, _path|
       first = make_store(store, scope: :server, scope_id: "svc-10", owner_id: "deploy-a")
       first.record_failure(kind: :transport)
@@ -320,7 +307,6 @@ class SQLiteCircuitStoreTest < Minitest::Test
       restarted = make_store(store, scope: :server, scope_id: "svc-10", owner_id: "deploy-a")
       assert_equal 1, restarted.failures
 
-      # A per-process UUID as owner identity is refused (DR-2 D10).
       assert_raises(Tamoz::CircuitPolicyError) do
         make_store(
           store, scope: :server, scope_id: "svc-10",
@@ -331,7 +317,7 @@ class SQLiteCircuitStoreTest < Minitest::Test
   end
 
   # D10b — the owner map is bounded: the 65th owner fails closed.
-  def test_d10_owner_overflow_fails_closed
+  def test_owner_overflow_fails_closed
     with_store do |store, _adapter, _path|
       assert_raises(Tamoz::CircuitPolicyError) do
         65.times do |index|

@@ -2,14 +2,7 @@
 
 require_relative "test_helper"
 
-# P16 tools-gem extraction probes (plan §4 T1/T2/T3/T3b, corrections C1–C6).
-# Everything here asserts the moved surface against values captured from the
-# pre-move code at P16 start, except the digest matrix, which is deliberately
-# re-pinned when the catalog begins binding configured check argv values.
-class P16ToolsGemTest < Minitest::Test
-
-  # ---- P16-start reference pins (captured from the pre-move code) -----------
-
+class ToolsGemTest < Minitest::Test
   MATRIX_DIGEST = "sha256:48a1e1a94fc1ac7a2f7948efcbec40953a85aecd09ba78cb6190e75db3a15a57"
 
   REJECTION_MESSAGES = {
@@ -32,7 +25,7 @@ class P16ToolsGemTest < Minitest::Test
   SNAPSHOT_EMPTY_DIGEST = "sha256:182a16f232863f7bd66e70dabb20b53bc2562762113c4acd35f78016bb6e5f3c"
 
   def setup
-    @dir = Dir.mktmpdir("tamoz-p16")
+    @dir = Dir.mktmpdir("tamoz-tools-gem")
   end
 
   def teardown
@@ -40,12 +33,12 @@ class P16ToolsGemTest < Minitest::Test
   end
 
   # ---------------------------------------------------------------------------
-  # T2: clean-env runtime harness — construct AND CALL the whole toolbox surface.
+  # Clean-env runtime harness — construct AND CALL the whole toolbox surface.
   # Loading only tamoz/tools must not define Tamoz::Agent or load any of its
   # files, even with every gem lib on the load path.
   # ---------------------------------------------------------------------------
 
-  def test_t2_clean_env_runs_the_full_toolbox_surface_without_agent
+  def test_a_clean_env_runs_the_full_toolbox_surface_without_agent
     workspace = File.join(@dir, "workspace")
     source = File.join(@dir, "operator")
     FileUtils.mkdir_p(workspace)
@@ -162,7 +155,7 @@ class P16ToolsGemTest < Minitest::Test
                              "RUBYOPT" => nil,
                              # The check child must NOT inherit this (credential-free
                              # env rule, invariant 24); the check asserts its absence.
-                             "ANTHROPIC_API_KEY" => "p16-leak-sentinel"
+                             "ANTHROPIC_API_KEY" => "api-key-leak-sentinel"
                            )
     stdout, stderr, status = Open3.capture3(
       clean_environment,
@@ -195,8 +188,7 @@ class P16ToolsGemTest < Minitest::Test
     assert_empty stderr
   end
 
-  # P16-05: the Skills::Error base resolves without any agent constant.
-  def test_t2_skills_error_base_is_core_visible_in_the_clean_env
+  def test_the_skills_error_base_is_core_visible_in_a_clean_env
     script = <<~'RUBY'
       # encoding: UTF-8
       require "json"
@@ -231,8 +223,6 @@ class P16ToolsGemTest < Minitest::Test
     assert_equal "nil", result.fetch("agent_defined")
   end
 
-  # P16-06: Skills.canonical is byte-identical to the core canonical, the input is
-  # never mutated, and Deliberation delegates to the same implementation.
   def test_canonical_is_single_sourced_and_byte_identical
     fixture = {
       "b" => [3, 1, 2], "a" => {"x" => 1, "y" => [{"k" => :v}]}, 2 => "two", :sym => {1 => "one"}
@@ -246,10 +236,6 @@ class P16ToolsGemTest < Minitest::Test
     Tamoz::Skills.canonical(input)
     assert_equal({"z" => 1, "a" => [2, 1]}, input)
   end
-
-  # ---------------------------------------------------------------------------
-  # P16-07 / P16-A2: the constant aliases are object-identical rebindings.
-  # ---------------------------------------------------------------------------
 
   def test_constant_aliases_are_object_identical_and_survive_identity
     aliases = {
@@ -285,13 +271,7 @@ class P16ToolsGemTest < Minitest::Test
     assert receipt.passed?
   end
 
-  # ---------------------------------------------------------------------------
-  # T1 (P16-19/P16-20): the full digest matrix is byte-identical to the P16-start
-  # capture, and the digest-input axes (check_safeties, allowed_tools) feed the
-  # digest while maximum_effect_output_bytes does not.
-  # ---------------------------------------------------------------------------
-
-  def test_digest_matrix_is_byte_identical_to_the_p16_start_capture
+  def test_digest_matrix_is_byte_identical_to_the_recorded_start_capture
     Dir.mktmpdir("tamoz-matrix") do |root|
       source = File.join(root, "operator")
       FileUtils.mkdir_p(File.join(source, "fix"))
@@ -462,8 +442,7 @@ class P16ToolsGemTest < Minitest::Test
     end
   end
 
-  # P16-03: the skills snapshot digests survive the move byte-for-byte.
-  def test_snapshot_digests_are_byte_identical_to_the_p16_start_capture
+  def test_snapshot_digests_are_byte_identical_to_the_recorded_start_capture
     source = File.join(@dir, "operator")
     FileUtils.mkdir_p(File.join(source, "fix"))
     File.write(
@@ -483,10 +462,6 @@ class P16ToolsGemTest < Minitest::Test
       Tamoz::Skills::Catalog.new(snapshot).render
     )
   end
-
-  # ---------------------------------------------------------------------------
-  # T3 (P16-10..13): the class-name serialization mapping at all three sites.
-  # ---------------------------------------------------------------------------
 
   def test_class_name_mapping_is_exhaustive_and_does_not_force_fit_others
     assert_equal "Tamoz::Agent::ToolError", Tamoz::Core.serialized_tool_error_name("Tamoz::Core::ToolError")
@@ -535,23 +510,23 @@ class P16ToolsGemTest < Minitest::Test
   def test_runtime_failure_payload_class_name_is_mapped
     Dir.mktmpdir("tamoz-mapping") do |root|
       File.write(File.join(root, "broken.rb"), "def self.answer = 40\n")
-      model = P16ScriptedModel.new(
+      model = CleanEnvModel.new(
         plan: [
-          p16_plan("discovery", %w[inspect], [p16_step("inspect", "read_file", {"path" => "broken.rb"})]),
-          p16_plan(
+          scripted_plan("discovery", %w[inspect], [scripted_step("inspect", "read_file", {"path" => "broken.rb"})]),
+          scripted_plan(
             "action",
             %w[patch check],
             [
-              p16_step("patch", "apply_patch", p16_patch_arguments("4O", "42")),
-              p16_step("check", "run_check", {"name" => "answer"})
+              scripted_step("patch", "apply_patch", patch_arguments("4O", "42")),
+              scripted_step("check", "run_check", {"name" => "answer"})
             ]
           ),
-          p16_plan(
+          scripted_plan(
             "repair",
             %w[patch check],
             [
-              p16_step("patch", "apply_patch", p16_patch_arguments("40", "42")),
-              p16_step("check", "run_check", {"name" => "answer"})
+              scripted_step("patch", "apply_patch", patch_arguments("40", "42")),
+              scripted_step("check", "run_check", {"name" => "answer"})
             ]
           )
         ],
@@ -581,11 +556,6 @@ class P16ToolsGemTest < Minitest::Test
       refute_includes failure.fetch("failure_signature"), "ToolArgumentError"
     end
   end
-
-  # ---------------------------------------------------------------------------
-  # T3b (P16-14/15): the bad-root CLI path renders "tamoz: …" exit 1 with no
-  # backtrace, and the rescue is NOT widened: a StoreError still escapes.
-  # ---------------------------------------------------------------------------
 
   def test_bad_root_cli_path_renders_clean_tamoz_error_without_backtrace
     bad_root = File.join(@dir, "does-not-exist")
@@ -629,11 +599,6 @@ class P16ToolsGemTest < Minitest::Test
     refute_includes err.string, "tamoz:"
   end
 
-  # ---------------------------------------------------------------------------
-  # P16-17: exactly one LEGACY_SKILL_EPOCH definition, in tamoz-core, and all
-  # four consumers agree on "none".
-  # ---------------------------------------------------------------------------
-
   def test_legacy_skill_epoch_has_one_core_definition_and_all_consumers_agree
     assert_equal "none", Tamoz::Core::LEGACY_SKILL_EPOCH
     refute Tamoz::Agent::SessionRecords.const_defined?(:LEGACY_SKILL_EPOCH),
@@ -650,7 +615,6 @@ class P16ToolsGemTest < Minitest::Test
       created_at_ms: 0
     )
     assert_equal "none", record.fetch("skill_epoch")
-    # Consumer 3: session enforce fetch default (pre-P9 resume).
     assert_equal(
       "none",
       {"no_epoch" => true}.fetch("skill_epoch", Tamoz::Core::LEGACY_SKILL_EPOCH)
@@ -659,7 +623,7 @@ class P16ToolsGemTest < Minitest::Test
 
   private
 
-  class P16ScriptedModel
+  class CleanEnvModel
     attr_reader :calls
 
     def initialize(plan:, review:, verify:)
@@ -676,7 +640,7 @@ class P16ToolsGemTest < Minitest::Test
     end
   end
 
-  def p16_plan(phase, ids, steps)
+  def scripted_plan(phase, ids, steps)
     {
       "goal" => "Complete the #{phase} task.",
       "done_when" => ["Controller-owned evidence satisfies the oracle."],
@@ -684,7 +648,7 @@ class P16ToolsGemTest < Minitest::Test
     }
   end
 
-  def p16_step(id, tool, arguments)
+  def scripted_step(id, tool, arguments)
     {
       "id" => id,
       "purpose" => "Perform the bounded #{id} step.",
@@ -694,7 +658,7 @@ class P16ToolsGemTest < Minitest::Test
     }
   end
 
-  def p16_patch_arguments(before, after)
+  def patch_arguments(before, after)
     {
       "path" => "broken.rb",
       "expected_sha256" => Digest::SHA256.hexdigest("def self.answer = 40\n"),

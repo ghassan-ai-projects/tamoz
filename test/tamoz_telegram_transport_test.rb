@@ -3,12 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/telegram_fixture_server'
 
-# Slice F (COMMS_TELEGRAM_PLAN §3) — the tamoz-telegram transport driven
-# against the in-memory fixture server (design §6.4 conformance): wrong
-# credentials refuse, polls confirm the durable prefix remotely, a send
-# timeout is genuinely ambiguous (never retried), throttling carries the
-# server's authoritative retry_after, and updates normalize to typed
-# envelopes.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class TamozTelegramTransportTest < Minitest::Test
   Comms = Tamoz::Comms
@@ -412,8 +406,6 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
-  # The callback envelope binds the originating message id (contract §7.1) so
-  # the gateway can compare a press to the exact prompt message.
   def test_normalizer_binds_the_callback_message_id
     callback = { 'update_id' => 3,
                  'callback_query' => { 'id' => 'q-3', 'from' => { 'id' => 111_111_11 },

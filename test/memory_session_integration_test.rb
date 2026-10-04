@@ -3,11 +3,6 @@
 require_relative "test_helper"
 require_relative "support/scripted_generation"
 
-# P11 probes P11-03, P11-19, P11-20: the session integration — the memory_epoch
-# sentinel, BehaviorTransition consumption at the FIRST INTAKE OF A THREAD
-# (claim → apply → finalize, existing threads pinned), the cache-epoch proof
-# (prefix digest moves with a recorded reason, in-flight stays pinned, rollback
-# returns byte-identical), and turn-boundary memory writes.
 class MemorySessionIntegrationTest < Minitest::Test
   Memory = Tamoz::Agent::Memory
 
@@ -225,10 +220,9 @@ class MemorySessionIntegrationTest < Minitest::Test
     end
   end
 
-  def test_pre_p11_session_resumes_byte_identical_with_no_memory_injection
+  def test_a_session_without_memory_resumes_byte_identical_with_no_injection
     with_memory_workspace do |root, adapter, engine|
       File.write(File.join(root, "note.txt"), "Tamoz is awake.\n")
-      # A memory-free session (no engine) writes a pre-P11-identical record.
       plain_session = Tamoz::Agent::Session.new(
         model: read_model,
         toolbox: Tamoz::Agent::Toolbox.new(root:),
@@ -236,9 +230,6 @@ class MemorySessionIntegrationTest < Minitest::Test
       )
       plain_session.start("What does note.txt say?", thread: "mem.plain", request_id: "r1")
 
-      # The memory-free write surface is byte-identical to pre-P11: the record
-      # loads with the legacy sentinel filled (probe P11-03), RECORD_VERSION
-      # still 1, and the baseline behavior version.
       plain_record = plain_session.view(thread: "mem.plain").state.fetch(:session)
       assert_equal Memory::LEGACY_MEMORY_EPOCH, plain_record.fetch("memory_epoch")
       assert_equal "tamoz.agent.session/1", plain_record.fetch("behavior_version")

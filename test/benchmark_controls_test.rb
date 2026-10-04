@@ -14,13 +14,6 @@ require "support/aquaculture_domain"
 require "support/climate_domain"
 require "support/episode_composition"
 
-# The frozen benchmark protocol in documentation/benchmark/: the mandatory adversarial
-# controls, consolidated through the composed graph. Each control is a named
-# test; the ones with dedicated P1–P6 gate suites call those mechanisms (the
-# gate is the consolidation, not a rewrite), and the seven that had no test
-# before P7 are written here. The go rule's hard gates (evidence-reference
-# validity, authority, grounding) must pass at zero failures; the whole suite
-# is fixture-labeled and never claims a real-model path.
 class BenchmarkControlsTest < Minitest::Test
   Stream = Tamoz::Stream
   SIGNING_KEY = "test-signing-key-0123456789abcdef"
@@ -279,9 +272,6 @@ class BenchmarkControlsTest < Minitest::Test
     assert_match(/ungrounded_evidence_refs/, error.message)
   end
 
-  # Control 9 — injection corpus (skills, memory, snapshots, corrections, tool
-  # results) fails closed. Mechanism: the P5 skills/memory adversarial suite;
-  # the graph-level gate is that every untrusted input is fenced data.
   def test_control_9_injection_inputs_are_fenced_data
     builder = Tamoz::Agent::EpisodeFrameBuilder.new(
       catalog: Tamoz::Agent::DiagnosisCatalog.from_list(AquacultureDomain::CATALOG),
@@ -350,10 +340,6 @@ class BenchmarkControlsTest < Minitest::Test
     second&.fetch(:adapter)&.close
   end
 
-  # Control 13 — shadow/post-kill refusal: a shadow dispatch is carried on the
-  # wire and never escalates to an action authority in the Ruby side; the
-  # composed graph's decision is a proposal the policy gateway may refuse
-  # (P8 wires the Go-side shadow refusal).
   def test_control_13_shadow_dispatch_never_escalates_in_the_graph
     request = wire_request("shadow")
     assert_equal :DISPATCH_POLICY_SHADOW, request.dispatch_policy

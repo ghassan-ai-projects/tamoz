@@ -12,8 +12,6 @@ class McpSupervisorTest < Minitest::Test
     PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
   ].freeze
 
-  # Minimal duck-typed CircuitStore implementation that records calls, proving
-  # the caller-injected seam (DR-2) rather than hard-coded in-memory state.
   class CircuitProbe
     attr_reader :calls
 
@@ -162,9 +160,6 @@ class McpSupervisorTest < Minitest::Test
     assert_operator supervisor.stderr_tail.bytesize, :>, 0
   end
 
-  # F2 (progress review, inv 24): a hostile/faulty child that prints its exact
-  # credential value to stderr must not leak it into diagnostic metadata —
-  # stderr_tail redacts resolved credential_refs values.
   def test_stderr_tail_redacts_resolved_credential_values
     ENV["TAMOZ_MCP_TEST_CREDENTIAL"] = "super-secret-value-12345"
     leaky_script = File.join(@dir, "leaky_child.rb")
@@ -189,8 +184,6 @@ class McpSupervisorTest < Minitest::Test
   ensure
     ENV.delete("TAMOZ_MCP_TEST_CREDENTIAL")
   end
-
-  # --- §8 circuit ----------------------------------------------------------
 
   def test_health_states_and_circuit_transitions
     supervisor = Supervisor.new(build_config, circuit_threshold: 3)
@@ -300,8 +293,6 @@ class McpSupervisorTest < Minitest::Test
   ensure
     supervisor.close
   end
-
-  # --- §8 restart backoff ------------------------------------------------------
 
   def test_restart_backoff_is_exponential_jittered_and_bounded
     supervisor = Supervisor.new(

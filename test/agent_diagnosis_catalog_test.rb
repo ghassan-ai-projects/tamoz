@@ -2,8 +2,6 @@
 
 require_relative "test_helper"
 
-# P0B/§5 conformance: the diagnosis catalog is trusted spec config with an
-# order-binding, domain-separated digest, and fails closed on malformed input.
 class AgentDiagnosisCatalogTest < Minitest::Test
   Catalog = Tamoz::Agent::DiagnosisCatalog
 

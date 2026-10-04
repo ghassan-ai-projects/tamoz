@@ -6,19 +6,17 @@ require_relative 'test_helper'
 require_relative '../agenteval/subagents/pack'
 require_relative 'support/subagent_fixtures'
 
-# Quality-bar rows F1-F4: the subagent pack's graders are proven by offline controls before any real-model run, and
-# they read the durable session record. No model is called here.
 class AgentevalSubagentPackTest < Minitest::Test
   include SubagentFixtures
 
   PACK = Agenteval::SubagentPack
 
-  def test_f1_f2_controls_trip_exactly_their_own_gate
+  def test_controls_trip_exactly_their_own_gate
     assert_empty PACK.prove
   end
 
   # A control suite that cannot fail proves nothing: blind each grader in turn and the suite must object.
-  def test_f1_each_blinded_grader_is_caught_by_its_control
+  def test_each_blinded_grader_is_caught_by_its_control
     { 'step_repetition' => [:repetition, ->(*) {}],
       'inconclusive' => [:inconclusive?, ->(*) { false }] }.each do |gate, (method, stub)|
       original = PACK::Graders.method(method)
@@ -31,7 +29,7 @@ class AgentevalSubagentPackTest < Minitest::Test
     end
   end
 
-  def test_f1_a_grader_that_ignores_child_namespaces_is_caught
+  def test_a_grader_that_ignores_child_namespaces_is_caught
     original = PACK::Graders::WRITES
     PACK::Graders.send(:remove_const, :WRITES)
     PACK::Graders.const_set(:WRITES, [].freeze)
@@ -42,7 +40,7 @@ class AgentevalSubagentPackTest < Minitest::Test
     PACK::Graders.const_set(:WRITES, original)
   end
 
-  def test_f3_the_record_of_a_real_session_carries_what_the_graders_read
+  def test_the_record_of_a_real_session_carries_what_the_graders_read
     delegating do |_outcome, model, _root, adapter|
       record = PACK::Record.read(adapter.path)
       scenario = PACK.scenarios([1]).first
@@ -64,7 +62,7 @@ class AgentevalSubagentPackTest < Minitest::Test
     end
   end
 
-  def test_f4_the_validator_refuses_a_prompt_that_names_its_needle
+  def test_the_validator_refuses_a_prompt_that_names_its_needle
     scenario = PACK.scenarios([1]).first
     needle = scenario.controls.fetch(:spec).needle
     named = scenario.with(sessions: [PACK::S.new(prompt: "#{scenario.sessions.first.prompt} Look at #{needle}.")])

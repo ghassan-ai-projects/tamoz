@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# Supervision proof for `tamoz comms serve` (design §14): when a store fails
-# mid-drain, run_gateway_loops must NAME the failure on stderr with its
-# exception class, stop every sibling loop, and exit non-zero — never spin
-# quietly beside a dead thread.
 class CommsServeSupervisionTest < Minitest::Test
   class StorageExploded < StandardError
     def initialize(msg = 'the comms inbound index stopped accepting writes')

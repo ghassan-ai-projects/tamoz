@@ -9,18 +9,9 @@ require "tamoz/stream/approval_relay"
 require "tamoz/stream/reconsideration"
 require "json"
 
-# T8.2 (PLAN_TAMOZ_STREAM_BUILD §7): the nine release-blocking stream
-# invariants as executable tests. The audit found the current evals cover the
-# agent, not the worker contract; this suite pins the worker contract. Each
-# clause exercises the REAL code path, not a stub.
 class StreamInvariantsTest < Minitest::Test
   Reconsideration = Tamoz::Stream::Reconsideration
 
-  # Invariant 1: the supervised episode path computes no watermark, event
-  # time, lateness, or window membership — the deterministic plane belongs to
-  # the stream (§2, §6.2). T8.3 retired the old P14 engine (which carried
-  # those concepts) by forward migration; the scan covers the surviving
-  # worker files.
   def test_invariant_1_the_episode_path_computes_no_stream_plane_concepts
     episode_files = ROOT.glob(
       "gems/tamoz-stream/lib/tamoz/stream/{episode_*,evidence_*,situation_*,capability_host,reconsideration,approval_relay,outcome_subscriber,verification_store,situation_memory,artifact_store,decision_builder}*.rb"
@@ -34,9 +25,6 @@ class StreamInvariantsTest < Minitest::Test
     end
   end
 
-  # Invariant 2: a snapshot digest mismatch terminates the episode BEFORE any
-  # model call (PROTOCOL §8: fail loudly; never prefer a locally recomputed
-  # value).
   def test_invariant_2_snapshot_mismatch_terminates_before_any_model_call
     directory = Dir.mktmpdir("tamoz-invariant2")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
@@ -62,14 +50,10 @@ class StreamInvariantsTest < Minitest::Test
     FileUtils.remove_entry(directory) if directory
   end
 
-  # Invariant 3: an interrupt inside a stream episode is terminal, never a
-  # wait (PROTOCOL §3.4; T0.4).
   def test_invariant_3_an_interrupt_in_a_stream_episode_is_terminal
     directory = Dir.mktmpdir("tamoz-invariant3")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     graph = Tamoz.graph(name: "invariant-3", version: "1") do
-      # P1: the runner payload carries the fixed graph's channels; a graph
-      # without them fails before its first node.
       state :episode, default: {}
       state :snapshot, default: {}
       state :wire, default: {}
@@ -98,10 +82,6 @@ class StreamInvariantsTest < Minitest::Test
     FileUtils.remove_entry(directory) if directory
   end
 
-  # Invariant 4: an Experience is admitted only from a Tamoz-executed episode
-  # with a reconciled outcome and full provenance — no self-certification, no
-  # learning from another executor's episode, an unreconciled verdict, or a
-  # forged source authority (T5.3).
   def test_invariant_4_experience_requires_a_reconciled_outcome_with_provenance
     directory = Dir.mktmpdir("tamoz-invariant4")
     adapter = Tamoz::SQLite::Adapter.new(
@@ -252,9 +232,6 @@ class StreamInvariantsTest < Minitest::Test
         {"reason" => "prior_action_invalidated", "invalidates" => ["cmd_1"]}
       )
     )
-    # P6: the judgment + compensation live in the GRAPH (judge → compensate)
-    # and the compensation mapping comes from the INTENT CATALOG. Drive the
-    # graph with the same transfer scenario.
     events = []
     composition = EpisodeComposition.build(
       endpoint: support_endpoint(wire).base_url
@@ -302,8 +279,6 @@ class StreamInvariantsTest < Minitest::Test
     endpoint
   end
 
-  # Invariant 8: a watch condition is scoped to one situation, expiring, and
-  # count-bounded (PROTOCOL §4.1).
   def test_invariant_8_a_watch_condition_is_scoped_expiring_and_bounded
     envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(
       Agenticstream::Runtime::V1::EpisodeRequest.new(
@@ -369,8 +344,6 @@ class StreamInvariantsTest < Minitest::Test
 
   def simple_graph(name)
     Tamoz.graph(name:, version: "1") do
-      # P1: the runner payload carries the fixed graph's channels; the node
-      # never emits model events (those are receipts-only now).
       state :episode, default: {}
       state :snapshot, default: {}
       state :wire, default: {}

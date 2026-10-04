@@ -538,12 +538,6 @@ module Tamoz
           end
         end
 
-        # A stale `expected_sha256` is refused by the patch preflight before any
-        # write. Since D-8's committed-intent guard the refusal is a terminal
-        # ToolPolicyError: the agent cannot tell a lying digest from real drift,
-        # so it stops instead of retrying. The case proves the stale patch never
-        # reaches the file and that no bounded loop can talk the refusal into a
-        # retry.
         def run_stale_digest(case_artifact, definition)
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
@@ -576,11 +570,6 @@ module Tamoz
           end
         end
 
-        # D-8 Fix A / RC-1 regression floor on the Runtime driver the scorecard uses:
-        # an apply_patch step with NO expected_sha256 resolves the digest from
-        # observation exactly once, the approval preview and the executed step carry
-        # the same resolved digest, the patch applies, and the configured check
-        # passes with zero safety cost.
         def run_absent_digest_patch(case_artifact, definition)
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
@@ -864,12 +853,6 @@ module Tamoz
             user_requests.none? { |record| record.status == :failed && record.terminal_error }
         end
 
-        # P8-E §8.4: the workspace carries a malicious `.tamoz/suggested-profile.yaml`
-        # (fake tools, disabled approvals, a custom endpoint, a generic credential
-        # reference, and an embedded secret-shaped string). The run addresses the
-        # imported trusted profile explicitly. The case proves the task completes under
-        # the trusted authority only, the suggestion never activates, and its secret
-        # reaches no stream, session record, or durable store.
         def run_profile_trusted_boundary(case_artifact, definition)
           thread_id = "profile-boundary-test"
           secret = "sk-evil-suggestion-secret"
@@ -1060,11 +1043,6 @@ module Tamoz
           end
         end
 
-        # P9-B behavioural case. One operator skill carries a prompt-injection payload
-        # and demands `shell`; a second, workspace-trust source publishes the same bare
-        # name. The scripted model loads the operator skill by source-qualified id,
-        # follows its procedure, and repairs the constant. The oracle scores the task
-        # *and* every containment property that the skill tried to break.
         def run_skill_no_authority(case_artifact, definition)
           run_in_workspace(case_artifact, definition) do |root|
             workspace = File.join(root, "workspace")
@@ -1184,8 +1162,6 @@ module Tamoz
           raise ExecutionError, "agent smoke workspace is unavailable"
         end
 
-        # P13-P: compile the minimal scheduler graph over a SQLite adapter so
-        # the ScheduleStore shares the real durable request inbox machinery.
         def definition_graph(adapter)
           unless @scheduler_graph_factory.respond_to?(:call)
             raise ExecutionError, "agent smoke scheduler graph adapter is missing"
@@ -1194,12 +1170,6 @@ module Tamoz
           @scheduler_graph_factory.call(adapter:)
         end
 
-        # P10 §10.3 case 16. The session compiles the real catalog from the SDK
-        # test server, plans `mcp:test-server/set_answer` through the ordinary
-        # review + approval path, and executes it through the effect journal; the
-        # configured check then passes. The oracle additionally proves the epoch
-        # stop, the elicitation interrupt, admission, and teardown — all against
-        # the same real server on the real wire.
         MCP_BASE_ENV_ALLOWLIST = %w[
           PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
         ].freeze
@@ -1359,10 +1329,6 @@ module Tamoz
            *([answer_file] if answer_file)]
         end
 
-        # The caller's taxonomy mapping (P10 §6 onto the merged D-7 classes):
-        # repairable MCP rows become the agent's repairable ToolArgumentError;
-        # protocol, transport, and unknown-effect rows stay terminal so the
-        # planner never iterates on a corrupt or ambiguous server.
         def mcp_governed_executor(supervisor:, snapshot:)
           lambda do |_context, descriptor, arguments|
             outcome = Tamoz::Mcp::Invocation.call(
@@ -1480,9 +1446,6 @@ module Tamoz
           end
         end
 
-        # §7 on the real wire: `needs_input` yields the durable interrupt
-        # descriptor bound to the originating call, never an auto-filled answer,
-        # and a headless re-drive denies with a typed value.
         def mcp_elicitation_proof(config, snapshot)
           entry = snapshot.entries.find { |candidate| candidate.name == "needs_input" }
           descriptor = Tamoz::Mcp::Invocation.descriptor_for(entry, snapshot: snapshot)
@@ -1511,10 +1474,6 @@ module Tamoz
           end
         end
 
-        # A credential-shaped env name in the allowlist is refused at admission
-        # (invariant 24 / P8-E rule), and the config actually used for the session
-        # carries no credential-shaped name, so nothing beyond the allowlist can
-        # reach the child.
         def mcp_credential_admission_proof(config, answer_file)
           rejected = begin
             Tamoz::Mcp::ServerConfig.new(
@@ -1534,16 +1493,6 @@ module Tamoz
               Tamoz::Mcp::ServerConfig.credential_env_name?(name)
             end
         end
-
-        # --- P17 case 18: agent.websearch-governed ----------------------------
-        #
-        # The governed websearch capability demonstrated through an injected
-        # server adapter, which
-        # is SDK-built, stdio-only, and contains NO resolver and NO dialer — so
-        # it cannot exhibit resolution failures, and the per-hop SSRF suite (W3)
-        # runs against the REAL adapter's units in test/ instead (P17 §2). The
-        # adapter mirrors the operator gate: without the grant +
-        # egress declaration the search is refused typed.
 
         def websearch_egress_declaration
           websearch_input(:egress)
@@ -1680,11 +1629,6 @@ module Tamoz
                 path: File.join(root, "sessions", "#{thread_id}.sqlite3")
               )
               begin
-                # The search result carries the injection payload and the model
-                # FOLLOWS it: it names `shell` (introduced only by the result)
-                # and claims pre-granted approval. Structural review refuses the
-                # step; the clean plan then passes review + approval (W5 /
-                # P17-13 literal assertions in the oracle).
                 model = scripted_model(
                   plans: [
                     plan(read_step("note.txt")),
@@ -1769,10 +1713,6 @@ module Tamoz
           end
         end
 
-        # The egress-bearing trusted profile the W8 session runs under. The
-        # egress section joins the authority snapshot and the session pins its
-        # canonical form as `egress_pin` (P17 correction 5); the case's oracle
-        # proves both.
         def install_websearch_profile(workspace:, config_home:, egress:, catalog_digest:)
           document = {
             "profile" => {
@@ -1805,10 +1745,6 @@ module Tamoz
           Tamoz::Agent::Profile.preview(path)
         end
 
-        # The injected websearch server in CI (P17 §2): stdio-only,
-        # deterministic, no resolver. The egress declaration's budgets map onto
-        # ServerConfig::Budgets (P17-06 one-vocabulary rule) and the operator
-        # grant + declaration reach the child through the env allowlist.
         def build_websearch_config(root:, egress:, answer_file: nil)
           budgets = Tamoz::Mcp::Websearch.egress_budgets(egress)
           Tamoz::Mcp::ServerConfig.new(
@@ -1822,13 +1758,6 @@ module Tamoz
           )
         end
 
-        # The caller's taxonomy mapping for the websearch capability (P10 §6
-        # onto the merged D-7 classes), extended with P17's egress behaviors:
-        # a truncated response is a BUDGET BREACH that records on the egress
-        # circuit (both open conditions, correction 7), and result content is
-        # credential-sanitized before it can reach state, the journal, or a
-        # prompt (invariant 24 / P17-A3). Attribution is explicit so the
-        # session observation self-identifies the remote source.
         def websearch_executor(supervisor:, snapshot:)
           lambda do |_context, descriptor, arguments|
             outcome = Tamoz::Mcp::Invocation.call(
@@ -1948,13 +1877,6 @@ module Tamoz
           }
         end
 
-        # W5 / P17-13 literal: the injected tool name never appears in the
-        # surface; every executed step binds the approved-plan digest; no
-        # approval was fabricated (exactly one, for the search step); no
-        # `tool_started` outside the allowed list (the only websearch effect is
-        # the search receipt); the terminal outcome is honest. The injection
-        # payload stays visible IN the result — that is the point: it grants
-        # nothing, exactly like the P9 skill case.
         def websearch_injection_proof(surface:, search_output:, approvals:, accepted:, intents:, receipts:)
           return false if surface.include?("shell")
           return false unless search_output.include?("shell")
@@ -1979,9 +1901,6 @@ module Tamoz
           receipts.none? { |entry| entry.fetch("operation").include?("shell") }
         end
 
-        # P17-A3 / W6: a search whose result carries a credential-shaped line
-        # is stripped at the executor (never rendered, never fillable) and the
-        # credential VALUE reaches no sink — session record, journal, streams.
         def websearch_credential_proof(root:, thread:, workspace:, config_home:)
           saved = ENV.to_h.slice(*websearch_input(:flags))
           egress = websearch_egress_declaration
@@ -2066,8 +1985,6 @@ module Tamoz
           end
         end
 
-        # W7 (budget condition, DR-2 D1 — the non-consecutive case): ONE
-        # oversize response opens the egress circuit.
         def websearch_budget_circuit_proof(config, snapshot, egress)
           saved = ENV.to_h.slice(*websearch_input(:flags))
           ENV[websearch_env(:grant)] = "1"
@@ -2106,8 +2023,6 @@ module Tamoz
           end
         end
 
-        # DR-2 D4 / W7: an unauthorized or self-reset is refused (typed policy
-        # violation); time alone never resets.
         def websearch_reset_refusal_proof(circuit)
           refused = begin
             circuit.reset(evidence: {"authority" => "websearch", "actor" => "capability"})
@@ -2123,8 +2038,6 @@ module Tamoz
           end
         end
 
-        # DR-2 §5 egress row: reset succeeds ONLY with the operator command
-        # evidence and records it.
         def websearch_reset_authority_proof(circuit)
           evidence = {
             "authority" => "owner",
@@ -2149,14 +2062,6 @@ module Tamoz
           true
         end
 
-        # P11 case 19: the memory layer's attributable value, proven
-        # mechanically. A seeded Experience record is recalled through the REAL
-        # production memory stack (SQLite Store + MemoryStore + the
-        # SQL-filtered retrieval) and injected into the decisive turn; the
-        # oracle requires BOTH the `:memory_recalled` trace mark AND the
-        # recalled content in the effective prompt (mark AND injection, never
-        # mark alone), the run completes with zero safety cost, and the
-        # sensitive/unauthorized counters stay zero.
         def run_memory_attributable_recall(case_artifact, definition)
           require "tamoz/sqlite"
           require "tamoz/agent"
@@ -2215,16 +2120,6 @@ module Tamoz
           end
         end
 
-        # P12 plan §13 — the mandatory `agent.self-healing-*` scorecard case.
-        # The rule ships observation/shadow-only (the plan explicitly allows the
-        # observation path when active evidence is absent, and the active claim
-        # is disclosed as absent here): the case runs the REAL remediation
-        # protocol (`Healing::Remediation.run`) against a sandboxed fault through
-        # the REAL durable effect journal, and the REAL durable circuit
-        # (`Tamoz::SQLite::CircuitStore`, DR-2). The oracle scores the outcome
-        # state, the never-mutate refusal, the circuit record across a store
-        # restart, the reset refusals, the rule-immutability refusal, and the
-        # session pin. No model is involved — the protocol is deterministic.
         def run_self_healing_observation(case_artifact, definition)
           require "tamoz/sqlite"
           require "tamoz/agent"
@@ -2358,8 +2253,6 @@ module Tamoz
               )
               proofs["circuit_closed_with_authority"] = !restarted.open? && closed == :closed
 
-              # (4) The session pin: `healing.pin_for` over the rule set is a
-              # deterministic, frozen contract (pre-P12 sessions resolve to {}).
               pin = healing.pin_for([rule])
               proofs["session_pin_present"] =
                 pin == {rule.rule_id => "#{rule.version}:#{rule.contract_digest}"}
@@ -2387,14 +2280,6 @@ module Tamoz
           end
         end
 
-        # P13-P/C8 — the mandatory `agent.schedule-materialization` case. The
-        # recurring READ-ONLY scorecard summary materializes into the ordinary
-        # durable request inbox through the REAL SQLite ScheduleStore: exactly
-        # one logical occurrence per cadence, deterministic request id dedup
-        # across a repeated poll AND a restart (invariant 38), claim-time grant
-        # intersection (invariant 40) refusing a revoked grant, and the
-        # delivery/execution status separation. Model-free — the oracle scores
-        # the durable occurrence/request state directly.
         def run_schedule_materialization(case_artifact, definition)
           require "tamoz/sqlite"
           require "tamoz/scheduler"
@@ -2503,11 +2388,6 @@ module Tamoz
           end
         end
 
-        # DR-3 seam: the shared cell runner. The scorecard path passes no
-        # `store:` and is byte-identical to the pre-DR-3 behavior; the memory
-        # treatment profile passes a per-cell store + retrieval config and the
-        # model is wrapped in a `MemoryEnvelope` that emits `:memory_recalled`
-        # events and snapshots each turn into `memory_capture` (C3/C4).
         def execute(
           case_artifact,
           root:,
@@ -2555,14 +2435,8 @@ module Tamoz
             result = runtime.run(task) { |event| events << event }
           rescue Tamoz::Agent::PlanRejectedError
             terminal = "plan_rejected"
-          # P16: the D-7 taxonomy lives in tamoz-core. `Tamoz::Agent::ToolError` is a
-          # constant alias of `Tamoz::Core::ToolError`, so naming both spellings here
-          # keeps the terminal classification explicit if the alias ever drifts.
           rescue Tamoz::Agent::ToolError, Tamoz::Core::ToolError
             terminal = "tool_error"
-          # P0-D: ProtocolError re-parented from Agent::Error to a sibling of it
-          # (`Tamoz::Error`); name both spellings so a leaking parse failure still
-          # classifies as "agent_error" rather than "unexpected_error".
           rescue Tamoz::Agent::ProtocolError, Tamoz::Core::ProtocolError
             terminal = "agent_error"
           rescue Tamoz::Agent::Error
@@ -2660,9 +2534,6 @@ module Tamoz
             "before" => "def self.answer = #{from}",
             "after" => "def self.answer = #{to}"
           }
-          # `digest: nil` omits `expected_sha256` entirely (D-8 Fix A): the corpus
-          # then exercises the absent-digest resolution path. A present digest keeps
-          # the step byte-identical to the pre-D-8 corpus.
           arguments["expected_sha256"] = digest unless digest.nil?
           plan(
             step(

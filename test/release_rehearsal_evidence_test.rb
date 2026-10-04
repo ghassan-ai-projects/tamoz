@@ -2,12 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-H — the committed rehearsal evidence must stay honest.
-#
-# A rehearsal log is the kind of artifact that rots quietly: it can record a
-# failure, or a commit nobody can find, or a toolchain nobody pinned, and still
-# sit in the repository looking like proof. These assertions are what make it
-# proof rather than decoration.
 class ReleaseRehearsalEvidenceTest < Minitest::Test
   REPORT_PATH = ROOT.join("docs", "release-rehearsal.json")
   MARKDOWN_PATH = ROOT.join("docs", "RELEASE_REHEARSAL.md")
@@ -60,12 +54,6 @@ class ReleaseRehearsalEvidenceTest < Minitest::Test
     assert_equal toolchain.fetch("lockfile_bundler"), toolchain.fetch("bundler")
   end
 
-  # Every step the release plan §10 names must be one the SCRIPT performs — so a
-  # rehearsal cannot silently stop covering the isolated gem install. This is
-  # asserted against the script's source, not against the committed evidence,
-  # because evidence certifies the commit it ran at and cannot be expected to
-  # cover a step added afterwards. Closing that window is the P15-I gate's job:
-  # the owner decision requires a rehearsal AT the candidate commit.
   REQUIRED_STEPS = %w[
     provisioning clean-clone bundle-install gate-lc-c gate-lc-utf8
     gate-locale-agreement scorecard packaged-gem-isolation durable-kill-resume
@@ -91,9 +79,6 @@ class ReleaseRehearsalEvidenceTest < Minitest::Test
     assert_equal recorded.uniq, recorded, "a step was recorded twice"
   end
 
-  # …and the gap between "what the evidence covered" and "what the script now
-  # does" is reported rather than hidden, so the P15-I gate knows whether a
-  # fresh rehearsal is owed.
   def test_steps_added_since_the_recorded_rehearsal_are_visible
     performed = declared_steps
     recorded = report.fetch("steps").map { |step| step.fetch("step") }
@@ -108,8 +93,6 @@ class ReleaseRehearsalEvidenceTest < Minitest::Test
     refute_nil added
   end
 
-  # Both locales must have produced IDENTICAL totals: a locale-dependent gate is
-  # the defect class this project opened with (D-1).
   def test_both_locales_agree
     totals = report.fetch("gate_totals")
 

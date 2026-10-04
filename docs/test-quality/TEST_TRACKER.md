@@ -22,6 +22,7 @@ Needs review is deliberately separate from a confirmed defect.
 | [test/agent_acceptance_workflow_test.rb](../../test/agent_acceptance_workflow_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_approval_boot_test.rb](../../test/agent_approval_boot_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_budget_test.rb](../../test/agent_budget_test.rb) | needs review | Static inventory only. | Not verified individually. |
+| [test/agent_capability_delegation_test.rb](../../test/agent_capability_delegation_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_change_evaluation_test.rb](../../test/agent_change_evaluation_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_child_task_runtime_test.rb](../../test/agent_child_task_runtime_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_child_task_test.rb](../../test/agent_child_task_test.rb) | needs review | Static inventory only. | Not verified individually. |
@@ -48,8 +49,6 @@ Needs review is deliberately separate from a confirmed defect.
 | [test/agent_model_receipt_test.rb](../../test/agent_model_receipt_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_non_ascii_session_test.rb](../../test/agent_non_ascii_session_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_outbox_delivery_sink_test.rb](../../test/agent_outbox_delivery_sink_test.rb) | needs review | Static inventory only. | Not verified individually. |
-| [test/agent_phase3_context_lifecycle_test.rb](../../test/agent_phase3_context_lifecycle_test.rb) | needs review | Static inventory only. | Not verified individually. |
-| [test/agent_phase4_capability_test.rb](../../test/agent_phase4_capability_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_probe_catalog_test.rb](../../test/agent_probe_catalog_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_probe_integration_test.rb](../../test/agent_probe_integration_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_probe_source_test.rb](../../test/agent_probe_source_test.rb) | needs review | Static inventory only. | Not verified individually. |
@@ -69,6 +68,7 @@ Needs review is deliberately separate from a confirmed defect.
 | [test/agent_session_effect_test.rb](../../test/agent_session_effect_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_session_kill_matrix_test.rb](../../test/agent_session_kill_matrix_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_session_operations_test.rb](../../test/agent_session_operations_test.rb) | needs review | Static inventory only. | Not verified individually. |
+| [test/agent_session_planning_context_test.rb](../../test/agent_session_planning_context_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_session_records_test.rb](../../test/agent_session_records_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_session_status_projection_test.rb](../../test/agent_session_status_projection_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/agent_session_test.rb](../../test/agent_session_test.rb) | needs review | Static inventory only. | Not verified individually. |
@@ -111,6 +111,7 @@ Needs review is deliberately separate from a confirmed defect.
 | [test/benchmark_holdout_test.rb](../../test/benchmark_holdout_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/benchmark_protocol_test.rb](../../test/benchmark_protocol_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/benchmark_report_test.rb](../../test/benchmark_report_test.rb) | needs review | Static inventory only. | Not verified individually. |
+| [test/calibration_rollout_test.rb](../../test/calibration_rollout_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/callback_ack_crash_test.rb](../../test/callback_ack_crash_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/cancellation_visibility_test.rb](../../test/cancellation_visibility_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/canonical_cross_surface_composition_test.rb](../../test/canonical_cross_surface_composition_test.rb) | needs review | Static inventory only. | Not verified individually. |
@@ -242,8 +243,6 @@ Needs review is deliberately separate from a confirmed defect.
 | [test/openclaw_mission_runner_test.rb](../../test/openclaw_mission_runner_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/openclaw_scenario_corpus_test.rb](../../test/openclaw_scenario_corpus_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/otel_test.rb](../../test/otel_test.rb) | needs review | Static inventory only. | Not verified individually. |
-| [test/p16_tools_gem_test.rb](../../test/p16_tools_gem_test.rb) | needs review | Static inventory only. | Not verified individually. |
-| [test/p8_rollout_test.rb](../../test/p8_rollout_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/packaging_test.rb](../../test/packaging_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/profile_boundary_test.rb](../../test/profile_boundary_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/public_api_test.rb](../../test/public_api_test.rb) | needs review | Static inventory only. | Not verified individually. |
@@ -353,6 +352,7 @@ Needs review is deliberately separate from a confirmed defect.
 | [test/thread_barrier_test.rb](../../test/thread_barrier_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/toolbox_staging_reaper_test.rb](../../test/toolbox_staging_reaper_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/tools_coding_surface_test.rb](../../test/tools_coding_surface_test.rb) | needs review | Static inventory only. | Not verified individually. |
+| [test/tools_gem_test.rb](../../test/tools_gem_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/websearch_adapter_test.rb](../../test/websearch_adapter_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/websearch_circuit_test.rb](../../test/websearch_circuit_test.rb) | needs review | Static inventory only. | Not verified individually. |
 | [test/websearch_connector_contract_test.rb](../../test/websearch_connector_contract_test.rb) | needs review | Static inventory only. | Not verified individually. |

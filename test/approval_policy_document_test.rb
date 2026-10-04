@@ -5,7 +5,6 @@ require_relative 'support/approval_case'
 require 'tempfile'
 require 'yaml'
 
-# Approval redesign phase 2 — policy data loader/validator.
 class ApprovalPolicyDocumentTest < Minitest::Test
   include ApprovalCase
 

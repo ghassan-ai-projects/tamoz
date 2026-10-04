@@ -3,11 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/comms_cli_fixture'
 
-# Slice I (COMMS_TELEGRAM_PLAN §3) — the pairing and recovery operator
-# surface (COMMS_DESIGN §7/§14): `tamoz comms pair list|approve|revoke`
-# (approval consumes the challenge and writes the binding in one step) and
-# `tamoz comms delivery resolve` (a genuinely ambiguous send is resolved by
-# the operator, never retried blindly).
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:disable Metrics/BlockLength, Metrics/CyclomaticComplexity
 # rubocop:disable Lint/UnusedMethodArgument, Metrics/ParameterLists

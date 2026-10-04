@@ -2,8 +2,6 @@
 
 require_relative "test_helper"
 
-# P6-C / P6-D2: the three-valued reconciliation of a filesystem effect and the
-# refusal to repeat a check or provider call whose outcome is unknown.
 class AgentSessionEffectTest < Minitest::Test
   ToolDispatchConfiguration = Data.define(
     :model, :model_call_safety, :profile, :toolbox, :mcp, :capabilities

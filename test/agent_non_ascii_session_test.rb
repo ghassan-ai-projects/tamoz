@@ -3,21 +3,6 @@
 require_relative "test_helper"
 require "digest"
 
-# P15-F (ledger gap 11) — the corpus can see non-ASCII content.
-#
-# D-10 crashed EVERY real durable session on any non-ASCII model reply and was
-# invisible to 1122 green tests, because every scripted case and every SQLite
-# suite used ASCII fixtures: the canonicality comparison was only ever exercised
-# on its passing branch. Round 28 fixed the six comparison sites and added one
-# unit-level regression test on the effect journal. This is the missing half —
-# the same bytes driven through the WHOLE durable path a real session takes:
-#
-#   model reply -> checkpoint -> resume -> effect intent -> journal receipt ->
-#   workspace bytes -> check receipt -> verification -> session view.
-#
-# Every payload here is chosen to break a different assumption: an em dash
-# (multi-byte, not ASCII, common in real model prose), a curly quote, an
-# accented Latin letter, an emoji outside the BMP, and a CJK ideograph.
 class AgentNonAsciiSessionTest < Minitest::Test
   # Deliberately not a constant string in one encoding: each of these has bitten
   # a real system somewhere.
@@ -40,10 +25,6 @@ class AgentNonAsciiSessionTest < Minitest::Test
     end
   end
 
-  # The D-10 crash path exactly: a non-ASCII model reply must survive the
-  # durable round trip. Before the fix this raised
-  # `CheckpointCorruptionError: … payload is not canonical` against bytes that
-  # were never corrupted.
   def test_a_non_ascii_model_reply_survives_the_durable_round_trip
     with_workspace do |root, adapter|
       File.write(File.join(root, "note.txt"), "#{ACCENT}\n", encoding: Encoding::UTF_8)
@@ -75,9 +56,6 @@ class AgentNonAsciiSessionTest < Minitest::Test
     end
   end
 
-  # A fresh Session over the same database — the ordinary resume path — reads
-  # the same bytes. This is the seam D-10 actually died at: the decode, not the
-  # encode.
   def test_a_non_ascii_thread_reopens_from_a_fresh_session
     Dir.mktmpdir("tamoz-nonascii-resume") do |directory|
       root = File.join(directory, "workspace")
@@ -158,9 +136,6 @@ class AgentNonAsciiSessionTest < Minitest::Test
       refute_empty view.effect_receipts
       assert_equal ["succeeded"], view.effect_receipts.map { |r| r.fetch("status") }.uniq
 
-      # The observations are the durable, model-visible text: they pass through
-      # the checkpoint codec, which is exactly where D-10 forged a corruption
-      # error. The check's non-ASCII stdout must come back byte-identical.
       outputs = view.state.fetch(:observations).filter_map { |record| record["output"] }
 
       refute_empty outputs
@@ -229,31 +204,6 @@ class AgentNonAsciiSessionTest < Minitest::Test
     end
   end
 
-  # The canonicality comparison is a defect CLASS, not one bug: D-10 lived at
-  # six sites at once, and fixing only the crashing one would have moved the
-  # crash. This pins the whole set, so a NEW comparison cannot be added without
-  # someone deciding whether the corpus can see it.
-  #
-  # Coverage measured by reverting each site's `.b` comparison and re-running
-  # this file:
-  #
-  #   effect_record_reader#decode_receipt   COVERED (the D-10 crash site)
-  #   checkpoint_store#decode_request        COVERED (a non-ASCII task payload)
-  #   store#get                              COVERED (application store values)
-  #   checkpoint_values#load_value           COVERED (durable state values)
-  #   checkpoint_values#verify_canonical_value_bytes shadowed — `load_value` performs the
-  #     identical check first, so this one can never be the site that fires
-  #   checkpoint_wire#canonical_state_value  unreachable — it guards a request's
-  #     `response` and `terminal_error`, whose vocabularies are ASCII by
-  #     construction (`{"graph_status" => …}`, the typed DR-4 payloads)
-  #   wire#decode_namespace                  unreachable — namespace parts are
-  #     component ids; non-ASCII is refused before this comparison
-  #   openclaw_durable_cli_adapter#decode_journal_result  COVERED (an episode
-  #     result carrying the non-ASCII answer is decoded back through the
-  #     adapter's journal reader)
-  #
-  # The last four are defence in depth. They are named here so the boundary is
-  # a recorded decision rather than an accident.
   CANONICALITY_SITES = {
     "tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb" => 1,
     "tamoz-graph/lib/tamoz/graph/checkpoint_values.rb" => 2,
@@ -274,13 +224,9 @@ class AgentNonAsciiSessionTest < Minitest::Test
 
     assert_equal CANONICALITY_SITES, observed,
                  "a canonicality comparison was added or moved: decide whether a " \
-                 "non-ASCII payload can reach it, then update this map and the " \
-                 "coverage note above"
+                 "non-ASCII payload can reach it, then update this map"
   end
 
-  # Digest stability: the same non-ASCII value must digest identically however
-  # it arrived. A comparison that ignored encoding (D-10's shape) or a
-  # normalization that rewrote the bytes would break exactly here.
   def test_non_ascii_record_digests_are_byte_stable
     utf8 = ANSWER.dup.force_encoding(Encoding::UTF_8)
     from_bytes = ANSWER.b.force_encoding(Encoding::UTF_8)

@@ -8,10 +8,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# P2 exit gates 3-6: the reason ↔ tool loop and the one-shot repair as GRAPH
-# branches (bounded by Limits#max_steps), journaled unsafe tool effects, and
-# budget enforcement from receipts. Fixture-labeled throughout (B8: these are
-# plumbing tests, never evidence of reasoning).
 class StreamEpisodeLoopTest < Minitest::Test
   Stream = Tamoz::Stream
 

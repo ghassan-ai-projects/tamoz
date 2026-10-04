@@ -22,10 +22,7 @@ class ToolsCodingSurfaceTest < Minitest::Test
     end
   end
 
-  # F7: the model's picture of the new file is the old read plus this diff, so the diff must carry
-  # enough surrounding lines to place the change. DSH's card uses three (DIFF_CONTEXT = 3).
   # rubocop:disable Minitest/MultipleAssertions -- one property (the hunk header, the change and
-  # the three context lines either side) observed in one place.
   def test_render_diff_carries_three_context_lines_either_side
     with_workspace do |toolbox, root|
       file = File.join(root, 'lib/context.rb')
@@ -45,8 +42,6 @@ class ToolsCodingSurfaceTest < Minitest::Test
   end
   # rubocop:enable Minitest/MultipleAssertions
 
-  # F2: a ranged read is a window under the documented byte budget, not the whole-file limit, and
-  # it says where to continue instead of silently truncating.
   def test_a_ranged_read_stops_at_the_read_budget_and_says_where_to_continue
     with_workspace do |toolbox, root|
       file = File.join(root, 'lib/wide.rb')

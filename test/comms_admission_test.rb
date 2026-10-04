@@ -2,11 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice D (COMMS_TELEGRAM_PLAN §3) — private-chat admission (design §5): the
-# pure decision function over envelope + surface + binding + route, plus the
-# hashed pairing challenge. Every disposition is deterministic; callbacks are
-# decisions (v1 deny-only), never requests; group chats and unknown commands
-# never become model input.
 # rubocop:disable Minitest/MultipleAssertions
 class CommsAdmissionTest < Minitest::Test
   Comms = Tamoz::Comms
@@ -96,9 +91,6 @@ class CommsAdmissionTest < Minitest::Test
     assert_equal :unbound, decision.reason
   end
 
-  # The allowlist is the admission (design §7): a listed id is admitted
-  # WITHOUT a pairing binding — the binding records operator pairing, the
-  # descriptor list records operator configuration.
   def test_an_allowlisted_sender_is_admitted_without_a_binding
     decision = Comms::Admission.decide(envelope, surface: surface, binding: nil, conversation: nil)
 

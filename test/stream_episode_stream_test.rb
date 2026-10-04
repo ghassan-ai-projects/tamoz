@@ -5,10 +5,6 @@ require "tamoz/stream/episode_worker"
 require "support/local_model_endpoint"
 require "support/episode_composition"
 
-# P1/§8.2: the wire projection boundary. The EpisodeStreamAdapter is the ONLY
-# crossing for graph events; model events are produced from journal receipts
-# through the trusted channel (emit_stream_part), never from graph nodes. The
-# budget state machine is gone (receipts-based budgets return in P2).
 class StreamEpisodeStreamTest < Minitest::Test
   Stream = Tamoz::Stream
 

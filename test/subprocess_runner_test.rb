@@ -245,9 +245,6 @@ class SubprocessRunnerTest < Minitest::Test
     assert_equal "timeout", result.termination_reason
     assert_equal "kill", result.termination
     assert_equal "KILL", result.term_signal
-    # The poll count is timing-dependent (0 < polls <= 75), so the assertions
-    # live on the AGGREGATE, never inside the poll callback: identical runs
-    # produce identical assertion totals (GAUNTLET_PROGRESS §5.6).
     assert_operator polls, :>, 0
     assert_operator polls, :<=, 75
     assert_equal polls, observations.length

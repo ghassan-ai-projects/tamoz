@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# Phase 1 wave A (plan 02, work item 1) — the closed external lifecycle
-# vocabulary: frozen state sets, the typed reason registry, exact translation
-# tables that fail closed on unknown input, and the short non-authorizing
-# request reference shared verbatim by the store's row shape.
 # rubocop:disable Minitest/MultipleAssertions
 class CommsLifecycleTest < Minitest::Test
   Lifecycle = Tamoz::Comms::Lifecycle

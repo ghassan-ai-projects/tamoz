@@ -3,8 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/approval_case'
 
-# Phase 7 flow seams at the engine and prompt boundaries: session teardown
-# deleting remembered grants, and the interactive scope follow-up contract.
 class ApprovalFlowTest < Minitest::Test
   include ApprovalCase
 

@@ -6,14 +6,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# THE BAR (docs/PLAN_TAMOZ_STREAM_BUILD.md §7): a supervised DIAGNOSE episode
-# runs end to end on the Tamoz side. A stub stream client (the runtime's role,
-# per the vendored proto) dials the Ruby EpisodeWorker over gRPC, handshakes,
-# sends an EpisodeRequest (snapshot+digest+model_policy+prompt+catalog), and
-# receives the complete in-order event stream: started (seq 1), model events
-# from receipts, a decision.proposed, exactly one terminal PRODUCED. P1: the
-# served graph is THE fixed graph, and the model call hits a real HTTP
-# fixture endpoint (labeled fixture).
 class StreamEpisodeEndToEndTest < Minitest::Test
   Stream = Tamoz::Stream
 
@@ -93,10 +85,6 @@ class StreamEpisodeEndToEndTest < Minitest::Test
 
   def raw_digest_episode_request(suffix)
     request = episode_request(suffix)
-    # P1: the fixed graph VERIFIES the prompt digest against the frame, so the
-    # raw override must carry the ACTUAL prompt's digest (raw form). P3: the
-    # other manifest-named digests are verified against their bytes at
-    # retention (fail-closed), so they must be the REAL digests too.
     request.prompt_sha256 = raw_digest(
       EpisodeComposition.prompt_sha256(request.prompt)
     )
@@ -198,9 +186,6 @@ class StreamEpisodeEndToEndTest < Minitest::Test
                  Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
 
     store = self.class.rpc.fetch(:artifact_store)
-    # P3: retention is keyed on the VERIFIED content digest (sha256 of the
-    # exact bytes — the durable store's rehash-on-admission rule). The
-    # manifest's DOMAIN digests stay the wire identity.
     assert_equal JSON.generate([{"name" => "compressor.read"}]),
                  store.resolve(raw_sha256(JSON.generate([{"name" => "compressor.read"}]))).fetch("bytes")
     assert_equal JSON.generate({"type" => "object"}),

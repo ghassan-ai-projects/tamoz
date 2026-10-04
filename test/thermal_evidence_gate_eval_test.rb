@@ -7,37 +7,6 @@ require 'support/local_model_endpoint'
 require 'support/episode_composition'
 require 'support/thermal_lab_domain'
 
-# An eval for what SHOULD be true of the physical loop's RECOMMENDATION layer,
-# independent of whether tamoz supports it yet.
-#
-# The property family: a supervisor must not RECOMMEND an actionable (R1+) intent
-# when the sensor evidence is not fit to act on — whatever the reason:
-#   * unusable quality  — disconnected / stale / contradictory / calibrating;
-#   * stale by age       — the reading is older than any reasonable freshness bound;
-#   * out of range       — the reading is physically implausible.
-# Acting on evidence like this is the canonical physical-safety failure, and
-# P5/M0 (`physical-evidence-gate`) name it as fail-closed behaviour.
-#
-# Each property drives the REAL tamoz decision graph with a naive model that
-# ignores the evidence problem and proposes bounded cooling. It is deliberately
-# INDEPENDENT: tamoz-only, no Go dispatcher — so it measures exactly what tamoz's
-# own recommendation layer guarantees, not what a downstream actuator might refuse.
-#
-# HOW IT REPORTS: each property asserts the CORRECT target — abstain on every
-# cell — and, while tamoz does not meet it, surfaces the shortfall as a PENDING
-# gap (a skip that prints the count) rather than a green that would encode the
-# wrong value. Background: `box_temp_quality` and the raw facts are read nowhere
-# in production code, so `DecisionBuilder` governs a proposal's RISK (from the
-# catalog) but never its EVIDENCE sufficiency. When tamoz closes a gap, that
-# property's target assertion passes green. Whether to add a recommendation-time
-# evidence gate (defence in depth) or accept the gaps is an owner decision the
-# eval does not make.
-#
-# The complementary guarantees tamoz DOES enforce at this layer — risk is the
-# catalog's and never escalated, at most one actionable intent, an out-of-catalog
-# operation fails closed, forged authority in facts is ignored — are asserted in
-# thermal_lab_decision_test and thermal_lab_adversarial_test; they are not
-# duplicated here.
 class ThermalEvidenceGateEvalTest < Minitest::Test
   Domain = ThermalLabDomain
   RISK_RANK = { 'R0' => 0, 'R1' => 1, 'R2' => 2, 'R3' => 3, 'R4' => 4 }.freeze

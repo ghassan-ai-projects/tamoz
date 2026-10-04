@@ -2,18 +2,6 @@
 
 require_relative "test_helper"
 
-# P13-E (plan §9, design §12) — the deterministic fake-clock suite. Every test
-# uses an injected `now` (the materialize_due clock parameter), never the wall
-# clock, so the run is byte-deterministic.
-#
-# The three behaviors that matter:
-# - 2–50 concurrent owners claiming the SAME schedule produce exactly one
-#   occurrence (the atomic transaction + deterministic request id are the
-#   serialization boundary, never a process-local mutex).
-# - A crash between claim and enqueue leaves NO partial state: the transaction
-#   rolls back atomically, and a retried materialization re-runs the same
-#   transaction and re-enqueues exactly once (invariant 38).
-# - Duplicate wakeups (a poll retried after a crash) add zero occurrences.
 class SQLiteScheduleDeterminismTest < Minitest::Test
   Scheduler = Tamoz::Scheduler
   PAYLOAD = "sha256:#{"a" * 64}"

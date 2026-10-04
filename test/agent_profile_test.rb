@@ -8,7 +8,6 @@ class AgentProfileTest < Minitest::Test
 
   def setup
     @dir = Dir.mktmpdir("tamoz-profile")
-    # Operator profiles live outside the project root (§3.1); fixtures honor that.
     @profiles_dir = Dir.mktmpdir("tamoz-profile-store")
   end
 
@@ -384,8 +383,6 @@ class AgentProfileTest < Minitest::Test
     assert_equal File.join(Profile.profiles_dir(env:), "my-profile.yaml"),
                  Profile.resolve_path(profile: "my-profile", env:)
   end
-
-  # --- P8-E §8.3 adversarial vectors ---------------------------------------------
 
   def write_raw(content, name: "raw.yaml", dir: @profiles_dir, mode: 0o600)
     path = File.join(dir, name)

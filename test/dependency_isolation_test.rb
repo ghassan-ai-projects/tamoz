@@ -71,8 +71,6 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
-  # P16: the tools gem must load core only — zero graph/sqlite/agent/evals/
-  # ruby_llm features, exactly the boundary the packaged install test also proves.
   def test_tools_loads_core_only_and_no_agent_graph_or_sqlite
     features = loaded_features_after("tamoz/tools")
 
@@ -86,11 +84,6 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
-  # P1: the kernel gem loads core + tools and nothing else. Kernel files
-  # install under lib/tamoz/agent/ just like the runtime gem's, so a bare
-  # "tamoz/agent" refute cannot work — allowlist exactly the union of the
-  # three gems' own trees (derived from their roots); any loaded feature
-  # outside the union is an upward or sideways edge.
   def test_kernel_loads_core_and_tools_only
     allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-skills", "tamoz-tools", "tamoz-agent-kernel")
     features = loaded_features_after("tamoz/agent_kernel")
@@ -216,10 +209,6 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
-  # Audit F2: the decision builder is the tamoz-stream injected-port boundary —
-  # it must load without tamoz-agent (the P4 edge, reintroduced by 747d350 and
-  # now homed in tamoz-core). This pins the no-edge property at the source
-  # level.
   def test_decision_builder_loads_core_only_and_no_agent_edge
     features = loaded_features_after("tamoz/stream/decision_builder")
 
@@ -366,7 +355,6 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
-  # DESIGN §11: only the session, the improvement tuner and the CLI may hold the research edge.
   def test_research_gemspec_declares_exactly_core
     spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-research").join("tamoz-research.gemspec").to_s)
 
@@ -387,11 +375,6 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
-  # Audit F2: the injected-port boundary at the PACKAGE level too — no
-  # production gemspec may depend on tamoz-agent except tamoz-agent's own
-  # dependents (agent, tools). The tamoz-stream gemspec must stay
-  # core/grpc/protobuf only. Evaluation packages are excluded because they are
-  # development/release companions, not production gems.
   def test_no_production_gemspec_depends_on_agent_except_agents_own_dependents
     allowed = %w[tamoz-agent tamoz-tools tamoz-agent-cli]
 

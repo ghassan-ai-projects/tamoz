@@ -214,8 +214,6 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
-  # A denial is a structured result fed back to the model; the turn continues
-  # (ADR §2.4) — and the denied effect never lands.
   def test_denied_approval_stops_before_any_filesystem_effect
     with_workspace do |root, adapter|
       target = File.join(root, "app.rb")

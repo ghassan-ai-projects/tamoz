@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# Approval redesign phase 5 — the durable homes behind the Tamoz::Approval
-# ports over a real SQLite database: rev-scoped grant lookup (stale rev never
-# matches), idempotent decision-log append, resolution replay, the single-row
-# active-policy record, receipt expiry, and migration 16→17 with its checksum.
 class SqliteApprovalStoresTest < Minitest::Test
   Approval = Tamoz::Approval
 

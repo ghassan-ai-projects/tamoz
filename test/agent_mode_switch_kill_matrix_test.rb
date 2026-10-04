@@ -5,10 +5,6 @@ require_relative 'support/autonomy_case'
 require 'delegate'
 require 'sqlite3'
 
-# Step 7B kill matrix (ADR §2.6): the mid-session switch deliberately breaks
-# in-flight rev stability, so its failure modes are pinned here. Hard zeros:
-# MS-4 (applied exactly once across restart; an in-flight step is never
-# re-decided) and MS-5 (never leaks to another session).
 class AgentModeSwitchKillMatrixTest < Minitest::Test
   include AutonomyCase
 
@@ -138,7 +134,6 @@ class AgentModeSwitchKillMatrixTest < Minitest::Test
       evidence_symbols: Tamoz::Comms::AuthorityEvidence.members
     ).policy_rev
   end
-
 
   def auto_rev = bundled_profile_rev('auto')
 

@@ -4,20 +4,6 @@ require_relative "test_helper"
 require_relative "support/session_plan"
 require "digest"
 
-# D-8 Fix A/B/C behavioural cases. See docs/D8_ACTION_PLAN_DIGEST_PLAN.md §3.
-#
-#   T2  absent digest resolves exactly once; the preview and the executed bytes are
-#       the same (both drivers);
-#   T3  placeholder arguments are rejected by structural review with the exact
-#       message, while legitimate `<`/`>` in patch text passes;
-#   T4  PlanRejectedError discloses a bounded summary of structural issues only;
-#   T5  Session driver: a mutation between approval and dispatch is refused by
-#       `verify_intent_before_state!` (ToolPolicyError), file byte-identical;
-#   T5R Runtime driver: a stale committed digest is refused fail closed by
-#       `prepare_patch`'s live equality check (ToolPolicyError — terminal, not a
-#       repairable argument value), file byte-identical;
-#   T8  repeated identical absent-digest plans stop on `repeated_action`;
-#   T9  create_file absent content digest resolves from `hexdigest(content)`.
 class AgentDigestResolutionTest < Minitest::Test
   include SessionPlan
 
@@ -40,7 +26,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T2: absent digest, single resolution, preview == execution (Runtime) -------
+  # --- Absent digest, single resolution, preview == execution (Runtime) -------------
 
   def test_runtime_resolves_absent_digest_once_and_binds_preview_to_execution
     Dir.mktmpdir("tamoz-digest-runtime") do |root|
@@ -115,7 +101,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T2: absent digest, single resolution (Session) ------------------------------
+  # --- Absent digest, single resolution (Session) -----------------------------------
 
   def test_session_resolves_absent_digest_once_and_executes_the_approved_bytes
     with_workspace do |root, adapter|
@@ -158,7 +144,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T3: scoped placeholder rejection + negative ---------------------------------
+  # --- Scoped placeholder rejection + negative --------------------------------------
 
   def test_placeholder_path_is_rejected_with_the_exact_structural_message
     Dir.mktmpdir("tamoz-digest-placeholder") do |root|
@@ -189,9 +175,6 @@ class AgentDigestResolutionTest < Minitest::Test
   def test_reference_phrase_path_is_rejected_by_structural_review
     Dir.mktmpdir("tamoz-digest-reference-path") do |root|
       File.write(File.join(root, "note.txt"), "content\n")
-      # A bare reference with no angle brackets (the F2 shape a real model emits)
-      # must still be rejected: the reference-phrase rule applies to `path` and
-      # digest-shaped arguments (the critic-hardened scope).
       model = scripted_model(
         plans: [
           plan_for("read_file", {"path" => "to be filled from search result"}, id: "inspect"),
@@ -246,11 +229,6 @@ class AgentDigestResolutionTest < Minitest::Test
   def test_reference_phrases_in_patch_text_and_queries_are_not_placeholders
     Dir.mktmpdir("tamoz-digest-phrase-negative") do |root|
       File.write(File.join(root, "doc.rb"), "from step 1\n")
-      # The D-8 critic hardening: cross-step reference phrases are legitimate
-      # text in patch `before`/`after` and in query/content values — only `path`
-      # and digest-shaped arguments can carry a placeholder reference. Without
-      # this, a real model patching "from step 1" -> "from step 2" is rejected
-      # with the placeholder message (the exact failure class D-8 exists to fix).
       model = scripted_model(
         plans: [
           # Discovery: a query legitimately containing the phrase must pass
@@ -290,7 +268,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T4: structural-only rejection disclosure ------------------------------------
+  # --- Structural-only rejection disclosure ------------------------------------------
 
   def test_structural_rejection_discloses_bounded_tamoz_issues_only
     Dir.mktmpdir("tamoz-disclose-structural") do |root|
@@ -409,7 +387,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T5: Session driver — mutation between approval and dispatch ----------------
+  # --- Session driver — mutation between approval and dispatch -----------------------
 
   def test_session_mutation_between_approval_and_dispatch_is_refused_fail_closed
     Dir.mktmpdir("tamoz-digest-session-mutate") do |directory|
@@ -467,7 +445,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T8: repeated identical absent-digest plans ----------------------------------
+  # --- Repeated identical absent-digest plans ----------------------------------------
 
   def test_repeated_identical_absent_digest_plans_stop_on_repeated_action
     Dir.mktmpdir("tamoz-digest-repeat") do |root|
@@ -494,7 +472,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T9: create_file absent content digest ---------------------------------------
+  # --- create_file absent content digest ---------------------------------------------
 
   def test_create_file_absent_digest_resolves_from_content_and_receipt_verifies
     Dir.mktmpdir("tamoz-digest-create") do |root|
@@ -662,8 +640,6 @@ class AgentDigestResolutionTest < Minitest::Test
     plan_for("read_file", {"path" => path}, id: "inspect")
   end
 
-  # An action plan whose apply_patch step carries NO `expected_sha256` — the shape a
-  # real model produces before a read executes (D-8 F1).
   def absent_action_plan
     {
       "goal" => "make Broken.answer equal 42",

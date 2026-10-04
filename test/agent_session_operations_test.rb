@@ -2,7 +2,6 @@
 
 require_relative "test_helper"
 
-# P6-F: operational durability of a real durable agent session.
 class AgentSessionOperationsTest < Minitest::Test
   class ScriptedModel
     attr_reader :calls

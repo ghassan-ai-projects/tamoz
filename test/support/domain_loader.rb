@@ -38,7 +38,11 @@ class DomainLoader
   # properties from JSON, compensation note/priority, policy, rate limit).
   def self.intent_entry(type:, risk:, compensation_map:, watch_preset:, watch_properties:, parameter_schemas: {})
     configured_schema = parameter_schemas.fetch(type, {})
-    writable = configured_schema.empty? ? (type == "install_watch_condition" ? [] : %w[hypothesis]) : configured_schema.keys
+    writable = if configured_schema.empty?
+                 type == "install_watch_condition" ? [] : %w[hypothesis]
+               else
+                 configured_schema.keys
+               end
     compensation_target = compensation_map.values.any? { |mapping| mapping.values.include?(type) }
     properties = {
       "entity_id" => {"type" => "string"},
@@ -98,7 +102,7 @@ class DomainLoader
   def intent_types = @data.fetch("intent_types")
   def benchmark_family = @data.fetch("benchmark_family", {})
 
-  # The curated tournament trial corpus (real-world sensor WP-T3): named
+  # The curated tournament trial corpus: named
   # scenarios with fact overrides and the human-oracle labels (truth_code,
   # abstain_expected). Ground-truth domain DATA, not machinery.
   def trials = @data.fetch("trials", [])

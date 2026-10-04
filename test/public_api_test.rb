@@ -2,10 +2,6 @@
 
 require_relative "test_helper"
 
-# P16 (correction 9): the documented inventory is a pinned HASH of package ->
-# { entry => options }. A `deprecated: true` option marks an entry that still
-# resolves (constant aliases) but lives in another package now. `docs/public-api.json`
-# is regenerated to match this exact shape.
 class PublicAPITest < Minitest::Test
   def test_documented_inventory_matches_loaded_public_surface
     inventory = read_json(ROOT.join("docs", "public-api.json")).fetch("packages")
@@ -476,9 +472,6 @@ class PublicAPITest < Minitest::Test
   end
 
   def test_package_versions_are_valid_and_begin_in_prerelease
-    # P15-G: every SHIPPED gem's version is pinned here. tamoz-scheduler and
-    # tamoz-stream ship in the release surface and were absent, so a version
-    # skew in either could not have been caught by this gate.
     versions = [
       Tamoz::Core::VERSION,
       Tamoz::ContextEngine::VERSION,
@@ -517,7 +510,7 @@ class PublicAPITest < Minitest::Test
     assert Gem::Version.new(versions.first).prerelease?
   end
 
-  def test_reference_application_manifest_identifies_the_bounded_repair_slice
+  def test_reference_application_manifest_identifies_the_bounded_repair_milestone
     manifest = read_json(ROOT.join("apps", "tamoz-agent", "app.json"))
 
     assert_equal "Tamoz Agent", manifest.fetch("name")

@@ -15,6 +15,17 @@ historical task codes and unrelated product comparisons. Keep exact production c
 CLI paths and wire values where they are the contract under test. Do not rename a public
 interface as part of cleaning its tests. No narrative class headers or numbered sections.
 
+The vocabulary rule is enforced mechanically: `TestSourceAudit.plan_vocabulary` fails the
+suite when a test comment cites a plan row (`P8`, `DR-5`, `A-13b`, `T2`, `slice 4`,
+`Phase 2`, `§`) or a review code. Kept deliberately: pinned benchmark scenario identities
+(`C1`–`C9`), the production milestone names in `test/m2_evidence_test.rb`, production
+artifact bytes and production error text (for example the kill-required message that
+contains `Phase 2`). The detector reads Prism comments only, so pinned bytes inside
+heredocs and string literals are out of its scope by design. Known false-positive
+surface: a bare `F1`/`F2` code is banned while the hyphenated metric spelling
+`macro-F1` is accepted, and `Q3`-style tokens are treated as review codes — spell out
+"quarter" or use the hyphenated metric form in a behavioral comment.
+
 ## Assertions and coverage
 
 Use `assert_equal expected, actual`, `assert_nil`, `assert_empty`, `assert_includes`,

@@ -6,11 +6,6 @@ require "tamoz/stream/episode_worker"
 require "support/aquaculture_domain"
 require "time"
 
-# T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4) + P4 (PHASE_P4_INTENT_AUTHORITY): the
-# typed Decision — decision-v1 shape, domain digest, and catalog-driven intent
-# selection. The model proposes; the catalog declares the risk, the parameter
-# schema, the presets, and the model-writable fields (B9/B10). Fixture data
-# throughout.
 class StreamDecisionBuilderTest < Minitest::Test
   Stream = Tamoz::Stream
   Catalog = Tamoz::Agent::IntentCatalog
@@ -300,9 +295,6 @@ class StreamDecisionBuilderTest < Minitest::Test
   end
 
   def test_a_compensation_target_must_be_a_catalog_member
-    # P6: the compensation mapping is part of the CATALOG's metadata — a
-    # target that is not a catalog member is refused AT CATALOG LOAD (a
-    # compensation can never bypass the catalog).
     tampered = AquacultureDomain::INTENT_CATALOG.map do |entry|
       entry["type"] == "create_maintenance_ticket" ?
         entry.merge("compensation" => {"withdraw" => "withdraw_ghost", "downgrade" => "downgrade_ghost"}) : entry
@@ -363,8 +355,6 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal valid_until, Time.iso8601(decision.fetch("intents").first.fetch("expires_at"))
   end
 
-  # F4 (coverage audit): the vendored decision-v1 schema is EXECUTED, not just
-  # matched by shape — a schema drift fails the builder test.
   def test_the_decision_conforms_to_the_vendored_decision_v1_schema
     decision, = build(
       primary_hypothesis: "bearing wear", confidence: 0.9,

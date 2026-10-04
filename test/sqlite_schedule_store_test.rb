@@ -2,15 +2,6 @@
 
 require_relative "test_helper"
 
-# P13-A (plan §4, SCHEDULER_DESIGN §11) — the durable ScheduleStore over
-# SQLite. The atomicity seam (C1/DC-4) is the core: `materialize_due` claims →
-# creates the occurrence → enqueues its request in ONE transaction, so a crash
-# at any point leaves old-or-complete-new state and a repeated delivery re-runs
-# the same transaction and dedups on the deterministic request id (invariant 38
-# duplicate-turn hard zero).
-#
-# Every proof is behavioral: real SQLite, real enqueue primitive, restart via a
-# fresh adapter over the same file.
 class SQLiteScheduleStoreTest < Minitest::Test
   Scheduler = Tamoz::Scheduler
   PAYLOAD = "sha256:#{"a" * 64}"
@@ -229,8 +220,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
     end
   end
 
-  # --- P13-B: misfire policies (design §6) ---------------------------------
-
   # Interval schedule with a 1h cadence, polled at now = anchor + 3h. The due
   # window is [a, a+1h, a+2h, a+3h]; the misfire policy picks what enqueues.
   def test_misfire_skip_delivers_only_the_latest_and_records_older_skipped
@@ -295,8 +284,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
       assert_equal 1, store.list_occurrences(schedule_id: "one-shot").length
     end
   end
-
-  # --- P13-B: overlap policies (design §7) ---------------------------------
 
   # forbid (default): a non-terminal occurrence blocks the next one.
   def test_overlap_forbid_skips_the_next_occurrence_while_one_is_in_flight
@@ -383,8 +370,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
     end
   end
 
-  # --- P13-C: claim-time grant intersection (invariant 40) -----------------
-
   def test_claim_time_grant_revocation_skips_the_schedule
     with_engine do |store, _adapter, _checkpoints, _path|
       anchor = 1_700_000_000
@@ -437,10 +422,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
     end
   end
 
-  # --- P13 critic fixes: covered range, grant history, allow cap, nil ---------
-
-  # latest misfire records EVERY covered instant (design §6), not just the
-  # latest.
   def test_latest_records_the_covered_range
     with_engine do |store, _adapter, _checkpoints, _path|
       anchor = 1_700_000_000
@@ -528,8 +509,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
     end
   end
 
-  # --- P13: typed execution lifecycle (plan §11 failure model) -------------
-
   def test_completion_requires_a_terminal_status_and_the_running_state
     with_engine do |store, _adapter, _checkpoints, _path|
       anchor = 1_700_000_000
@@ -565,12 +544,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
     end
   end
 
-  # --- P13 critic fixes: scan conflict isolation ----------------------------
-
-  # A schedule whose enqueue conflicts must not wedge the whole scan (plan §11).
-  # B's deterministic request id is pre-poisoned with byte-different content;
-  # the scan's enqueue for B raises, B is recorded as a conflict, and A still
-  # materializes.
   def test_scan_conflict_records_a_reason_and_continues
     with_engine do |store, _adapter, checkpoints, _path|
       anchor = 1_700_000_000

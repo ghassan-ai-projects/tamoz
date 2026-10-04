@@ -3,11 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/autonomy_case'
 
-# Phase 2 work item 6 (plan 03), the study's flagged-missing coverage: a
-# Telegram callback is acknowledged immediately after its durable admission
-# record and before any turn processing, and the prompt activation plus the
-# decision survive a worker crash boundary.
-#
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 class CallbackAckCrashTest < Minitest::Test
   include AutonomyCase

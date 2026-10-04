@@ -140,9 +140,6 @@ class GraphStreamTest < Minitest::Test
     )
     parts = []
 
-    # The invoke-thread-exists precondition (compiled.rb:470) is a stale-request
-    # condition (DR-4 C2): it raises StaleRequestError, still a CheckpointError with a
-    # safe message that never discloses the caller hint.
     error = assert_raises(Tamoz::StaleRequestError) do
       stream.each { |part| parts << part }
     end
