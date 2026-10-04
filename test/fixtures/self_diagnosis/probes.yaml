@@ -2,8 +2,9 @@ targets: {}
 probes:
   - name: probe_self_diagnose
     description: >-
-      Findings about this Tamoz runtime in the window: every rule that fired with its evidence rows
-      (operation, status, error class and code of each failure), and per-operation attempts, failures and latency.
+      Findings about this Tamoz runtime in the window, ordered most severe first: every rule that fired with its
+      evidence rows (operation, status, error class and code of each failure), and per-operation attempts,
+      failures, unknown outcomes and latency.
     backing: {server: tamoz-self, tool: diagnose}
     arguments: {from: "{window.from}", until: "{window.until}"}
   - name: probe_self_timeline

@@ -162,7 +162,7 @@ sources:
     targets: {}
     probes:
       - name: probe_self_diagnose
-        description: Findings about this Tamoz runtime in the window, with evidence rows and per-operation failure counts.
+        description: Findings about this Tamoz runtime in the window, ordered most severe first, with evidence rows and per-operation failure counts.
         backing: {server: tamoz-self, tool: diagnose}
         arguments: {from: "{window.from}", until: "{window.until}"}
       - name: probe_self_timeline

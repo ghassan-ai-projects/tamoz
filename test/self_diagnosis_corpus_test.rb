@@ -5,7 +5,7 @@ require_relative 'support/self_diagnosis_corpus'
 require 'tamoz/agent_cli'
 
 class SelfDiagnosisCorpusTest < Minitest::Test
-  PINNED_DIGEST = 'sha256:76fb8202a5857f3491befb9981cc5ea85ea204c97a15ee82f8a6bb7bc36e3c0e'
+  PINNED_DIGEST = 'sha256:c78502c0fe036771174ce4d2f28074e5986f794f56dc9c574f22dffffd39d0cb'
   MINUTE_MS = 60_000
 
   def test_the_corpus_is_data_and_its_digest_is_pinned

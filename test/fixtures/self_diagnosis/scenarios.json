@@ -263,7 +263,8 @@
             "class": "Tamoz::Agent::ToolError",
             "code": "not_found",
             "message": "optional file is absent"
-          }
+          },
+          "spread": true
         },
         {
           "kind": "effect",
@@ -296,7 +297,8 @@
             "class": "Tamoz::MCP::WebSearch::SearchError",
             "code": "no_results",
             "message": "the query matched nothing"
-          }
+          },
+          "spread": true
         },
         {
           "kind": "effect",

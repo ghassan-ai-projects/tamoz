@@ -17,8 +17,8 @@ module SelfDiagnosisCorpus
 
   def build(scenario, directory, noise: load.fetch('noise'))
     DurableRecordBuilder.open(File.join(directory, 'runtime.sqlite3')) do |builder|
-      execution = healthy_noise(builder, noise)
-      scenario.fetch('faults').each { |fault| inject(builder, directory, execution, fault) }
+      executions = healthy_noise(builder, noise)
+      scenario.fetch('faults').each { |fault| inject(builder, directory, executions, fault) }
     end
   end
 
@@ -28,18 +28,18 @@ module SelfDiagnosisCorpus
       noise.fetch('model_calls_per_turn').times { succeed(builder, turn, 'model.generate.plan') }
       noise.fetch('tool_calls_per_turn').times { succeed(builder, turn, 'tool.read_file') }
       builder.approval(verdict: 'ask', answer: 'approve', session: 'profile:default')
-      turn.execution_id
+      [turn.thread_id, turn.execution_id]
     end
-    executions.last
+    executions
   end
 
   def succeed(builder, turn, operation)
     builder.effect(thread: turn.thread_id, execution_id: turn.execution_id, operation:, outcome: :succeeded)
   end
 
-  def inject(builder, directory, execution, fault)
+  def inject(builder, directory, executions, fault)
     case fault.fetch('kind')
-    when 'effect' then inject_effects(builder, execution, fault)
+    when 'effect' then inject_effects(builder, executions, fault)
     when 'failed_turn' then fault.fetch('count').times { |index| builder.failed_turn(thread: "thread.failed.#{index}") }
     when 'approval' then fault.fetch('count').times { builder.approval(verdict: fault.fetch('verdict')) }
     when 'journal_event' then journal_events(directory, fault)
@@ -48,9 +48,11 @@ module SelfDiagnosisCorpus
     end
   end
 
-  def inject_effects(builder, execution, fault)
-    fault.fetch('count').times do
-      builder.effect(thread: 'thread.noise.5', execution_id: execution, operation: fault.fetch('operation'),
+  def inject_effects(builder, executions, fault)
+    targets = fault['spread'] ? executions.first(executions.length - 1) : [executions.last]
+    fault.fetch('count').times do |index|
+      thread, execution = targets[index % targets.length]
+      builder.effect(thread:, execution_id: execution, operation: fault.fetch('operation'),
                      outcome: fault.fetch('outcome').to_sym, error: fault['error'])
     end
   end
