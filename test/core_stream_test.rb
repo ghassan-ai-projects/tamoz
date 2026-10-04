@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/thread_readiness'
 
 class CoreStreamTest < Minitest::Test
+  include ThreadReadiness
+
   class ManualClock
     def initialize
       @value = 0.0
@@ -222,14 +225,5 @@ class CoreStreamTest < Minitest::Test
       run_id: "run.1",
       **options
     )
-  end
-
-  def wait_until(timeout: 1.0)
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
-    until yield
-      flunk "condition was not reached within #{timeout}s" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-      Thread.pass
-    end
   end
 end

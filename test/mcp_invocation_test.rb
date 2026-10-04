@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/process_group_probe'
 
 class McpInvocationTest < Minitest::Test
+  include ProcessGroupProbe
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Budgets = ServerConfig::Budgets
   Catalog = Tamoz::Mcp::Catalog
@@ -107,15 +110,6 @@ class McpInvocationTest < Minitest::Test
   def descriptor_for(snapshot, name, effect_class: :unknown_effects, output_schema: nil)
     entry = snapshot.entries.find { |candidate| candidate.name == name }
     Invocation.descriptor_for(entry, snapshot: snapshot, effect_class: effect_class, output_schema: output_schema)
-  end
-
-  def group_alive?(pid)
-    Process.kill(0, -pid)
-    true
-  rescue Errno::ESRCH
-    false
-  rescue Errno::EPERM
-    true
   end
 
   def test_success_attributes_every_content_block_and_returns_text
@@ -431,19 +425,34 @@ class McpInvocationTest < Minitest::Test
     supervisor = Supervisor.new(config, retry_budget: 1, base_backoff: 0.01)
     slow = descriptor_for(snapshot, "sleep_ms", effect_class: :read_only)
     echo = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+    started = Queue.new
+    client = signaled_client(supervisor, started)
 
     timed_out = Thread.new do
-      Invocation.call(slow, { "ms" => 2_000 }, snapshot: snapshot, supervisor: supervisor)
+      Invocation.call(slow, { "ms" => 2_000 }, snapshot: snapshot, supervisor: supervisor,
+                      client_factory: ->(_) { client })
     rescue Tamoz::Mcp::UnavailableError => e
       e
     end
-    sleep 0.1 # the slow call must be in flight on its own pipe before the second caller joins
+    assert started.pop(timeout: 10), 'the slow client did not reach its call boundary'
     answered = Invocation.call(echo, { "value" => "still here" }, snapshot: snapshot, supervisor: supervisor)
 
     assert_instance_of Tamoz::Mcp::UnavailableError, timed_out.value
     assert_equal "still here", answered.observation.text
   ensure
+    timed_out&.join(5)
     supervisor&.close
+  end
+
+  def signaled_client(supervisor, started)
+    client = MCP::Client.new(transport: supervisor)
+    client.singleton_class.prepend(Module.new do
+      define_method(:call_tool) do |**arguments|
+        started << true
+        super(**arguments)
+      end
+    end)
+    client
   end
 
   # Row: same as above with effect_class :read_only → typed unavailable, retryable

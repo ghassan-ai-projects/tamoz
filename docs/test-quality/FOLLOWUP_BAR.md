@@ -42,9 +42,16 @@ TestSuite impact: seven dependents within two hops. Read subjects end to end bef
 | 0 | Baseline driver test fails because its snapshot helper assumes rowid; bundled protoc cannot execute on this CPU | Focused driver: one error; detached baseline reproduces both errors | — |
 | 1 | Sort snapshots by every projected column; retain duplicate/empty rows and detect a changed value. Withdraw unsupported FTS corruption diagnosis. Local diff review: no weakened assertions, production edits or open critical/high findings. | Driver 14/38,425 green; mutation red; changed-file lint clean; diff check clean | 41aeb93f |
 
-| 2 | Share seven repeating model classes, two strict queued models, profile-session setup, recovery setup and edit plans. Preserve each provider's exhaustion semantics. Local review: every existing test method retained; new helper methods remain below 20 lines; no critical/high findings. | Twelve consumer suites pass individually; helper 10/24; aliasing and repeated-response mutations fail; new helpers lint clean; no changed-file cop increase vs detached baseline | This round |
+| 2 | Share seven repeating model classes, two strict queued models, profile-session setup, recovery setup and edit plans. Preserve each provider's exhaustion semantics. Local review: every existing test method retained; new helper methods remain below 20 lines; no critical/high findings. | Twelve consumer suites pass individually; helper 10/24; aliasing and repeated-response mutations fail; new helpers lint clean; no changed-file cop increase vs detached baseline | 862a7b61 |
+
+| 3 | Share nine subject-specific storage/transport helpers across 22 suites. Replace the MCP guessed delay with a bounded signal from the real SDK client; retain real timeout/restart assertions and join its caller during cleanup. Local diff review: no test removed or softened; every new helper method meets the configured 20-line bar. | All 22 suites pass separately; final MCP 33/214; no changed-file lint increase across 31 Ruby files; diff/syntax checks pass | This round |
 
 ## Known red at baseline
 
 The bundled grpc-tools compiler is x86_64 and cannot execute on this arm64 machine.
 Reproduce against the detached baseline before grading full gates. No waiver granted.
+
+Fresh baseline execution also exposed stale renamed evidence in the requirements manifest.
+The pending follow-up repairs its generator/reference together. Baseline coverage is
+90.31% line / 71.58% branch, but Minitest 6 ignores the old MT_SEED variable; a
+controlled same-seed comparison is still required.

@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/worker_runtime_fixture'
 require_relative 'support/autonomy_case'
 require 'sqlite3'
 
 class AgentModeSwitchTest < Minitest::Test
+  include WorkerRuntimeFixture
+
   include AutonomyCase
 
   def test_a_mode_switch_governs_the_next_turn_without_prompting
@@ -208,16 +211,6 @@ class AgentModeSwitchTest < Minitest::Test
 
   def live_profile_name(rt)
     open_runtime(rt) { |runtime| runtime.approval_engine.policy.profile_name }
-  end
-
-  def open_runtime(rt)
-    runtime = Tamoz::Agent::WorkerRuntime.open(
-      Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
-      model_factory: ->(profile:) { read_only_factory.call(profile) }
-    )
-    yield runtime
-  ensure
-    runtime&.close
   end
 
   def switch_rows(rt)

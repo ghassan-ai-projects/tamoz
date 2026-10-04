@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/thread_readiness'
 require_relative 'support/thread_barrier'
 
 class CorePoolTest < Minitest::Test
+  include ThreadReadiness
+
   def test_inline_and_threaded_results_preserve_submission_order
     items = (0...40).to_a
     inline = Tamoz::Pool.for(:inline).map(items) { |item| item * item }
@@ -194,14 +197,5 @@ class CorePoolTest < Minitest::Test
 
   def tamoz_pool_threads
     Thread.list.select { |thread| thread.name&.start_with?("tamoz-pool-") }
-  end
-
-  def wait_until(timeout: 1.0)
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
-    until yield
-      flunk "condition was not reached within #{timeout}s" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-      Thread.pass
-    end
   end
 end

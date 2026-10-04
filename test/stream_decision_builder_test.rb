@@ -1,26 +1,20 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/episode_worker_fixture'
 require "json_schemer"
 require "tamoz/stream/episode_worker"
 require "support/aquaculture_domain"
 require "time"
 
 class StreamDecisionBuilderTest < Minitest::Test
+  include EpisodeWorkerFixture
+
   Stream = Tamoz::Stream
   Catalog = Tamoz::Agent::IntentCatalog
 
   def catalog
     @catalog ||= Catalog.from_list(AquacultureDomain::INTENT_CATALOG)
-  end
-
-  def worker
-    Stream::EpisodeWorker.new(
-      worker_version: "0.1.0.alpha.1",
-      lane_config: Tamoz::Agent::LaneConfig.build(
-        "fast" => "flash", "deep" => "pro", "batch" => "flash"
-      )
-    )
   end
 
   def envelope

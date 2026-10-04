@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/sqlite_scenario_fixture'
 require_relative "support/deep_freeze_assertions"
 
 class SQLiteTraceRecorderTest < Minitest::Test
+  include SQLiteScenarioFixture
+
   include DeepFreezeAssertions
 
   RECORDER_DIGEST =
@@ -534,16 +537,6 @@ class SQLiteTraceRecorderTest < Minitest::Test
         definition,
         domain: "eval.sqlite_scenario"
       )
-    }
-  end
-
-  def subject
-    {
-      "id" => "tamoz-sqlite",
-      "version" => Tamoz::SQLite::VERSION,
-      "git_revision" => "a" * 40,
-      "git_tree" => "b" * 40,
-      "dirty" => false
     }
   end
 

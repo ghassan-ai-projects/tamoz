@@ -1,21 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/episode_worker_fixture'
 require "tamoz/stream/episode_worker"
 require "support/local_model_endpoint"
 require "support/episode_composition"
 
 class StreamEpisodeStreamTest < Minitest::Test
-  Stream = Tamoz::Stream
+  include EpisodeWorkerFixture
 
-  def worker
-    Stream::EpisodeWorker.new(
-      worker_version: "0.1.0.alpha.1",
-      lane_config: Tamoz::Agent::LaneConfig.build(
-        "fast" => "flash", "deep" => "pro", "batch" => "flash"
-      )
-    )
-  end
+  Stream = Tamoz::Stream
 
   def with_fixture_endpoint(responses: nil)
     Dir.mktmpdir("tamoz-stream-endpoint") do |dir|

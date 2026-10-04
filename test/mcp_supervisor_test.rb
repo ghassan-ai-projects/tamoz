@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/process_group_probe'
 
 class McpSupervisorTest < Minitest::Test
+  include ProcessGroupProbe
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Budgets = ServerConfig::Budgets
   Catalog = Tamoz::Mcp::Catalog
@@ -69,17 +72,6 @@ class McpSupervisorTest < Minitest::Test
         env_allowlist: BASE_ENV_ALLOWLIST + %w[MCP_TEST_SERVER_GRANDCHILD]
       }.merge(overrides)
     )
-  end
-
-  def group_alive?(pid)
-    Process.kill(0, -pid)
-    true
-  rescue Errno::ESRCH
-    false
-  rescue Errno::EPERM
-    # A zombie group leader (or a group in another session) signals EPERM;
-    # treat it as still present, matching the supervisor's own probe.
-    true
   end
 
   def test_child_environment_is_restricted_to_allowlist_and_credential_refs

@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/sqlite_scenario_fixture'
 
 class SQLiteRawOracleTest < Minitest::Test
+  include SQLiteScenarioFixture
+
   ORACLE = ROOT.join("script", "tamoz_sqlite_oracle").freeze
   ORACLE_DIGEST =
     "sha256:1132f9ef361d1faaf6075fe0a465baa1b569fead93eea11db0e1b3713dd4bd87"
@@ -532,16 +535,6 @@ class SQLiteRawOracleTest < Minitest::Test
 
   def boundary_registry
     Tamoz::SQLite.const_get(:BoundaryRegistry, false)
-  end
-
-  def subject
-    {
-      "id" => "tamoz-sqlite",
-      "version" => Tamoz::SQLite::VERSION,
-      "git_revision" => "a" * 40,
-      "git_tree" => "b" * 40,
-      "dirty" => false
-    }
   end
 
   def trace_scenario(scenario_id, path)

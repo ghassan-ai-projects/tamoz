@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/sqlite_scenario_fixture'
 require_relative "support/deep_freeze_assertions"
 
 class SQLiteConvergenceProbeTest < Minitest::Test
+  include SQLiteScenarioFixture
+
   include DeepFreezeAssertions
 
   PROBE_DIGEST =
@@ -204,16 +207,6 @@ class SQLiteConvergenceProbeTest < Minitest::Test
 
   def boundary_registry
     Tamoz::SQLite.const_get(:BoundaryRegistry, false)
-  end
-
-  def subject
-    {
-      "id" => "tamoz-sqlite",
-      "version" => Tamoz::SQLite::VERSION,
-      "git_revision" => "a" * 40,
-      "git_tree" => "b" * 40,
-      "dirty" => false
-    }
   end
 
   def build_state(scenario_id, classification, path)

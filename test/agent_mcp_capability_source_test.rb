@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/mcp_server_fixture'
 require_relative "support/scripted_generation"
 require_relative "support/session_plan"
 
 class AgentMcpCapabilitySourceTest < Minitest::Test
+  include McpServerFixture
+
   include SessionPlan
 
   private :plan_for
@@ -261,19 +264,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
   end
 
   # --- session glue: pinning, execution, resume guard --------------------------
-
-  def build_config(answer_file, overrides = {})
-    ServerConfig.new(
-      **{
-        server_id: "test-server",
-        transport: :stdio,
-        command: RbConfig.ruby,
-        arguments: [SERVER_SCRIPT, answer_file],
-        working_directory: @dir,
-        env_allowlist: BASE_ENV_ALLOWLIST + FLAG_NAMES
-      }.merge(overrides)
-    )
-  end
 
   def descriptor_for(snapshot, name, effect_class: :unknown_effects)
     entry = snapshot.entries.find { |candidate| candidate.name == name }

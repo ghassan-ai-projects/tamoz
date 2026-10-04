@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/thermal_episode_fixture'
 require 'tamoz/agent'
 require 'tamoz/sqlite'
 require 'tamoz/stream/episode_worker'
@@ -18,6 +19,8 @@ require 'support/episode_composition'
 # proves the plumbing invariants, NOT intelligence (that is the shadow tournament,
 # on a real model).
 class ThermalLabDecisionTest < Minitest::Test
+  include ThermalEpisodeFixture
+
   Domain = ThermalLabDomain
 
   def setup
@@ -30,42 +33,6 @@ class ThermalLabDecisionTest < Minitest::Test
     @compositions.each { |c| c.fetch(:adapter).close }
     @endpoints.each(&:stop)
     FileUtils.remove_entry(@dir) if @dir
-  end
-
-  # Runs ONE thermal episode whose single model call returns `document`.
-  # Returns [terminal, decision_or_nil].
-  def run_episode(episode_id:, document:, allowed:, risk_ceiling:, snapshot: Domain.snapshot)
-    endpoint = LocalModelEndpoint.new(
-      mode: :fixture,
-      responses: [Tamoz::Core.jcs(document)],
-      log_path: File.join(@dir, "#{episode_id}.log")
-    ).start
-    @endpoints << endpoint
-    composition = EpisodeComposition.build(endpoint: endpoint.base_url)
-    @compositions << composition
-    request = EpisodeComposition.wire_request(
-      episode_id:, prompt: Domain::PROMPT, snapshot:,
-      catalog_json: Tamoz::Core.jcs(Domain::CATALOG),
-      intent_catalog_json: Tamoz::Core.jcs(Domain::INTENT_CATALOG),
-      intent_catalog_sha256: Domain.intent_catalog_digest,
-      objective: Domain::OBJECTIVE,
-      allowed_intent_types: allowed, risk_ceiling:
-    )
-    events, app = EpisodeComposition.run(composition, request)
-    terminal = events.filter_map(&:terminal).last
-    [terminal, decision_for(app, episode_id, terminal)]
-  end
-
-  def decision_for(app, episode_id, terminal)
-    return nil unless terminal&.status == :TERMINAL_STATUS_PRODUCED
-
-    result = app.durable_runner.fetch(
-      thread: "episode.#{episode_id}",
-      request_id: "episode.#{episode_id}.at-1.1",
-      namespace: ['acme']
-    )
-    app.state(thread: "episode.#{episode_id}", namespace: ['acme'], checkpoint_id: result.checkpoint_id)
-       .state.to_h.fetch(:decision)
   end
 
   def sole_intent(decision)

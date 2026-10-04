@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/comms_approval_fixture'
 
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:disable Metrics/BlockLength, Lint/UnusedMethodArgument
 class CommsDenyCallbackTest < Minitest::Test
+  include CommsApprovalFixture
+
   Comms = Tamoz::Comms
 
   def with_engine
@@ -24,24 +27,6 @@ class CommsDenyCallbackTest < Minitest::Test
         adapter&.close
       end
     end
-  end
-
-  def descriptor
-    Comms::SurfaceDescriptor.build(
-      surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-                   poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990, bot_username: 'ops_bot' },
-      admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
-      threading: 'conversation', profile_id: 'ops',
-      approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
-      limits: { max_inbound_bytes: 8192, max_open_requests: 50,
-                max_denial_prompts_per_request: 4, outbox_capacity: 500,
-                control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 }
-    )
   end
 
   def test_a_callback_resolves_one_active_prompt_to_a_deny_decision

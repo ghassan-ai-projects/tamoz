@@ -1,10 +1,16 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/mcp_server_fixture'
+require_relative 'support/process_group_probe'
 require_relative "support/scripted_generation"
 require_relative "support/session_plan"
 
 class AgentMcpAdversarialTest < Minitest::Test
+  include McpServerFixture
+
+  include ProcessGroupProbe
+
   include SessionPlan
 
   ServerConfig = Tamoz::Mcp::ServerConfig
@@ -35,19 +41,6 @@ class AgentMcpAdversarialTest < Minitest::Test
     FLAG_NAMES.each { |name| ENV.delete(name) }
     @saved_flags.each { |name, value| ENV[name] = value }
     FileUtils.remove_entry(@dir)
-  end
-
-  def build_config(answer_file, overrides = {})
-    ServerConfig.new(
-      **{
-        server_id: "test-server",
-        transport: :stdio,
-        command: RbConfig.ruby,
-        arguments: [SERVER_SCRIPT, answer_file],
-        working_directory: @dir,
-        env_allowlist: BASE_ENV_ALLOWLIST + FLAG_NAMES
-      }.merge(overrides)
-    )
   end
 
   def descriptor_for(snapshot, name, effect_class: :unknown_effects)
@@ -134,15 +127,6 @@ class AgentMcpAdversarialTest < Minitest::Test
 
   def accepted_review
     {"decision" => "accept", "issues" => [], "rationale" => "sound"}
-  end
-
-  def group_alive?(pid)
-    Process.kill(0, -pid)
-    true
-  rescue Errno::ESRCH
-    false
-  rescue Errno::EPERM
-    true
   end
 
   def approved_outcome(session, outcome, thread:, request_id:)

@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/effect_attempt_fixture'
 
 class AgentSessionEffectTest < Minitest::Test
+  include EffectAttemptFixture
+
   ToolDispatchConfiguration = Data.define(
     :model, :model_call_safety, :profile, :toolbox, :mcp, :capabilities
   )
@@ -700,16 +703,6 @@ class AgentSessionEffectTest < Minitest::Test
       edge Tamoz::START, :finish
       edge :finish, Tamoz::END
     end
-  end
-
-  def expire_attempt(path, token)
-    database = SQLite3::Database.new(path)
-    database.execute(
-      "UPDATE tamoz_effect_attempts SET deadline_ms = 0 WHERE attempt_token = ?",
-      [token]
-    )
-  ensure
-    database&.close
   end
 
   def read_transitions(adapter, key)

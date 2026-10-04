@@ -1,22 +1,16 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/episode_worker_fixture'
 require "tamoz/stream/episode_worker"
 require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
 class StreamTokenCustodyTest < Minitest::Test
-  TOKEN = "opaque.hmac.token.7f3c"
+  include EpisodeWorkerFixture
 
-  def worker
-    Tamoz::Stream::EpisodeWorker.new(
-      worker_version: "0.1.0.alpha.1",
-      lane_config: Tamoz::Agent::LaneConfig.build(
-        "fast" => "flash", "deep" => "pro", "batch" => "flash"
-      )
-    )
-  end
+  TOKEN = "opaque.hmac.token.7f3c"
 
   def snapshot
     {
