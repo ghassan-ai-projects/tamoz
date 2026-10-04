@@ -185,6 +185,14 @@ zero fabricated answers is not met.
 - **Tamoz adds no network client of its own.** Logs, metrics, HTTP health and
   databases are read through MCP servers you configure.
 
+## Investigating Tamoz itself
+
+`tamoz self-observe` is a read-only MCP server over Tamoz's own durable record
+(`diagnose`, `timeline`, `explain_turn`). Declare it and probes over it as in
+[observability-ops.md](../operations/observability-ops.md#let-tamoz-investigate-itself),
+then ask `tamoz investigate "what went wrong since yesterday?"`; pass the JSON
+report to `tamoz postmortem --analysis`.
+
 ## Next reads
 
 - [Configuration reference](../reference/config.md)

@@ -121,10 +121,14 @@ The closed signal catalog, deterministic correlation, bounded local journal,
 content policy, derived local metrics, model cost basis, worker producers,
 `observe` commands, and hardened optional OTLP/HTTP adapter are implemented.
 
-The full observability contract is not yet release-complete. The authoritative
-SQLite read-only telemetry adapter and durable model-usage persistence are not
-implemented, so `tamoz trace` currently reconstructs only journal documents and
-cannot claim the complete checkpoint/effect tree. The four-way crash/non-
+The full observability contract is not yet release-complete. The read-only
+durable-record reader (`Tamoz::SQLite::RecordReader`) now exists and feeds
+`tamoz diagnose`, `explain` and `postmortem`, but `tamoz trace` still
+reconstructs only journal documents, durable model-usage persistence is not
+implemented, approval decisions in a shared worker database link to turns by
+time only, and there is no tamper-evident sealed audit trail or regulatory
+reporting clock (designed, deferred:
+`docs/observability-self-diagnosis-2026-10-04/FUTURE_PLAN.md`). The four-way crash/non-
 interference proof, full all-surface secret property test, export sampling,
 divergence accounting, and benchmark remain outstanding. The local journal is
 observer-only and every bounded bulk drop is counted; it is not a second source

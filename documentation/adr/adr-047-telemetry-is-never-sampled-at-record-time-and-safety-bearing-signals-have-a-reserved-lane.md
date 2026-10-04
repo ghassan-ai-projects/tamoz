@@ -4,7 +4,7 @@
 **Date:** 2026-08-10
 **Tier:** F
 **Implementation:** Complete
-**Relates to:** [ADR-045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md) (the journal is lossy; truth is the durable record)
+**Relates to:** [ADR-045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md) (the journal is lossy; truth is the durable record), [ADR-060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) (counted loss marks a diagnosis degraded)
 
 The recorder never samples. If sampling is ever added, it is an export decision and never applies to
 safety-bearing signals. Safety-bearing signals ride a reserved lane that is written even when the

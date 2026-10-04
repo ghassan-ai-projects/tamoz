@@ -4,7 +4,7 @@
 **Date:** 2026-08-10
 **Tier:** F
 **Implementation:** Not built — ratified when observability phase 5 (alerting) ships with fault-injection proof of the non-degraded-window precondition
-**Relates to:** [ADR-045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md), [ADR-047](./adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md), [ADR-022](./adr-022-reviewed-plan-gate.md), [ADR-028](./adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md)
+**Relates to:** [ADR-045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md), [ADR-047](./adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md), [ADR-022](./adr-022-reviewed-plan-gate.md), [ADR-028](./adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md), [ADR-060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) (diagnosis computes conditions and has no actuator)
 
 Observability may compute that a condition holds; it may never act on it. A response fires only on
 durable evidence over a window with no counted telemetry loss, and runs in the subsystem that already

@@ -19,9 +19,9 @@ clause or has a dedicated test yet.
 | [011](./adr-011-sqlite-is-tamoz-agent-s-default-persistence.md) | SQLite is Tamoz Agent's default persistence | C | `tamoz-sqlite` | — | — |
 | [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public concepts are documented and introduced when needed | C | — | — | — |
 | [014](./adr-014-extensions-are-first-party-adapter-gems-not-plugins.md) | Extensions are first-party adapter gems, not plugins | F | `tamoz-comms`, `tamoz-core`, `tamoz-observability` | 35, 42 | — |
-| [015](./adr-015-durable-means-synchronous-barrier-commit.md) | Durable means synchronous barrier commit | F | `tamoz-agent-s-default-persistence`, `tamoz-graph`, `tamoz-sqlite` | 1, 2, 4, 19 | `documentation_surface_test.rb` |
+| [015](./adr-015-durable-means-synchronous-barrier-commit.md) | Durable means synchronous barrier commit | F | `tamoz-graph`, `tamoz-sqlite` | 1, 2, 4, 19 | `documentation_surface_test.rb` |
 | [016](./adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md) | Every external effect is journaled, and ambiguity stops as `:unknown` | F | `tamoz-agent-kernel`, `tamoz-sqlite` | 21, 52, 54 | — |
-| [017](./adr-017-one-fenced-writer-per-thread-namespace.md) | One fenced writer per thread namespace | F | `tamoz-agent-s-default-persistence`, `tamoz-sqlite` | 19, 20 | — |
+| [017](./adr-017-one-fenced-writer-per-thread-namespace.md) | One fenced writer per thread namespace | F | `tamoz-sqlite` | 19, 20 | — |
 | [018](./adr-018-strict-sequence-is-separate-from-checkpoint-identity.md) | Strict sequence is separate from checkpoint identity | C | `tamoz-sqlite` | — | — |
 | [019](./adr-019-resume-is-graph-version-checked.md) | Resume is graph-version checked | F | `tamoz-graph` | 18, 22 | — |
 | [020](./adr-020-secrets-are-refused-by-type-or-explicitly-protected-never-scrubbed-by-name.md) | Secrets are refused by type or explicitly protected, never scrubbed by name | F | `tamoz-sqlite` | 18, 24, 60 | — |
@@ -40,7 +40,7 @@ clause or has a dedicated test yet.
 | [033](./adr-033-skills-use-the-open-agent-skills-format-and-stay-an-agent-recipe.md) | Skills use the open Agent Skills format and stay an agent recipe | F | `tamoz-skills` | 41, 42 | — |
 | [034](./adr-034-skill-identity-is-a-tree-digest-activation-is-supply-chain-promotion.md) | Skill identity is a tree digest; activation is supply-chain promotion | F | `tamoz-skills` | 41, 43 | — |
 | [036](./adr-036-cognition-sees-only-a-sealed-situation-snapshot-never-raw-evidence.md) | Cognition sees only a sealed Situation snapshot, never raw evidence | F | `tamoz-stream` | 44, 49 | — |
-| [038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md) | Physical action is typed intent plus current-state policy, never model effect | F | `tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external`, `tamoz-stream` | 50 | `tamoz_brain_hardware_boundary_test.rb` |
+| [038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md) | Physical action is typed intent plus current-state policy, never model effect | F | `tamoz-stream` | 50 | `tamoz_brain_hardware_boundary_test.rb` |
 | [039](./adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md) | Tamoz is supervisory; certified safety and real-time control stay external | F | `tamoz-stream` | 51 | `documentation_surface_test.rb` |
 | [040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) | One monorepo, multiple independently publishable gems | C | — | — | — |
 | [041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) | Communication channels are a contract gem plus per-transport adapter gems | C | `tamoz-comms`, `tamoz-core`, `tamoz-telegram` | — | `dependency_isolation_test.rb`<br>`documentation_surface_test.rb` |
@@ -55,17 +55,18 @@ clause or has a dedicated test yet.
 | [052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md) | A gem owns one dependency boundary and is reached only through its facade | C | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-core`, `tamoz-evals-runner` | — | — |
 | [053](./adr-053-approval-gem.md) | Approval policy is data, decided by one gem, `tamoz-approval` | F | `tamoz-approval`, `tamoz-core` | 40 | — |
 | [054](./adr-054-websearch-capability-source.md) | Websearch is the fourth capability source, realized as a reserved MCP server with governed egress | F | `tamoz-agent-capabilities`, `tamoz-mcp-websearch` | 35, 37 | — |
-| [055](./adr-055-two-repo-authority-split.md) | The continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker | F | `tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external`, `tamoz-stream` | 49, 50, 51 | — |
+| [055](./adr-055-two-repo-authority-split.md) | The continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker | F | `tamoz-stream` | 49, 50, 51 | — |
 | [056](./adr-056-skills-gem.md) | Skills are a gem, `tamoz-skills`, reached through one facade | C | `tamoz-core`, `tamoz-skills`, `tamoz-tools` | — | — |
 | [057](./adr-057-a-user-stop-ends-the-turn-it-never-aborts-the-graph.md) | A user's stop ends the turn; it never aborts the graph | F | `tamoz-agent`, `tamoz-agent-session`, `tamoz-cancellation` | 14, 15, 53 | — |
 | [058](./adr-058-domain-knowledge-is-digest-pinned-data-never-code.md) | Domain knowledge is digest-pinned data, never code | C | — | — | — |
-| [059](./adr-059-no-backward-compatibility-before-1-0.md) | No backward compatibility before 1.0 | C | `tamoz-sqlite`, `tamoz-the-reference-application-is-tamoz-agent` | — | — |
+| [059](./adr-059-no-backward-compatibility-before-1-0.md) | No backward compatibility before 1.0 | C | `tamoz-sqlite` | — | — |
+| [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | `tamoz-agent-cli`, `tamoz-observability`, `tamoz-sqlite` | 59, 60, 61 | — |
 
 ## Coverage snapshot
 
-- In-force ADRs: **50**
+- In-force ADRs: **51**
 - With at least one referencing test: **14**
-- With a named invariant clause: **33**
+- With a named invariant clause: **34**
 
 ## Next reads
 

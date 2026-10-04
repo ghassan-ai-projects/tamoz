@@ -12,9 +12,10 @@ TamozGemspec.build(
   summary: 'The observability signal plane for Tamoz',
   description: 'The closed, versioned signal catalog, derived correlation ' \
                'identity, immutable signals, bounded recorders, local journal, ' \
-               'content policy, metrics and trace projection.',
+               'content policy, metrics, trace projection and read-only self-diagnosis.',
   dependencies: [
     ['tamoz-concurrency', "= #{Tamoz::Observability::VERSION}"],
     ['tamoz-core', "= #{Tamoz::Observability::VERSION}"]
-  ]
+  ],
+  runtime_contracts: ['diagnosis/**/*.yaml']
 )

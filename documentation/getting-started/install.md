@@ -191,6 +191,10 @@ request inboxes and the checkpoints.
 | `approve` | Grant (or `--deny`) a paused approval so its occurrence can resume |
 | `observe` | Tail the local journal, render metrics, or run the redaction self-test |
 | `trace` | Reconstruct the journal view for one thread from durable correlation identity |
+| `diagnose` | Read-only findings about this runtime from its durable record and journal health |
+| `explain` | The decision record of one thread or request: effects, attempts, approvals |
+| `postmortem` | Write a Markdown + JSON postmortem of a window, optionally with a model analysis |
+| `self-observe` | Serve `diagnose`, `timeline` and `explain_turn` as a read-only stdio MCP server for probes |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
 | `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
 | `config` | Explicit configuration migration (`migrate`) |
@@ -232,6 +236,18 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz observe tail --follow --json
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz observe metrics --format prometheus
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz observe doctor --json
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz trace THREAD --json
+```
+
+Tamoz can also diagnose itself from its durable record, read-only. `diagnose`
+runs the rules in `gems/tamoz-observability/diagnosis/rules.yaml` over the
+record and the journal's drop counts; `explain` shows one turn's decision
+record; `postmortem` writes a report of a window. See
+[`observability-ops.md`](../operations/observability-ops.md#self-diagnosis).
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz diagnose --since 24h
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz explain THREAD --json
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz postmortem --title "Provider outage" --out ~/.tamoz/postmortems
 ```
 
 Content capture is disabled by default. Signals carry a policy digest and a digest/size

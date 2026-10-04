@@ -536,3 +536,22 @@ Checked 2026-10-01 (source inspection).
 | Applied migrations cannot be edited | `tamoz-sqlite` kernel | `test/sqlite_kernel_test.rb` — `test_migration_checksum_tampering_is_rejected` | — |
 | No compatibility migration for session records | session records | `test/agent_session_records_test.rb` — `test_version_one_session_record_is_rejected_without_compatibility_migration` | — |
 | No legacy readers | — | contradicted by `test/legacy_session_resume_test.rb` — `test_a_current_build_reads_the_old_database` | Open: delete that tolerance or narrow this rule |
+
+## ADR-060
+
+Checked 2026-10-04 (deterministic tests, *run* that day; mutation-checked where noted).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| The reader never writes the database | `gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb` | `test/sqlite_record_reader_test.rb` — `test_reader_never_writes_the_database` (red when `readonly`/`query_only` are removed) | SQLite may create `-wal`/`-shm` sidecars (mode 0600) when absent; the database file is byte-identical |
+| No content column is selected | same | `test/sqlite_record_reader_test.rb` — `test_reader_returns_no_content_columns` (red when `payload` is selected) | — |
+| A failure yields only its class and code; a message, a free-text class, or a secret-shaped code never does | `gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb` | `test/sqlite_record_reader_test.rb` — `test_a_failure_exposes_only_its_class_and_code` | — |
+| No secret reaches any self-diagnosis output | reader identifiers, journal-reason scrub | `test/self_diagnosis_boundary_test.rb` — `test_a_secret_shaped_value_reaches_no_report_explanation_timeline_postmortem_or_tool_result` | Only the core secret shapes are recognised |
+| Diagnosis code reaches no writer, enqueue, network or dispatch | source scan | `test/self_diagnosis_boundary_test.rb` — `test_the_pure_modules_reference_no_store_and_no_actor`, `test_the_cli_side_reads_through_the_reader_only` | A text scan, not a call-graph proof |
+| Commands leave the database unchanged | CLI | `test/agent_cli_self_diagnosis_test.rb` — `test_commands_never_change_the_database` | — |
+| Rules are data; unknown detector, kind, severity or category, or a missing detector parameter, is refused | `gems/tamoz-observability/lib/tamoz/observability/diagnosis/rules.rb` | `test/diagnosis_rules_test.rb` — `test_no_rule_wording_threshold_or_severity_lives_in_ruby`, `test_an_unknown_detector_kind_severity_or_category_is_refused` | — |
+| Free text never classifies a failure | detectors | `test/self_diagnosis_test.rb` — `test_detectors_never_classify_by_free_text` (red when grouping by reason) | — |
+| Counted loss marks a report degraded | diagnosis | `test/self_diagnosis_test.rb` — `test_telemetry_loss_marks_the_report_degraded`, `test_row_limit_marks_the_report_degraded` | Journal drop counts are cumulative, not per window |
+| A window's end bounds what is counted | diagnosis | `test/self_diagnosis_test.rb` — `test_rows_after_the_window_end_are_not_counted` | Status rules (unknown effects, unsettled occurrences) report current state regardless of window |
+| An unanswered approval never reads as approved | `gems/tamoz-observability/lib/tamoz/observability/explanation.rb` | `test/agent_cli_self_diagnosis_test.rb` — `test_explain_attributes_policy_and_actor_and_marks_unanswered_approval` (red when a missing answer defaults) | Shared worker databases link approvals to turns by time |
+| The self-observe tools are read-only MCP tools probes can back | `gems/tamoz-agent-cli/lib/tamoz/agent/self_observe_server.rb` | `test/self_observe_server_test.rb` — `test_lists_three_read_only_tools`, `test_the_probe_catalog_accepts_probes_over_the_self_observe_tools`, `test_serves_mcp_over_stdio` | Whether a real model finds causes is a real-model run, recorded in `docs/observability-self-diagnosis-2026-10-04/EVAL.md`; the grader's controls are `test/self_investigation_grader_test.rb` |

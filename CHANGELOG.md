@@ -10,6 +10,16 @@ from its public release line onward.
 
 ### Added
 
+- Read-only self-diagnosis (ADR-060): `tamoz diagnose` (findings from rules
+  kept as data in `gems/tamoz-observability/diagnosis/rules.yaml`), `tamoz
+  explain` (one turn's decision record), `tamoz postmortem` (Markdown + JSON,
+  optionally embedding a `tamoz investigate` findings report), and `tamoz
+  self-observe` (a stdio MCP server so investigation probes can read the same
+  evidence). Built on `Tamoz::SQLite::RecordReader`, the read-only
+  implementation of `TelemetryReader` (contract v2; v1 removed). Regulatory
+  evidence (sealed audit trail, retention, reporting clocks) is designed in
+  `docs/observability-self-diagnosis-2026-10-04/FUTURE_PLAN.md`, not built.
+
 - `tamoz telegram setup|start`: pair a Telegram bot and run it from two
   commands. `setup` authenticates the token, pairs the first private sender the
   operator confirms, and writes the channel and workspace profile; `start`

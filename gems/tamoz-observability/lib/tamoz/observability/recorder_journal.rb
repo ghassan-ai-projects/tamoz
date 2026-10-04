@@ -31,6 +31,10 @@ module Tamoz
           Files.inventory(directory)
         end
 
+        def self.drop_counts(directory)
+          Files.drop_counts(directory)
+        end
+
         def initialize(directory:, role:, pid: Process.pid, catalog: Catalog, policy: ContentPolicy::NONE,
                        queue_size: DEFAULT_QUEUE_SIZE, reserved_size: DEFAULT_RESERVED_SIZE,
                        max_file_bytes: DEFAULT_MAX_FILE_BYTES, max_files: DEFAULT_MAX_FILES,
@@ -254,6 +258,15 @@ module Tamoz
             empty_inventory
           end
 
+          def self.drop_counts(directory)
+            _ndjson_files, health_files = inventory_files(directory)
+            health_files.sort.each_with_object(Hash.new(0)) do |file, counts|
+              health_drops(file).each { |key, count| counts[key] += count }
+            end.to_h
+          rescue Errno::ENOENT
+            {}
+          end
+
           def self.matching_files(directory, role)
             Dir.glob(File.join(File.expand_path(directory), "#{role || '*'}-*.ndjson*"))
                .reject { |file| file.end_with?('.health.json') }
@@ -317,14 +330,19 @@ module Tamoz
           private_class_method :build_inventory
 
           def self.drops_from_health_file(file)
-            JSON.parse(File.read(file)).fetch('drops', {}).values.sum
-          rescue JSON::ParserError, SystemCallError
-            0
+            health_drops(file).values.sum
           end
           private_class_method :drops_from_health_file
 
+          def self.health_drops(file)
+            JSON.parse(File.read(file)).fetch('drops', {}).select { |_key, count| count.is_a?(Integer) }
+          rescue JSON::ParserError, SystemCallError
+            {}
+          end
+          private_class_method :health_drops
+
           def self.empty_inventory
-            {'files' => 0, 'bytes' => 0, 'drops' => 0, 'paths' => []}
+            { 'files' => 0, 'bytes' => 0, 'drops' => 0, 'paths' => [] }
           end
           private_class_method :empty_inventory
         end
