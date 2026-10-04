@@ -10,8 +10,8 @@ class SkillsBoundaryTest < Minitest::Test
   ALLOWED_REQUIRES = %w[digest json psych tamoz/core].freeze
 
   def test_no_file_outside_the_gem_names_an_inner_constant
-    leaks = (production_files + test_files).reject { |path| path.start_with?(OWNER) }
-                                           .flat_map { |path| matches(path, INNER_CONSTANT) }
+    leaks = (production_files + suite_sources).reject { |path| path.start_with?(OWNER) }
+                                              .flat_map { |path| matches(path, INNER_CONSTANT) }
 
     assert_empty leaks
   end
@@ -62,7 +62,7 @@ end
   private
 
   def production_files = files('{gems/*/lib,gems/*/exe,apps,bin,script,agenteval/lib,agenteval/adapters}/**/*')
-  def test_files = files('test/**/*.rb')
+  def suite_sources = files('test/**/*.rb')
   def gem_files = files("#{OWNER}lib/**/*.rb")
 
   def files(pattern)

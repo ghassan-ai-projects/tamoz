@@ -5,7 +5,8 @@ require 'prism'
 module TestSuite
   ROOT = File.expand_path('../..', __dir__).freeze
   TEST_PATTERNS = %w[test/**/*_test.rb gems/*/test/**/*_test.rb agenteval/test/**/*_test.rb].freeze
-  SOURCE_PATTERNS = %w[Rakefile bin/* script/* gems/**/*.rb gems/**/exe/* test/**/*.rb agenteval/**/*.rb].freeze
+  SOURCE_PATTERNS = %w[Rakefile bin/* script/* script/**/*.rb scripts/**/*.rb apps/**/*.rb
+                       gems/**/*.rb gems/**/exe/* test/**/*.rb agenteval/**/*.rb].freeze
 
   module_function
 
@@ -15,6 +16,18 @@ module TestSuite
 
   def sources(root: ROOT)
     discover(SOURCE_PATTERNS, root:)
+  end
+
+  def coverage_environment
+    { 'RUN_COVERAGE' => '1', 'SEED' => '1', 'TEST' => nil, 'TESTOPTS' => nil }
+  end
+
+  def validate_runnable_methods!
+    hidden = Minitest::Runnable.runnables.flat_map do |suite|
+      methods = suite.private_instance_methods + suite.protected_instance_methods
+      methods.grep(/^test_/).map { |name| "#{suite}##{name}" }
+    end
+    raise ArgumentError, "non-public test methods: #{hidden.sort.join(', ')}" unless hidden.empty?
   end
 
   def discover(patterns, root:)

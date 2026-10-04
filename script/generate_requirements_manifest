@@ -401,7 +401,7 @@ EVIDENCE = {
     supporting: [
       "test/agent_skills_adversarial_test.rb#test_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed",
       "test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing",
-      "test/agent_skills_adversarial_test.rb#test_a13b_compiling_a_hostile_tree_invokes_no_execution_verb"
+      "test/agent_skills_adversarial_test.rb#test_compiling_a_hostile_tree_invokes_no_execution_verb"
     ],
     classification: "deferred-by-contract"
   },

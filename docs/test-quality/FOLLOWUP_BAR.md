@@ -44,7 +44,9 @@ TestSuite impact: seven dependents within two hops. Read subjects end to end bef
 
 | 2 | Share seven repeating model classes, two strict queued models, profile-session setup, recovery setup and edit plans. Preserve each provider's exhaustion semantics. Local review: every existing test method retained; new helper methods remain below 20 lines; no critical/high findings. | Twelve consumer suites pass individually; helper 10/24; aliasing and repeated-response mutations fail; new helpers lint clean; no changed-file cop increase vs detached baseline | 862a7b61 |
 
-| 3 | Share nine subject-specific storage/transport helpers across 22 suites. Replace the MCP guessed delay with a bounded signal from the real SDK client; retain real timeout/restart assertions and join its caller during cleanup. Local diff review: no test removed or softened; every new helper method meets the configured 20-line bar. | All 22 suites pass separately; final MCP 33/214; no changed-file lint increase across 31 Ruby files; diff/syntax checks pass | This round |
+| 3 | Share nine subject-specific storage/transport helpers across 22 suites. Replace the MCP guessed delay with a bounded signal from the real SDK client; retain real timeout/restart assertions and join its caller during cleanup. Local diff review: no test removed or softened; every new helper method meets the configured 20-line bar. | All 22 suites pass separately; final MCP 33/214; no changed-file lint increase across 31 Ruby files; diff/syntax checks pass | 9308f0df |
+
+| 4 | Include application/nested script sources in syntax discovery; use the locked Minitest SEED variable through one shared coverage environment; reject private/protected runnable tests. Rename one private source-list helper using the reserved test prefix. Repair the stale requirements evidence reference and regenerate its manifest. Local review: no existing behavioral assertions removed. | Fast lane: all 321 files pass; runner 18/42; manifest 11/3,266; skills boundary 6/42; source/seed/visibility mutations each fail; no changed-file lint increases | This round |
 
 ## Known red at baseline
 
@@ -55,3 +57,7 @@ Fresh baseline execution also exposed stale renamed evidence in the requirements
 The pending follow-up repairs its generator/reference together. Baseline coverage is
 90.31% line / 71.58% branch, but Minitest 6 ignores the old MT_SEED variable; a
 controlled same-seed comparison is still required.
+
+The proposed injected MCP concurrency failure was rejected during owner review because
+it changed the live-server evidence and retry policy. It was reverted before this commit;
+the real server, 0.5-second deadline and retry budget of one remain unchanged.

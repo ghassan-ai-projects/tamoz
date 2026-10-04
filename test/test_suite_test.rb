@@ -18,7 +18,7 @@ class TestSuiteTest < Minitest::Test
 
   def test_syntax_inventory_includes_evaluation_sources_and_gem_executables
     paths = %w[Rakefile test/support/helper.rb gems/subject/lib/subject.rb gems/subject/exe/subject
-               agenteval/lib/grader.rb]
+               agenteval/lib/grader.rb apps/reference/main.rb script/quality/inventory.rb scripts/probe.rb]
 
     with_sources(paths.to_h { |path| [path, ''] }.merge('agenteval/README.md' => '')) do |root|
       assert_equal paths.sort, TestSuite.sources(root:)
@@ -153,11 +153,41 @@ class TestSuiteTest < Minitest::Test
     end
   end
 
+  %w[private protected].each do |visibility|
+    define_method("test_runner_rejects_#{visibility}_tests_instead_of_silently_omitting_them") do
+      source = "require 'minitest/autorun'; class HiddenTest < Minitest::Test; " \
+               "#{visibility}; define_method(:test_hidden) { flunk 'must run' }; end"
+      with_sources('test/hidden_test.rb' => source) do |root|
+        output, status = run_fixture(File.join(root, 'test/hidden_test.rb'))
+
+        refute_predicate status, :success?, output
+        assert_includes output, 'non-public test methods: HiddenTest#test_hidden'
+      end
+    end
+  end
+
+  def test_coverage_environment_controls_the_locked_minitest_seed_and_clears_filters
+    source = "require 'minitest/autorun'; class SeedTest < Minitest::Test; def test_runs; assert true; end; end"
+    with_sources('test/seed_test.rb' => source) do |root|
+      output, status = run_fixture(File.join(root, 'test/seed_test.rb'), env: TestSuite.coverage_environment)
+
+      assert_predicate status, :success?, output
+      assert_match(/Run options: --seed 1\b/, output)
+      assert_equal({ 'TEST' => nil, 'TESTOPTS' => nil }, TestSuite.coverage_environment.slice('TEST', 'TESTOPTS'))
+    end
+  end
+
   def test_repository_test_identities_are_unique
     assert_silent { TestSuite.validate_identities!(TestSuite.files) }
   end
 
   private
+
+  def run_fixture(path, env: {})
+    script = 'load ARGV.shift; exit(system(*test_command([ARGV.shift])) ? 0 : 1)'
+    Open3.capture2e(env, RbConfig.ruby, '-rrake', '-e', script,
+                    File.join(TestSuite::ROOT, 'Rakefile'), path, chdir: TestSuite::ROOT)
+  end
 
   def with_sources(sources)
     Dir.mktmpdir('test-suite') do |root|

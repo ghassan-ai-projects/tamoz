@@ -79,3 +79,8 @@
   `WITHOUT ROWID`; `logical_database_rows` failed on an empty, healthy database inside
   its observer. Order by all projected columns and preserve duplicate rows. Inspect
   the observer before attributing a wrapped SQL error to durability or corruption.
+
+- **The locked Minitest version reads `SEED`, not `MT_SEED`.** Coverage commands share
+  `TestSuite.coverage_environment`; its subprocess regression verifies the actual run
+  options. A private helper must not use the reserved `test_` prefix: the runner
+  rejects non-public test methods after loading every selected file.

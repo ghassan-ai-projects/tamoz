@@ -93,8 +93,9 @@ LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
 
 def test_command(files, warnings: false)
   options = warnings ? ["-w"] : []
-  [RbConfig.ruby, *options, "-Itest", *LIB_FLAGS,
-   "-e", "ARGV.shift(Integer(ARGV.shift)).each { |file| require File.expand_path(file) }",
+  [RbConfig.ruby, *options, "-Itest", *LIB_FLAGS, '-r', File.join(TestSuite::ROOT, 'test/support/test_suite'),
+   "-e", "ARGV.shift(Integer(ARGV.shift)).each { |file| require File.expand_path(file) }; " \
+         "TestSuite.validate_runnable_methods! if defined?(Minitest::Runnable)",
    files.length.to_s, *files, *Shellwords.split(ENV.fetch("TESTOPTS", ""))]
 end
 
@@ -387,11 +388,11 @@ namespace :quality do
     require 'open3'
     require_relative 'script/quality/coverage_totals'
     baseline = JSON.parse(File.read(QUALITY_BASELINE)).fetch('coverage')
-    # MT_SEED pinned (same as the baseline generator) so the comparison is
+    # Seed pinned (same as the baseline generator) so the comparison is
     # exact — a random seed would move a line or two and false-fail the ratchet.
     FileUtils.rm_f(QUALITY_RESULTSET)
     _out, err, status = Open3.capture3(
-      { 'RUN_COVERAGE' => '1', 'MT_SEED' => '1', 'TEST' => nil, 'TESTOPTS' => nil }, RbConfig.ruby, '-S', 'bundle', 'exec', 'rake', 'test', 'test_slow',
+      TestSuite.coverage_environment, RbConfig.ruby, '-S', 'bundle', 'exec', 'rake', 'test', 'test_slow',
       chdir: QUALITY_ROOT
     )
     raise "quality:coverage failed: coverage run failed: #{err}" unless status.success?
