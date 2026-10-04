@@ -10,7 +10,7 @@ Three different kinds of evidence, never mixed:
 |---|---|---|
 | Deterministic tests (plumbing) | The reader, rules, detectors and commands do what they say, on records written through the real `tamoz-sqlite` APIs | That a model reasons well |
 | Value comparison (plumbing) | What an operator learns from `diagnose` that the existing surface does not show | Anything about a model |
-| Real-model runs (DeepSeek via OpenRouter) | That the agent finds the root cause of its own failures through `self-observe` probes and cites what it read | Generalisation: the corpus is a development set, not held out |
+| Real-model runs (Z.ai GLM 5.3 flash; historical runs DeepSeek via OpenRouter) | That the agent finds the root cause of its own failures through `self-observe` probes and cites what it read | Generalisation: the corpus is a development set, not held out |
 
 ## 1. The corpus
 
@@ -34,8 +34,8 @@ sidecar file the journal itself writes).
 | `websearch_egress` | 4 searches refused `destination_not_allowed` | `destination_not_allowed` |
 | `telemetry_loss` | 240 journal drops (`queue_full`) | `queue_full` |
 | `single_model_failure` | 1 model call fails `http_failure` (added after run 2, see §4) | `http_failure` |
-| `unknown_write_among_misses` (trap) | 8 routine reads fail `not_found`; 1 aerator write ends `unknown`, `transport_timeout` — the code appears only in the timeline | `transport_timeout` |
-| `unknown_feeder_among_empty_searches` (trap) | 5 searches fail `no_results`; 1 feeder write ends `unknown`, `connection_reset` — timeline only | `connection_reset` |
+| `unknown_write_among_misses` (trap) | 8 reads fail `not_found`, spread over the healthy turns; 1 aerator write ends `unknown`, `transport_timeout`, in a turn of its own | `transport_timeout` |
+| `unknown_feeder_among_empty_searches` (trap) | 5 searches fail `no_results`, spread; 1 feeder write ends `unknown`, `connection_reset`, alone | `connection_reset` |
 | `approval_stall` | 2 approvals unanswered (judged 5 h later) | `approval.waiting` |
 | `stuck_effect` | 1 shell effect running (judged 45 min later) | `effect.stuck` |
 | `clean` | none | — |
@@ -44,14 +44,14 @@ sidecar file the journal itself writes).
 
 `ruby -Itest test/self_diagnosis_corpus_test.rb` — 16 runs (15 scenarios + the digest pin),
 44 assertions, 0 failures. Each scenario must fire **exactly** its expected rules, and the marker must
-be in the output of the probe that decides it (`diagnose`, or `timeline` for the two traps).
+be in the `diagnose` output.
 
 | | Result |
 |---|---|
 | Fault scenarios whose expected rules all fired | 14 / 14 (100%) |
 | Rules fired that were not expected | 0 |
 | Findings on the clean runtime | 0 |
-| Marker present in its deciding probe's output (so a model *can* find it) | 14 / 14 |
+| Marker present in the `diagnose` output (so a model *can* find it) | 14 / 14 |
 
 **Expectation error caught by the first run, recorded rather than hidden.** Before any run, the
 corpus expected `model.failure_rate` / `tool.failure_rate` to fire in four scenarios. They did not:
@@ -64,7 +64,7 @@ were not touched. `effect.repeated_failure` named the cause in all four.
 
 `script/self_investigation_eval value` builds each scenario into a real runtime directory
 (`tamoz init`), then asks the existing operator surface and the new command whether they *name* the
-root-cause marker. Raw output (clean tree, `e542237d`):
+root-cause marker. Raw output (clean tree, `efae9bf4`):
 [`runs/value-2026-10-04-final.json`](runs/value-2026-10-04-final.json).
 
 | Scenario | `tamoz status --json` | `tamoz observe metrics` | `tamoz diagnose` |
@@ -79,9 +79,9 @@ root-cause marker. Raw output (clean tree, `e542237d`):
 | websearch_egress | no | no | **yes** |
 | telemetry_loss | no (shows a total drop count) | no | **yes** |
 | single_model_failure | no | no | **yes** |
-| unknown_write_among_misses (trap) | no | no | no — the code is only in `timeline` |
-| unknown_feeder_among_empty_searches (trap) | no | no | no — the code is only in `timeline` |
-| **Total** | **0 / 12** | **0 / 12** | **10 / 12** (the traps are found through `timeline`, §4) |
+| unknown_write_among_misses (trap) | no (lists the blocked effect key) | no | **yes** |
+| unknown_feeder_among_empty_searches (trap) | no (lists the blocked effect key) | no | **yes** |
+| **Total** | **0 / 12** | **0 / 12** | **12 / 12** |
 
 `approval_stall` and `stuck_effect` need real elapsed time from the CLI (the command uses the wall
 clock); they are covered by the injected-clock tests above. **Harness defect caught:** the first value
@@ -112,55 +112,63 @@ fabricated citation hidden beside a valid one, and the earlier wrong-cause/ungro
 runs retain the full grading inputs, question, corpus/rules digests and implementation provenance.
 The question changed, so the corpus digest was reviewed and repinned; historical run digests remain
 unchanged. A second review found a model-free "most frequent code" policy also scored 9/9, so the
-grader now scores two deterministic baselines beside the model, and two trap scenarios hide the cause
-from `diagnose` (`test_model_free_baselines_solve_an_ordinary_scenario_and_fail_the_trap`).
+grader now scores two deterministic baselines beside the model, and two traps defeat the frequency
+policy (`test_frequency_fails_both_traps_and_ranking_solves_every_scenario`).
 
-### Final-design run — [`runs/real-2026-10-04-run4-zai-final.json`](runs/real-2026-10-04-run4-zai-final.json) — C5
+### Final run — [`runs/real-2026-10-04-run5-zai-final.json`](runs/real-2026-10-04-run5-zai-final.json) — C5
 
-**Model:** `zai/glm-5.3-flash` (Z.ai coding-plan endpoint). **Code:** `e542237d` (the record says
-`dirty: true` because EVAL.md and one test's file-read encoding were being edited during the run; no
-file under `gems/` or `script/` differed). **Corpus:** `sha256:60437638…`, 11 real-model scenarios,
-development set. Every investigation got the same question; the hypothesis field must be exactly the
-root-cause code. Graded by `test/support/self_investigation_grader.rb`; next to the model, two
-model-free baselines are scored by the same grader on the same `diagnose` output: **frequency** (the
-most frequent known code) and **ranked** (the first known code in the top-ranked finding).
+**Model:** `zai/glm-5.3-flash` (Z.ai coding-plan endpoint). **Code:** `efae9bf4`, clean tree.
+**Corpus:** `sha256:c78502c0…`, 11 real-model scenarios, development set, one run each. Every
+investigation got the same question; the hypothesis field must be exactly the root-cause code.
+Graded by `test/support/self_investigation_grader.rb`. Beside the model, two model-free baselines
+are scored by the same grader on the same `diagnose` output: **frequency** (the most frequent known
+code) and **ranked** (the first known code in the top-ranked finding).
 
-| Scenario | Model | Frequency baseline | Ranked baseline | Probe calls | Model calls | Seconds |
+| Scenario | Model | Frequency | Ranked | Probe calls | Model calls | Seconds |
 |---|---|---|---|---|---|---|
-| provider_balance | success | success | success | 5 | 4 | 143 |
-| rate_limited | success | success | success | 3 | 7 | 106 |
-| mcp_transport | success | success | success | 3 | 4 | 86 |
-| check_failing | success | success | success | 4 | 5 | 192 |
-| tool_not_found | success | success | success | 4 | 5 | 185 |
-| worker_claim_errors | success | success | success | 4 | 6 | 185 |
-| auth_refused | success | success | success | 4 | 5 | 154 |
-| websearch_egress | success | success | success | 3 | 4 | 71 |
-| telemetry_loss | success | success | success | 5 | 5 | 150 |
-| unknown_write_among_misses (trap) | **wrong cause** (`not_found`) | fail | fail | 3 | 5 | 257 |
-| unknown_feeder_among_empty_searches (trap) | **success** (`connection_reset`) | fail | fail | 3 | 4 | 110 |
+| provider_balance | success | success | success | 3 | 4 | 104 |
+| rate_limited | success | success | success | 3 | 6 | 144 |
+| mcp_transport | success | success | success | 4 | 6 | 130 |
+| check_failing | success | success | success | 5 | 5 | 125 |
+| tool_not_found | success | success | success | 5 | 6 | 147 |
+| worker_claim_errors | success | success | success | 8 | 8 | 217 |
+| auth_refused | success | success | success | 3 | 5 | 202 |
+| websearch_egress | success | success | success | 3 | 5 | 106 |
+| telemetry_loss | success | success | success | 3 | 5 | 95 |
+| unknown_write_among_misses (trap) | success | **fail** (`not_found`) | success | 18 | 16 | 508 |
+| unknown_feeder_among_empty_searches (trap) | success | **fail** (`no_results`) | success | 4 | 4 | 119 |
 
-| Measure | Model | Baselines | Threshold (bar C5) |
-|---|---|---|---|
-| Correct, grounded in a cited probe result | **10 / 11** | 9 / 11 each | ≥ 6 / 8 |
-| Fabricated codes or citations | **0** | — | 0 |
-| Model calls | 54 (4.9 per investigation) | 0 | — |
+| Measure | Model | Frequency | Ranked | Threshold (bar C5) |
+|---|---|---|---|---|
+| Correct, grounded in a cited probe result | **11 / 11** | 9 / 11 | 11 / 11 | ≥ 6 / 8 |
+| Fabricated codes or citations | **0** | — | — | 0 |
+| Model calls | 70 (6.4 per investigation) | 0 | 0 | — |
+| Cost | Z.ai GLM Coding Plan quota; the endpoint reports no per-call price | — | — | named |
 
-What this does and does not show:
+What this shows, and what it does not:
 
-- **It finds its own failures, cites what it read, and invents nothing**: 10/11, no fabricated code
-  or citation, every turn ended `reported`.
-- **On the nine ordinary scenarios a model-free baseline does as well.** The diagnosis engine already
-  ranks the cause first, which is the design: detection is deterministic, the model reads it,
-  explains it and cites it. Those nine scenarios show faithful reporting, not independent reasoning.
-- **The traps are where reasoning is needed.** The root cause (an `unknown` outcome on an external
-  write) is absent from `diagnose` and visible only through `timeline` or `explain_turn`, and both
-  baselines fail. The model solved one of the two here and the other in a separate earlier run
-  ([`runs/real-2026-10-04-trap-zai.json`](runs/real-2026-10-04-trap-zai.json)): 2 of 3 trap attempts,
-  too few to quote a rate. Where it failed, it fell for the frequent, harmless `not_found` reads.
-- Development set, one model, one run per scenario. Not held out; not a benchmark.
+- **Tamoz finds the root cause of its own failures through its own probes, cites what it read, and
+  invents nothing**: 11/11, no fabricated code or citation, every turn ended `reported`.
+- **It does not choose better than the deterministic diagnosis.** The ranked baseline also scores
+  11/11: `diagnose` already puts the cause first, with its error code. That is the design —
+  detection is deterministic; the model reads, explains, cites and proposes. The model beats a naive
+  frequency count (the traps), not the ranking.
+- **Where it struggled:** on `unknown_write_among_misses` it needed 18 probe calls and 16 model calls
+  to settle on the critical unknown write over eight frequent, harmless failures.
+- **Development-set tuning, stated:** the traps were rebalanced and the diagnose probe's description
+  gained "ordered most severe first" after the model missed the first trap twice (below). Both
+  changes are accurate, but the description does steer the model toward the ranked policy, and this
+  run comes after them on the same development set.
+  Nothing is held out.
 
-Earlier run on the same final design but the previous corpus (9 scenarios, no traps):
-[`runs/real-2026-10-04-run3-zai.json`](runs/real-2026-10-04-run3-zai.json) — 9/9, 0 fabricated.
+### How the result was reached (all recorded runs)
+
+| Run | Code / tree | Corpus | Result | Why it is not the headline |
+|---|---|---|---|---|
+| [`run4b`](runs/real-2026-10-04-run4b-zai.json) | `5c541d43`, clean | traps in one turn | model 10/11, ranked 11/11, frequency 9/11 | the model chose `not_found` on the aerator trap with a defensible causal reading: the reads failed in the same turn just before the write. The trap label was ambiguous; the traps were redesigned |
+| [`run4`](runs/real-2026-10-04-run4-zai-final.json) | `e542237d`, docs being edited | traps hidden from `diagnose` | model 10/11, both baselines 9/11 | a reviewer showed a model-free "top finding → timeline row" join scores 11/11; the real gap was that `diagnose` omitted the code of its critical finding, now fixed in the product |
+| [`trap`](runs/real-2026-10-04-trap-zai.json) | `a4902b96`, dirty | an intermediate corpus (`42a02d86…`) | 1/1 on the first trap | single exploratory run |
+| [`run3`](runs/real-2026-10-04-run3-zai.json) | `a4902b96`, dirty | 9 scenarios, no traps | 9/9 | no baseline; a frequency policy also scored 9/9 there |
 
 ### Run 1 — [`runs/real-2026-10-04-run1.json`](runs/real-2026-10-04-run1.json)
 
@@ -227,8 +235,13 @@ postmortem labels the analysis as not verified by the postmortem command itself.
 
 ## 6. What it cannot do yet
 
-- **The model's added value over the deterministic ranking is small in this corpus**: model-free
-  baselines match it on every ordinary scenario; it beats them only on the traps, 2 of 3 attempts.
+- **The model does not out-choose the deterministic ranking.** The ranked baseline matches it 11/11;
+  its value is the cited explanation and proposals, not the choice. A held-out corpus with causes
+  `diagnose` cannot rank is future work.
+- **An open request's approval window runs until now**: in a shared worker database a request paused
+  for a long time collects every approval since it started, from any thread (worse form of F4).
+- **The A8 guard reads `detectors.rb` only** and catches a comparison against a digit; a threshold
+  hidden behind a named constant, or one in `diagnosis.rb` or `summary.rb`, would pass it.
 - **Corpus realism:** the builder writes failed effects after their turn completed, so turns read
   `completed` with failures inside them (the model noticed). Real runtimes order these differently.
 - **Failure messages are not shown**, only class and code: the model and the operator see

@@ -101,7 +101,7 @@ redacted at the report surface; the database queries share one read snapshot.
 
 | Command | Answers |
 |---|---|
-| `tamoz diagnose [--since 24h] [--json]` | Which rules fired in the window, with the rows that prove each finding, plus per-operation attempts, failures and p50/p95 latency |
+| `tamoz diagnose [--since 24h] [--json]` | Which rules fired in the window, with the rows that prove each finding, plus per-operation attempts, failures, unknown outcomes and p50/p95 latency |
 | `tamoz explain THREAD [--request ID] [--json]` | One turn's decision record: requests, executions, every model/tool/check effect with attempts and failures, approvals with policy revision, answer and actor evidence |
 | `tamoz postmortem --title T --out DIR [--since 24h] [--analysis FILE]` | A blameless Markdown + JSON postmortem: impact, timeline, findings, unknowns, proposed actions (never executed) |
 | `tamoz self-observe` | A stdio MCP server exposing `diagnose`, `timeline`, `explain_turn` so an investigation can read the same evidence |
@@ -162,7 +162,7 @@ sources:
     targets: {}
     probes:
       - name: probe_self_diagnose
-        description: Findings about this Tamoz runtime in the window, ordered most severe first, with evidence rows and per-operation failure counts.
+        description: Findings about this Tamoz runtime in the window, ordered most severe first, with evidence rows (error class and code of each failure) and per-operation counts.
         backing: {server: tamoz-self, tool: diagnose}
         arguments: {from: "{window.from}", until: "{window.until}"}
       - name: probe_self_timeline

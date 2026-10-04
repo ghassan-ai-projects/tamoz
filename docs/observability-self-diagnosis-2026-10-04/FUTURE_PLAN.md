@@ -116,6 +116,16 @@ ADR-050's phase 5 and needs its fault-injection proof first. No actuator in obse
 **Tests:** ADR-050's own list (a degraded window blocks a response; flapping produces one request).
 **Decision:** ratify ADR-050 first.
 
+## F8. A held-out self-investigation corpus the ranking cannot solve
+
+**Serves:** the claim that the model adds judgement, not only explanation. On the development corpus
+a model-free "top-ranked finding" baseline matches the model 11/11 (EVAL §4), so the eval shows
+faithful, cited reporting rather than better choice. **Design:** scenarios written by someone who has
+not seen the rules, where the cause needs joining evidence across threads or time (a credential
+rotated in one thread, failures in another) and is not the top finding; kept out of the repository
+until run. **Tests:** the grader's two baselines must fail most of them before a paid run; report model
+and baselines side by side. **Decision:** who authors the held-out set.
+
 ## Owner decisions
 
 | # | Decision | Default if undecided |

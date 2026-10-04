@@ -28,6 +28,8 @@ class SelfDiagnosisTest < Minitest::Test
     assert_equal(['tool.mcp.write'], finding.evidence.map { |entry| entry.fetch('operation') })
     assert_equal({ 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout' },
                  finding.evidence.first.fetch('failure'))
+    write = report.summary.fetch('operations').find { |line| line.fetch('operation') == 'tool.mcp.write' }
+    assert_equal [0, 1], write.values_at('failed', 'unknown')
     assert_equal report.findings.first, finding
   end
 

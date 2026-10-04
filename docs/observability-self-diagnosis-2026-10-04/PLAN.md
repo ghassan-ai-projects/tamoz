@@ -130,7 +130,7 @@ log" stays true; the sealed durable record would become one) — see `FUTURE_PLA
 |---|---|
 | 020 | Secrets are refused by type and never scrubbed by name. Diagnosis adds no scrubbing by name: failure output is class and code identifiers, and any secret-shaped value is dropped or redacted by shape (`Tamoz::Core.scrub_secrets`); the state codec still refuses `Tamoz::Secret`. |
 | 023 | Self-improvement is candidate promotion, never live self-mutation. Diagnosis changes nothing: proposed actions in a postmortem are text, never executed, and no rule, threshold or behaviour is promoted from a finding. |
-| 024 | Tests prove plumbing; real-model claims remain separately measured and final-design eval blocked. |
+| 024 | "Smart" means evidence-based and verified: tests prove plumbing only; real-model claims rest on recorded Z.ai runs with model-free baselines beside them (EVAL §4). |
 | 028 | Diagnosis uses the healing vocabulary but introduces no remediation loop. |
 | 044 | Contract ownership is extended within its existing gem and adapter boundary. |
 | 045 | Durable storage remains the source of truth; the reader adds no table or secondary truth. |

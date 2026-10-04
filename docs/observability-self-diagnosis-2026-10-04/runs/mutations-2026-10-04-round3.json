@@ -131,6 +131,17 @@
     "name": "test_unknown_effect_is_a_critical_finding_with_its_row_as_evidence",
     "red_under_mutation": true,
     "green_after_restore": true,
-    "result_line": "1 runs, 2 assertions, 0 failures, 1 errors, 0 skips (run in the working tree on the round-4 code, restored before any other test)"
+    "result_line": "1 runs, 2 assertions, 0 failures, 1 errors, 0 skips (round-4 code in the working tree, restored and re-run green)"
+  },
+  {
+    "property": "unknown-split",
+    "mutation": "count unknown attempts as failed again in Summary.operation_line",
+    "file": "gems/tamoz-observability/lib/tamoz/observability/diagnosis/summary.rb",
+    "applied": true,
+    "test": "test/self_diagnosis_test.rb",
+    "name": "test_unknown_effect_is_a_critical_finding_with_its_row_as_evidence",
+    "red_under_mutation": true,
+    "green_after_restore": true,
+    "result_line": "1 runs, 4 assertions, 1 failures, 0 errors, 0 skips (round-4 code in the working tree)"
   }
 ]
