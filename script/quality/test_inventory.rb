@@ -26,7 +26,7 @@ module TestQualityInventory
     summary = STATUSES.map { |status| "#{status}: #{counts.fetch(status, 0)}" }.join(' · ')
     lines = ['# Test file tracker', '', summary, '',
              'Generated from `reviews.json` by `ruby script/quality/test_inventory.rb`.', '',
-             'Done means the recorded improvement passed focused checks and independent review.',
+             'Done means the recorded improvement passed the checks and review recorded in its evidence.',
              'Fine means the reviewed file needs no change. Neither status means the whole suite passed.',
              'Needs review is deliberately separate from a confirmed defect.', '',
              '| Test file | Status | Finding / completed work | Verification |',

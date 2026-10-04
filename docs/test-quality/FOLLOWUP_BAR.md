@@ -62,4 +62,31 @@ The proposed injected MCP concurrency failure was rejected during owner review b
 it changed the live-server evidence and retry policy. It was reverted before this commit;
 the real server, 0.5-second deadline and retry budget of one remain unchanged.
 
-| 5 | Share remaining duplicate CLI, source-audit, websearch and checkpoint setup. Extract named scorecard/change-evaluation assertions and preserve independently stored API/aggregate expectations. Local review: scenarios, callbacks, retry policy and existing assertions retained; no production edits. | All affected consumers pass individually. API 3/1,176, scorecard 6/215 and change evaluation 2/30 match baseline counts. Expected-value and event-filter mutations fail; 16 changed Ruby files have no cop increase; Enola reports zero new findings. | This round |
+| 5 | Share remaining duplicate CLI, source-audit, websearch and checkpoint setup. Extract named scorecard/change-evaluation assertions and preserve independently stored API/aggregate expectations. Local review: scenarios, callbacks, retry policy and existing assertions retained; no production edits. | All affected consumers pass individually. API 3/1,176, scorecard 6/215 and change evaluation 2/30 match baseline counts. Expected-value and event-filter mutations fail; 16 changed Ruby files have no cop increase; Enola reports zero new findings. | 73c42938 |
+
+
+## Scope and retained evidence
+
+The remaining 161 file dispositions now distinguish source review from complete
+behavioral proof. Of these, 140 have identical executable token streams to the
+pre-branch revision; 21 changed files were checked against their original scenarios
+and shared helpers. Source guards found no ignored assertion predicates or banned
+comment vocabulary. No exact duplicate helper of eight or more lines remains.
+Long cohesive scenarios were retained rather than split to satisfy a line count.
+
+Existing waits retained after review: the external timeout child in
+`test/agent_repair_evaluation_test.rb:222`; SQLite crash/lease evidence in
+`test/sqlite_crash_recovery_test.rb:28,82,121`; fan-out completion in
+`test/graph_subgraph_fanout_test.rb:56`; drain readiness polling in
+`test/concurrency_drain_test.rb:196`. These are not claimed to have mocked clocks.
+The SQLite adapter has no public lease-clock injection seam. Changing that facade
+or replacing real crash evidence is outside behavior-preserving test refactoring.
+
+`test/support/source_boundary_audit.rb:12` preserves the existing ArgumentError
+rescue in both original source audits. Failing closed on unreadable source would
+change their behavior; it remains a separately recorded testing-standard concern.
+
+Review is local throughout this follow-up, as the owner explicitly prohibited
+subagents. Historical independent reviews remain historical evidence only.
+
+| 6 | Complete the remaining per-file source dispositions with explicit limits on behavioral proof; correct tracker wording so local review is not called independent review. Existing real-process timing and source-audit rescue concerns are recorded separately. | Inventory 355 rows: 215 done / 140 fine; inventory regressions 4/9; generator lint adds no offense; local diff review and diff check pass. | This round |
