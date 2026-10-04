@@ -44,7 +44,10 @@ wrong silently is worse than none.
   explanations filter effects by request identity; checkpoints are labelled as execution context.
 - **Diagnosis cannot act.** `Diagnosis`, `Explanation`, `Timeline`, `Postmortem`,
   `SelfObservation` and `SelfObserveServer` reach no writer, enqueue, network client or effect
-  dispatch. The only file written is the postmortem in the operator's `--out` directory.
+  dispatch. The only file written is the postmortem in the operator's `--out` directory; opening a
+  quiet WAL database read-only may leave SQLite's `-wal`/`-shm` sidecars (mode 0600), and the database
+  file itself stays byte-identical. Rules about unknown effects and unsettled schedules report the
+  current state, not the state as of a window's end.
 - **A model analysis is cited.** A model analyses Tamoz only through `tamoz investigate` over the
   `self-observe` MCP tools declared as operator probes, whose every finding must cite a probe call
   that answered. `postmortem --analysis` embeds a findings report given to it and labels it as not
@@ -62,7 +65,9 @@ approval to a turn only by time — and every threshold change is a reviewed dat
 ## Invariants
 
 - 59 — observation cannot change execution: the reader is read-only and diagnosis has no actuator.
-- 60 — no secret reaches a report, explanation, timeline, postmortem or tool result.
+- 60 — no value of a known secret shape (`Tamoz::Core` secret patterns) or `Tamoz::Secret` reaches a
+  report, explanation, timeline, postmortem or tool result; a secret of an unrecognised shape inside an
+  attached analysis file is not detected.
 - 61 — safety-bearing findings derive from the durable record; journal-derived evidence is labelled
   and loss is counted.
 

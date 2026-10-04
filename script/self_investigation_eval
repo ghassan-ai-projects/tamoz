@@ -50,12 +50,13 @@ class SelfInvestigationEval
     def investigate(corpus, scenario, vocabulary)
       with_runtime(scenario) do |paths|
         write_probe_config(paths.fetch(:runtime))
+        baselines = SelfInvestigationGrader.baselines(scenario, diagnosis_json(paths.fetch(:runtime)), vocabulary)
         text, status, seconds = investigation_turn(paths, corpus.fetch('question'))
         shown = shown_document(paths)
         inputs = { scenario:, vocabulary:, report: shown['report'], cited_probes: cited_probes(text),
                    probe_results: probe_results(paths) }
         SelfInvestigationGrader.grade(**inputs).to_h.merge(
-          exit: status, seconds: seconds.round(1), model_calls: model_calls(paths),
+          baselines:, exit: status, seconds: seconds.round(1), model_calls: model_calls(paths),
           grading_inputs: inputs, output: Tamoz::Core.scrub_secrets(text),
           turn: shown.slice('status', 'terminal'), self_diagnosis: shown['report'] ? nil : self_diagnosis(paths)
         )
@@ -82,12 +83,19 @@ class SelfInvestigationEval
         truth = scenario.fetch('truth')
         status, = tamoz('--json', '--runtime-dir', runtime, 'status')
         metrics, = tamoz('--runtime-dir', runtime, 'observe', 'metrics')
-        diagnosis, = tamoz('--runtime-dir', runtime, 'diagnose', '--json', '--since', '24h')
+        diagnosis = diagnosis_json(runtime)
+        vocabulary = SelfInvestigationGrader.vocabulary(SelfDiagnosisCorpus.load)
         { 'scenario' => scenario.fetch('id'), 'truth' => truth, 'expected_rules' => scenario.fetch('expected_rules'),
+          'baselines' => truth && SelfInvestigationGrader.baselines(scenario, diagnosis, vocabulary),
           'status_names_it' => named?(status, truth), 'metrics_names_it' => named?(metrics, truth),
           'diagnose_names_it' => named?(diagnosis, truth), 'status_bytes' => status.bytesize,
           'diagnose_rules' => JSON.parse(diagnosis).fetch('findings').map { |finding| finding.fetch('rule_id') } }
       end
+    end
+
+    def diagnosis_json(runtime)
+      text, = tamoz('--runtime-dir', runtime, 'diagnose', '--json', '--since', '24h')
+      text
     end
 
     def named?(output, truth) = truth.nil? ? false : output.include?(truth)

@@ -252,6 +252,74 @@
       "real_model": false
     },
     {
+      "id": "unknown_write_among_misses",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.read_file",
+          "outcome": "failed",
+          "count": 8,
+          "error": {
+            "class": "Tamoz::Agent::ToolError",
+            "code": "not_found",
+            "message": "optional file is absent"
+          }
+        },
+        {
+          "kind": "effect",
+          "operation": "tool.mcp.ponds.set_aerator",
+          "outcome": "unknown",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::MCP::TransportError",
+            "code": "transport_timeout",
+            "message": "no answer after the request was sent"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "truth": "transport_timeout",
+      "decisive_probe": "timeline",
+      "real_model": true
+    },
+    {
+      "id": "unknown_feeder_among_empty_searches",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.websearch.search",
+          "outcome": "failed",
+          "count": 5,
+          "error": {
+            "class": "Tamoz::MCP::WebSearch::SearchError",
+            "code": "no_results",
+            "message": "the query matched nothing"
+          }
+        },
+        {
+          "kind": "effect",
+          "operation": "tool.mcp.ponds.set_feeder",
+          "outcome": "unknown",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::MCP::TransportError",
+            "code": "connection_reset",
+            "message": "the connection closed after the request was sent"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "truth": "connection_reset",
+      "decisive_probe": "timeline",
+      "real_model": true
+    },
+    {
       "id": "approval_stall",
       "faults": [
         {

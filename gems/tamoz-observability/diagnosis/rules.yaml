@@ -99,7 +99,7 @@ rules:
     severity: high
     category: dependency_unavailable
     title: A model call failed
-    action: One failed model call ends the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
+    action: A failed model call can end or degrade the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
 
   - id: request.failed
     detector: failure_groups

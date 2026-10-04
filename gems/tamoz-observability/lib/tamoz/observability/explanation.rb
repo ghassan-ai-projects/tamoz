@@ -6,10 +6,11 @@ module Tamoz
     module Explanation
       FORMAT_VERSION = 1
       APPROVAL_LINKS = %i[database time_window].freeze
+      TERMINAL_REQUESTS = %w[completed failed].freeze
 
       module_function
 
-      def build(records, thread:, approval_link:, request: nil)
+      def build(records, thread:, approval_link:, request: nil, now_ms: nil)
         raise ValidationError, "approval_link must be one of #{APPROVAL_LINKS.join(', ')}" unless
           APPROVAL_LINKS.include?(approval_link)
 
@@ -19,7 +20,8 @@ module Tamoz
                            'outcome' => requests.last&.fetch('status'),
                            'requests' => requests.map { |row| request_line(row) },
                            'executions' => executions(records, requests, request:),
-                           'approvals' => approvals(records, requests, request ? :time_window : approval_link)
+                           'approvals' => approvals(records, requests, request ? :time_window : approval_link,
+                                                    now_ms:)
                          })
       end
 
@@ -84,9 +86,9 @@ module Tamoz
         }.compact
       end
 
-      def approvals(records, requests, link)
+      def approvals(records, requests, link, now_ms:)
         decisions = records.fetch('approval_decisions')
-        decisions = within(decisions, requests) if link == :time_window
+        decisions = within(decisions, requests, now_ms) if link == :time_window
         {
           'link' => link.to_s,
           'decisions' => decisions.sort_by { |row| [row['created_at_ms'], row['decision_id']] }
@@ -94,10 +96,16 @@ module Tamoz
         }
       end
 
-      def within(decisions, requests)
+      def within(decisions, requests, now_ms)
         from = requests.map { |row| row['created_at_ms'] }.min
-        to = requests.map { |row| row['updated_at_ms'] }.max
-        decisions.select { |row| row['created_at_ms'].between?(from, to) }
+        to = requests.map { |row| window_end(row, now_ms) }.max
+        decisions.select do |row|
+          [row['created_at_ms'], row['resolved_at_ms']].compact.any? { |at| at.between?(from, to) }
+        end
+      end
+
+      def window_end(request, now_ms)
+        TERMINAL_REQUESTS.include?(request['status']) ? request['updated_at_ms'] : now_ms || request['updated_at_ms']
       end
 
       def decision_line(row)

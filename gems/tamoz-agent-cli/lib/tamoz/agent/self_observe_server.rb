@@ -16,7 +16,8 @@ module Tamoz
       TOOLS = {
         'diagnose' => [
           'Findings about this Tamoz runtime between from and until (ISO 8601; default the last 24 hours): ' \
-          'every rule that fired, its evidence rows, and per-operation counts and latencies.', WINDOW
+          'every rule that fired, its evidence rows, and per-operation counts and latencies. Rules about ' \
+          'unknown effects and unsettled schedules report the current state, whatever the window.', WINDOW
         ],
         'timeline' => [
           'Ordered events between from and until: turns requested and ended, failed or unknown effect attempts ' \

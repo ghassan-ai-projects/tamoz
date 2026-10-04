@@ -60,7 +60,8 @@ module Tamoz
                                            .find { |_entry, rows| rows.fetch('requests').any? }
         raise Error, "no durable request for thread #{thread}" unless database
 
-        Tamoz::Observability::Explanation.build(records, thread:, request:, approval_link: database.approval_link)
+        Tamoz::Observability::Explanation.build(records, thread:, request:, approval_link: database.approval_link,
+                                                         now_ms: (Time.now.to_f * 1000).to_i)
                                          .merge('database' => Tamoz::Core.scrub_secrets(database.name),
                                                 'truncated' => records.select do |_kind, rows|
                                                   rows.length >= @limit
@@ -120,6 +121,8 @@ module Tamoz
 
         journal_class = Tamoz::Observability::Recorder::Journal
         { documents: journal_class.read(directory), drops: journal_class.drop_counts(directory) }
+      rescue SystemCallError => e
+        raise Error, "the telemetry journal in #{directory} cannot be read: #{e.class.name}"
       end
 
       def journal_names(rules)

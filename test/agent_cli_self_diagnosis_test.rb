@@ -169,6 +169,39 @@ class AgentCLISelfDiagnosisTest < Minitest::Test
     assert_equal 'time_window', record.dig('approvals', 'link')
   end
 
+  def test_an_unreadable_journal_is_a_typed_error
+    with_runtime do |directory|
+      journal = File.join(directory, 'worker-1.ndjson')
+      File.write(journal, "{}\n")
+      File.chmod(0o000, journal)
+      status, _out, err = cli('--runtime-dir', directory, 'diagnose')
+
+      assert_equal 1, status
+      assert_includes err, 'cannot be read'
+    ensure
+      File.chmod(0o600, journal) if journal && File.exist?(journal)
+    end
+  end
+
+  def test_an_approval_answered_during_a_resume_or_asked_while_running_is_kept
+    resume = { 'thread_id' => 't', 'request_id' => 'resume', 'created_at_ms' => 50, 'updated_at_ms' => 60,
+               'status' => 'completed' }
+    running = { 'thread_id' => 't', 'request_id' => 'running', 'created_at_ms' => 70, 'updated_at_ms' => 71,
+                'status' => 'running' }
+    decisions = [{ 'decision_id' => 'answered', 'verdict' => 'ask', 'answer' => 'approve', 'created_at_ms' => 40,
+                   'resolved_at_ms' => 55 },
+                 { 'decision_id' => 'pending', 'verdict' => 'ask', 'created_at_ms' => 90 }]
+    records = { 'requests' => [resume, running], 'effects' => [], 'effect_attempts' => [], 'checkpoints' => [],
+                'approval_decisions' => decisions }
+    build = lambda do |request|
+      Tamoz::Observability::Explanation.build(records, thread: 't', request:, approval_link: :time_window, now_ms: 100)
+                                       .dig('approvals', 'decisions').map { |entry| entry.fetch('decision_id') }
+    end
+
+    assert_equal ['answered'], build.call('resume')
+    assert_equal ['pending'], build.call('running')
+  end
+
   def test_request_specific_effects_do_not_include_a_later_request_in_the_same_execution
     records = { 'requests' => [{ 'thread_id' => 't', 'request_id' => 'r1', 'execution_id' => 'shared',
                                  'created_at_ms' => 10, 'updated_at_ms' => 20, 'status' => 'completed' }],

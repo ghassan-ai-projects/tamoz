@@ -28,7 +28,7 @@ durable model-usage persistence, alerting.
 **Not in scope:** everything above; a new gem, table, migration, capability source, loop or model path;
 Go repository changes.
 
-**Owner decisions needed:** none for this scope; the deferred work's decisions are in `FUTURE_PLAN.md`.
+**Owner decisions needed:** (O-R1) `Tamoz::SQLite::RecordReader` is a second public entry point of `tamoz-sqlite` beside `Adapter`, reached directly by the CLI. ADR-052 / AGENTS.md ask for owner sign-off on a cross-gem interface change; until given, it is recorded here as open. The deferred work's decisions are in `FUTURE_PLAN.md`.
 
 ## 1. Seam
 
@@ -82,7 +82,7 @@ Go repository changes.
 | D1 | Every touched test file, one per command | `VALIDATION.md` focused test table; one file per command | PASS |
 | D2 | `rake ci` (minus known-red) | `VALIDATION.md`: full test and gate evidence, known-red proof at HEAD | BLOCKED |
 | D3 | `rake ci_full` in both locales (packaging and MCP are touched) | `VALIDATION.md`: full test and gate evidence, known-red proof at HEAD | BLOCKED |
-| D4 | RuboCop zero offenses in new files; no new offense in touched files | `bundle exec rubocop <files>` | PASS |
+| D4 | RuboCop zero offenses in new files; no new offense in touched files | `bundle exec rubocop <files>` | WAIVED — owner, 2026-10-04: "do not work on linting, we can fix them later, only auto fix"; `rubocop -a` applied to new files only |
 | D5 | enola: no new cycle, layer violation or unintended coupling | `enola check` + `diff_snapshot`: no new cycle/layer; expected scrub-secrets reuse; v0.4.25 coverage limit | PASS |
 | D6 | `rake adr:validate adr:verify` | output | PASS |
 
@@ -103,7 +103,7 @@ Go repository changes.
 | E2 | No shim or alias; `TelemetryReader` v1 removed (ADR-059) | diff review | PASS |
 | E3 | No comments beyond the one-line class doc | diff scan | PASS |
 | E4 | New files 644, scripts 755; no scratch files | `git ls-files -s`, `git status` | PASS |
-| E5 | Methods ≤ 20 lines, classes ≤ 250; no new `.rubocop_todo.yml` entry | RuboCop | PASS |
+| E5 | Methods ≤ 20 lines, classes ≤ 250; no new `.rubocop_todo.yml` entry | RuboCop | WAIVED — same owner instruction as D4; no `.rubocop_todo.yml` entry was added |
 | E6 | Deferred work is in `FUTURE_PLAN.md`, not half-built in code | review | PASS |
 
 ## F. Honesty and records

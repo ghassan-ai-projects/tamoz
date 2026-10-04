@@ -3,6 +3,7 @@
 require_relative 'test_helper'
 require_relative 'support/self_diagnosis_corpus'
 require_relative 'support/self_investigation_grader'
+require 'tamoz/agent_cli'
 
 class SelfInvestigationGraderTest < Minitest::Test
   CORPUS = SelfDiagnosisCorpus.load
@@ -76,7 +77,29 @@ class SelfInvestigationGraderTest < Minitest::Test
                                               [%w[probe_self_diagnose probe_invented]]).outcome
   end
 
+  def test_model_free_baselines_solve_an_ordinary_scenario_and_fail_the_trap
+    ordinary = baselines_for('provider_balance')
+    trap = baselines_for('unknown_write_among_misses')
+
+    assert ordinary.fetch('frequency').fetch('success')
+    assert ordinary.fetch('ranked').fetch('success')
+    refute trap.fetch('frequency').fetch('success')
+    refute trap.fetch('ranked').fetch('success')
+  end
+
   private
+
+  def baselines_for(id)
+    scenario = SelfDiagnosisCorpus.scenario(id)
+    Dir.mktmpdir('tamoz-baseline') do |directory|
+      File.chmod(0o700, directory)
+      SelfDiagnosisCorpus.build(scenario, directory)
+      now = (Time.now.to_f * 1000).to_i
+      diagnosis = Tamoz::Agent::SelfObservation.open(runtime_dir: directory)
+                                               .diagnose(now_ms: now, since_ms: now - 3_600_000).to_json
+      SelfInvestigationGrader.baselines(scenario, diagnosis, VOCABULARY)
+    end
+  end
 
   def report(code)
     { 'hypothesis' => code, 'findings' => [{ 'statement' => "Calls failed with #{code}." }] }

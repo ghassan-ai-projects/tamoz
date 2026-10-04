@@ -53,10 +53,12 @@ module Tamoz
       def cmd_self_observe(options, argv)
         OptionParser.new do |parser|
           parser.banner = 'Usage: tamoz --runtime-dir DIR [--session-dir DIR] self-observe  (a stdio MCP server)'
-          accept_json(parser, options)
+          parser.on('-h', '--help', "Show this subcommand's options") do
+            @out.puts parser
+            throw :tamoz_subcommand_help, 0
+          end
         end.parse!(argv)
-        runtime_dir = options[:runtime_dir] || @env['TAMOZ_RUNTIME_DIR']
-        SelfObserveServer.new(runtime_dir:, session_dir: options[:session_dir]).serve
+        SelfObserveServer.new(**observation_directories(options)).serve
         0
       end
 
@@ -98,9 +100,13 @@ module Tamoz
       end
 
       def self_observation(options)
+        SelfObservation.open(**observation_directories(options))
+      end
+
+      def observation_directories(options)
         runtime_dir = options[:runtime_dir] || @env['TAMOZ_RUNTIME_DIR']
-        session_dir = options[:session_dir] || (@sessions.resolve_session_dir(options) unless runtime_dir)
-        SelfObservation.open(runtime_dir:, session_dir:)
+        { runtime_dir:,
+          session_dir: options[:session_dir] || (@sessions.resolve_session_dir(options) unless runtime_dir) }
       end
 
       def duration_ms(text)

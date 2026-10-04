@@ -97,12 +97,9 @@ probe call that answered. No new capability source, loop or authority.
 | 045 | Amend: durable reconstruction is now built (`RecordReader`) |
 | 050 | Relates to 060; stays Proposed — no actuator is built |
 
-**Retirement review.** ADRs 020, 023, 024, 028, 044, 045, 046, 047 and 050 were read against this
-design. None contradicts it: 045 forbids a telemetry table and a second account of what happened (none
-is added; the durable record stays the truth); 046 is honoured because nothing new exports content;
-050's "compute conditions, never actuate" is the diagnosis contract. None is retired. A future seal
-chain would amend 045 ("the journal is not an audit log" stays true; the sealed durable record would
-become one) — see `FUTURE_PLAN.md`.
+**Retirement review.** Nine ADRs were read against this design; none contradicts it, so none is
+retired. The reason per ADR is in §7. A future seal chain would amend 045 ("the journal is not an audit
+log" stays true; the sealed durable record would become one) — see `FUTURE_PLAN.md`.
 
 ## 5. Packages
 
@@ -131,8 +128,8 @@ become one) — see `FUTURE_PLAN.md`.
 
 | ADR | Why retained |
 |---|---|
-| 020 | Existing authority restrictions still govern probes; observation grants no mutation capability. |
-| 023 | Existing human approval flow stays authoritative; explanations only read its decisions. |
+| 020 | Secrets are refused by type and never scrubbed by name. Diagnosis adds no scrubbing by name: failure output is class and code identifiers, and any secret-shaped value is dropped or redacted by shape (`Tamoz::Core.scrub_secrets`); the state codec still refuses `Tamoz::Secret`. |
+| 023 | Self-improvement is candidate promotion, never live self-mutation. Diagnosis changes nothing: proposed actions in a postmortem are text, never executed, and no rule, threshold or behaviour is promoted from a finding. |
 | 024 | Tests prove plumbing; real-model claims remain separately measured and final-design eval blocked. |
 | 028 | Diagnosis uses the healing vocabulary but introduces no remediation loop. |
 | 044 | Contract ownership is extended within its existing gem and adapter boundary. |

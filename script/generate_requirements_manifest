@@ -747,6 +747,10 @@ EVIDENCE = {
                    supporting: ["test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"]},
   "CLI-observe" => {test: "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal"},
   "CLI-trace" => {test: "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal"},
+  "CLI-diagnose" => {test: "test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json"},
+  "CLI-explain" => {test: "test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval"},
+  "CLI-postmortem" => {test: "test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis"},
+  "CLI-self-observe" => {test: "test/self_observe_server_test.rb#test_serves_mcp_over_stdio"},
   "CLI-skills" => {test: "test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections"},
 
   # ---- Migrations ---------------------------------------------------------

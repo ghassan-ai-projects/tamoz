@@ -29,6 +29,13 @@ class DiagnosisRulesTest < Minitest::Test
     refute_match(/fetch\('(min_count|max_failure_ratio|older_than_minutes)',/, source)
   end
 
+  def test_detectors_compare_against_rule_parameters_never_numeric_literals
+    detectors = File.read(LIB.join('detectors.rb'), encoding: Encoding::UTF_8)
+
+    refute_match(/(?:[<>]=?|==)\s*-?\d/, detectors)
+    refute_match(/\b\d+\.\d+\b/, detectors)
+  end
+
   def test_an_unknown_detector_kind_severity_or_category_is_refused
     base = YAML.safe_load_file(Rules::DEFAULT_PATH)
     mutate = ->(changes) { base.merge('rules' => [base.fetch('rules').first.merge(changes)]) }

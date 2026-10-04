@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module SelfInvestigationGrader
   Outcome = Data.define(:scenario, :outcome, :correct, :grounded, :hedged, :fabricated_codes, :probe_calls)
 
@@ -51,7 +53,31 @@ module SelfInvestigationGrader
     end
   end
 
-  def mentions?(text, token) = text.to_s.match?(/(?<![A-Za-z0-9_])#{Regexp.escape(token)}(?![A-Za-z0-9_])/)
+  def frequency_choice(diagnosis_json, vocabulary)
+    counts = vocabulary.to_h { |token| [token, diagnosis_json.scan(token_pattern(token)).length] }
+    best = counts.max_by { |token, count| [count, token] }
+    best && best.last.positive? ? best.first : nil
+  end
+
+  def ranked_choice(diagnosis, vocabulary)
+    diagnosis.fetch('findings').each do |finding|
+      text = JSON.generate(finding)
+      token = vocabulary.find { |entry| mentions?(text, entry) }
+      return token if token
+    end
+    nil
+  end
+
+  def baselines(scenario, diagnosis_json, vocabulary)
+    truth = scenario.fetch('truth')
+    choices = { 'frequency' => frequency_choice(diagnosis_json, vocabulary),
+                'ranked' => ranked_choice(JSON.parse(diagnosis_json), vocabulary) }
+    choices.transform_values { |choice| { 'choice' => choice, 'success' => choice == truth } }
+  end
+
+  def token_pattern(token) = /(?<![A-Za-z0-9_])#{Regexp.escape(token)}(?![A-Za-z0-9_])/
+
+  def mentions?(text, token) = text.to_s.match?(token_pattern(token))
 
   def outcome(scenario, verdict, calls:)
     Outcome.new(scenario: scenario.fetch('id'), outcome: verdict, correct: false, grounded: false, hedged: false,
