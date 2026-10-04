@@ -380,6 +380,27 @@ class SQLiteScenarioDriverTest < Minitest::Test
     end
   end
 
+  def test_logical_database_snapshot_orders_rows_without_assuming_rowid
+    Dir.mktmpdir('tamoz-sqlite-snapshot') do |directory|
+      path = File.join(directory, 'snapshot.db')
+      database = SQLite3::Database.new(path, strict: true)
+      database.execute('CREATE TABLE tamoz_rows (id TEXT PRIMARY KEY, value TEXT) WITHOUT ROWID')
+      database.execute("INSERT INTO tamoz_rows VALUES ('b', 'second'), ('a', 'first')")
+      database.execute('CREATE TABLE tamoz_duplicates (value TEXT, position INTEGER)')
+      database.execute("INSERT INTO tamoz_duplicates VALUES ('same', 2), ('same', 1), ('same', 1)")
+      database.execute('CREATE TABLE tamoz_empty (value TEXT)')
+
+      expected = { 'tamoz_rows' => [%w[a first], %w[b second]],
+                   'tamoz_duplicates' => [['same', 1], ['same', 1], ['same', 2]], 'tamoz_empty' => [] }
+
+      assert_equal expected, logical_database_rows(path)
+      database.execute("UPDATE tamoz_rows SET value = 'changed' WHERE id = 'b'")
+      refute_equal expected, logical_database_rows(path)
+    ensure
+      database&.close
+    end
+  end
+
   def test_missing_scenario_bad_observer_and_nonfresh_paths_fail_closed
     assert_raises(Tamoz::Evals::ExecutionError) do
       driver.trace(
@@ -603,7 +624,8 @@ class SQLiteScenarioDriverTest < Minitest::Test
     ).flatten
     tables.to_h do |table|
       quoted = %("#{table.gsub('"', '""')}")
-      [table, database.execute("SELECT * FROM #{quoted} ORDER BY rowid")]
+      columns = (1..database.table_info(table).length).to_a.join(', ')
+      [table, database.execute("SELECT * FROM #{quoted} ORDER BY #{columns}")]
     end
   ensure
     database&.close

@@ -74,3 +74,8 @@
   the first non-ASCII prompt (`research_replies.json`) hashed differently under `LANG=C` and a UTF-8 locale: pins made
   in one shell failed in `rake`'s UTF-8 run and passed alone. Read with `encoding: Encoding::UTF_8`, and generate pins
   under the same locale the gate runs in.
+
+- **Snapshotting every SQLite table cannot assume `rowid`.** FTS shadow tables can be
+  `WITHOUT ROWID`; `logical_database_rows` failed on an empty, healthy database inside
+  its observer. Order by all projected columns and preserve duplicate rows. Inspect
+  the observer before attributing a wrapped SQL error to durability or corruption.

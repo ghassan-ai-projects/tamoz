@@ -1,5 +1,9 @@
 # Test suite improvement — quality bar
 
+**Historical round record:** current completion is graded in [FOLLOWUP_BAR.md](FOLLOWUP_BAR.md).
+The prior PASS labels below are historical claims, not current gate results. The follow-up
+found unfinished per-file reviews and corrected the SQLite diagnosis recorded below.
+
 **Task:** Review and improve every test · **Owner:** repository owner · **Size:** L
 **Set:** 2026-10-04, before implementation · **Branch:** improve-the-tests
 **Plan:** [README](README.md) · **Standards:** [TESTING_STANDARD](TESTING_STANDARD.md)
@@ -98,19 +102,13 @@ Baseline outputs are kept under `/tmp/tamoz-test-baseline-*`; record results in 
 **Known red at HEAD (neither waived):**
 1. `rake ci` fails `stream:proto:check` with `Errno::EBADARCH` — bundled x86_64
    protoc on an arm64 Mac. Environmental.
-2. `test/sqlite_scenario_driver_test.rb#test_stable_read_and_atomic_request_checkpoint_relations_are_real`
-   fails in every slow-lane run (13 runs / 38,417 assertions / one error),
-   reproduced in the detached HEAD worktree `/private/tmp/tamoz-test-quality-baseline`.
-   Root cause identified this session by temporarily instrumenting the swallowed
-   message: SQLite's own FTS5 recovery query `SELECT * FROM "tamoz_memory_fts_config"
-   ORDER BY rowid` raises `no such column: rowid` after the scenario's injected
-   faults — the FTS5 shadow state left by a kill-injected run cannot be re-opened
-   by FTS5 itself. This is a product defect in FTS5 durability under
-   kill-injection, not a test defect; it blocks the D6 coverage ratchet. Routed to
-   the owner; an ADR is the right place to decide whether memory FTS is exempt
-   from kill-injection scenarios or the shadow state must be made crash-safe.
-3. Coverage baseline: never completed by the previous pass; `rake quality:coverage`
-   is the committed ratchet and will grade D6 mechanically once (2) is fixed.
+2. The scenario-driver failure was a **test helper defect**, corrected in the follow-up.
+   `logical_database_rows` queried every table with `ORDER BY rowid`, including FTS
+   shadow tables declared `WITHOUT ROWID`. It fails without any kill injection.
+   The earlier FTS corruption diagnosis was unsupported and is withdrawn. Sorting
+   by all projected columns preserves complete, deterministic row comparison.
+3. Coverage baseline was not completed by the previous pass. The follow-up runs fresh
+   baseline and final measurements; no conclusion about coverage follows from prose.
 
 A repeated failure in the same row for three iterations goes to the owner. Do not lower
 the bar to make the loop finish. Environmental refusal is a blocker, never a product failure.
