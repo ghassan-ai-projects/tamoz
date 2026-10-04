@@ -1,30 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/scripted_generation'
+require_relative 'support/tool_recovery_fixture'
 require_relative "support/session_plan"
 require "digest"
 
 class AgentDigestResolutionTest < Minitest::Test
+  include ToolRecoveryFixture
   include SessionPlan
 
   private :plan_for
 
-  class ScriptedModel
-    attr_reader :calls
-
-    def initialize(plan:, review:, verify:)
-      @responses = {plan:, review:, verify:}.transform_values(&:dup)
-      @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      value = @responses.fetch(stage).shift
-      raise "missing #{stage} response" unless value
-
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
-  end
+  ScriptedModel = ScriptedGeneration::QueueModel
 
   # --- Absent digest, single resolution, preview == execution (Runtime) -------------
 
@@ -566,20 +554,6 @@ class AgentDigestResolutionTest < Minitest::Test
 
   private
 
-  def scripted_model(plans:, reviews:, final_satisfied:)
-    ScriptedModel.new(
-      plan: plans,
-      review: Array.new(reviews) { accepted_review },
-      verify: [
-        {
-          "answer" => "Broken.answer inspection",
-          "satisfied" => final_satisfied,
-          "evidence" => ["controller-owned evidence"]
-        }
-      ]
-    )
-  end
-
   # The review profile makes workspace_write ASK, so apply_patch produces a real
   # approval decision (with a preview bound to the resolved digest) instead of the
   # implement profile's silent allow.
@@ -692,21 +666,6 @@ class AgentDigestResolutionTest < Minitest::Test
           "arguments" => {"name" => "answer"},
           "verification" => "the check receipt is observed"
         }
-      ]
-    }
-  end
-
-  def accepted_review
-    {"decision" => "accept", "issues" => [], "rationale" => "bounded and independently verifiable"}
-  end
-
-  def answer_check
-    {
-      "answer" => [
-        RbConfig.ruby,
-        "-I.",
-        "-e",
-        %q{require './broken'; abort("wrong #{Broken.answer}") unless Broken.answer == 42}
       ]
     }
   end

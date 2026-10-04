@@ -9,16 +9,7 @@ class TestFixtureHelpersTest < Minitest::Test
   include ApprovalCase
   include CommsCliFixture
 
-  class ResponseModel
-    include ScriptedGeneration
-
-    attr_reader :calls
-
-    def initialize(responses)
-      @responses = responses
-      @calls = []
-    end
-  end
+  ResponseModel = ScriptedGeneration::Model
 
   def test_scripted_generation_consumes_the_prefix_and_repeats_the_final_response
     model = ResponseModel.new(plan: [{ 'answer' => 1 }, 'raw response'])
@@ -41,6 +32,37 @@ class TestFixtureHelpersTest < Minitest::Test
     model = ResponseModel.new(plan: ['response'])
 
     assert_raises(KeyError) { model.generate(stage: :verify, system: 'system', prompt: 'first') }
+  end
+
+  def test_models_consume_separate_queues_without_changing_the_supplied_responses
+    [ScriptedGeneration::Model, ScriptedGeneration::QueueModel].each do |model_class|
+      responses = { plan: %w[first second], review: [], verify: [] }
+      first = model_class.new(**responses)
+      second = model_class.new(**responses)
+
+      outputs = [first.generate(stage: :plan, system: 'system', prompt: 'one'),
+                 first.generate(stage: :plan, system: 'system', prompt: 'two'),
+                 second.generate(stage: :plan, system: 'system', prompt: 'one')]
+
+      assert_equal %w[first second first], outputs
+      assert_equal %w[first second], responses.fetch(:plan)
+    end
+  end
+
+  def test_queued_generation_rejects_exhaustion_instead_of_repeating_a_response
+    model = ScriptedGeneration::QueueModel.new(plan: [{ 'answer' => 1 }], review: [], verify: [])
+
+    assert_equal '{"answer":1}', model.generate(stage: :plan, system: 'system', prompt: 'one')
+    error = assert_raises(RuntimeError) { model.generate(stage: :plan, system: 'system', prompt: 'two') }
+
+    assert_equal ['missing plan response', %w[one two]],
+                 [error.message, model.calls.map { |call| call.fetch(:prompt) }]
+  end
+
+  def test_queued_generation_rejects_an_unconfigured_stage
+    model = ScriptedGeneration::QueueModel.new(plan: [], review: [], verify: [])
+
+    assert_raises(KeyError) { model.generate(stage: :unexpected, system: 'system', prompt: 'one') }
   end
 
   def test_policy_fixture_flushes_content_and_removes_the_file_after_returning

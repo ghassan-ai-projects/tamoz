@@ -40,7 +40,9 @@ TestSuite impact: seven dependents within two hops. Read subjects end to end bef
 | Round | Findings and changes | Checks | Commit |
 | --- | --- | --- | --- |
 | 0 | Baseline driver test fails because its snapshot helper assumes rowid; bundled protoc cannot execute on this CPU | Focused driver: one error; detached baseline reproduces both errors | — |
-| 1 | Sort snapshots by every projected column; retain duplicate/empty rows and detect a changed value. Withdraw unsupported FTS corruption diagnosis. Local diff review: no weakened assertions, production edits or open critical/high findings. | Driver 14/38,425 green; mutation red; changed-file lint clean; diff check clean | This round |
+| 1 | Sort snapshots by every projected column; retain duplicate/empty rows and detect a changed value. Withdraw unsupported FTS corruption diagnosis. Local diff review: no weakened assertions, production edits or open critical/high findings. | Driver 14/38,425 green; mutation red; changed-file lint clean; diff check clean | 41aeb93f |
+
+| 2 | Share seven repeating model classes, two strict queued models, profile-session setup, recovery setup and edit plans. Preserve each provider's exhaustion semantics. Local review: every existing test method retained; new helper methods remain below 20 lines; no critical/high findings. | Twelve consumer suites pass individually; helper 10/24; aliasing and repeated-response mutations fail; new helpers lint clean; no changed-file cop increase vs detached baseline | This round |
 
 ## Known red at baseline
 

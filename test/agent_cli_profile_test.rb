@@ -1,26 +1,19 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/profile_session_fixture'
 require_relative "support/scripted_generation"
 require_relative "support/session_plan"
 
 class AgentCLIProfileTest < Minitest::Test
+  include ProfileSessionFixture
   include SessionPlan
 
   private :plan_for
 
   Profile = Tamoz::Agent::Profile
 
-  class ScriptedModel
-    include ScriptedGeneration
-
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-  end
+  ScriptedModel = ScriptedGeneration::Model
 
   READ_ONLY_TOOLS = %w[read_file list_directory search_text].freeze
 
@@ -424,33 +417,6 @@ class AgentCLIProfileTest < Minitest::Test
 
   # Records the planning prompt so a test can prove which tool surface the
   # session was actually planned against.
-  def recording_factory(sink)
-    lambda do |options|
-      model = read_factory.call(options)
-      model.singleton_class.prepend(Module.new do
-        define_method(:generate) do |stage:, system:, prompt:|
-          sink << prompt if stage == :plan
-          super(stage:, system:, prompt:)
-        end
-      end)
-      model
-    end
-  end
-
-  def read_factory
-    ->(_options) do
-      ScriptedModel.new(
-        plan: [plan_for("read_file", {"path" => "note.txt"})],
-        review: [accepted_review],
-        verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
-      )
-    end
-  end
-
-  def accepted_review
-    {"decision" => "accept", "issues" => [], "rationale" => "the plan is minimal and read-only"}
-  end
-
   def run_cli(argv, workspace:, session_dir:, config_home:, out:, err:, input: StringIO.new, factory:, session: nil, allow_changes: false)
     global_argv = ["--session-dir", session_dir, "--root", workspace]
     global_argv << "--allow-changes" if allow_changes

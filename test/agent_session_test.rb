@@ -9,16 +9,7 @@ class AgentSessionTest < Minitest::Test
 
   private :plan_for
 
-  class ScriptedModel
-    include ScriptedGeneration
-
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-  end
+  ScriptedModel = ScriptedGeneration::Model
 
   ToolPolicy = Data.define(:allow_changes, :checks) do
     def self.default = new(allow_changes: false, checks: {})

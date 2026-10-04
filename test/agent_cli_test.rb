@@ -9,16 +9,7 @@ class AgentCLITest < Minitest::Test
 
   private :plan_for
 
-  class ScriptedModel
-    include ScriptedGeneration
-
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-  end
+  ScriptedModel = ScriptedGeneration::Model
 
   def test_version_needs_no_provider_configuration
     out = StringIO.new

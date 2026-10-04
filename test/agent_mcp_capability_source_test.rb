@@ -63,16 +63,7 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     def read_only? = effect_class == :read_only
   end
 
-  class ScriptedModel
-    include ScriptedGeneration
-
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-  end
+  ScriptedModel = ScriptedGeneration::Model
 
   # Real SDK client that counts every wire request without changing the wire.
   # The SDK's `call_tool` funnels through `request`, so `request` is the single

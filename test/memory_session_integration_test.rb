@@ -6,16 +6,7 @@ require_relative "support/scripted_generation"
 class MemorySessionIntegrationTest < Minitest::Test
   Memory = Tamoz::Agent::Memory
 
-  class ScriptedModel
-    include ScriptedGeneration
-
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-  end
+  ScriptedModel = ScriptedGeneration::Model
 
   def with_memory_workspace
     Dir.mktmpdir("tamoz-mem-session") do |directory|
