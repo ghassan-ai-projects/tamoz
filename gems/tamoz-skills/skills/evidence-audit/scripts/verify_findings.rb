@@ -58,7 +58,7 @@ module EvidenceAudit
     private
 
     def parse
-      document = JSON.parse(File.read(File.expand_path(@findings_path, @root)))
+      document = JSON.parse(File.read(File.expand_path(@findings_path, @root), encoding: Encoding::UTF_8))
       return document if document.is_a?(Hash)
 
       problem('findings file must be a JSON object')

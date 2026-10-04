@@ -1,11 +1,12 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-10-01T22:16:33Z",
+  "generated_at": "2026-10-04T17:10:16Z",
   "manifest_requirements": 578,
-  "named_cases_run": 305,
+  "named_cases_run": 303,
   "counts": {
-    "deferred-by-contract": 11,
+    "deferred-by-contract": 10,
+    "failing": 1,
     "indirect": 3,
     "missing": 14,
     "pass": 550
@@ -26,7 +27,9 @@
     "INV-61",
     "OBJ-7"
   ],
-  "failing": [],
+  "failing": [
+    "INV-42"
+  ],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -36,7 +39,7 @@
       "title": "The framework is Tamoz; the reference application is Tamoz Agent",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice",
+      "named_test": "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_milestone",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -119,7 +122,7 @@
       "id": "ADR-009",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "The model request prefix is byte-stable within a cache epoch",
+      "title": "Keep model request prefixes stable within a request series",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it",
@@ -151,7 +154,7 @@
       "id": "ADR-013",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Public vocabulary is a budget, never a correctness cap",
+      "title": "Public concepts are documented and introduced when needed",
       "release_blocking": false,
       "status": "indirect",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -7262,7 +7265,7 @@
       "status": "pass",
       "named_test": "test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates",
       "supporting_tests": [
-        "test/agent_cli_memory_test.rb#test_e5_threads_in_one_session_directory_share_memory_only_when_enabled"
+        "test/agent_cli_memory_test.rb#test_threads_in_one_session_directory_share_memory_only_when_enabled"
       ],
       "classification": "direct",
       "rationale": null,
@@ -8310,7 +8313,7 @@
       "status": "deferred-by-contract",
       "named_test": "test/agent_skills_test.rb#test_same_version_content_swap_changes_identity_and_epoch",
       "supporting_tests": [
-        "test/agent_skills_toolbox_test.rb#test_a16_a_content_swap_changes_the_epoch_and_stops_a_durable_resume",
+        "test/agent_skills_toolbox_test.rb#test_a_content_swap_changes_the_epoch_and_stops_a_durable_resume",
         "test/agent_skills_test.rb#test_same_name_across_sources_never_shadows_silently"
       ],
       "classification": "deferred-by-contract",
@@ -8326,18 +8329,18 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Skill content never grants authority or escapes its tree",
       "release_blocking": false,
-      "status": "deferred-by-contract",
-      "named_test": "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
+      "status": "failing",
+      "named_test": "test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
       "supporting_tests": [
-        "test/agent_skills_adversarial_test.rb#test_a2_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed",
-        "test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing",
+        "test/agent_skills_adversarial_test.rb#test_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed",
+        "test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing",
         "test/agent_skills_adversarial_test.rb#test_a13b_compiling_a_hostile_tree_invokes_no_execution_verb"
       ],
       "classification": "deferred-by-contract",
       "rationale": null,
       "promotion_exclusion": null,
       "deferred_to": "v0.2",
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -8776,8 +8779,8 @@
       "status": "pass",
       "named_test": "test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head",
       "supporting_tests": [
-        "test/memory_spec_test.rb#test_b5_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
-        "test/memory_retrieval_corpus_test.rb#test_b2_the_real_retriever_meets_recall_and_precision_with_zero_violations"
+        "test/memory_spec_test.rb#test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
+        "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"
       ],
       "classification": "direct",
       "rationale": null,
@@ -8915,9 +8918,9 @@
       "title": "Content (skill/catalog/MCP/memory/model output) never grants authority",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing",
+      "named_test": "test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing",
       "supporting_tests": [
-        "test/agent_skills_adversarial_test.rb#test_a29_declared_risk_is_an_author_claim_that_changes_no_classification"
+        "test/agent_skills_adversarial_test.rb#test_declared_risk_is_an_author_claim_that_changes_no_classification"
       ],
       "classification": "direct",
       "rationale": null,
@@ -9073,7 +9076,7 @@
       "status": "pass",
       "named_test": "test/capability_host_test.rb#test_the_admission_set_bounds_the_surface",
       "supporting_tests": [
-        "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
+        "test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
         "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
         "test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
         "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
@@ -9131,7 +9134,7 @@
       "title": "Durable circuit — one persistent record serves P10 server + P17/P12/P13 scopes across restart",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask",
+      "named_test": "test/sqlite_circuit_store_test.rb#test_consecutive_threshold_opens_and_owner_success_does_not_mask",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -9296,7 +9299,7 @@
       "title": "Tools gem extraction — tamoz-tools loads/runs with core only and preserves behavior byte-for-byte",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent",
+      "named_test": "test/tools_gem_test.rb#test_a_clean_env_runs_the_full_toolbox_surface_without_agent",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -9326,7 +9329,7 @@
       "title": "Capability host + graph audit — four closed built-in sources share one host; graph surface measured and documented",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture",
+      "named_test": "test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_recorded_start_surface",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

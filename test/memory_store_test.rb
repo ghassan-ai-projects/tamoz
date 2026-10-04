@@ -105,7 +105,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_migration_2_creates_the_index_table_and_ordinals_are_monotonic
-    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, Tamoz::SQLite::Migrator::CURRENT_VERSION
     assert_equal (1..Tamoz::SQLite::Migrator::CURRENT_VERSION).to_a,
                  Tamoz::SQLite::Migrator.migration_ordinals
 

@@ -1,1 +1,972 @@
-{}
+{
+  "gems/tamoz-evals/test/scenario_driver_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_acceptance_workflow_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_approval_boot_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_capability_delegation_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_cli_memory_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_cli_profile_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_cli_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_decision_flow_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_diagnosis_catalog_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_digest_resolution_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_durable_compatibility_spike_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_intent_catalog_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_mcp_adversarial_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_mcp_capability_source_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_mode_switch_kill_matrix_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_mode_switch_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_model_receipt_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_non_ascii_session_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_outbox_delivery_sink_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_probe_source_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_profile_adoption_seams_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_profile_machinery_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_profile_schema_seams_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_profile_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_profile_transition_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_reasoning_document_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_runtime_effects_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_scorecard_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_session_adaptive_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_session_effect_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_session_kill_matrix_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_session_operations_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_session_planning_context_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_session_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_skill_set_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_skills_adversarial_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_skills_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_skills_toolbox_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_tool_error_recovery_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_toolbox_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_unattended_policy_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agent_worker_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agenteval_memory_pack_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agenteval_research_pack_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agenteval_skills_optimizer_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agenteval_subagent_pack_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/agenteval_topology_pack_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_answer_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_flow_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_grant_key_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_mode_switch_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_policy_document_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_reload_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/approval_values_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/autonomy_scorecard_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/benchmark_abstention_metrics_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/benchmark_controls_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/benchmark_harness_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/benchmark_report_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/calibration_rollout_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/callback_ack_crash_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/cancellation_visibility_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/canonical_cross_surface_composition_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/capability_closed_world_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/capability_host_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/capability_registry_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/chat_work_loop_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/child_environments_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/circuit_record_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/cli_telegram_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_admission_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_adr049_consistency_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_authority_evidence_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_cli_ops_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_cli_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_command_parity_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_decision_record_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_decision_store_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_deny_callback_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_evidence_gated_approval_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_gateway_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_lifecycle_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_pairing_first_contact_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_rendering_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_seams_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_serve_supervision_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/comms_values_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/context_control_exposure_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/core_jcs_vectors_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/dependency_isolation_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/dependency_review_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/documentation_surface_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/evals_verifier_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/graph_durable_runner_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/graph_execution_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/graph_immutable_recall_channels_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/graph_interrupt_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/graph_stream_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/graph_surface_audit_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/harness_prompt_pack_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/healing_failure_contract_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/healing_matrix_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/healing_remediation_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/improvement_candidate_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/lane_config_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/legacy_session_resume_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/mcp_catalog_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/mcp_elicitation_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/mcp_invocation_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/mcp_supervisor_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_boundary_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_engine_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_repository_adapter_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_retrieval_corpus_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_session_integration_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_spec_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_store_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_treatment_profile_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/memory_work_route_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/model_call_node_contract_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/model_client_factory_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/model_windows_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/packaging_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/public_api_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/release_evaluation_manifest_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/release_rehearsal_evidence_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/requirements_manifest_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/research_durability_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/research_spec_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/research_tuning_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/runtime_directory_config_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/scheduler_consumer_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/scheduler_values_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/secret_sweep_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/session_context_controls_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/skills_lint_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/skills_spec_conformance_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_approval_stores_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_checkpoint_seams_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_checkpoint_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_circuit_store_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_comms_store_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_schedule_determinism_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_schedule_store_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_stale_request_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/sqlite_store_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_approval_relay_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_artifact_manifest_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_decision_builder_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_capability_host_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_crash_matrix_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_end_to_end_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_fixed_graph_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_intent_authority_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_loop_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_real_model_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_reconsider_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_replay_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_skills_memory_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_stream_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_witness_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_episode_worker_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_evidence_client_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_invariants_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_learning_loop_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_situation_request_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_situation_snapshot_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_token_custody_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/stream_worker_server_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/subagent_durability_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/subagent_kill_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/subagent_spec_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/subagent_topology_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/subprocess_runner_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/tamoz_telegram_transport_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/telegram_normalizer_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/test_fixture_helpers_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/test_quality_inventory_test.rb": {
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/test_source_audit_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/thermal_evidence_gate_eval_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/thermal_lab_adversarial_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/thermal_lab_decision_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/thermal_lab_facts_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/thermal_manifest_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/thermal_tournament_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/toolbox_staging_reaper_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/tools_coding_surface_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/tools_gem_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/websearch_adapter_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/websearch_circuit_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/websearch_egress_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/websearch_invocation_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/websearch_recorded_web_test.rb": {
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  "test/work_loop_test.rb": {
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  }
+}

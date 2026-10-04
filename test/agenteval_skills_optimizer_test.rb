@@ -5,7 +5,7 @@ require_relative '../agenteval/skills/optimizer'
 
 class AgentevalSkillsOptimizerTest < Minitest::Test
   OPT = Agenteval::SkillsPack::Optimizer
-  CURRENT = File.read(File.join(Agenteval::SkillsPack::SKILL_DIR, 'SKILL.md'))
+  CURRENT = File.read(File.join(Agenteval::SkillsPack::SKILL_DIR, 'SKILL.md'), encoding: Encoding::UTF_8)
   SHORTER = CURRENT.sub(/## Rules that are not negotiable.*\z/m, "## Rules that are not negotiable\n\n- No quote, no finding.\n")
 
   def row(id, solved:, tokens: 100) = { 'scenario' => id, 'solved' => solved, 'gates' => [], 'matched' => solved ? 1 : 0,
@@ -15,7 +15,7 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
   def evaluator(heldout_helps:, seen:)
     lambda do |dir, ids|
       seen << ids
-      better = File.read(File.join(dir, 'SKILL.md')) == SHORTER
+      better = File.read(File.join(dir, 'SKILL.md'), encoding: Encoding::UTF_8) == SHORTER
       ids.map do |id|
         held = OPT::HELDOUT.include?(id)
         row(id, solved: held ? (better ? heldout_helps : !heldout_helps) || !better : true, tokens: better ? 50 : 100)
@@ -37,7 +37,9 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
     run_optimizer(SHORTER) do |result, _, _|
       assert result.accepted, result.reason
       assert_equal 'tamoz.skill-optimizer', result.candidate.fetch('created_by')
-      assert_equal SHORTER, File.read(File.join(result.best, 'SKILL.md'))
+      staged = File.read(File.join(result.best, 'SKILL.md'), encoding: Encoding::UTF_8)
+
+      assert_equal SHORTER, staged
       assert File.exist?("#{result.best}.candidate.json")
     end
   end

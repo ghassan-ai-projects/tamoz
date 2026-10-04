@@ -37,7 +37,7 @@ module Agenteval
 
       def call
         baseline = evaluate(@skill_dir, @train)
-        current = File.read(File.join(@skill_dir, "SKILL.md"))
+        current = File.read(File.join(@skill_dir, "SKILL.md"), encoding: Encoding::UTF_8)
         drafts = Array.new(@variants) { |index| draft(current, baseline, index) }.compact
         scored = drafts.map { |dir| [dir, evaluate(dir, @train)] }
         return finish(false, "no rewrite passed the authoring bar", baseline, scored) if scored.empty?
@@ -90,7 +90,7 @@ module Agenteval
         dir = File.join(@staging, "variant-#{index + 1}", "evidence-audit")
         FileUtils.mkdir_p(File.dirname(dir))
         FileUtils.cp_r(@skill_dir, dir)
-        File.write(File.join(dir, "SKILL.md"), text.to_s)
+        File.write(File.join(dir, "SKILL.md"), text.to_s, encoding: Encoding::UTF_8)
         snapshot = Tamoz::Skills.compile(sources: [Tamoz::Skills::SkillSource.new(id: "draft", root: File.dirname(dir), trust: "workspace")])
         record = snapshot.records["draft/evidence-audit"]
         record && Tamoz::Skills.lint(record).empty? ? dir : nil

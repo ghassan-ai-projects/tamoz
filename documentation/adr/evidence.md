@@ -235,7 +235,7 @@ Checked 2026-10-01 (source inspection).
 |---|---|---|---|
 | Access sees only this owner and workspace | `Memory::Access` | `test/memory_access_test.rb` — `test_find_sees_only_this_owner_and_workspace_while_eligible` | — |
 | No gem reaches past the facade | boundary test | `test/memory_boundary_test.rb` — `test_no_gem_outside_memory_reaches_into_its_storage_or_scopes` | Source scan |
-| Sensitive records are never indexed; other scopes are never returned | retrieval | `test/memory_spec_test.rb` — `test_b4_sensitive_never_indexed_and_other_scopes_never_returned` | Surface-level filtering has no dedicated test |
+| Sensitive records are never indexed; other scopes are never returned | retrieval | `test/memory_spec_test.rb` — `test_sensitive_never_indexed_and_other_scopes_never_returned` | Surface-level filtering has no dedicated test |
 | Sensitive records are never injected or decrypted | repository adapter | `test/memory_repository_adapter_test.rb` — `test_sensitive_records_are_matched_never_injected_never_decrypted` | — |
 | Correction and deletion leave recall and index | lifecycle | `test/memory_engine_test.rb` — `test_correction_removes_bad_record_from_active_recall_and_index`, `test_deletion_emits_receipt_and_propagates_to_index` | Derived artifacts outside memory are not covered |
 
@@ -302,9 +302,9 @@ Checked 2026-10-01 (source inspection).
 | Claim | Enforced by | Evidence | Limit |
 |---|---|---|---|
 | Portable format conformance | `gems/tamoz-skills/lib/tamoz/skills/frontmatter.rb` | `test/skills_spec_conformance_test.rb` | — |
-| Path escape, links, and YAML tricks are refused at compile | `tamoz-skills` walk and frontmatter | `test/agent_skills_adversarial_test.rb` — `test_a2_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed`, `test_a8_ruby_object_tag_in_frontmatter_is_rejected_without_materialising_anything` | — |
+| Path escape, links, and YAML tricks are refused at compile | `tamoz-skills` walk and frontmatter | `test/agent_skills_adversarial_test.rb` — `test_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed`, `test_ruby_object_tag_in_frontmatter_is_rejected_without_materialising_anything` | — |
 | Loads are recorded with their tree digest | session | `test/skills_reachability_test.rb` — `test_a_model_load_is_recorded_with_its_tree_digest` | — |
-| Scripts are never readable as resources | `tamoz-skills` resources | `test/agent_skills_adversarial_test.rb` — `test_a25_reading_a_script_is_refused` | — |
+| Scripts are never readable as resources | `tamoz-skills` resources | `test/agent_skills_adversarial_test.rb` — `test_reading_a_script_is_refused` | — |
 
 ## ADR-034
 
