@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require 'timeout'
 require 'tmpdir'
 
 # `tamoz telegram setup|start` against a scripted Bot API client and scripted models.
@@ -149,25 +150,31 @@ class CliTelegramTest < Minitest::Test
     end
   end
 
-# With an operator skills source enabled, the chat profile offers the skill tools and pins the digest they make.
-def test_setup_offers_the_skill_tools_when_skills_are_enabled
-  with_dirs do |runtime, workspace|
-    Tamoz::Agent::RuntimeDirectory.create!(runtime, workspace:)
-    config = File.join(runtime, 'config.yaml')
-    File.write(config, File.read(config).sub(/^sources:.*?\n/m, "sources:\n  skills:\n    enabled: true\n").then do |text|
-      text.include?("skills:\n    enabled: true") ? text : "#{text}sources:\n  skills:\n    enabled: true\n"
-    end)
-    FileUtils.cp_r(File.join(Tamoz::Skills.bundled_root, 'evidence-audit'), File.join(runtime, 'skills', 'evidence-audit').tap { |dir| FileUtils.mkdir_p(File.dirname(dir)) })
+  # With an operator skills source enabled, the chat profile offers the skill
+  # tools and pins the digest they make.
+  def test_setup_offers_the_skill_tools_when_skills_are_enabled
+    with_dirs do |runtime, workspace|
+      Tamoz::Agent::RuntimeDirectory.create!(runtime, workspace:)
+      config = File.join(runtime, 'config.yaml')
+      enabled = "sources:\n  skills:\n    enabled: true\n"
+      rewritten = File.read(config).sub(/^sources:.*?\n/m, enabled)
 
-    status, _, err = cli(runtime, %W[telegram setup --workspace #{workspace} --owner #{OWNER}], bot: Bot.new([]))
+      File.write(config, rewritten.include?(enabled) ? rewritten : "#{rewritten}#{enabled}")
+      skills_dir = File.join(runtime, 'skills', 'evidence-audit')
 
-    assert_equal 0, status, err
-    profile = Psych.safe_load_file(File.join(runtime, 'profiles', 'telegram.yaml'))
+      FileUtils.mkdir_p(File.dirname(skills_dir))
+      FileUtils.cp_r(File.join(Tamoz::Skills.bundled_root, 'evidence-audit'), skills_dir)
+      status, _, err = cli(runtime, %W[telegram setup --workspace #{workspace} --owner #{OWNER}], bot: Bot.new([]))
 
-    assert_includes profile.dig('tools', 'allowed'), 'load_skill'
-    assert_equal 0, cli(runtime, %w[comms doctor], bot: Bot.new([]))[0], 'the written profile passes the doctor'
+      assert_equal 0, status, err
+      profile = Psych.safe_load_file(File.join(runtime, 'profiles', 'telegram.yaml'))
+
+      assert_includes profile.dig('tools', 'allowed'), 'load_skill'
+      doctor = cli(runtime, %w[comms doctor], bot: Bot.new([]))
+
+      assert_equal 0, doctor[0], 'the written profile passes the doctor'
+    end
   end
-end
 
   def test_setup_reports_a_transient_telegram_failure_without_a_backtrace
     with_dirs do |runtime, workspace|
@@ -304,13 +311,19 @@ end
   end
 
   def test_stop_child_escalates_to_kill_a_child_that_ignores_term
-    pid = Process.spawn('sh', '-c', 'trap "" TERM; sleep 30')
-    sleep 0.2
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+    Dir.mktmpdir('tamoz-stop-child') do |directory|
+      ready = File.join(directory, 'ready')
+      pid = Process.spawn(
+        RbConfig.ruby, '-e',
+        "Signal.trap('TERM', 'IGNORE'); File.write(ARGV[0], 'ready'); sleep 30", ready
+      )
+      Timeout.timeout(10) { sleep 0.01 until File.file?(ready) }
+      cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
 
-    cli.send(:stop_child, pid, grace: 0.5)
+      cli.send(:stop_child, pid, grace: 0.5)
 
-    assert_raises(Errno::ESRCH) { Process.kill(0, pid) }
+      assert_raises(Errno::ESRCH) { Process.kill(0, pid) }
+    end
   end
 
   private

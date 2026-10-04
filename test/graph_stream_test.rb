@@ -216,7 +216,7 @@ class GraphStreamTest < Minitest::Test
       stable_id = snapshot.checkpoint_id
 
       assert_includes reference_states, snapshot.state, "event index #{stop_after}"
-      sleep(0.002)
+      sleep(0.002) # a detection window: a late commit must not move the settled checkpoint
       assert_equal stable_id,
                    app.state(thread: "thread.stop.#{stop_after}").checkpoint_id,
                    "late commit at event index #{stop_after}"

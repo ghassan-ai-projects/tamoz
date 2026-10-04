@@ -802,7 +802,6 @@ module Tamoz
               lib_paths: @subprocess_lib_paths
             )
             killed_clean = harness.ask_until_approval(thread_id:, task: definition.fetch("task"))
-            sleep 1.1
             resume_status = harness.resume(thread_id:, input: "y\ny\n")
             evidence = harness.durable_evidence(thread_id:, workspace:)
 

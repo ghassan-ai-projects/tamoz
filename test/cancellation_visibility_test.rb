@@ -331,7 +331,6 @@ class CancellationVisibilityTest < Minitest::Test
         first&.close
       end
 
-      sleep 0.25
       second = Tamoz::Agent::WorkerRuntime.open(
         directory,
         model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },

@@ -153,7 +153,7 @@ class McpSupervisorTest < Minitest::Test
     )
     supervisor = Supervisor.new(noisy)
     supervisor.start
-    sleep 0.3
+    Timeout.timeout(10) { sleep 0.01 until supervisor.stderr_tail.bytesize.positive? }
     supervisor.close
 
     assert_operator supervisor.stderr_tail.bytesize, :<=, 64
@@ -175,7 +175,7 @@ class McpSupervisorTest < Minitest::Test
     )
     supervisor = Supervisor.new(leaky)
     supervisor.start
-    sleep 0.3
+    Timeout.timeout(10) { sleep 0.01 until supervisor.stderr_tail.bytesize.positive? }
     supervisor.close
 
     tail = supervisor.stderr_tail

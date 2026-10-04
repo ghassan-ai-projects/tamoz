@@ -437,7 +437,7 @@ class McpInvocationTest < Minitest::Test
     rescue Tamoz::Mcp::UnavailableError => e
       e
     end
-    sleep 0.1
+    sleep 0.1 # the slow call must be in flight on its own pipe before the second caller joins
     answered = Invocation.call(echo, { "value" => "still here" }, snapshot: snapshot, supervisor: supervisor)
 
     assert_instance_of Tamoz::Mcp::UnavailableError, timed_out.value

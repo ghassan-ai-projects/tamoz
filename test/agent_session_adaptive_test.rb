@@ -188,7 +188,6 @@ class AgentSessionAdaptiveTest < Minitest::Test
         first_adapter.close
       end
 
-      sleep 0.25
       second_adapter = Tamoz::SQLite::Adapter.new(
         path: database,
         limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 0.2)
