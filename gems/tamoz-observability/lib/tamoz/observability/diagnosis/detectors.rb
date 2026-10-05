@@ -5,7 +5,9 @@ module Tamoz
     module Diagnosis
       # The closed set of detectors a rule may name; each turns rows into findings and nothing else.
       module Detectors
-        Context = Data.define(:records, :journal_documents, :drops, :now_ms, :since_ms)
+        Context = Data.define(:records, :journal_documents, :drops, :now_ms, :since_ms) do
+          def in_window?(time_ms) = time_ms.to_i.between?(since_ms, now_ms)
+        end
 
         MINUTE_MS = 60_000
 
@@ -23,73 +25,61 @@ module Tamoz
         end
 
         def status(rule, context)
-          rows = matching(rule, context)
-          rows.empty? ? [] : [Findings.from_rows(rule, rows, kind: rule.fetch('kind'), group: 'all')]
+          one_finding(rule, rows(rule, context))
         end
 
         def age(rule, context)
-          cutoff = context.now_ms - (rule.fetch('older_than_minutes') * MINUTE_MS)
-          rows = matching(rule, context).select { |row| row.fetch(rule.fetch('time_field')).to_i < cutoff }
-          rows.empty? ? [] : [Findings.from_rows(rule, rows, kind: rule.fetch('kind'), group: 'all')]
+          cutoff_ms = context.now_ms - (rule.older_than_minutes * MINUTE_MS)
+          one_finding(rule, rows(rule, context).select { |row| row.fetch(rule.time_field).to_i < cutoff_ms })
         end
 
         def failure_rate(rule, context)
-          settled = windowed(rule, context).select do |row|
-            row.fetch('operation').start_with?(rule.fetch('operation_prefix')) &&
-              rule.fetch('settled_values').include?(row.fetch('status'))
-          end
-          failed = settled.select { |row| rule.fetch('failed_values').include?(row.fetch('status')) }
-          return [] unless rate_exceeded?(rule, settled.length, failed.length)
+          settled = rows(rule, context, windowed: true).select { |row| rule.settled_values.include?(row['status']) }
+          failed = settled.select { |row| rule.failed_values.include?(row['status']) }
+          return [] if settled.length < rule.min_count
+          return [] unless failed.length.fdiv(settled.length) > rule.max_failure_ratio
 
-          [Findings.from_rows(rule, failed, kind: rule.fetch('kind'), group: 'all',
-                                            detail: rate_detail(settled, failed))]
+          [Findings.from_rows(rule, failed, kind: rule.kind, group: 'all', detail: rate_detail(settled, failed))]
         end
 
         def failure_groups(rule, context)
-          rows = windowed(rule, context).select { |row| failure_matches?(rule, row) }
-          rows.group_by { |row| failure_group(row) }
-              .select { |_group, members| members.length >= rule.fetch('min_count') }
-              .map do |group, members|
-                Findings.from_rows(rule, members, kind: rule.fetch('kind'), group:,
-                                                  detail: { 'failure' => group })
-              end
-        end
-
-        def failure_matches?(rule, row)
-          rule.fetch('values').include?(row.fetch(rule.fetch('field'))) &&
-            row['operation'].to_s.start_with?(rule['operation_prefix'].to_s)
+          rows(rule, context, windowed: true)
+            .group_by { |row| failure_label(row) }
+            .select { |_label, group| group.length >= rule.min_count }
+            .map do |label, group|
+              Findings.from_rows(rule, group, kind: rule.kind, group: label, detail: { 'failure' => label })
+            end
         end
 
         def journal_events(rule, context)
-          context.journal_documents
-                 .select { |document| rule.fetch('names').include?(document['name']) }
-                 .select { |document| document['observed_at_ms'].to_i.between?(context.since_ms, context.now_ms) }
-                 .group_by { |document| document['name'] }
-                 .select { |_name, documents| documents.length >= rule.fetch('min_count') }
-                 .map { |name, documents| Findings.from_documents(rule, documents, group: name) }
+          named = context.journal_documents.select do |document|
+            rule.names.include?(document['name']) && context.in_window?(document['observed_at_ms'])
+          end
+          named.group_by { |document| document['name'] }
+               .select { |_name, documents| documents.length >= rule.min_count }
+               .map { |name, documents| Findings.from_documents(rule, documents, group: name) }
         end
 
         def telemetry_loss(rule, context)
-          return [] if context.drops.values.sum < rule.fetch('min_count')
+          return [] if context.drops.values.sum < rule.min_count
 
           [Findings.from_drops(rule, context.drops)]
         end
 
-        def matching(rule, context)
-          context.records.fetch(rule.fetch('kind'), []).select do |row|
-            rule.fetch('values').include?(row[rule.fetch('field')]) &&
-              Array(rule['missing']).all? { |field| row[field].nil? }
+        def rows(rule, context, windowed: false)
+          context.records.fetch(rule.kind, []).select do |row|
+            matches?(rule, row) && (!windowed || context.in_window?(row[rule.time_field]))
           end
         end
 
-        def windowed(rule, context)
-          context.records.fetch(rule.fetch('kind'), []).select do |row|
-            row[rule.fetch('time_field')].to_i.between?(context.since_ms, context.now_ms)
-          end
+        def matches?(rule, row)
+          (rule.field_values.nil? || rule.field_values.include?(row[rule.field])) &&
+            rule.missing.all? { |field| row[field].nil? } &&
+            row['operation'].to_s.start_with?(rule.operation_prefix)
         end
 
-        def rate_exceeded?(rule, settled, failed)
-          settled >= rule.fetch('min_count') && failed.fdiv(settled) > rule.fetch('max_failure_ratio')
+        def one_finding(rule, rows)
+          rows.empty? ? [] : [Findings.from_rows(rule, rows, kind: rule.kind, group: 'all')]
         end
 
         def rate_detail(settled, failed)
@@ -100,7 +90,7 @@ module Tamoz
           }
         end
 
-        def failure_group(row)
+        def failure_label(row)
           failure = row['failure'] || {}
           [failure['class'] || 'unclassified', failure['code']].compact.join('/')
         end

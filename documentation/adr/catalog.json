@@ -1399,7 +1399,7 @@
       "state": "proposed",
       "date": "2026-10-04",
       "tier": "F",
-      "implementation": "Partial — the durable reader, diagnosis, `explain`, `postmortem` and `self-observe` are built; `tamoz trace` still reads the journal only, and approval decisions in a shared worker database link to a turn by time, not by identity",
+      "implementation": "Partial — `tamoz trace` still reads only the journal; approvals in a shared worker database link to a turn by time, not by identity",
       "file": "adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md",
       "relates_to": [
         "028",

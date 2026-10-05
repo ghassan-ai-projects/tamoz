@@ -187,8 +187,8 @@ zero fabricated answers is not met.
 
 ## Investigating Tamoz itself
 
-`tamoz self-observe` is a read-only MCP server over Tamoz's own durable record
-(`diagnose`, `timeline`, `explain_turn`). Declare it and probes over it as in
+`tamoz mcp` is Tamoz's read-only MCP server over its own durable record
+(`observe_diagnose`, `observe_timeline`, `observe_explain_turn`). Declare it and probes over it as in
 [observability-ops.md](../operations/observability-ops.md#let-tamoz-investigate-itself),
 then ask `tamoz investigate "what went wrong since yesterday?"`; pass the JSON
 report to `tamoz postmortem --analysis`.

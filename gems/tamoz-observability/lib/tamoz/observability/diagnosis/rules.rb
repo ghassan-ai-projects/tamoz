@@ -23,8 +23,18 @@ module Tamoz
         REQUIRED = %w[id detector severity category title action].freeze
 
         Rule = Data.define(:id, :detector, :severity, :category, :title, :action, :parameters) do
-          def fetch(name) = parameters.fetch(name)
-          def [](name) = parameters[name]
+          def kind = parameters['kind']
+          def field = parameters['field']
+          def field_values = parameters['values']
+          def missing = Array(parameters['missing'])
+          def operation_prefix = parameters['operation_prefix'].to_s
+          def time_field = parameters['time_field']
+          def older_than_minutes = parameters['older_than_minutes']
+          def settled_values = parameters['settled_values']
+          def failed_values = parameters['failed_values']
+          def max_failure_ratio = parameters['max_failure_ratio']
+          def min_count = parameters['min_count']
+          def names = parameters['names']
         end
 
         attr_reader :rules, :digest, :severities

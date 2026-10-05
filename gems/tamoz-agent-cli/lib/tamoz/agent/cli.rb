@@ -74,7 +74,7 @@ module Tamoz
         "diagnose" => :cmd_diagnose,
         "explain" => :cmd_explain,
         "postmortem" => :cmd_postmortem,
-        "self-observe" => :cmd_self_observe
+        "mcp" => :cmd_mcp
       }.freeze
 
       SUBCOMMANDS = SUBCOMMAND_HANDLERS.keys.freeze
@@ -86,7 +86,7 @@ module Tamoz
       # asked to touch.
       NEEDS_HELP_CATCH = %w[
         comms telegram config init queue worker status schedule approve observe trace
-        diagnose explain postmortem self-observe
+        diagnose explain postmortem mcp
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze

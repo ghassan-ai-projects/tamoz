@@ -107,7 +107,7 @@ Work an operator runs against the runtime directory.
 | `diagnose` | Read-only findings about this runtime (rules in `gems/tamoz-observability/diagnosis/rules.yaml`) | `--since 30m\|24h\|7d`, `--json` |
 | `explain` | Decision record of one thread: requests, effects with attempts and failures, approvals | `THREAD`, `--request ID`, `--json` |
 | `postmortem` | Write `postmortem-<ms>.md` and `.json` for a window | `--title TEXT`, `--out DIR`, `--since`, `--analysis FILE`, `--json` |
-| `self-observe` | Run a read-only stdio MCP server (`diagnose`, `timeline`, `explain_turn`) for investigation probes | |
+| `mcp` | Run Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for investigation probes | |
 | `comms` | The channel surface | verbs below |
 | `telegram` | Set up and run the Telegram bot | verbs below |
 | `config` | Explicit configuration migration | `migrate` |

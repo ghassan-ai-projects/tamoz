@@ -6417,6 +6417,19 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-mcp",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz mcp",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/mcp_server_test.rb#test_serves_mcp_over_stdio",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-memory",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6569,19 +6582,6 @@
       "supporting_tests": [
         "test/agent_schedule_test.rb#test_schedule_lifecycle_add_pause_resume_remove"
       ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "CLI-self-observe",
-      "category": "cli_command",
-      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
-      "title": "tamoz self-observe",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/self_observe_server_test.rb#test_serves_mcp_over_stdio",
-      "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null

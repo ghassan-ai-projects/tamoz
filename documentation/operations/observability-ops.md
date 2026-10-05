@@ -104,7 +104,7 @@ redacted at the report surface; the database queries share one read snapshot.
 | `tamoz diagnose [--since 24h] [--json]` | Which rules fired in the window, with the rows that prove each finding, plus per-operation attempts, failures, unknown outcomes and p50/p95 latency |
 | `tamoz explain THREAD [--request ID] [--json]` | One turn's decision record: requests, executions, every model/tool/check effect with attempts and failures, approvals with policy revision, answer and actor evidence |
 | `tamoz postmortem --title T --out DIR [--since 24h] [--analysis FILE]` | A blameless Markdown + JSON postmortem: impact, timeline, findings, unknowns, proposed actions (never executed) |
-| `tamoz self-observe` | A stdio MCP server exposing `diagnose`, `timeline`, `explain_turn` so an investigation can read the same evidence |
+| `tamoz mcp` | Tamoz's read-only stdio MCP server: `observe_diagnose`, `observe_timeline`, `observe_explain_turn`, so an investigation can read the same evidence |
 
 Pass `--runtime-dir` for a worker or Telegram runtime (`runtime.sqlite3` and its
 journal), or `--session-dir` for interactive threads (one database per thread).
@@ -143,7 +143,7 @@ it as not verified by the postmortem command; produce it with `tamoz investigate
 
 ### Let Tamoz investigate itself
 
-Declare the self-observe server and probes over it in the runtime's
+Declare the `tamoz mcp` server and probes over it in the runtime's
 `config.yaml`, then ask with `tamoz investigate` (or a chat turn that admits
 the probes). Every finding in the report must cite a probe call that answered.
 
@@ -152,26 +152,26 @@ sources:
   mcp:
     enabled: true
     servers:
-      - id: tamoz-self
+      - id: tamoz
         command: /usr/local/bin/tamoz
-        arguments: [--runtime-dir, /var/lib/tamoz, self-observe]
+        arguments: [--runtime-dir, /var/lib/tamoz, mcp]
         env_allowlist: [PATH, HOME, LANG, LC_ALL]
-        read_only_tools: [diagnose, timeline, explain_turn]
+        read_only_tools: [observe_diagnose, observe_timeline, observe_explain_turn]
   probes:
     enabled: true
     targets: {}
     probes:
       - name: probe_self_diagnose
         description: Findings about this Tamoz runtime in the window, ordered most severe first, with evidence rows (error class and code of each failure) and per-operation counts.
-        backing: {server: tamoz-self, tool: diagnose}
+        backing: {server: tamoz, tool: observe_diagnose}
         arguments: {from: "{window.from}", until: "{window.until}"}
       - name: probe_self_timeline
         description: Ordered events in the window — failed effect attempts with error class and code, turns, approvals.
-        backing: {server: tamoz-self, tool: timeline}
+        backing: {server: tamoz, tool: observe_timeline}
         arguments: {from: "{window.from}", until: "{window.until}"}
       - name: probe_self_explain_turn
         description: The decision record of one thread, by thread id.
-        backing: {server: tamoz-self, tool: explain_turn}
+        backing: {server: tamoz, tool: observe_explain_turn}
         arguments: {thread_id: {free: string, max_bytes: 128}}
 ```
 

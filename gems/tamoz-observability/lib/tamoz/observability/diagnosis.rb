@@ -85,6 +85,9 @@ module Tamoz
         reasons = sources.flat_map do |source|
           truncated(source).map { |kind| "#{source.name}: #{kind} reached the row limit #{source.limit}" }
         end
+        reasons.concat(journal.fetch(:unreadable).map do |file|
+          "the telemetry journal health file #{file} cannot be read; its dropped-signal count is unknown"
+        end)
         drops = journal.fetch(:drops).values.sum
         reasons << "the telemetry journal counted #{drops} dropped signals" if drops.positive?
         reasons.sort

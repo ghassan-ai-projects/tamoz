@@ -6,7 +6,7 @@ require 'optionparser'
 
 module Tamoz
   module Agent
-    # `diagnose`, `explain` and `postmortem`: read-only questions about this runtime's own record.
+    # `diagnose`, `explain`, `postmortem` and `mcp`: read-only questions about this runtime's own record.
     module CLISelfObservationCommands
       DURATION = /\A(\d+)([mhd])\z/
       UNIT_MS = { 'm' => 60_000, 'h' => 3_600_000, 'd' => 86_400_000 }.freeze
@@ -50,15 +50,15 @@ module Tamoz
         write_postmortem(postmortem, settings.fetch(:out), options)
       end
 
-      def cmd_self_observe(options, argv)
+      def cmd_mcp(options, argv)
         OptionParser.new do |parser|
-          parser.banner = 'Usage: tamoz --runtime-dir DIR [--session-dir DIR] self-observe  (a stdio MCP server)'
+          parser.banner = 'Usage: tamoz --runtime-dir DIR [--session-dir DIR] mcp  (a read-only stdio MCP server)'
           parser.on('-h', '--help', "Show this subcommand's options") do
             @out.puts parser
             throw :tamoz_subcommand_help, 0
           end
         end.parse!(argv)
-        SelfObserveServer.new(**observation_directories(options)).serve
+        MCPServer.new(**observation_directories(options)).serve
         0
       end
 

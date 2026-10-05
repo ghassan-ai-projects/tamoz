@@ -117,9 +117,10 @@ class SelfInvestigationEval
       config = YAML.safe_load_file(path)
       config['sources'] = {
         'mcp' => { 'enabled' => true, 'servers' => [{
-          'id' => 'tamoz-self', 'command' => RbConfig.ruby,
-          'arguments' => LIBS + [TAMOZ, '--runtime-dir', runtime, 'self-observe'],
-          'env_allowlist' => %w[PATH HOME LANG LC_ALL], 'read_only_tools' => %w[diagnose timeline explain_turn]
+          'id' => 'tamoz', 'command' => RbConfig.ruby,
+          'arguments' => LIBS + [TAMOZ, '--runtime-dir', runtime, 'mcp'],
+          'env_allowlist' => %w[PATH HOME LANG LC_ALL],
+          'read_only_tools' => %w[observe_diagnose observe_timeline observe_explain_turn]
         }] },
         'probes' => PROBES.merge('enabled' => true)
       }

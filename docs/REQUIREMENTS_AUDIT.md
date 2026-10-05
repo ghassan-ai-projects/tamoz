@@ -491,6 +491,7 @@ generating run.
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-investigate` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
+| `CLI-mcp` | cli_command | yes | pass | `test/mcp_server_test.rb#test_serves_mcp_over_stdio` |
 | `CLI-memory` | cli_command | yes | pass | `test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates` |
 | `CLI-observe` | cli_command | yes | pass | `test/observability_cli_test.rb#test_observe_commands_read_the_local_journal` |
 | `CLI-postmortem` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis` |
@@ -502,7 +503,6 @@ generating run.
 | `CLI-resolve` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resolve_records_a_human_effect_resolution` |
 | `CLI-resume` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resume_collects_interrupt_answers` |
 | `CLI-schedule` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence` |
-| `CLI-self-observe` | cli_command | yes | pass | `test/self_observe_server_test.rb#test_serves_mcp_over_stdio` |
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
 | `CLI-skills` | cli_command | yes | pass | `test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections` |
 | `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |

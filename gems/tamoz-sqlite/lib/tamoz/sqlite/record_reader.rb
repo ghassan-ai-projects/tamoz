@@ -62,6 +62,9 @@ module Tamoz
         Migrator.verify_connection!(connection)
         connection.execute('BEGIN')
         connection
+      rescue ::SQLite3::Exception => e
+        connection&.close
+        ExceptionMapper.raise_mapped(e, operation: 'record_reader.open')
       rescue StandardError
         connection&.close
         raise

@@ -1,12 +1,13 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'mcp'
 require 'time'
 
 module Tamoz
   module Agent
-    # A stdio MCP server whose three read-only tools let an investigation read this runtime's own record.
-    class SelfObserveServer
+    # Tamoz's stdio MCP server; every tool it serves is read-only.
+    class MCPServer
       DAY_SECONDS = 86_400
       WINDOW = {
         'type' => 'object', 'additionalProperties' => false,
@@ -14,16 +15,16 @@ module Tamoz
                           'until' => { 'type' => 'string', 'format' => 'date-time' } }
       }.freeze
       TOOLS = {
-        'diagnose' => [
+        'observe_diagnose' => [
           'Findings about this Tamoz runtime between from and until (ISO 8601; default the last 24 hours): ' \
           'every rule that fired, its evidence rows, and per-operation counts and latencies. Rules about ' \
           'unknown effects and unsettled schedules report the current state, whatever the window.', WINDOW
         ],
-        'timeline' => [
+        'observe_timeline' => [
           'Ordered events between from and until: turns requested and ended, failed or unknown effect attempts ' \
           'with their error class and code, approvals asked and answered, pauses, logged worker errors.', WINDOW
         ],
-        'explain_turn' => [
+        'observe_explain_turn' => [
           'The decision record of one thread (or one request): its executions, every model and tool effect ' \
           'with attempts and failures, and the approvals with who answered them.',
           { 'type' => 'object', 'additionalProperties' => false, 'required' => ['thread_id'],
@@ -39,13 +40,11 @@ module Tamoz
       end
 
       def serve
-        server = mcp_server
-        MCP::Server::Transports::StdioTransport.new(server).open
+        MCP::Server::Transports::StdioTransport.new(mcp_server).open
       end
 
       def mcp_server
-        require 'mcp'
-        MCP::Server.new(name: 'tamoz-self-observe', version: CLI::VERSION, tools: TOOLS.keys.map { |name| tool(name) })
+        MCP::Server.new(name: 'tamoz', version: CLI::VERSION, tools: TOOLS.keys.map { |name| tool(name) })
       end
 
       def call(name, arguments)
@@ -70,13 +69,13 @@ module Tamoz
 
       def answer(name, arguments)
         observation = SelfObservation.open(runtime_dir: @runtime_dir, session_dir: @session_dir)
-        if name == 'explain_turn'
+        if name == 'observe_explain_turn'
           return observation.explain(thread: arguments.fetch('thread_id'), request: arguments['request_id'],
                                      now_ms: (@clock.call.to_f * 1000).to_i)
         end
 
         since_ms, until_ms = window(arguments)
-        return observation.timeline(since_ms:, until_ms:) if name == 'timeline'
+        return observation.timeline(since_ms:, until_ms:) if name == 'observe_timeline'
 
         observation.diagnose(now_ms: until_ms, since_ms:).to_h
       end

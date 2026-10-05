@@ -194,7 +194,7 @@ request inboxes and the checkpoints.
 | `diagnose` | Read-only findings about this runtime from its durable record and journal health |
 | `explain` | The decision record of one thread or request: effects, attempts, approvals |
 | `postmortem` | Write a Markdown + JSON postmortem of a window, optionally with a model analysis |
-| `self-observe` | Serve `diagnose`, `timeline` and `explain_turn` as a read-only stdio MCP server for probes |
+| `mcp` | Serve Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for probes |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
 | `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
 | `config` | Explicit configuration migration (`migrate`) |

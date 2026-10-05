@@ -37,6 +37,18 @@ class SQLiteRecordReaderTest < Minitest::Test
     end
   end
 
+  def test_a_database_sqlite_cannot_open_raises_a_tamoz_permission_error
+    skip 'root can open a mode-000 file' if Process.uid.zero?
+
+    with_records do |path, _builder|
+      File.chmod(0o000, path)
+
+      assert_raises(Tamoz::SQLite::PermissionError) { Tamoz::SQLite::RecordReader.open(path:) }
+    ensure
+      File.chmod(0o600, path)
+    end
+  end
+
   def test_reader_implements_the_telemetry_reader_contract
     contract = Tamoz::Observability::TelemetryReader.instance_methods(false)
 

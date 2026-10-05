@@ -14,8 +14,9 @@ from its public release line onward.
   kept as data in `gems/tamoz-observability/diagnosis/rules.yaml`), `tamoz
   explain` (one turn's decision record), `tamoz postmortem` (Markdown + JSON,
   optionally embedding a `tamoz investigate` findings report), and `tamoz
-  self-observe` (a stdio MCP server so investigation probes can read the same
-  evidence). Built on `Tamoz::SQLite::RecordReader`, the read-only
+  mcp` (Tamoz's read-only stdio MCP server, whose `observe_*` tools let
+  investigation probes read the same evidence). An unreadable database or
+  journal health file is skipped and marks the report degraded. Built on `Tamoz::SQLite::RecordReader`, the read-only
   implementation of `TelemetryReader` (contract v2; v1 removed). Regulatory
   evidence (sealed audit trail, retention, reporting clocks) is designed in
   `docs/observability-self-diagnosis-2026-10-04/FUTURE_PLAN.md`, not built.

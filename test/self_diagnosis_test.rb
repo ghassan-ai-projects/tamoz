@@ -6,7 +6,7 @@ require_relative 'support/durable_record_builder'
 class SelfDiagnosisTest < Minitest::Test
   Diagnosis = Tamoz::Observability::Diagnosis
   HOUR_MS = 3_600_000
-  NO_JOURNAL = { documents: [], drops: {} }.freeze
+  NO_JOURNAL = { documents: [], drops: {}, unreadable: [] }.freeze
 
   def test_clean_runtime_has_no_findings
     report = diagnose { |builder| healthy_activity(builder) }
@@ -65,6 +65,21 @@ class SelfDiagnosisTest < Minitest::Test
     assert_equal %w[approval.waiting effect.stuck], later.findings.map(&:rule_id).sort
   end
 
+  def test_an_unreadable_health_file_marks_the_report_degraded
+    records = records_for { |builder| healthy_activity(builder) }
+    report = diagnose_records(records, journal: NO_JOURNAL.merge(unreadable: ['worker-2.ndjson.health.json']))
+
+    assert_predicate report, :degraded?
+    assert_includes report.degraded_reasons.join, 'worker-2.ndjson.health.json cannot be read'
+  end
+
+  def test_an_answered_approval_is_not_waiting
+    records = records_for { |builder| builder.approval(verdict: 'ask', answer: 'approve') }
+    later = diagnose_records(records, now_ms: (Time.now.to_f * 1000).to_i + (5 * HOUR_MS))
+
+    refute_includes later.findings.map(&:rule_id), 'approval.waiting'
+  end
+
   def test_detectors_never_classify_by_free_text
     report = diagnose do |builder|
       execution = healthy_activity(builder)
@@ -82,7 +97,8 @@ class SelfDiagnosisTest < Minitest::Test
 
   def test_telemetry_loss_marks_the_report_degraded
     records = records_for { |builder| healthy_activity(builder) }
-    report = diagnose_records(records, journal: { documents: [], drops: { 'tamoz.model.call:queue_full:bulk' => 3 } })
+    drops = { 'tamoz.model.call:queue_full:bulk' => 3 }
+    report = diagnose_records(records, journal: NO_JOURNAL.merge(drops:))
 
     assert_predicate report, :degraded?
     assert_equal ['the telemetry journal counted 3 dropped signals'], report.degraded_reasons
@@ -97,7 +113,7 @@ class SelfDiagnosisTest < Minitest::Test
       { 'name' => 'tamoz.worker.started', 'observed_at_ms' => now - 1000 }
     ]
     records = records_for { |builder| healthy_activity(builder) }
-    report = diagnose_records(records, now_ms: now, journal: { documents:, drops: {} })
+    report = diagnose_records(records, now_ms: now, journal: { documents:, drops: {}, unreadable: [] })
 
     assert_equal 1, finding(report, 'worker.errors').count
   end

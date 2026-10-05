@@ -31,8 +31,8 @@ module Tamoz
           Files.inventory(directory)
         end
 
-        def self.drop_counts(directory)
-          Files.drop_counts(directory)
+        def self.read_health(directory)
+          Files.read_health(directory)
         end
 
         def initialize(directory:, role:, pid: Process.pid, catalog: Catalog, policy: ContentPolicy::NONE,
@@ -221,7 +221,7 @@ module Tamoz
         end
 
         def persist_health
-          File.write(@health_path, JSON.generate('drops' => drops_hash), mode: 'w', perm: 0o600)
+          Tamoz::Core::AtomicFile.replace(@health_path, JSON.generate('drops' => drops_hash), mode: 0o600)
         rescue SystemCallError
           nil
         end
@@ -258,13 +258,15 @@ module Tamoz
             empty_inventory
           end
 
-          def self.drop_counts(directory)
-            _ndjson_files, health_files = inventory_files(directory)
-            health_files.sort.each_with_object(Hash.new(0)) do |file, counts|
-              health_drops(file).each { |key, count| counts[key] += count }
-            end.to_h
-          rescue Errno::ENOENT
-            {}
+          def self.read_health(directory)
+            drops = Hash.new(0)
+            unreadable = []
+            inventory_files(directory).last.sort.each do |file|
+              health_drops(file).each { |key, count| drops[key] += count }
+            rescue JSON::ParserError, SystemCallError
+              unreadable << File.basename(file)
+            end
+            { drops: drops.to_h, unreadable: }
           end
 
           def self.matching_files(directory, role)
@@ -331,13 +333,13 @@ module Tamoz
 
           def self.drops_from_health_file(file)
             health_drops(file).values.sum
+          rescue JSON::ParserError, SystemCallError
+            0
           end
           private_class_method :drops_from_health_file
 
           def self.health_drops(file)
             JSON.parse(File.read(file)).fetch('drops', {}).select { |_key, count| count.is_a?(Integer) }
-          rescue JSON::ParserError, SystemCallError
-            {}
           end
           private_class_method :health_drops
 

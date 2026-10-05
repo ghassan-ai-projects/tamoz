@@ -5,16 +5,16 @@ probes:
       Findings about this Tamoz runtime in the window, ordered most severe first: every rule that fired with its
       evidence rows (operation, status, error class and code of each failure), and per-operation attempts,
       failures, unknown outcomes and latency.
-    backing: {server: tamoz-self, tool: diagnose}
+    backing: {server: tamoz, tool: observe_diagnose}
     arguments: {from: "{window.from}", until: "{window.until}"}
   - name: probe_self_timeline
     description: >-
       Ordered events in the window: turns requested and ended, failed or unknown effect attempts with error class
       and code, approvals asked and answered, logged worker errors.
-    backing: {server: tamoz-self, tool: timeline}
+    backing: {server: tamoz, tool: observe_timeline}
     arguments: {from: "{window.from}", until: "{window.until}"}
   - name: probe_self_explain_turn
     description: >-
       The decision record of one thread, by thread id: its effects with attempts and failures, and its approvals.
-    backing: {server: tamoz-self, tool: explain_turn}
+    backing: {server: tamoz, tool: observe_explain_turn}
     arguments: {thread_id: {free: string, max_bytes: 128}}

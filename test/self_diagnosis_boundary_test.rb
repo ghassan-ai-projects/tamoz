@@ -10,9 +10,8 @@ class SelfDiagnosisBoundaryTest < Minitest::Test
     ROOT.join('gems/tamoz-observability/lib/tamoz/observability', file)
   end.freeze
   READER = ROOT.join('gems/tamoz-sqlite/lib/tamoz/sqlite/record_reader.rb')
-  CLI_SIDE = %w[self_observation.rb self_observe_server.rb].map do |file|
-    ROOT.join('gems/tamoz-agent-cli/lib/tamoz/agent', file)
-  end.freeze
+  READING_SIDE = [ROOT.join('gems/tamoz-agent/lib/tamoz/agent/self_observation.rb'),
+                  ROOT.join('gems/tamoz-agent-cli/lib/tamoz/agent/mcp_server.rb')].freeze
   ACTING = /Adapter\.new|open_writer|enqueue|submit|EffectDispatcher|Net::HTTP|Socket|IO\.popen|system\(|spawn|
             AtomicFile|File\.write|\.execute\(|Recorder::Journal\.new|durable_runner/x
   SECRET = "sk-#{'z' * 32}".freeze
@@ -34,11 +33,12 @@ class SelfDiagnosisBoundaryTest < Minitest::Test
     assert source.include?('readonly: true') && source.include?('PRAGMA query_only = ON')
   end
 
-  def test_the_cli_side_reads_through_the_reader_only
-    CLI_SIDE.each do |path|
+  def test_the_reading_side_reads_through_the_reader_only
+    READING_SIDE.each do |path|
       source = File.read(path, encoding: Encoding::UTF_8)
 
       refute_match ACTING, source, path.to_s
+      refute_match(/SQLite3::/, source, path.to_s)
       assert_includes source, 'RecordReader' if path.basename.to_s == 'self_observation.rb'
     end
   end
@@ -78,7 +78,7 @@ class SelfDiagnosisBoundaryTest < Minitest::Test
      Tamoz::Observability::Postmortem.to_markdown(
        observation.postmortem(title: SECRET, now_ms: now, since_ms: now - 3_600_000, until_ms: now)
      ),
-     Tamoz::Agent::SelfObserveServer.new(runtime_dir: directory, session_dir: nil).call('diagnose', {}).first]
+     Tamoz::Agent::MCPServer.new(runtime_dir: directory, session_dir: nil).call('observe_diagnose', {}).first]
   end
 
   def now_ms = (Time.now.to_f * 1000).to_i
