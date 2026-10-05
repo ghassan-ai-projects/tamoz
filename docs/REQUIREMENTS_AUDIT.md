@@ -7,17 +7,16 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 578 | 303 | 14 | **no** |
+| 582 | 307 | 14 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
-| deferred-by-contract | 10 |
-| failing | 1 |
+| deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 550 |
+| pass | 554 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -37,10 +36,6 @@ generating run.
 | `INV-60` — Telemetry is redacted by construction and content capture is an explicit named policy | missing | Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual. |
 | `INV-61` — Safety-bearing observability is derived from durable evidence, correlated by durable identity, and never overstates what it measured | missing | Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding. |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
-
-## Failing evidence (release stopper)
-
-- `INV-42` — test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing
 
 ## Full audit
 
@@ -489,13 +484,17 @@ generating run.
 | `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-deep-research` | cli_command | yes | pass | `test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace` |
+| `CLI-diagnose` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json` |
+| `CLI-explain` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-improve` | cli_command | yes | pass | `test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-investigate` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
+| `CLI-mcp` | cli_command | yes | pass | `test/mcp_server_test.rb#test_serves_mcp_over_stdio` |
 | `CLI-memory` | cli_command | yes | pass | `test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates` |
 | `CLI-observe` | cli_command | yes | pass | `test/observability_cli_test.rb#test_observe_commands_read_the_local_journal` |
+| `CLI-postmortem` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis` |
 | `CLI-probes` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server` |
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
 | `CLI-queue` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
@@ -554,7 +553,7 @@ generating run.
 | `INV-39` | invariant | yes | missing | `test/sqlite_schedule_store_test.rb#test_misfire_skip_delivers_only_the_latest_and_records_older_skipped` |
 | `INV-40` | invariant | yes | pass | `test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule` |
 | `INV-41` | invariant | no | deferred-by-contract | `test/agent_skills_test.rb#test_same_version_content_swap_changes_identity_and_epoch` |
-| `INV-42` | invariant | no | failing | `test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing` |
+| `INV-42` | invariant | no | deferred-by-contract | `test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing` |
 | `INV-43` | invariant | no | deferred-by-contract | `—` |
 | `INV-52` | invariant | yes | pass | `test/graph_identity_test.rb#test_activation_survives_new_base_while_attempt_identity_changes` |
 | `INV-53` | invariant | yes | pass | `test/sqlite_request_inbox_test.rb#test_redirect_pins_target_and_generation_then_starts_new_turn` |

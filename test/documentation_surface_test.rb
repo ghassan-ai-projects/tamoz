@@ -44,7 +44,7 @@ class DocumentationSurfaceTest < Minitest::Test
      %w[schedule add], %w[schedule list], %w[comms serve], %w[comms list],
      %w[comms doctor], %w[comms pair list], %w[comms delivery resolve],
      %w[config migrate], %w[observe tail], %w[observe metrics],
-     %w[observe doctor]].each do |argv|
+     %w[observe doctor], %w[diagnose], %w[explain], %w[postmortem]].each do |argv|
       help << capture_help(argv + ["--help"])
     end
 

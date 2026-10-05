@@ -1,15 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-10-04T17:10:16Z",
-  "manifest_requirements": 578,
-  "named_cases_run": 303,
+  "generated_at": "2026-10-05T08:48:01Z",
+  "manifest_requirements": 582,
+  "named_cases_run": 307,
   "counts": {
-    "deferred-by-contract": 10,
-    "failing": 1,
+    "deferred-by-contract": 11,
     "indirect": 3,
     "missing": 14,
-    "pass": 550
+    "pass": 554
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -27,9 +26,7 @@
     "INV-61",
     "OBJ-7"
   ],
-  "failing": [
-    "INV-42"
-  ],
+  "failing": [],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -7178,6 +7175,36 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-diagnose",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz diagnose",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-explain",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz explain",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-follow-up",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7257,6 +7284,21 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-mcp",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz mcp",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/mcp_server_test.rb#test_serves_mcp_over_stdio",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-memory",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7281,6 +7323,21 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-postmortem",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz postmortem",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -8329,18 +8386,18 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Skill content never grants authority or escapes its tree",
       "release_blocking": false,
-      "status": "failing",
+      "status": "deferred-by-contract",
       "named_test": "test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
       "supporting_tests": [
         "test/agent_skills_adversarial_test.rb#test_symlink_to_a_file_outside_the_tree_is_rejected_and_never_indexed",
         "test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing",
-        "test/agent_skills_adversarial_test.rb#test_a13b_compiling_a_hostile_tree_invokes_no_execution_verb"
+        "test/agent_skills_adversarial_test.rb#test_compiling_a_hostile_tree_invokes_no_execution_verb"
       ],
       "classification": "deferred-by-contract",
       "rationale": null,
       "promotion_exclusion": null,
       "deferred_to": "v0.2",
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {

@@ -95,6 +95,25 @@ class ObservabilityRuntimeTest < Minitest::Test
     end
   end
 
+  def test_journal_health_sums_drops_and_names_an_unreadable_health_file
+    Dir.mktmpdir do |directory|
+      journal = Observability::Recorder::Journal.new(
+        directory:, role: 'worker', pid: 1, queue_size: 1, flush_interval_ms: 1_000
+      )
+      producer = Observability::Producer.new(recorder: journal)
+      10.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x'}) }
+      journal.close
+      File.write(File.join(directory, 'worker-2.ndjson.health.json'), '{"drops": {"a:b', perm: 0o600)
+
+      health = Observability::Recorder::Journal.read_health(directory)
+
+      assert_operator health.fetch(:drops).values.sum, :>, 0
+      assert_equal ['worker-2.ndjson.health.json'], health.fetch(:unreadable)
+      assert_equal 0o600, File.stat(File.join(directory, 'worker-1.ndjson.health.json')).mode & 0o777
+      assert_empty Dir.children(directory).grep(/\.tmp\z/)
+    end
+  end
+
   def test_journal_cap_survives_reopen_and_one_file_retention
     Dir.mktmpdir do |directory|
       2.times do

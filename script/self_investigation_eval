@@ -1,0 +1,181 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path('../test', __dir__))
+$stdout.sync = true
+
+require 'json'
+require 'open3'
+require 'rbconfig'
+require 'tmpdir'
+require 'yaml'
+require 'tamoz/agent_cli'
+require 'support/self_diagnosis_corpus'
+require 'support/self_investigation_grader'
+
+# Measures deterministic value and exact-code selection over self-observation probes.
+class SelfInvestigationEval
+  ROOT = File.expand_path('..', __dir__)
+  TAMOZ = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
+  LIBS = Dir[File.join(ROOT, 'gems/*/lib')].flat_map { |lib| ['-I', lib] }.freeze
+  PROVIDER = ENV.fetch('TAMOZ_PROVIDER', 'openrouter')
+  MODEL = ENV.fetch('TAMOZ_MODEL', 'deepseek/deepseek-v4.1-flash')
+  PROBES = YAML.safe_load_file(File.join(ROOT, 'test/fixtures/self_diagnosis/probes.yaml'))
+
+  class << self
+    def run(mode, ids)
+      raise ArgumentError, 'mode must be value or real' unless %w[value real].include?(mode)
+
+      corpus = SelfDiagnosisCorpus.load
+      scenarios = corpus.fetch('scenarios').select { |scenario| ids.empty? || ids.include?(scenario.fetch('id')) }
+      results = mode == 'value' ? scenarios.map { |scenario| value(scenario) } : real(corpus, scenarios)
+      puts JSON.pretty_generate(run_report(mode, corpus, results))
+    end
+
+    def run_report(mode, corpus, results)
+      { 'mode' => mode, 'model' => mode == 'value' ? nil : "#{PROVIDER}/#{MODEL}",
+        'corpus_digest' => SelfDiagnosisCorpus.digest, 'question' => corpus.fetch('question'),
+        'rules_digest' => Tamoz::Observability::Diagnosis::Rules.default.digest,
+        'implementation' => implementation, 'results' => results }
+    end
+
+    def real(corpus, scenarios)
+      vocabulary = SelfInvestigationGrader.vocabulary(corpus)
+      scenarios.select { |scenario| scenario.fetch('real_model') }.each_slice(3).flat_map do |slice|
+        slice.map { |scenario| Thread.new { investigate(corpus, scenario, vocabulary) } }.map(&:value)
+      end
+    end
+
+    def investigate(corpus, scenario, vocabulary)
+      with_runtime(scenario) do |paths|
+        write_probe_config(paths.fetch(:runtime))
+        baselines = SelfInvestigationGrader.baselines(scenario, diagnosis_json(paths.fetch(:runtime)), vocabulary)
+        text, status, seconds = investigation_turn(paths, corpus.fetch('question'))
+        shown = shown_document(paths)
+        inputs = { scenario:, vocabulary:, report: shown['report'], cited_probes: cited_probes(text),
+                   probe_results: probe_results(paths) }
+        SelfInvestigationGrader.grade(**inputs).to_h.merge(
+          baselines:, exit: status, seconds: seconds.round(1), model_calls: model_calls(paths),
+          grading_inputs: inputs, output: Tamoz::Core.scrub_secrets(text),
+          turn: shown.slice('status', 'terminal'), self_diagnosis: shown['report'] ? nil : self_diagnosis(paths)
+        )
+      end
+    end
+
+    def investigation_turn(paths, question)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      text, status = tamoz('--provider', PROVIDER, '--model', MODEL, '--runtime-dir', paths.fetch(:runtime),
+                           '--session-dir', paths.fetch(:sessions), '--session', 'investigation',
+                           '--root', paths.fetch(:workspace), 'investigate', question)
+      [text, status, Process.clock_gettime(Process::CLOCK_MONOTONIC) - started]
+    end
+
+    def implementation
+      revision, = Open3.capture2('git', '-C', ROOT, 'rev-parse', 'HEAD')
+      status, = Open3.capture2('git', '-C', ROOT, 'status', '--porcelain')
+      { 'revision' => revision.strip, 'dirty' => !status.empty? }
+    end
+
+    def value(scenario)
+      with_runtime(scenario) do |paths|
+        runtime = paths.fetch(:runtime)
+        truth = scenario.fetch('truth')
+        status, = tamoz('--json', '--runtime-dir', runtime, 'status')
+        metrics, = tamoz('--runtime-dir', runtime, 'observe', 'metrics')
+        diagnosis = diagnosis_json(runtime)
+        vocabulary = SelfInvestigationGrader.vocabulary(SelfDiagnosisCorpus.load)
+        { 'scenario' => scenario.fetch('id'), 'truth' => truth, 'expected_rules' => scenario.fetch('expected_rules'),
+          'baselines' => truth && SelfInvestigationGrader.baselines(scenario, diagnosis, vocabulary),
+          'status_names_it' => named?(status, truth), 'metrics_names_it' => named?(metrics, truth),
+          'diagnose_names_it' => named?(diagnosis, truth), 'status_bytes' => status.bytesize,
+          'diagnose_rules' => JSON.parse(diagnosis).fetch('findings').map { |finding| finding.fetch('rule_id') } }
+      end
+    end
+
+    def diagnosis_json(runtime)
+      out, = Open3.capture3(RbConfig.ruby, *LIBS, TAMOZ, '--runtime-dir', runtime, 'diagnose', '--json', '--since', '24h',
+                            stdin_data: '')
+      out
+    end
+
+    def named?(output, truth) = truth.nil? ? false : output.include?(truth)
+
+    def with_runtime(scenario)
+      Dir.mktmpdir('self-eval') do |directory|
+        paths = { workspace: File.join(directory, 'ws'), runtime: File.join(directory, 'rt'),
+                  sessions: File.join(directory, 'sessions') }
+        paths.each_value { |path| Dir.mkdir(path, 0o700) }
+        tamoz('--runtime-dir', paths.fetch(:runtime), 'init', '--workspace', paths.fetch(:workspace))
+        SelfDiagnosisCorpus.build(scenario, paths.fetch(:runtime))
+        yield paths
+      end
+    end
+
+    def write_probe_config(runtime)
+      path = File.join(runtime, 'config.yaml')
+      config = YAML.safe_load_file(path)
+      config['sources'] = {
+        'mcp' => { 'enabled' => true, 'servers' => [{
+          'id' => 'tamoz', 'command' => RbConfig.ruby,
+          'arguments' => LIBS + [TAMOZ, '--runtime-dir', runtime, 'mcp'],
+          'env_allowlist' => %w[PATH HOME LANG LC_ALL],
+          'read_only_tools' => %w[observe_diagnose observe_timeline observe_explain_turn]
+        }] },
+        'probes' => PROBES.merge('enabled' => true)
+      }
+      File.write(path, YAML.dump(config), perm: 0o600)
+    end
+
+    def tamoz(*argv)
+      out, err, status = Open3.capture3(RbConfig.ruby, *LIBS, TAMOZ, *argv, stdin_data: '')
+      ["#{out}#{err}", status.exitstatus]
+    end
+
+    def shown_document(paths)
+      text, = tamoz('--json', '--runtime-dir', paths.fetch(:runtime), '--session-dir', paths.fetch(:sessions),
+                    'show', 'investigation')
+      JSON.parse(text)
+    rescue JSON::ParserError
+      {}
+    end
+
+    def self_diagnosis(paths)
+      text, = tamoz('--session-dir', paths.fetch(:sessions), 'diagnose', '--json', '--since', '1h')
+      JSON.parse(text).fetch('findings').map { |finding| finding.slice('rule_id', 'count', 'detail') }
+    rescue JSON::ParserError, KeyError
+      text
+    end
+
+    def cited_probes(text)
+      findings = text[/^Findings:\n(.*?)(?:^\S[^\n]*:\n|\z)/m, 1].to_s
+      findings.lines.grep(/\A\d+\. /).map do |line|
+        line[/\[from ([^\]]+)\]\s*\z/, 1].to_s.split(', ')
+      end
+    end
+
+    def probe_results(paths)
+      rows(paths, 'SELECT e.operation, a.result FROM tamoz_effects e JOIN tamoz_effect_attempts a ' \
+                  "ON a.effect_key = e.effect_key WHERE e.operation LIKE 'tool.probe_%' AND a.status = 'succeeded'")
+        .group_by(&:first)
+        .to_h { |operation, entries| [operation.delete_prefix('tool.'), entries.map { |entry| decode(entry.last) }] }
+    end
+
+    def model_calls(paths)
+      rows(paths, "SELECT COUNT(*) FROM tamoz_effects WHERE operation LIKE 'model.%'").first&.first
+    end
+
+    def rows(paths, sql)
+      database = SQLite3::Database.new(File.join(paths.fetch(:sessions), 'investigation.sqlite3'), readonly: true)
+      database.execute(sql)
+    rescue SQLite3::Exception
+      []
+    ensure
+      database&.close
+    end
+
+    def decode(bytes) = bytes ? Tamoz::StateCodec.new.load(bytes.b).to_s : ''
+  end
+end
+
+SelfInvestigationEval.run(ARGV.first || 'real', ARGV.drop(1)) if $PROGRAM_NAME == __FILE__

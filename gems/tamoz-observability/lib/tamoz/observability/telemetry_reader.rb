@@ -2,15 +2,18 @@
 
 module Tamoz
   module Observability
+    # The read-only contract a durable store implements so its record can be reconstructed and diagnosed.
     module TelemetryReader
-      CONTRACT_VERSION = 1
+      CONTRACT_VERSION = 2
+      KINDS = %i[requests effects effect_attempts checkpoints approval_decisions occurrences].freeze
 
-      def checkpoint_records(thread:, namespace:, execution: nil) = raise NotImplementedError
-      def turn_records(thread:, execution: nil) = raise NotImplementedError
-      def effect_records(thread:, execution: nil) = raise NotImplementedError
-      def decision_records(thread:, occurrence: nil) = raise NotImplementedError
-      def store_records(namespace:, limit:) = raise NotImplementedError
-      def census = raise NotImplementedError
+      def requests(thread: nil, limit: nil) = raise NotImplementedError
+      def effects(thread: nil, limit: nil) = raise NotImplementedError
+      def effect_attempts(thread: nil, limit: nil) = raise NotImplementedError
+      def checkpoints(thread: nil, limit: nil) = raise NotImplementedError
+      def approval_decisions(thread: nil, limit: nil) = raise NotImplementedError
+      def occurrences(thread: nil, limit: nil) = raise NotImplementedError
+      def close = raise NotImplementedError
     end
   end
 end

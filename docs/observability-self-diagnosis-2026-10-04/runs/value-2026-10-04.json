@@ -1,0 +1,197 @@
+{
+  "mode": "value",
+  "model": null,
+  "corpus_digest": "sha256:be6a80c3612d2e48075af0630bdd046e2cc651bc29caadab83d1aa745a4a6d0e",
+  "results": [
+    {
+      "scenario": "provider_balance",
+      "truth": "insufficient_balance",
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "rate_limited",
+      "truth": "rate_limited",
+      "expected_rules": [
+        "model.failure_rate",
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.failure_rate"
+      ]
+    },
+    {
+      "scenario": "mcp_transport",
+      "truth": "transport_timeout",
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1155,
+      "diagnose_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "check_failing",
+      "truth": "check_exit_nonzero",
+      "expected_rules": [
+        "check.failure_rate",
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "check.failure_rate"
+      ]
+    },
+    {
+      "scenario": "tool_not_found",
+      "truth": "path_outside_workspace",
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "worker_claim_errors",
+      "truth": "lease_lost",
+      "expected_rules": [
+        "worker.errors",
+        "request.failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1049,
+      "diagnose_rules": [
+        "worker.errors",
+        "request.failed"
+      ]
+    },
+    {
+      "scenario": "auth_refused",
+      "truth": "authentication_failed",
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "websearch_egress",
+      "truth": "destination_not_allowed",
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "telemetry_loss",
+      "truth": "queue_full",
+      "expected_rules": [
+        "telemetry.loss"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1050,
+      "diagnose_rules": [
+        "telemetry.loss"
+      ]
+    },
+    {
+      "scenario": "single_model_failure",
+      "truth": "http_failure",
+      "expected_rules": [
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "approval_stall",
+      "truth": "approval.waiting",
+      "expected_rules": [
+        "approval.waiting"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1048,
+      "diagnose_rules": []
+    },
+    {
+      "scenario": "stuck_effect",
+      "truth": "effect.stuck",
+      "expected_rules": [
+        "effect.stuck"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": false,
+      "status_bytes": 1048,
+      "diagnose_rules": []
+    },
+    {
+      "scenario": "clean",
+      "truth": null,
+      "expected_rules": [],
+      "status_names_it": null,
+      "metrics_names_it": null,
+      "diagnose_names_it": null,
+      "status_bytes": 1048,
+      "diagnose_rules": []
+    }
+  ]
+}

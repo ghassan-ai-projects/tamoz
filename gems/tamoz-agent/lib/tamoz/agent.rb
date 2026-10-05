@@ -31,6 +31,8 @@ module Tamoz
   module Agent
     ROOT = File.expand_path("../../..", __dir__).freeze
 
+    autoload :SelfObservation, File.expand_path("agent/self_observation", __dir__)
+
     # P16: the tool primitives live in
     # tamoz-tools. These are constant rebindings — object-identical to the
     # tools-side constants — never subclass or delegation wrappers, so class

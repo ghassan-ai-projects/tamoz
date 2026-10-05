@@ -25,6 +25,10 @@ require_relative 'observability/exporter'
 require_relative 'observability/usage'
 require_relative 'observability/model_call'
 require_relative 'observability/notifier'
+require_relative 'observability/diagnosis'
+require_relative 'observability/explanation'
+require_relative 'observability/timeline'
+require_relative 'observability/postmortem'
 
 module Tamoz
   # The observability signal plane: a closed, versioned signal catalog,

@@ -131,6 +131,7 @@ decision is not built; the ADR says which part.
 | [045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md) | The observability gems add no durable table and no second source of truth | C | Complete |
 | [047](./adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md) | Telemetry is never sampled at record time, and safety-bearing signals have a reserved lane | F | Complete |
 | [050](./adr-050-automated-response-durable-evidence.md) | Automated responses act only on durable evidence, under the subsystem that owns the effect | F | Proposed |
+| [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | Partial |
 
 ### Streaming and physical action
 
@@ -157,7 +158,7 @@ decision is not built; the ADR says which part.
 
 What each said and why it died: [`RETIRED.md`](./RETIRED.md).
 
-**Next number to assign: 060.**
+**Next number to assign: 061.**
 
 ## Other files here
 

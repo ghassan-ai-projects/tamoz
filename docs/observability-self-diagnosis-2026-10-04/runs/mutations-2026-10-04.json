@@ -1,0 +1,56 @@
+[
+  {
+    "property": "A1",
+    "discriminates": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_reader_never_writes_the_database"
+  },
+  {
+    "property": "A2",
+    "discriminates": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_reader_returns_no_content_columns"
+  },
+  {
+    "property": "A3",
+    "discriminates": true,
+    "test": "test/self_diagnosis_boundary_test.rb",
+    "name": "test_the_pure_modules_reference_no_store_and_no_actor"
+  },
+  {
+    "property": "A4",
+    "discriminates": true,
+    "test": "test/agent_cli_self_diagnosis_test.rb",
+    "name": "test_explain_attributes_policy_and_actor_and_marks_unanswered_approval"
+  },
+  {
+    "property": "A5",
+    "discriminates": true,
+    "test": "test/self_diagnosis_test.rb",
+    "name": "test_detectors_never_classify_by_free_text"
+  },
+  {
+    "property": "A6",
+    "discriminates": true,
+    "test": "test/self_diagnosis_boundary_test.rb",
+    "name": "test_the_reader_is_read_only_and_does_not_know_observability"
+  },
+  {
+    "property": "A7",
+    "discriminates": true,
+    "test": "test/self_diagnosis_test.rb",
+    "name": "test_telemetry_loss_marks_the_report_degraded"
+  },
+  {
+    "property": "A8",
+    "discriminates": true,
+    "test": "test/diagnosis_rules_test.rb",
+    "name": "test_an_unknown_detector_kind_severity_or_category_is_refused"
+  },
+  {
+    "property": "snapshot",
+    "discriminates": true,
+    "test": "test/sqlite_record_reader_test.rb",
+    "name": "test_one_reader_keeps_one_snapshot_while_a_writer_completes_an_effect"
+  }
+]

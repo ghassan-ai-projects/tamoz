@@ -8,6 +8,7 @@ require "tamoz/comms/gateway"
 
 require_relative "agent/cli/version"
 require_relative "agent/cli_worker_commands"
+require_relative "agent/cli_self_observation_commands"
 require_relative "agent/cli_improvement_commands"
 require_relative "agent/cli_schedule_commands"
 require_relative "agent/cli_profile_commands"
@@ -36,3 +37,10 @@ require_relative "agent/cli_interrupt_answers"
 require_relative "agent/cli_turn_stream"
 require_relative "agent/cli_turn_driver"
 require_relative "agent/cli"
+
+module Tamoz
+  # MCPServer loads on first use, so starting the CLI does not load the MCP SDK.
+  module Agent
+    autoload :MCPServer, File.expand_path("agent/mcp_server", __dir__)
+  end
+end

@@ -1,0 +1,363 @@
+{
+  "format_version": 1,
+  "question": "Something went wrong with this Tamoz runtime in the last few hours. Use the probes to investigate its own record and report the root cause. Set the hypothesis field to exactly one error code identifying the root cause, with no other words or punctuation. Discuss your reasoning and other codes in the findings.",
+  "noise": {
+    "turns": 6,
+    "model_calls_per_turn": 3,
+    "tool_calls_per_turn": 2
+  },
+  "scenarios": [
+    {
+      "id": "provider_balance",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "model.generate.plan",
+          "outcome": "failed",
+          "count": 4,
+          "error": {
+            "class": "Tamoz::Agent::ModelCallError",
+            "code": "insufficient_balance",
+            "message": "402 Payment Required: the account balance is empty"
+          }
+        },
+        {
+          "kind": "effect",
+          "operation": "tool.read_file",
+          "outcome": "failed",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::Agent::ToolError",
+            "code": "not_found",
+            "message": "notes.md does not exist"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "truth": "insufficient_balance",
+      "real_model": true
+    },
+    {
+      "id": "rate_limited",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "model.converse.work_step",
+          "outcome": "failed",
+          "count": 8,
+          "error": {
+            "class": "Tamoz::Agent::ModelCallError",
+            "code": "rate_limited",
+            "message": "429 Too Many Requests"
+          }
+        }
+      ],
+      "expected_rules": [
+        "model.failure_rate",
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "truth": "rate_limited",
+      "real_model": true
+    },
+    {
+      "id": "mcp_transport",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.mcp.ponds.query",
+          "outcome": "failed",
+          "count": 3,
+          "error": {
+            "class": "Tamoz::MCP::TransportError",
+            "code": "transport_timeout",
+            "message": "the ponds server did not answer within 10s"
+          }
+        },
+        {
+          "kind": "effect",
+          "operation": "tool.mcp.ponds.set_aerator",
+          "outcome": "unknown",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::MCP::TransportError",
+            "code": "transport_timeout",
+            "message": "no answer after the request was sent"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "truth": "transport_timeout",
+      "real_model": true
+    },
+    {
+      "id": "check_failing",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "check.test",
+          "outcome": "failed",
+          "count": 4,
+          "error": {
+            "class": "Tamoz::Agent::CheckFailed",
+            "code": "check_exit_nonzero",
+            "message": "rake test exited 1"
+          }
+        }
+      ],
+      "expected_rules": [
+        "check.failure_rate",
+        "effect.repeated_failure"
+      ],
+      "truth": "check_exit_nonzero",
+      "real_model": true
+    },
+    {
+      "id": "tool_not_found",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.read_file",
+          "outcome": "failed",
+          "count": 12,
+          "error": {
+            "class": "Tamoz::Agent::ToolError",
+            "code": "path_outside_workspace",
+            "message": "../secrets.env is outside the workspace root"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "truth": "path_outside_workspace",
+      "real_model": true
+    },
+    {
+      "id": "worker_claim_errors",
+      "faults": [
+        {
+          "kind": "journal_event",
+          "name": "tamoz.worker.error",
+          "reason": "lease_lost",
+          "count": 5
+        },
+        {
+          "kind": "failed_turn",
+          "count": 2
+        }
+      ],
+      "expected_rules": [
+        "worker.errors",
+        "request.failed"
+      ],
+      "truth": "lease_lost",
+      "real_model": true
+    },
+    {
+      "id": "auth_refused",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "model.generate.plan",
+          "outcome": "failed",
+          "count": 5,
+          "error": {
+            "class": "Tamoz::Agent::ModelCallError",
+            "code": "authentication_failed",
+            "message": "401 invalid API key"
+          }
+        },
+        {
+          "kind": "effect",
+          "operation": "model.generate.review",
+          "outcome": "failed",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::Agent::ModelCallError",
+            "code": "rate_limited",
+            "message": "429 Too Many Requests"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ],
+      "truth": "authentication_failed",
+      "real_model": true
+    },
+    {
+      "id": "websearch_egress",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.websearch.search",
+          "outcome": "failed",
+          "count": 4,
+          "error": {
+            "class": "Tamoz::MCP::WebSearch::EgressRefused",
+            "code": "destination_not_allowed",
+            "message": "api.search.example is not on the egress allowlist"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "truth": "destination_not_allowed",
+      "real_model": true
+    },
+    {
+      "id": "telemetry_loss",
+      "faults": [
+        {
+          "kind": "journal_drops",
+          "key": "tamoz.model.call:queue_full:bulk",
+          "count": 240
+        }
+      ],
+      "expected_rules": [
+        "telemetry.loss"
+      ],
+      "truth": "queue_full",
+      "real_model": true
+    },
+    {
+      "id": "single_model_failure",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "model.converse.work_step",
+          "outcome": "failed",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::Agent::ModelCallError",
+            "code": "http_failure",
+            "message": "402 out of credit"
+          }
+        }
+      ],
+      "expected_rules": [
+        "model.call_failed"
+      ],
+      "truth": "http_failure",
+      "real_model": false
+    },
+    {
+      "id": "unknown_write_among_misses",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.read_file",
+          "outcome": "failed",
+          "count": 8,
+          "error": {
+            "class": "Tamoz::Agent::ToolError",
+            "code": "not_found",
+            "message": "optional file is absent"
+          },
+          "spread": true
+        },
+        {
+          "kind": "effect",
+          "operation": "tool.mcp.ponds.set_aerator",
+          "outcome": "unknown",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::MCP::TransportError",
+            "code": "transport_timeout",
+            "message": "no answer after the request was sent"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "truth": "transport_timeout",
+      "real_model": true
+    },
+    {
+      "id": "unknown_feeder_among_empty_searches",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.websearch.search",
+          "outcome": "failed",
+          "count": 5,
+          "error": {
+            "class": "Tamoz::MCP::WebSearch::SearchError",
+            "code": "no_results",
+            "message": "the query matched nothing"
+          },
+          "spread": true
+        },
+        {
+          "kind": "effect",
+          "operation": "tool.mcp.ponds.set_feeder",
+          "outcome": "unknown",
+          "count": 1,
+          "error": {
+            "class": "Tamoz::MCP::TransportError",
+            "code": "connection_reset",
+            "message": "the connection closed after the request was sent"
+          }
+        }
+      ],
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "truth": "connection_reset",
+      "real_model": true
+    },
+    {
+      "id": "approval_stall",
+      "faults": [
+        {
+          "kind": "approval",
+          "verdict": "ask",
+          "count": 2
+        }
+      ],
+      "now_offset_minutes": 300,
+      "expected_rules": [
+        "approval.waiting"
+      ],
+      "truth": "approval.waiting",
+      "real_model": false
+    },
+    {
+      "id": "stuck_effect",
+      "faults": [
+        {
+          "kind": "effect",
+          "operation": "tool.shell.run",
+          "outcome": "running",
+          "count": 1
+        }
+      ],
+      "now_offset_minutes": 45,
+      "expected_rules": [
+        "effect.stuck"
+      ],
+      "truth": "effect.stuck",
+      "real_model": false
+    },
+    {
+      "id": "clean",
+      "faults": [],
+      "expected_rules": [],
+      "truth": null,
+      "real_model": false
+    }
+  ]
+}

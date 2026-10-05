@@ -1,0 +1,169 @@
+{
+  "mode": "value",
+  "model": null,
+  "corpus_digest": "sha256:4b2a27cb8e5ef0e146d0312ca408d4e648bfed9767a0c8c5c5dc10c1f73fc435",
+  "question": "Something went wrong with this Tamoz runtime in the last few hours. Use the probes to investigate its own record and report the root cause. Set the hypothesis field to exactly one error code identifying the root cause, with no other words or punctuation. Discuss your reasoning and other codes in the findings.",
+  "rules_digest": "sha256:d3fd5ee66ee14377acad73ac3a91e7b4a209c9597fc59efde8c8b977135837db",
+  "implementation": {
+    "revision": "7df2cc9e2db443c74d08306c1adac71ff130480a",
+    "dirty": true
+  },
+  "results": [
+    {
+      "scenario": "provider_balance",
+      "truth": "insufficient_balance",
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "rate_limited",
+      "truth": "rate_limited",
+      "expected_rules": [
+        "model.failure_rate",
+        "effect.repeated_failure",
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.failure_rate"
+      ]
+    },
+    {
+      "scenario": "mcp_transport",
+      "truth": "transport_timeout",
+      "expected_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1155,
+      "diagnose_rules": [
+        "effect.outcome_unknown",
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "check_failing",
+      "truth": "check_exit_nonzero",
+      "expected_rules": [
+        "check.failure_rate",
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "check.failure_rate"
+      ]
+    },
+    {
+      "scenario": "tool_not_found",
+      "truth": "path_outside_workspace",
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "worker_claim_errors",
+      "truth": "lease_lost",
+      "expected_rules": [
+        "worker.errors",
+        "request.failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1051,
+      "diagnose_rules": [
+        "worker.errors",
+        "request.failed"
+      ]
+    },
+    {
+      "scenario": "auth_refused",
+      "truth": "authentication_failed",
+      "expected_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure",
+        "model.call_failed",
+        "model.call_failed"
+      ]
+    },
+    {
+      "scenario": "websearch_egress",
+      "truth": "destination_not_allowed",
+      "expected_rules": [
+        "effect.repeated_failure"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "effect.repeated_failure"
+      ]
+    },
+    {
+      "scenario": "telemetry_loss",
+      "truth": "queue_full",
+      "expected_rules": [
+        "telemetry.loss"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1050,
+      "diagnose_rules": [
+        "telemetry.loss"
+      ]
+    },
+    {
+      "scenario": "single_model_failure",
+      "truth": "http_failure",
+      "expected_rules": [
+        "model.call_failed"
+      ],
+      "status_names_it": false,
+      "metrics_names_it": false,
+      "diagnose_names_it": true,
+      "status_bytes": 1048,
+      "diagnose_rules": [
+        "model.call_failed"
+      ]
+    }
+  ]
+}

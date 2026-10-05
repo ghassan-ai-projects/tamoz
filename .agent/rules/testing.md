@@ -92,3 +92,13 @@
 - CLI refusal tests create their own manifests in temporary directories. A local
   real-run artifact can hide a CI dependency: scoreboard_cli_test now builds a
   failed-controls manifest and keeps the report absent to prove refusal order.
+
+- **An in-process test inherits everything `test_helper` requires.** `tamoz mcp` (then `self-observe`) passed every in-process
+  test, then failed its first real `tools/call` with `uninitialized constant Tamoz::SQLite`: the CLI loads
+  `tamoz-sqlite` lazily and the helper had preloaded it. A command that a fresh process runs (an MCP server, a
+  probe backend, an `exe/` path) needs one test that drives it as a subprocess through the call that matters.
+
+- **An observation must be coherent and complete about its limits.** Self-diagnosis initially read each
+  table in a separate SQLite snapshot and silently limited explanations. Pin one reader transaction and
+  declare each kind that reaches the limit. Schedule `reason` can contain completion evidence, so column
+  names alone do not establish that a projection contains metadata.
