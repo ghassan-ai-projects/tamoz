@@ -1,0 +1,166 @@
+format_version: 1
+
+severities: [critical, high, medium, low]
+
+categories:
+  - effect_unknown
+  - dependency_unavailable
+  - resource_exhausted
+  - verification_failed
+  - policy_denied
+  - stale_precondition
+  - durable_state_corrupt
+
+rules:
+  - id: effect.outcome_unknown
+    detector: status
+    kind: effects
+    field: status
+    values: [unknown, reconcile]
+    severity: critical
+    category: effect_unknown
+    title: An external effect has an unknown outcome and is waiting for a human
+    action: Check the external system for each effect, then settle it with `tamoz resolve`. Never retry it blindly.
+
+  - id: effect.stuck
+    detector: age
+    kind: effects
+    field: status
+    values: [prepared, running]
+    time_field: updated_at_ms
+    older_than_minutes: 30
+    severity: high
+    category: stale_precondition
+    title: An effect has been in flight for more than 30 minutes
+    action: Check whether the worker that owns the thread is alive (`tamoz status`); a dead owner's effect is reconciled when the thread resumes.
+
+  - id: model.failure_rate
+    detector: failure_rate
+    kind: effects
+    operation_prefix: model.
+    settled_values: [succeeded, failed, unknown]
+    failed_values: [failed, unknown]
+    time_field: updated_at_ms
+    min_count: 4
+    max_failure_ratio: 0.25
+    severity: high
+    category: dependency_unavailable
+    title: Model calls are failing more often than one in four
+    action: Check the model failures' error codes; a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug.
+
+  - id: tool.failure_rate
+    detector: failure_rate
+    kind: effects
+    operation_prefix: tool.
+    settled_values: [succeeded, failed, unknown]
+    failed_values: [failed, unknown]
+    time_field: updated_at_ms
+    min_count: 4
+    max_failure_ratio: 0.5
+    severity: medium
+    category: dependency_unavailable
+    title: Tool calls are failing more often than one in two
+    action: Check which tools fail; repeated failures of one tool usually mean a broken MCP server or a missing workspace path.
+
+  - id: check.failure_rate
+    detector: failure_rate
+    kind: effects
+    operation_prefix: check.
+    settled_values: [succeeded, failed, unknown]
+    failed_values: [failed, unknown]
+    time_field: updated_at_ms
+    min_count: 3
+    max_failure_ratio: 0.5
+    severity: medium
+    category: verification_failed
+    title: Configured checks fail on most runs
+    action: Run the check by hand in the workspace; a check that always fails makes every change end unverified.
+
+  - id: effect.repeated_failure
+    detector: failure_groups
+    kind: effect_attempts
+    field: status
+    values: [failed, unknown]
+    time_field: completed_at_ms
+    min_count: 3
+    severity: high
+    category: dependency_unavailable
+    title: The same failure is repeating
+    action: One error class and code keeps recurring; fix that cause once instead of retrying the calls.
+
+  - id: model.call_failed
+    detector: failure_groups
+    kind: effect_attempts
+    field: status
+    values: [failed, unknown]
+    operation_prefix: model.
+    time_field: completed_at_ms
+    min_count: 1
+    severity: high
+    category: dependency_unavailable
+    title: A model call failed
+    action: A failed model call can end or degrade the turn that made it; check the error code (a refused key, an empty account or a rate limit is a provider problem, not a Tamoz bug).
+
+  - id: request.failed
+    detector: failure_groups
+    kind: requests
+    field: status
+    values: [failed]
+    time_field: updated_at_ms
+    min_count: 1
+    severity: medium
+    category: dependency_unavailable
+    title: Turns ended failed
+    action: Open each failed turn with `tamoz explain THREAD --request ID` to see which effect failed first.
+
+  - id: request.backlog
+    detector: age
+    kind: requests
+    field: status
+    values: [queued, claimed]
+    time_field: created_at_ms
+    older_than_minutes: 15
+    severity: high
+    category: resource_exhausted
+    title: Requests have waited in the inbox for more than 15 minutes
+    action: Check that a worker is running for this runtime directory (`tamoz status`, `tamoz worker`).
+
+  - id: approval.waiting
+    detector: age
+    kind: approval_decisions
+    field: verdict
+    values: [ask]
+    missing: [answer]
+    time_field: created_at_ms
+    older_than_minutes: 240
+    severity: medium
+    category: policy_denied
+    title: An approval has been waiting for an answer for more than four hours
+    action: Answer it (`tamoz approve`, or the chat buttons) or cancel the turn; the work is paused until then.
+
+  - id: schedule.unsettled
+    detector: status
+    kind: occurrences
+    field: state
+    values: [unknown, failed]
+    severity: medium
+    category: dependency_unavailable
+    title: Scheduled occurrences failed or have an unknown outcome
+    action: Inspect the schedule (`tamoz schedule list`) and the request each occurrence enqueued.
+
+  - id: worker.errors
+    detector: journal_events
+    names: [tamoz.worker.error, tamoz.worker.schedule.error, tamoz.agent.model.ambiguous, comms.delivery.failed, comms.delivery.unknown]
+    min_count: 1
+    severity: medium
+    category: dependency_unavailable
+    title: The worker or the gateway logged errors
+    action: Read the logged errors with `tamoz observe tail --kind event`; the journal is lossy, so a missing error proves nothing.
+
+  - id: telemetry.loss
+    detector: telemetry_loss
+    min_count: 1
+    severity: low
+    category: resource_exhausted
+    title: The telemetry journal dropped signals
+    action: Counts derived from the journal are lower bounds. Check disk space and the journal directory; the durable record is unaffected.

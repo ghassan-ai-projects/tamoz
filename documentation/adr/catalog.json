@@ -1,10 +1,10 @@
 {
   "generated_by": "script/adr_catalog.rb",
-  "count": 59,
-  "next_number": 60,
+  "count": 60,
+  "next_number": 61,
   "states": {
     "accepted": 49,
-    "proposed": 1,
+    "proposed": 2,
     "retired": 9
   },
   "adrs": [
@@ -993,7 +993,8 @@
       "file": "adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md",
       "relates_to": [
         "014",
-        "045"
+        "045",
+        "060"
       ],
       "supersedes": [],
       "superseded_by": [],
@@ -1002,7 +1003,8 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences"
+        "Consequences",
+        "History"
       ]
     },
     {
@@ -1016,7 +1018,8 @@
       "file": "adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md",
       "relates_to": [
         "047",
-        "050"
+        "050",
+        "060"
       ],
       "supersedes": [],
       "superseded_by": [],
@@ -1025,7 +1028,8 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences"
+        "Consequences",
+        "History"
       ]
     },
     {
@@ -1062,7 +1066,8 @@
       "implementation": "Complete",
       "file": "adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md",
       "relates_to": [
-        "045"
+        "045",
+        "060"
       ],
       "supersedes": [],
       "superseded_by": [],
@@ -1146,7 +1151,8 @@
         "022",
         "028",
         "045",
-        "047"
+        "047",
+        "060"
       ],
       "supersedes": [],
       "superseded_by": [],
@@ -1384,6 +1390,34 @@
         "Context",
         "Decision",
         "Consequences"
+      ]
+    },
+    {
+      "num": "060",
+      "title": "Tamoz diagnoses itself read-only, from its durable record, by rules that are data",
+      "status": "Proposed",
+      "state": "proposed",
+      "date": "2026-10-04",
+      "tier": "F",
+      "implementation": "Partial — `tamoz trace` still reads only the journal; approvals in a shared worker database link to a turn by time, not by identity",
+      "file": "adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md",
+      "relates_to": [
+        "028",
+        "045",
+        "046",
+        "047",
+        "050"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model"
       ]
     }
   ]

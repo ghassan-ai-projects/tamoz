@@ -36,6 +36,10 @@ Each rule's reasoning and evidence live in the ADR named; the line here is the r
   a fresh schema.
 - **Simple over complicated; no rare cases.** When two designs work, take the one with less machinery.
   Do not write code for a case that cannot happen or has never happened.
+- **Defer complexity to a future plan** (owner, 2026-10-04). Keep the agent as simple as possible.
+  Anything that adds complexity now — a new mechanism, a compliance regime, a second path, a feature
+  not needed for the task's outcome — is written into a future plan in the task's `docs/` folder
+  (design, tests, open decisions), not built.
 - **Understand before you build; extend, don't reinvent.** Map the existing path (enola
   `explore`/`traverse`/`impact_analysis`, then read it end to end) and name the seam you extend before
   writing a line. A class duplicating an existing effect, loop, store, or model call is a defect.

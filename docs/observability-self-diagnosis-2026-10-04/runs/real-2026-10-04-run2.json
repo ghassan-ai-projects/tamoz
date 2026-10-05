@@ -1,0 +1,223 @@
+{
+  "mode": "real",
+  "model": "openrouter/deepseek/deepseek-v4.1-flash",
+  "corpus_digest": "sha256:3811e8f3366d4dee0a925cd8508acbafc2c98a65d52fb5d3352af9143e7ed006",
+  "results": [
+    {
+      "scenario": "provider_balance",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.6,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "rate_limited",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 2.0,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "mcp_transport",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.6,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "check_failing",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.4,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "tool_not_found",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.5,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "worker_claim_errors",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.5,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "auth_refused",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.5,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "websearch_egress",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.5,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    },
+    {
+      "scenario": "telemetry_loss",
+      "outcome": "no_report",
+      "correct": false,
+      "grounded": false,
+      "hedged": false,
+      "fabricated_codes": [],
+      "probe_calls": 0,
+      "exit": 2,
+      "seconds": 1.5,
+      "model_calls": 1,
+      "hypothesis": null,
+      "answer_tail": "",
+      "turn": {
+        "status": "completed",
+        "terminal": {
+          "reason": "model_out_of_credit",
+          "record": "terminal",
+          "record_version": 2,
+          "satisfied": false
+        }
+      },
+      "self_diagnosis": []
+    }
+  ]
+}

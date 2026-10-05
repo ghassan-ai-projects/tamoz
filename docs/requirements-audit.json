@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-10-01T22:16:33Z",
-  "manifest_requirements": 578,
-  "named_cases_run": 305,
+  "generated_at": "2026-10-05T08:14:55Z",
+  "manifest_requirements": 582,
+  "named_cases_run": 307,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 3,
     "missing": 14,
-    "pass": 550
+    "pass": 554
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -119,7 +119,7 @@
       "id": "ADR-009",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "The model request prefix is byte-stable within a cache epoch",
+      "title": "Keep model request prefixes stable within a request series",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it",
@@ -151,7 +151,7 @@
       "id": "ADR-013",
       "category": "adr",
       "source": "documentation/adr",
-      "title": "Public vocabulary is a budget, never a correctness cap",
+      "title": "Public concepts are documented and introduced when needed",
       "release_blocking": false,
       "status": "indirect",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -7175,6 +7175,36 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-diagnose",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz diagnose",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-explain",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz explain",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-follow-up",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7254,6 +7284,21 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-mcp",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz mcp",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/mcp_server_test.rb#test_serves_mcp_over_stdio",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-memory",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7278,6 +7323,21 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-postmortem",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz postmortem",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

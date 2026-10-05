@@ -64,6 +64,7 @@ SLOW_TESTS = %w[
   test/m2_evidence_test.rb
   test/agent_scorecard_test.rb
   test/memory_treatment_profile_test.rb
+  test/self_diagnosis_scale_test.rb
 ].freeze
 
 # Tests that must NOT share a process pool with anything else. They build gems

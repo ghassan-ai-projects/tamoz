@@ -6322,6 +6322,32 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-diagnose",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz diagnose",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-explain",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz explain",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-follow-up",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6391,6 +6417,19 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-mcp",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz mcp",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/mcp_server_test.rb#test_serves_mcp_over_stdio",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-memory",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6413,6 +6452,19 @@
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-postmortem",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz postmortem",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

@@ -33,6 +33,7 @@ AdrCatalog.files(ADR_DIR).sort.each do |path|
 
   evidence = evidence_by_adr.fetch(num, '')
   gems = "#{text}\n#{evidence}".scan(/\btamoz-[a-z0-9]+(?:-[a-z0-9]+)*/).uniq.sort
+  gems.select! { |name| File.directory?(File.join(ROOT, 'gems', name)) }
   listed = text[/^##\s+Invariants\s*\n(.+?)(?=^##\s|\z)/m, 1].to_s.scan(/^-\s+([\d,\s]+)\s+—/).flatten
   invs = (text.scan(/(?:invariant|clause)\s+(\d+)/i).flatten + listed.flat_map { |l| l.scan(/\d+/) })
          .map(&:to_i).uniq.sort

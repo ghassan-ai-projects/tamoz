@@ -7,10 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 578 | 305 | 14 | **no** |
-
-ADR-010 was withdrawn on 2026-10-02 and removed from this historical audit. Remaining verdicts
-and the 305-case execution count retain their original provenance; the audit was not rerun.
+| 582 | 307 | 14 | **no** |
 
 ## Status counts
 
@@ -19,7 +16,7 @@ and the 305-case execution count retain their original provenance; the audit was
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 550 |
+| pass | 554 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -487,13 +484,17 @@ and the 305-case execution count retain their original provenance; the audit was
 | `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-deep-research` | cli_command | yes | pass | `test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace` |
+| `CLI-diagnose` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json` |
+| `CLI-explain` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-improve` | cli_command | yes | pass | `test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-investigate` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
+| `CLI-mcp` | cli_command | yes | pass | `test/mcp_server_test.rb#test_serves_mcp_over_stdio` |
 | `CLI-memory` | cli_command | yes | pass | `test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates` |
 | `CLI-observe` | cli_command | yes | pass | `test/observability_cli_test.rb#test_observe_commands_read_the_local_journal` |
+| `CLI-postmortem` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis` |
 | `CLI-probes` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server` |
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
 | `CLI-queue` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |

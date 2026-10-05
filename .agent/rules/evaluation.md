@@ -64,3 +64,17 @@ harness that scores an agent.
   inconclusive (`docs/subagents-2026-09-29/FINDINGS.md`). Before a paid run, check that the solo control's path is long
   (many reads that no single search replaces), or the arm difference measures nothing. An offered-but-unused tool still
   costs: the unused `delegate` schema added ~15% tokens per solved scenario.
+- **Run the diagnosis on the eval's own failures.** The self-investigation eval's second paid run ended every
+  turn `model_out_of_credit`, and `tamoz diagnose` on those sessions found nothing: one failed model call sat
+  under every count threshold, though one is enough to end a turn. The `model.call_failed` rule and the
+  `single_model_failure` scenario exist because of that run; a gap the product shows on its own failures is the
+  cheapest one to find.
+- **Check the provider's remaining credit before a paid run, with headroom.** OpenRouter answered every call of
+  a nine-scenario run "out of credit" with $0.45 still left on a $6 key, so the run measured nothing. Read
+  `GET /api/v1/key` (`limit_remaining`) first, record the spend after, and treat a near-empty key as blocked.
+
+- **Preserve the inputs that produced a grade.** Self-investigation's first harness deleted its temporary
+  databases after keeping only a hypothesis and output tail; its grounding could not be replayed. Retain
+  the complete report, rendered citation mapping, served probe results, question, corpus and rules digests,
+  and implementation provenance. For code-selection tasks, compare the existing structured hypothesis
+  field to the exact code; token presence also accepts "this is not the cause".

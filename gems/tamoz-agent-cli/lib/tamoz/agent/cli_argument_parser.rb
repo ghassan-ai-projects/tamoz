@@ -60,6 +60,8 @@ module Tamoz
                             follow-up, redirect, cancel, resolve, profile, probes
               Unattended:   init, queue, worker, status, schedule, approve, observe,
                             trace, improve
+              Self-diagnosis: diagnose, explain, postmortem
+              MCP server:   mcp
 
               Run 'tamoz <subcommand> --help' for a subcommand's own options.
             BANNER
