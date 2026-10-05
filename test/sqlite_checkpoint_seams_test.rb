@@ -2,12 +2,6 @@
 
 require_relative 'test_helper'
 
-# Q2 characterization of the checkpoint_store validation seams
-# (gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb). These branches were
-# uncovered by the Q0 coverage baseline (90.5% overall): the argument-validation
-# failure paths of history / open_writer. Each test is a mutation contract —
-# removing its validation must fail the test: bad input raises, it never
-# silently clamps or proceeds.
 class SQLiteCheckpointSeamsTest < Minitest::Test
   def test_history_rejects_negative_before_sequence
     with_bound_store do |_adapter, store|

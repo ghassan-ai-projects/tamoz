@@ -14,19 +14,19 @@ module Agenteval
       module_function
 
       def load(dir)
-        report = File.read(File.join(dir, "report.md"))
+        report = File.read(File.join(dir, "report.md"), encoding: Encoding::UTF_8)
         sources = report.split(/^## Sources\s*$/, 2)[1].to_s.lines.filter_map do |line|
           number, text = line.match(SOURCE_LINE)&.captures
           [Integer(number), text] if number
         end.to_h
-        record = JSON.parse(File.read(File.join(dir, "run.json")))
+        record = JSON.parse(File.read(File.join(dir, "run.json"), encoding: Encoding::UTF_8))
         Folder.new(report:, sources:, excerpts: excerpts(dir), record:)
       end
 
       # {url => [excerpt, ...]} from the children's notes.
       def excerpts(dir)
         Dir[File.join(dir, "notes", "*.md")].each_with_object(Hash.new { |hash, key| hash[key] = [] }) do |path, found|
-          File.read(path).scan(/^\s+> (.+)\n\s+(https?:\S+)$/) { |excerpt, url| found[url] << excerpt }
+          File.read(path, encoding: Encoding::UTF_8).scan(/^\s+> (.+)\n\s+(https?:\S+)$/) { |excerpt, url| found[url] << excerpt }
         end
       end
 

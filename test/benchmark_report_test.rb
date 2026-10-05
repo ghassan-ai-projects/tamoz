@@ -2,14 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-E (docs/P15_RELEASE_PLAN.md §7, correction 8) — the benchmark report is
-# held to the same standard as the numbers in it.
-#
-# The failure mode a benchmark test must prevent is not a slow build; it is a
-# DISHONEST report: one that gates a number it cannot reproduce, quietly drops
-# a counter, or publishes a ratio without the context that stops a reader
-# misusing it. The benchmark itself runs in the rehearsal, not in `rake ci` —
-# 20 durable turns is not something to pay for on every test run.
 class BenchmarkReportTest < Minitest::Test
   REPORT = ROOT.join("docs", "benchmark.json")
   MARKDOWN = ROOT.join("docs", "BENCHMARK.md")

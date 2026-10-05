@@ -3,10 +3,6 @@
 require_relative "test_helper"
 require "tamoz/mcp/websearch"
 
-# P17 W7 / DR-2 egress scope (correction 7): BOTH open conditions (consecutive
-# connect failures AND the non-consecutive budget breach), typed unavailable
-# while open with no outbound, and the authority-gated reset (DR-2 §5: no
-# self-reset, no evidence-free reset, time alone never resets).
 class WebsearchCircuitTest < Minitest::Test
   EgressCircuit = Tamoz::Mcp::Websearch::EgressCircuit
 
@@ -20,8 +16,6 @@ class WebsearchCircuitTest < Minitest::Test
     {"authority" => "owner", "operator_command_digest" => digest}
   end
 
-  # W7 / P17-16: consecutive connect failures open the circuit; the threshold
-  # is evaluated inside the write.
   def test_consecutive_connect_failures_open_the_egress_circuit
     store = circuit
     assert_equal :degraded, store.record_failure(kind: :connect)
@@ -33,8 +27,6 @@ class WebsearchCircuitTest < Minitest::Test
     assert_equal :connect, store.last_failure_kind
   end
 
-  # W7 / P17-16 + DR-2 D1: a SINGLE budget breach opens the circuit — the
-  # non-consecutive condition, never only the consecutive happy path.
   def test_budget_breach_opens_the_circuit_immediately
     store = circuit
     assert_equal :open, store.record_failure(kind: :budget_breach)
@@ -60,8 +52,6 @@ class WebsearchCircuitTest < Minitest::Test
     assert store.open?, "time/success alone never resets an open circuit"
   end
 
-  # W7 / P17-17: reset requires the operator command evidence; a self-reset or
-  # an evidence-free reset is refused typed.
   def test_reset_requires_operator_authority
     store = circuit
     3.times { store.record_failure(kind: :connect) }
@@ -86,8 +76,6 @@ class WebsearchCircuitTest < Minitest::Test
     assert_equal "sha256:#{"a" * 64}", store.reset_evidence.fetch("operator_command_digest")
   end
 
-  # The conditions digest is deterministic for a given failure state (the
-  # reset's audit evidence, DR-2).
   def test_conditions_digest_is_deterministic
     first = circuit
     second = circuit
@@ -97,8 +85,6 @@ class WebsearchCircuitTest < Minitest::Test
     assert_match(/\Asha256:[0-9a-f]{64}\z/, first.conditions_digest("websearch"))
   end
 
-  # DR-2: the store satisfies the duck-typed CircuitStore contract the
-  # supervisor validates, so it drops into the supervisor unchanged.
   def test_egress_circuit_plugs_into_the_supervisor_seam
     store = circuit
     config = Tamoz::Mcp::ServerConfig.new(

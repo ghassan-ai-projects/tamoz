@@ -3,11 +3,6 @@
 require 'json'
 require 'socket'
 
-# An in-memory Telegram Bot API fixture (design §6.4 conformance): scripted
-# JSON responses per method, able to duplicate/reorder updates, throttle with
-# the authoritative retry_after, lose a poll response, and delay beyond the
-# client timeout. Each request is served on a worker thread so a slow response
-# does not block the next call.
 class TelegramFixtureServer
   attr_reader :port, :requests
 

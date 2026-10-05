@@ -3,21 +3,6 @@
 require_relative "test_helper"
 require "digest"
 
-# P15 acceptance workflow — the product proof, end to end, in ONE durable
-# thread against a real repository, a real SQLite database, a real configured
-# check, and a real `kill -9`.
-#
-# Every phase-level test in this repository proves one link of the chain. This
-# proves the CHAIN: that a single session can inspect a repository, plan a
-# bounded change, obtain approval, edit, run the configured check, treat the
-# failure as evidence and repair it, survive a process kill mid-flight, resume
-# in a fresh process, and finish with a verification bound to evidence — with
-# every effect applied exactly once across both processes.
-#
-# Nothing here is simulated. The kill is `Process.kill("KILL", Process.pid)`
-# fired from inside the atomic publication, the check is a real subprocess, and
-# the second process shares nothing with the first except the database and the
-# workspace.
 class AgentAcceptanceWorkflowTest < Minitest::Test
   # The model is deterministic and derives its plan from the WORKSPACE, the way
   # a real model derives it from the evidence it was shown. That matters here:
@@ -230,9 +215,6 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
 
   def test_the_full_workflow_survives_a_kill_and_ends_evidence_bound
     with_workspace do |context|
-      # Phase 1-6: inspect, plan, approve, edit, check FAILS, repair, approve,
-      # edit again — and the process is killed the instant the repair's bytes
-      # reach the workspace, before the journal can record the publication.
       first = run_child(context, mode: "run", kill_after_publish: 2)
 
       refute first.success?, "the run must be killed at the declared seam"
@@ -242,14 +224,11 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
       assert_equal "value = 2\n", File.read(File.join(context.fetch(:workspace), "app.rb")),
                    "the repair's bytes must already be on disk when the process dies"
 
-      # Phase 7: a fresh process, sharing only the database and the workspace,
-      # resumes the interrupted thread.
       second = run_child(context, mode: "recover")
 
       assert second.success?, "the resumed process must complete: #{second.inspect}"
       result = JSON.parse(File.read(context.fetch(:result)))
 
-      # Phase 8: an evidence-bound verification, not a claim.
       assert_equal "completed", result.fetch("status")
       assert_equal "check_passed", result.fetch("terminal").fetch("reason")
       verification = result.fetch("verification")

@@ -50,6 +50,8 @@ class ChatWorkLoopTest < Minitest::Test
     harness = nil
     cancel_then_call_a_tool = lambda do |_messages|
       harness.admit('/cancel')
+      # The worker observes a stamped cancellation within two of its own poll
+      # periods; returning earlier would race the watcher, not the product.
       sleep Tamoz::Agent::Worker::STOP_POLL_SECONDS * 2
       { calls: [['list_directory', {}]] }
     end
@@ -78,7 +80,7 @@ class ChatWorkLoopTest < Minitest::Test
 
     texts = capture_io { harness.say('hello') }.then { harness.instance_variable_get(:@transport).outbound }
 
-    assert_equal [Tamoz::Agent::ChatReply::FAILED], texts.map { |card| card[:text] }
+    assert_equal([Tamoz::Agent::ChatReply::FAILED], texts.map { |card| card[:text] })
   ensure
     harness&.close
   end

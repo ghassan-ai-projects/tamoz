@@ -2,19 +2,6 @@
 
 require_relative 'test_helper'
 
-# Q2 characterization of profile.rb's ADOPTION-registry seams (giant #2, slice 2).
-#
-# The adoption registry is the only record of which profile digests the operator
-# has actually trusted: `Profile.load` refuses a profile whose digest is not
-# activated here. So every way of READING it must fail closed — a registry that
-# is corrupt, foreign-versioned, tampered, or group-readable must raise, and a
-# non-digest token must never be honoured as an activation.
-#
-# The transition registry already has these tests
-# (agent_profile_transition_test.rb); the adoption registry had none — before
-# this file, no test in the suite asserted either of its two error messages
-# ("adoption registry is invalid" / "... is unreadable"). Each test is a
-# mutation contract: deleting the validation it names must fail it.
 class AgentProfileAdoptionSeamsTest < Minitest::Test
   Profile = Tamoz::Agent::Profile
 

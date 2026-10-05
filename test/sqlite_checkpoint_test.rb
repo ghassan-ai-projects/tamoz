@@ -3,6 +3,14 @@
 require_relative "test_helper"
 
 class SQLiteCheckpointTest < Minitest::Test
+  class ClockedAdapter < Tamoz::SQLite::Adapter
+    attr_accessor :now_ms
+
+    private
+
+    def backend_time(*) = now_ms
+  end
+
   def test_durable_graph_rejects_public_mutation_and_recovers_history_after_reopen
     Dir.mktmpdir("tamoz-sqlite-checkpoint") do |directory|
       path = File.join(directory, "tamoz.db")
@@ -75,10 +83,11 @@ class SQLiteCheckpointTest < Minitest::Test
   def test_expired_owner_cannot_write_after_takeover
     Dir.mktmpdir("tamoz-sqlite-stale") do |directory|
       limits = Tamoz::SQLite::Limits.new(lease_ttl: 0.1)
-      adapter = Tamoz::SQLite::Adapter.new(
+      adapter = ClockedAdapter.new(
         path: File.join(directory, "tamoz.db"),
         limits:
       )
+      adapter.now_ms = 1_700_000_000_000
       thread_id = "thread.stale"
       namespace = Tamoz::SQLite.const_get(:Wire, false).namespace([])
       stale = adapter.__send__(
@@ -88,8 +97,7 @@ class SQLiteCheckpointTest < Minitest::Test
         owner_id: "owner.stale",
         ttl: 0.1
       )
-      sleep 0.12
-      # Only the stale owner must expire; a 0.1 s lease for the new owner expired under CI load.
+      adapter.now_ms += 101
       current = adapter.__send__(
         :acquire_lease,
         thread_id:,

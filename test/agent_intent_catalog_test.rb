@@ -4,8 +4,6 @@ require_relative "test_helper"
 require "tamoz/agent"
 require "support/aquaculture_domain"
 
-# P4/§B9-B10: the spec-bound IntentCatalog — structural rules, the shared
-# cross-boundary digest, and the fail-closed wire gate. Fixture data.
 class AgentIntentCatalogTest < Minitest::Test
   Catalog = Tamoz::Agent::IntentCatalog
 
@@ -109,9 +107,6 @@ class AgentIntentCatalogTest < Minitest::Test
     assert_equal catalog.digest, wire_digest
   end
 
-  # P4/T5 cross-repo parity: this exact digest is pinned on the Go side
-  # (internal/episodes/intent_catalog_test.go) — a drift on either side breaks
-  # every Go-driven episode at this verify_wire gate.
   def test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector
     assert_equal(
       "sha256:e4f866204344a5f19994e28afdea67b610e34405b062bbfd2879209a363d81f3",

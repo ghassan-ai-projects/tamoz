@@ -2,11 +2,6 @@
 
 require_relative "test_helper"
 
-# P11 probes P11-01..P11-04, P11-10..P11-15, P11-16/17, P11-19..P11-21,
-# P11-A1..A3: the agent-side memory surface — record/lifecycle, deterministic
-# admission (reject matrix, no-model gate, owner fast path), retrieval policy
-# (budget, trace, anti self-ingestion), correction/deletion with receipts,
-# consolidation (preimage + gates), and the DR-1 BehaviorTransition machinery.
 class MemoryEngineTest < Minitest::Test
   Memory = Tamoz::Agent::Memory
 
@@ -108,9 +103,6 @@ class MemoryEngineTest < Minitest::Test
     }
   end
 
-  # T5.3: the authenticated reconciled-outcome reference that admits an
-  # episode as :observed — the stream's reconciled Outcome is the independent
-  # observer Tamoz alone cannot be.
   def reconciled_outcome(overrides = {})
     {
       "outcome_id" => "out-1",
@@ -141,8 +133,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_record_is_immutable_versioned_and_codec_registered
-    # P11-01/P11-02: one immutable versioned MemoryRecord; the codec is in the
-    # allowlist and an unknown format_version fails before partial load.
     result = admit_episode
     assert result.accepted?
     record = result.record
@@ -174,12 +164,6 @@ class MemoryEngineTest < Minitest::Test
     assert_equal "Canary 2%, then monitor", corrected_again.statement
   end
 
-  # T0.2 + T5.3: a self-certified episode never admits as :observed. The
-  # admission path must not infer independent observation from a flag; the
-  # independently_observed boolean has NO power at all — only the
-  # authenticated reconciled-outcome reference admits an episode as :observed,
-  # and a CLAIMED reference that does not verify is refused, never silently
-  # downgraded to :reported.
   def test_episodes_without_independent_observation_admit_only_as_reported
     unmarked = @engine.admission.admit_episode(
       episode: episode(statement: "Self-certified observation").merge(
@@ -210,8 +194,6 @@ class MemoryEngineTest < Minitest::Test
     assert stringy.accepted?
     assert_equal :reported, stringy.record.epistemic_kind
 
-    # T5.3 regression pin: a bare truthy boolean is a self-certified claim —
-    # the flag no longer grants :observed.
     flagged = @engine.admission.admit_episode(
       episode: episode(statement: "Boolean-flagged observation").merge(
         observed_outcome: {"outcome" => "claimed", "independently_observed" => true, "confidence" => 0.9}
@@ -232,9 +214,6 @@ class MemoryEngineTest < Minitest::Test
     assert_equal :observed, independent.record.epistemic_kind
   end
 
-  # T0.3: situation scopes are complete by VALUE, canonicalized to string keys.
-  # A nil entity identity is the same as a missing key and is refused; symbol
-  # keys are normalized so the episode lands in the situation dimension.
   def test_situation_scopes_are_value_complete_and_key_canonicalized
     partial = episode(statement: "Partial situation scope").merge(
       scopes: scopes(user: "alice").merge(
@@ -255,9 +234,6 @@ class MemoryEngineTest < Minitest::Test
     assert_equal "compressor", result.record.scopes.fetch("entity_type")
   end
 
-  # T0.2 code-review finding: string-keyed episodes must not lose their
-  # outcome/confidence to symbol-only fetches, and a :reported record must not
-  # claim an "observed outcome" in its durable statement.
   def test_episode_statement_preserves_the_outcome_and_says_reported
     result = @engine.admission.admit_episode(
       episode: episode(statement: nil, user: "alice").merge(
@@ -276,8 +252,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_sessions_without_memory_load_with_memory_epoch_none
-    # P11-03 at the record layer: a current session without memory still carries
-    # the explicit empty memory sentinel.
     record = Tamoz::Agent::SessionRecords.build(
       "session",
       session_id: "thread.x",
@@ -309,9 +283,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_lifecycle_transitions_and_eligible_state_set_are_exact
-    # P11-04: every transition records actor/authority/reason/prior-version;
-    # the eligible reader returns only active/consolidated; expiry transitions
-    # by :system; a duplicate rejected candidate does not re-enter.
     result = admit_episode
     record = result.record
 
@@ -346,7 +317,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_admission_reject_matrix_is_durable_and_never_raises
-    # P11-12: every forbidden candidate class is a durable :rejected record.
     oversized = episode(statement: "x" * 5_000)
     result = @engine.admission.admit_episode(episode: oversized, owner: "alice")
     assert result.rejected?
@@ -385,9 +355,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_no_model_call_decides_admission
-    # P11-13: all three gate paths admit with no provider loaded. The engine is
-    # built with no model at all (see setup), so every admission below deciding
-    # correctly IS the proof that the path consults no model.
     episode_result = @engine.admission.admit_episode(episode: episode(statement: "Gate a"), owner: "alice")
     assert episode_result.accepted?
 
@@ -411,7 +378,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_owner_fast_path_three_negatives
-    # P11-15: the owner fast path admits :reported/:prescribed only.
     ok = @engine.admission.admit_owner_request(
       statement: "Prefer two green checks before canary promotion",
       owner: "alice", authority: "owner", scopes: scopes,
@@ -493,9 +459,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_recall_marks_trace_and_never_absorbs_itself
-    # P11-11/P11-A2: recalled memory is marked in the trace and excluded as
-    # new Experience evidence — the self-ingestion loop is closed at the
-    # admission boundary.
     admit_episode(statement: "Rollback on two consecutive failed checks")
     trace = []
     recalled = @engine.retrieval.recall(
@@ -518,8 +481,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_retrieval_budget_truncates_by_rank_and_automatic_drops_lowest
-    # P11-10: explicit truncates by rank (never silent); automatic drops the
-    # lowest-ranked admissible record and records the drop.
     (1..6).each do |index|
       @engine.admission.admit_owner_request(
         statement: "Rollout rule number #{index}: " + ("canary " * 200),
@@ -546,8 +507,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_correction_removes_bad_record_from_active_recall_and_index
-    # P11-16: after correction the bad version leaves active recall immediately
-    # and the index no longer matches it; a historical read still works.
     result = admit_episode(statement: "Deploy to production directly")
     @engine.lifecycle.correct(
       memory_id: result.record.memory_id,
@@ -563,8 +522,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_deletion_emits_receipt_and_propagates_to_index
-    # P11-17: tombstone-delete takes the record out of recall and its full-text
-    # row with it; version and index rows are named as kept until purge.
     result = admit_episode(statement: "Delete-me policy note")
     receipt = @engine.lifecycle.delete(memory_id: result.record.memory_id, actor: "alice", reason: "test")
     assert_equal({"from_recall" => 1, "fts_rows" => 1}, receipt.fetch("removed"))
@@ -576,9 +533,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge
-    # P11-14: preimage stored before the rewrite; a rewrite dropping a
-    # protected entry is rejected, prior Knowledge stays intact, and a
-    # rejected candidate is recorded.
     protected_source = @engine.admission.admit_owner_request(
       statement: "Protected constraint: never auto-promote canaries",
       owner: "alice", authority: "owner", scopes: scopes,
@@ -656,10 +610,6 @@ class MemoryEngineTest < Minitest::Test
     end
   end
 
-  # P11 critic defect 1: the consolidation SUCCESS path was dead — store_preimage
-  # and mark_consumed both wrote the same key with if_version: nil, so the second
-  # write always raised StoreConflictError and no Knowledge record could ever be
-  # produced. Now the consume mark is version-keyed.
   def test_consolidation_success_path_admits_knowledge_and_consumes_once
     candidate = Memory::MemoryRecord.new(
       memory_id: "mem.consolidation-success",
@@ -759,10 +709,6 @@ class MemoryEngineTest < Minitest::Test
     assert_includes error.message, "durable effect context"
   end
 
-  # P11 critic defect 2: Lifecycle#delete never tombstoned the STORE head
-  # (append hardcoded deleted: false), so purge_expired / Lifecycle#purge could
-  # never physically remove an agent-deleted record — ciphertext persisted
-  # forever (invariant 31). Now the :deleted append carries the tombstone flag.
   def test_delete_tombstones_the_store_then_purge_removes_ciphertext_after_retention
     admitted = @engine.admission.admit_owner_request(
       statement: "Purge me after deletion", owner: "alice", authority: "owner",
@@ -791,8 +737,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_behavior_transition_claim_apply_finalize_and_pinning
-    # P11-19: Wisdom activates only through a BehaviorTransition at first
-    # intake; a second apply is a no-op; existing threads stay pinned.
     snapshot = {"wisdom" => "Prefer two green checks before promotion"}
     transition, reserved = @engine.transitions.record(
       kind: :wisdom_promotion,
@@ -843,9 +787,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_behavior_transition_serialized_pending_and_release_rules
-    # DR-1 T5/T7: two pipelines from one baseline — one pending; the loser
-    # cannot reserve; release is permitted only when nothing references the
-    # transition; otherwise recovery finalizes.
     @engine.transitions.record(
       kind: :wisdom_promotion, candidate_id: "wis.a", candidate_digest: "sha256:a",
       behavior_snapshot: {"wisdom" => "a"}, behavior_version_after: "tamoz.agent.session/2",
@@ -884,8 +825,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_wisdom_promotion_gates
-    # P11-21: holdout-gated, human-gated, one-candidate bound, recommendation
-    # only.
     candidate = Memory::MemoryRecord.new(
       memory_id: "wis.planning", layer: :wisdom, klass: :strategy,
       state: :candidate, epistemic_kind: :inferred, owner: "alice",
@@ -939,14 +878,6 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_content_addressed_snapshot_rewrite_is_idempotent
-    # P12-I regression for the DR-1 rollback fix (slice I, 2026-08-02): the
-    # snapshot namespace is content-addressed — the key IS the digest of the
-    # value. Writing it with `if_version: nil` raised StoreConflictError
-    # whenever the same snapshot content was recorded twice, which is exactly
-    # what DR-1 §7 rollback does (it re-records the PRIOR snapshot's bytes to
-    # restore them byte-identically) and what two promotions with identical
-    # snapshot content would do. "Already present with identical bytes" must be
-    # success for a content-addressed key.
     snapshot = {"wisdom" => "rollback target bytes"}
     first, = @engine.transitions.record(
       kind: :wisdom_promotion,

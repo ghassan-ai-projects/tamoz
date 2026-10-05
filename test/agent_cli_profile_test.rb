@@ -1,26 +1,19 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/profile_session_fixture'
+require_relative "support/scripted_generation"
+require_relative "support/session_plan"
 
 class AgentCLIProfileTest < Minitest::Test
+  include ProfileSessionFixture
+  include SessionPlan
+
+  private :plan_for
+
   Profile = Tamoz::Agent::Profile
 
-  class ScriptedModel
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
+  class ScriptedModel < ScriptedGeneration::Model
   end
 
   READ_ONLY_TOOLS = %w[read_file list_directory search_text].freeze
@@ -77,9 +70,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-B §5.5.3: an edited profile never rebinds an existing thread by itself.
-  # The thread replays the authority snapshot pinned in its own checkpoint, so
-  # the narrowed tool set in the edited file is simply not applied.
   def test_changed_profile_keeps_the_pinned_authority_of_an_existing_thread
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -110,8 +100,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-B §5.4/§6.5: only an explicit operator-recorded candidate transition moves
-  # a thread onto a new digest, and only at a turn boundary.
   def test_candidate_transition_applies_only_at_a_turn_boundary
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -151,9 +139,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-B §5.5.4: when the operator has revoked the grant for the digest a thread
-  # was created under, the thread fails closed instead of silently adopting the
-  # current file.
   def test_revoked_old_digest_fails_closed
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -240,9 +225,6 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  # P8-E §8.3: resume checks the profile *identity*, not just the digest — a session
-  # belongs to exactly one profile family, so a second activated profile (even over
-  # the same root and tool surface) cannot take its thread over.
   def test_resume_with_a_different_profile_id_is_rejected
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -436,49 +418,6 @@ class AgentCLIProfileTest < Minitest::Test
 
   # Records the planning prompt so a test can prove which tool surface the
   # session was actually planned against.
-  def recording_factory(sink)
-    lambda do |options|
-      model = read_factory.call(options)
-      model.singleton_class.prepend(Module.new do
-        define_method(:generate) do |stage:, system:, prompt:|
-          sink << prompt if stage == :plan
-          super(stage:, system:, prompt:)
-        end
-      end)
-      model
-    end
-  end
-
-  def read_factory
-    ->(_options) do
-      ScriptedModel.new(
-        plan: [plan_for("read_file", {"path" => "note.txt"})],
-        review: [accepted_review],
-        verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
-      )
-    end
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
-  end
-
-  def accepted_review
-    {"decision" => "accept", "issues" => [], "rationale" => "the plan is minimal and read-only"}
-  end
-
   def run_cli(argv, workspace:, session_dir:, config_home:, out:, err:, input: StringIO.new, factory:, session: nil, allow_changes: false)
     global_argv = ["--session-dir", session_dir, "--root", workspace]
     global_argv << "--allow-changes" if allow_changes

@@ -2,8 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice B (COMMS_TELEGRAM_PLAN §3) — the closed command table and the three
-# seams: Transport, DeliverySink (nil-safe), and the CommsStore contract.
 # rubocop:disable Minitest/MultipleAssertions
 class CommsSeamsTest < Minitest::Test
   Comms = Tamoz::Comms

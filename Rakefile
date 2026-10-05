@@ -1,17 +1,11 @@
 # frozen_string_literal: true
 
-require "rake/testtask"
+require "shellwords"
+require_relative "test/support/test_suite"
 require "rbconfig"
 require "fileutils"
 
-RUBY_SOURCES = FileList[
-  "Rakefile",
-  "bin/*",
-  "script/*",
-  "gems/**/*.rb",
-  "gems/**/exe/*",
-  "test/**/*.rb"
-].select { |path| File.file?(path) }.freeze
+RUBY_SOURCES = TestSuite.sources.freeze
 
 # The autonomy scorecard is a MILESTONE gate, not a regression gate: its cases
 # describe the product Tamoz is being built into and fail until that product
@@ -19,6 +13,7 @@ RUBY_SOURCES = FileList[
 # regression in what already works — while `rake autonomy` reports honestly on
 # what does not work yet. Both must pass to close the milestone.
 AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
+MANUAL_TESTS = ["test/stream_episode_real_model_test.rb"].freeze
 
 # The slow set: every file measured at >= 5 seconds, plus everything in
 # SERIAL_TESTS. They are slow for real reasons — spawning MCP server
@@ -89,28 +84,56 @@ SERIAL_TESTS = %w[
   test/stream_episode_end_to_end_test.rb
   test/stream_evidence_client_test.rb
   test/stream_worker_server_test.rb
+  agenteval/test/grader_test.rb
 ].freeze
 
-EXCLUDED_FROM_DEFAULT = (AUTONOMY_TESTS + SLOW_TESTS + SERIAL_TESTS).freeze
+TEST_LANES = TestSuite.lanes(slow: SLOW_TESTS, serial: SERIAL_TESTS,
+                             autonomy: AUTONOMY_TESTS, manual: MANUAL_TESTS)
+LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
+            .sort.flat_map { |path| ["-I", path] }.freeze
 
-Rake::TestTask.new(:test) do |task|
-  task.libs << "test"
-  task.test_files = FileList["test/**/*_test.rb"].reject do |path|
-    EXCLUDED_FROM_DEFAULT.include?(path)
-  end
-  task.warning = true
+def test_command(files, warnings: false)
+  options = warnings ? ["-w"] : []
+  [RbConfig.ruby, *options, "-Itest", *LIB_FLAGS, '-r', File.join(TestSuite::ROOT, 'test/support/test_suite'),
+   "-e", "ARGV.shift(Integer(ARGV.shift)).each { |file| require File.expand_path(file) }; " \
+         "TestSuite.validate_runnable_methods! if defined?(Minitest::Runnable)",
+   files.length.to_s, *files, *Shellwords.split(ENV.fetch("TESTOPTS", ""))]
+end
+
+def selected_test_files(paths)
+  return paths unless ENV.key?("TEST")
+
+  selected = paths & Dir.glob(ENV.fetch("TEST"))
+  abort("TEST matched no files in the selected lane") if selected.empty?
+  selected
+end
+
+desc "Validate all test roots, lanes and test identities"
+task :test_inventory do
+  TestSuite.validate_identities!(TestSuite.files)
+  puts "test inventory: #{TestSuite.files.length} files in #{TEST_LANES.length} explicit lanes"
+end
+
+desc "Run the everyday test lane"
+task test: :test_inventory do
+  files = selected_test_files(TEST_LANES.fetch(:fast))
+  sh({ "SIMPLE_COV_COMMAND_NAME" => "tests:fast" }, *test_command(files, warnings: true))
 end
 
 desc "The slow set: subprocess, crash-matrix, packaging and evidence tests"
-Rake::TestTask.new(:test_slow) do |task|
-  task.libs << "test"
-  task.test_files = (SLOW_TESTS + SERIAL_TESTS).select { |path| File.file?(path) }
-  task.warning = true
+task test_slow: :test_inventory do
+  selected_test_files(TEST_LANES.fetch(:slow) + TEST_LANES.fetch(:serial)).each do |path|
+    sh({ "SIMPLE_COV_COMMAND_NAME" => "tests:#{path}" }, *test_command([path], warnings: true))
+  end
 end
 
+desc "Run the real-model episode test explicitly (RUN_REAL_E2E=1)"
+task test_evidence: :test_inventory do
+  abort("set RUN_REAL_E2E=1 for the explicit real-model evidence run") unless ENV["RUN_REAL_E2E"] == "1"
 
-LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
-            .map { |path| "-I#{path}" }.sort.join(" ").freeze
+  sh(*test_command(TEST_LANES.fetch(:manual), warnings: true))
+end
+
 
 # Measured wall-clock seconds per file (`rake test_profile` regenerates these).
 # Used to BIN-PACK the shards: round-robin left one worker trailing a 23-second
@@ -149,7 +172,8 @@ TEST_WEIGHTS = {
   "test/dependency_isolation_test.rb" => 3.6,
   "test/agent_mcp_capability_source_test.rb" => 3.4,
   "test/agent_profile_machinery_test.rb" => 3.3,
-  "test/agent_worker_test.rb" => 3.2
+  "test/agent_worker_test.rb" => 3.2,
+  "agenteval/test/grader_test.rb" => 14.8
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the
@@ -162,16 +186,14 @@ task :test_fast do
 end
 
 desc "Run the test suite across processes (fast; use for a refactor loop)"
-task :test_parallel, [:mode] do |_task, args|
+task :test_parallel, [:mode] => :test_inventory do |_task, args|
   require "etc"
   require "open3"
 
-  include_slow = args[:mode] != :skip_slow
-  all = FileList["test/**/*_test.rb"].reject do |path|
-    AUTONOMY_TESTS.include?(path) || (!include_slow && SLOW_TESTS.include?(path))
-  end
-  serial = include_slow ? (SERIAL_TESTS & all) : []
-  parallel = all - (SERIAL_TESTS & all)
+  include_slow = args[:mode].to_s != "skip_slow"
+  parallel = TEST_LANES.fetch(:fast)
+  parallel += TEST_LANES.fetch(:slow) if include_slow
+  serial = include_slow ? TEST_LANES.fetch(:serial) : []
 
   workers = [Etc.nprocessors - 1, 1].max
   CiBudget.parallel_workers = workers
@@ -191,9 +213,9 @@ task :test_parallel, [:mode] do |_task, args|
     Thread.new do
       # One process per shard, requiring every file in it — `ruby a.rb b.rb`
       # would run only the first and treat the rest as ARGV.
-      command = "#{RbConfig.ruby} -Itest #{LIB_FLAGS} " \
-                "-e 'ARGV.each { |f| require File.expand_path(f) }' #{files.join(" ")}"
-      output, status = Open3.capture2e(command)
+      output, status = Open3.capture2e(
+        { "SIMPLE_COV_COMMAND_NAME" => "tests:shard:#{files.first}" }, *test_command(files)
+      )
       failures << [files, output] unless status.success?
     end
   end.each(&:join)
@@ -201,7 +223,7 @@ task :test_parallel, [:mode] do |_task, args|
   # The serial tail: gem builds and artifact regeneration, one at a time.
   serial.each do |path|
     output, status = Open3.capture2e(
-      "#{RbConfig.ruby} -Itest #{LIB_FLAGS} #{path}"
+      { "SIMPLE_COV_COMMAND_NAME" => "tests:#{path}" }, *test_command([path])
     )
     failures << [[path], output] unless status.success?
   end
@@ -216,6 +238,7 @@ task :test_parallel, [:mode] do |_task, args|
 
         warn lines[index, 4].join
       end
+      warn output unless lines.any? { |line| line =~ /^\s*\d+\) (Failure|Error):/ }
       warn lines.grep(/runs,/).last.to_s
     end
     abort("test_parallel failed")
@@ -224,11 +247,12 @@ task :test_parallel, [:mode] do |_task, args|
 end
 
 desc "Measure per-file test wall clock (regenerates the TEST_WEIGHTS table)"
-task :test_profile do
+task test_profile: :test_inventory do
   require "open3"
-  timings = FileList["test/**/*_test.rb"].map do |path|
+  timings = (TestSuite.files - MANUAL_TESTS - AUTONOMY_TESTS).map do |path|
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    Open3.capture2e("#{RbConfig.ruby} -Itest #{LIB_FLAGS} #{path}")
+    output, status = Open3.capture2e(*test_command([path]))
+    abort("test_profile failed for #{path}:\n#{output}") unless status.success?
     [path, (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(1)]
   end
   timings.sort_by { |_, seconds| -seconds }.first(25).each do |path, seconds|
@@ -359,16 +383,17 @@ namespace :quality do
     puts "reek: #{by_file.values.sum} smells; none new vs the committed baseline"
   end
 
-  desc 'Coverage: RUN_COVERAGE=1 run must not fall below the committed baseline'
+  desc 'Coverage: fresh complete-suite run must not fall below the committed baseline'
   task :coverage do
     require 'json'
     require 'open3'
     require_relative 'script/quality/coverage_totals'
     baseline = JSON.parse(File.read(QUALITY_BASELINE)).fetch('coverage')
-    # MT_SEED pinned (same as the baseline generator) so the comparison is
+    # Seed pinned (same as the baseline generator) so the comparison is
     # exact — a random seed would move a line or two and false-fail the ratchet.
+    FileUtils.rm_f(QUALITY_RESULTSET)
     _out, err, status = Open3.capture3(
-      { 'RUN_COVERAGE' => '1', 'MT_SEED' => '1' }, RbConfig.ruby, '-S', 'bundle', 'exec', 'rake', 'test',
+      TestSuite.coverage_environment, RbConfig.ruby, '-S', 'bundle', 'exec', 'rake', 'test', 'test_slow',
       chdir: QUALITY_ROOT
     )
     raise "quality:coverage failed: coverage run failed: #{err}" unless status.success?
@@ -500,7 +525,7 @@ end
 # The complete gate. Stays SERIAL for the test phase: a parallel run is one
 # contended process table away from a false failure, and the gate that decides
 # whether something ships should not have that property.
-desc "The complete gate — nothing skipped (use before committing)"
+desc "The complete offline gate — all regression lanes (use before committing)"
 task ci_full: ["design:validate", "adr:validate", "adr:verify", :syntax, :test, :test_slow,
                "stream:proto:check", "quality:architecture"]
 

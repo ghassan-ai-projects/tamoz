@@ -2,11 +2,6 @@
 
 require_relative "test_helper"
 
-# P13-D (SCHEDULER_DESIGN §3/§5, plan §3) — the validated Schedule and
-# Occurrence values, content-addressed revisions, deterministic occurrence
-# identity, the closed state machine, and the at/interval next-fire calculus.
-#
-# Every gate is proven by attempting the violation and asserting the refusal.
 class SchedulerValuesTest < Minitest::Test
   Scheduler = Tamoz::Scheduler
 
@@ -35,8 +30,6 @@ class SchedulerValuesTest < Minitest::Test
       created_by: "human:op", created_at: ANCHOR, **overrides
     )
   end
-
-  # --- P13-D: values -------------------------------------------------------
 
   def test_interval_schedule_validates_and_computes_next_instants
     schedule = interval_schedule
@@ -136,8 +129,6 @@ class SchedulerValuesTest < Minitest::Test
     assert_equal ANCHOR + 3_600, ended.next_fire_at(ANCHOR + 100)
   end
 
-  # --- P13-D: jitter -------------------------------------------------------
-
   def test_jitter_is_deterministic_from_occurrence_id_within_the_window
     schedule = interval_schedule(jitter_window: 300)
     first = schedule.jitter_for("occurrence-A")
@@ -151,8 +142,6 @@ class SchedulerValuesTest < Minitest::Test
     # Zero window → no jitter at all.
     assert_equal 0, interval_schedule.jitter_for("anything")
   end
-
-  # --- P13-D: occurrence identity ------------------------------------------
 
   def test_occurrence_identity_is_deterministic_and_request_id_derives_from_it
     one = Scheduler::Occurrence.new(
@@ -176,8 +165,6 @@ class SchedulerValuesTest < Minitest::Test
     )
     refute_equal one.occurrence_id, other.occurrence_id
   end
-
-  # --- P13-D: the closed state machine -------------------------------------
 
   def test_occurrence_state_machine_is_closed_and_typed
     occurrence = Scheduler::Occurrence.new(
@@ -251,8 +238,6 @@ class SchedulerValuesTest < Minitest::Test
     end
   end
 
-  # --- P13-B: misfire selection (design §6) --------------------------------
-
   def test_misfire_selection_for_each_policy
     window = [ANCHOR, ANCHOR + 3_600, ANCHOR + 7_200]
 
@@ -261,9 +246,6 @@ class SchedulerValuesTest < Minitest::Test
     assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
     assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:skipped)
 
-    # latest (default for recurring): coalesce the window into the latest,
-    # recording the covered range (design §6: every due occurrence has a
-    # durable reason).
     selection = interval_schedule(misfire_policy: :latest).misfire_selection(window)
     assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
     assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:skipped)
@@ -284,8 +266,6 @@ class SchedulerValuesTest < Minitest::Test
     assert_equal({materialize: [], skipped: []},
                  interval_schedule.misfire_selection([]))
   end
-
-  # --- P13-B: overlap decision (design §7) ---------------------------------
 
   def test_overlap_decision_for_each_policy
     # forbid (default): any in-flight occurrence skips the new one.
@@ -308,8 +288,6 @@ class SchedulerValuesTest < Minitest::Test
       overlap_policy: :allow, max_concurrency: 2
     ).overlap_decision(non_terminal: 2, pending: 1)
   end
-
-  # --- P13-C: grant intersection (design §9, invariant 40) -----------------
 
   def test_grant_intersection_classifies_granted_narrowed_revoked
     stored = {"scopes" => ["read"], "capabilities" => ["tool.run-check"]}

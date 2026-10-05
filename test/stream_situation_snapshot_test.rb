@@ -2,10 +2,6 @@
 
 require_relative "test_helper"
 
-# T1.5 (PLAN_TAMOZ_STREAM_BUILD T1.5): the received situation snapshot is
-# verified before any model call — digest recomputed with the shared rule and
-# compared in constant time, identity fields required, malformed documents
-# refused by the strict scanner.
 class StreamSituationSnapshotTest < Minitest::Test
   def valid_snapshot(overrides = {})
     {

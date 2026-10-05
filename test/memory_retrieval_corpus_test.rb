@@ -5,9 +5,6 @@
 require_relative 'test_helper'
 require_relative 'support/memory_spec'
 
-# Retrieval quality on labelled data (EVAL.md §2). Four control retrievers run through
-# the same scorer first (F1): a scorer that cannot tell them apart would make the real
-# retriever's numbers meaningless. The corpus is data: test/fixtures/memory/retrieval_corpus.json.
 class MemoryRetrievalCorpusTest < Minitest::Test
   include MemorySpec
 
@@ -89,8 +86,6 @@ class MemoryRetrievalCorpusTest < Minitest::Test
     }
   end
 
-  # The pre-fix matcher (REVIEW.md F2) with every eligibility filter correct, so the only
-  # thing that can fail it is matching.
   def and_prefix(query)
     terms = query.fetch('text').downcase.split(/[^a-z0-9]+/).reject(&:empty?)
     RECORDS.values.select do |record|
@@ -102,7 +97,7 @@ class MemoryRetrievalCorpusTest < Minitest::Test
     end.map { |record| record.fetch('id') }
   end
 
-  def test_f1_controls_discriminate
+  def test_controls_discriminate
     spec_row('F1') do
       verdicts = controls.transform_values { |retriever| score(retriever) }
 
@@ -114,7 +109,7 @@ class MemoryRetrievalCorpusTest < Minitest::Test
     end
   end
 
-  def test_b2_the_real_retriever_meets_recall_and_precision_with_zero_violations
+  def test_the_real_retriever_meets_recall_and_precision_with_zero_violations
     spec_row('B2') do
       result = summary(with_loaded_engine { |retriever| score(retriever) })
 
@@ -125,7 +120,7 @@ class MemoryRetrievalCorpusTest < Minitest::Test
     end
   end
 
-  def test_b7_stop_words_and_unrelated_text_return_nothing
+  def test_stop_words_and_unrelated_text_return_nothing
     spec_row('B7') do
       verdicts = with_loaded_engine { |retriever| score(retriever) }
       empty = verdicts.select { |verdict| verdict.query['empty'] }

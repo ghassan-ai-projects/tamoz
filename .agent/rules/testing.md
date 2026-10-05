@@ -1,8 +1,12 @@
 # Testing — never pay real time
 
 - Inject the wait; never `sleep`. The gateway drainer paces for real: pass `sleeper: ->(_) {}`.
+- In `assert rows.all? do ... end`, Ruby gives the block to `assert` and never checks the
+  predicate. Use braces, parentheses, or an expected collection; `test_source_audit_test.rb`
+  checks this binding across every test root.
 - Fast because it *fails early* is not fast.
-- A regression test you have not seen fail proves nothing: stash the fix, watch it fail.
+- A regression test you have not seen fail proves nothing: temporarily mutate the guarded
+  behavior, watch it fail, restore it, and rerun; never use `git stash`.
 - Don't weaken the property under test for speed — keep `WAL` + `synchronous=FULL`.
 - Irreducible process/kill/socket tests go in `SLOW_TESTS`.
 - A deadline the child's own startup must fit inside is a race, not a test — Ruby boot can
@@ -70,6 +74,25 @@
   the first non-ASCII prompt (`research_replies.json`) hashed differently under `LANG=C` and a UTF-8 locale: pins made
   in one shell failed in `rake`'s UTF-8 run and passed alone. Read with `encoding: Encoding::UTF_8`, and generate pins
   under the same locale the gate runs in.
+
+- **Snapshotting every SQLite table cannot assume `rowid`.** FTS shadow tables can be
+  `WITHOUT ROWID`; `logical_database_rows` failed on an empty, healthy database inside
+  its observer. Order by all projected columns and preserve duplicate rows. Inspect
+  the observer before attributing a wrapped SQL error to durability or corruption.
+
+- **The locked Minitest version reads `SEED`, not `MT_SEED`.** Coverage commands share
+  `TestSuite.coverage_environment`; its subprocess regression verifies the actual run
+  options. A private helper must not use the reserved `test_` prefix: the runner
+  rejects non-public test methods after loading every selected file.
+
+- Shared scripted models must retain their consumer class names: runtime and worker
+  use `model.class.name` as fallback effect identity. Use a named subclass of the
+  shared implementation; a constant alias changes the recorded identity.
+
+- CLI refusal tests create their own manifests in temporary directories. A local
+  real-run artifact can hide a CI dependency: scoreboard_cli_test now builds a
+  failed-controls manifest and keeps the report absent to prove refusal order.
+
 - **An in-process test inherits everything `test_helper` requires.** `tamoz mcp` (then `self-observe`) passed every in-process
   test, then failed its first real `tools/call` with `uninitialized constant Tamoz::SQLite`: the CLI loads
   `tamoz-sqlite` lazily and the helper had preloaded it. A command that a fresh process runs (an MCP server, a

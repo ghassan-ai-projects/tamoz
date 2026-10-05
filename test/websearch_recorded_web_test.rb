@@ -3,7 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/research_spec'
 
-# The eval's Brave cap and query cache (docs/deep-research-2026-09-30/EVAL.md §3): offline, no socket.
 # rubocop:disable Minitest/MultipleAssertions -- each case reads one record behaviour from several sides.
 class WebsearchRecordedWebTest < Minitest::Test
   include ResearchSpec

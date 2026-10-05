@@ -2,10 +2,6 @@
 
 require_relative "test_helper"
 
-# P0B/§5 conformance: the strict ReasoningDocument v2 parser accepts a
-# well-formed turn and fails closed on every malformed, forged, or
-# authority-smuggling variant. Each rejection asserts the stable
-# `reasoning_document/<code>` prefix so the contract cannot silently drift.
 class AgentReasoningDocumentTest < Minitest::Test
   Doc = Tamoz::Agent::ReasoningDocument
   CATALOG = %w[ventilation_failure sensor_drift unknown].freeze
@@ -165,9 +161,6 @@ class AgentReasoningDocumentTest < Minitest::Test
     assert_rejected("probabilities_sum", hash)
   end
 
-  # P1: the tolerance is sized to real-provider quantization noise (~5% on a
-  # 6-code set), not a license for malformed distributions — a sum 0.88 (12%
-  # short) must still fail closed.
   def test_rejects_a_distribution_ten_percent_short
     hash = terminal_hash
     hash["diagnosis_probabilities"][0]["probability"] = 0.6

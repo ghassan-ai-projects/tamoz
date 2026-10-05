@@ -8,20 +8,6 @@ require "tamoz/stream/situation_memory"
 require "support/local_model_endpoint"
 require "support/episode_composition"
 
-# T5 (PLAN_TAMOZ_STREAM_BUILD T5): the learning loop. The audit's core gap was
-# "the admission guard exists but nothing feeds it". This suite closes the
-# loop on the tamoz side:
-#   T5.1 outcome_subscriber — Channel B consumer with durable resume, dedup,
-#        resnapshot, poison-skip, backpressure (tested against a scripted
-#        frame source; the live SSE endpoint is the stream's).
-#   T5.2 verification store — awaiting → observed → reconciled; learnable only
-#        on a settled verdict (verified/refuted); inconclusive and
-#        superseded_before_verification are recorded and never learned from.
-#   T5.3 admission — :observed ONLY with an authenticated reconciled-outcome
-#        reference; a bare boolean, a forged authority, a foreign episode, or
-#        an unlearnable verdict is refused.
-#   T5.4 situation_memory — same-tenant-AND-same-entity-type relatedness
-#        boundary over the T0.3 scopes.
 class StreamLearningLoopTest < Minitest::Test
   Subscriber = Tamoz::Stream::OutcomeSubscriber
   VerificationStore = Tamoz::Stream::VerificationStore
@@ -123,8 +109,6 @@ class StreamLearningLoopTest < Minitest::Test
   def durable_event_digest(frame)
     Tamoz::Core.digest("tamoz/stream/notification/v1\n", JSON.parse(frame.data))
   end
-
-  # --- T5.1: the Channel B subscriber --------------------------------------
 
   def test_resume_carries_the_stored_cursor_and_credential
     store = MemoryCursorStore.new
@@ -340,8 +324,6 @@ class StreamLearningLoopTest < Minitest::Test
     assert_empty subscriber.skipped
   end
 
-  # --- T5.2: the verification store ------------------------------------------
-
   def test_verification_opens_awaiting_and_closes_learnable_on_a_settled_verdict
     store = VerificationStore.new(clock: -> { Time.at(1_700_000_000) })
     store.open(
@@ -405,8 +387,6 @@ class StreamLearningLoopTest < Minitest::Test
       decision_digest: "sha256:#{"d" * 64}", episode: {}, decision_id: "decision-1"
     )
   end
-
-  # --- T5.4: situation-scoped retrieval --------------------------------------
 
   def memory_engine
     directory = Dir.mktmpdir("tamoz-learning-loop")
@@ -518,8 +498,6 @@ class StreamLearningLoopTest < Minitest::Test
     FileUtils.remove_entry(directory) if directory
   end
 
-  # --- T5.3: admission requires the authenticated reference -------------------
-
   def test_a_claimed_reference_that_does_not_verify_is_refused
     engine, adapter, directory = memory_engine
     episode = {
@@ -616,9 +594,6 @@ class StreamLearningLoopTest < Minitest::Test
     )
     verification = VerificationStore.new(clock: -> { Time.at(1_700_000_000) })
 
-    # P1: the fixed graph produces the decision; the verification row is no
-    # longer opened by the runner (that moved to the Go side) — the test opens
-    # it explicitly, as the runtime's subscriber path does.
     endpoint = LocalModelEndpoint.new(
       mode: :fixture,
       responses: [Tamoz::Core.jcs(

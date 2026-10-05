@@ -3,7 +3,7 @@
 require_relative 'test_helper'
 require 'tamoz/evals/runner'
 
-# Real-world sensor WP-T3: the two new tournament metrics, proven purely over
+# The two new tournament metrics, proven purely over
 # hand-built cells (no model, no episode path). abstention_quality rewards a
 # correct act/abstain choice; counterfactual_regret charges the oracle-optimal
 # asymmetry (a missed action dwarfs a false alarm).

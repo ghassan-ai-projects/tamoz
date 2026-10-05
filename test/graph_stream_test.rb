@@ -140,9 +140,6 @@ class GraphStreamTest < Minitest::Test
     )
     parts = []
 
-    # The invoke-thread-exists precondition (compiled.rb:470) is a stale-request
-    # condition (DR-4 C2): it raises StaleRequestError, still a CheckpointError with a
-    # safe message that never discloses the caller hint.
     error = assert_raises(Tamoz::StaleRequestError) do
       stream.each { |part| parts << part }
     end
@@ -219,7 +216,7 @@ class GraphStreamTest < Minitest::Test
       stable_id = snapshot.checkpoint_id
 
       assert_includes reference_states, snapshot.state, "event index #{stop_after}"
-      sleep(0.002)
+      sleep(0.002) # a detection window: a late commit must not move the settled checkpoint
       assert_equal stable_id,
                    app.state(thread: "thread.stop.#{stop_after}").checkpoint_id,
                    "late commit at event index #{stop_after}"

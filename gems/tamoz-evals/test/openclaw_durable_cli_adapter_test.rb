@@ -4,7 +4,7 @@ require_relative '../../../test/test_helper'
 
 # Verifies that the adapter's catalog metrics are evidence-derived.
 # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/MethodLength, Minitest/MultipleAssertions -- each test checks one evidence contract.
-class OpenclawDurableCliAdapterTest < Minitest::Test
+class DurableCliAdapterEvidenceTest < Minitest::Test
   # Simulates a readonly SQLite connection while a writer holds the lock.
   class BusyReadonlyDatabase
     attr_accessor :busy_timeout

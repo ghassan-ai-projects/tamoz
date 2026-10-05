@@ -1,0 +1,2132 @@
+[
+  {
+    "path": "agenteval/test/grader_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "gems/tamoz-evals/test/agent_observability_durability_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "gems/tamoz-evals/test/comparison_executor_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "gems/tamoz-evals/test/durable_session_evidence_reader_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "gems/tamoz-evals/test/openclaw_durable_cli_adapter_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "gems/tamoz-evals/test/scenario_driver_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "gems/tamoz-evals/test/scoreboard_cli_test.rb",
+    "status": "done",
+    "reason": "Linux CI exposed a developer-home manifest dependency missed by the prior review. The failed-controls refusal now uses the existing owned manifest fixture; accepted cases keep their defaults.",
+    "verification": "Focused CLI 3/23 in both locales and isolated checkout; bypassing controls guard fails; restored refusal 1/8; sibling suites and lint pass. Linux rerun is not yet claimed."
+  },
+  {
+    "path": "gems/tamoz-evals/test/scoreboard_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/adr_tooling_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_acceptance_workflow_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_approval_boot_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_budget_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_capability_delegation_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_change_evaluation_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_child_task_runtime_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_child_task_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_cli_investigate_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_cli_mcp_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_cli_memory_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_cli_profile_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_cli_research_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_cli_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_decision_flow_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_diagnosis_catalog_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_digest_resolution_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_durable_compatibility_spike_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_durable_routing_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_episode_investigation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_governed_database_source_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_improvement_lifecycle_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_intent_catalog_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_latency_smoke_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_mcp_adversarial_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_mcp_capability_source_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_mode_switch_kill_matrix_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_mode_switch_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_model_receipt_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_non_ascii_session_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_outbox_delivery_sink_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_probe_catalog_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_probe_integration_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_probe_source_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_profile_adoption_seams_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_profile_machinery_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_profile_schema_seams_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_profile_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_profile_transition_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_reasoning_document_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_repair_evaluation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_request_routing_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_runtime_effects_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_runtime_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_schedule_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_scorecard_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_session_adaptive_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_session_effect_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_session_kill_matrix_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_session_operations_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_session_planning_context_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_session_records_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_session_status_projection_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_session_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_skill_set_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_skills_adversarial_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_skills_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_skills_toolbox_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_terminal_progress_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_tool_error_recovery_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_toolbox_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_unattended_policy_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agent_worker_fail_closed_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_worker_failure_reason_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_worker_mcp_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_worker_profile_digest_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agent_worker_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agenteval_memory_pack_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agenteval_research_pack_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agenteval_skills_optimizer_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agenteval_skills_pack_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/agenteval_subagent_pack_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/agenteval_topology_pack_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_answer_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_boundary_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/approval_engine_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/approval_flow_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_grant_key_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_mode_switch_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_policy_document_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_reload_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/approval_resolve_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/approval_values_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/autonomy_scorecard_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/benchmark_abstention_metrics_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/benchmark_comms_b0_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/benchmark_comms_controls_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/benchmark_controls_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/benchmark_families_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/benchmark_harness_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/benchmark_holdout_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/benchmark_protocol_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/benchmark_report_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/calibration_rollout_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/callback_ack_crash_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/cancellation_visibility_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/canonical_cross_surface_composition_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/canonical_json_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/capability_closed_world_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/capability_descriptor_contract_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/capability_host_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/capability_inventory_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/capability_registry_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/chat_work_loop_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/child_environments_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/ci_configuration_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/circuit_record_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/cli_code_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/cli_improve_promote_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/cli_improve_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/cli_skills_command_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/cli_skills_create_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/cli_telegram_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_admission_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_adr049_consistency_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_authority_evidence_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_cli_ops_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_cli_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_command_parity_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_decision_record_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_decision_store_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_deny_callback_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_evidence_gated_approval_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_gateway_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_lifecycle_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_pairing_first_contact_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_rendering_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_seams_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_serve_supervision_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/comms_values_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/concurrency_drain_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/context_compaction_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/context_control_exposure_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/context_header_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/context_pruner_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/context_spill_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/context_surface_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/context_usage_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_atomic_file_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_context_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_file_lock_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_instrumentation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_jcs_vectors_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/core_pool_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_private_directory_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_state_codec_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_stream_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/core_turn_context_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/delivery_drainer_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/dependency_isolation_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/dependency_review_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/documentation_surface_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/documentation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/documentation_tree_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/duplicate_key_detector_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/effect_dispatcher_failed_projection_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/effect_identity_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/evals_verifier_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/evidence_artifact_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/experience_harness_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/file_facades_boundary_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_checkpoint_codec_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_definition_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_determinism_property_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_durable_request_executor_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_durable_runner_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/graph_execution_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/graph_history_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_identity_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_immutable_recall_channels_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/graph_interrupt_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/graph_reducer_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_resume_answers_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_state_manager_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_stream_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/graph_subgraph_fanout_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_subgraph_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/graph_surface_audit_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/harness_instructions_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/harness_prompt_pack_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/harness_protocol_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/healing_failure_contract_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/healing_matrix_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/healing_remediation_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/heuristic_improvement_pipeline_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/heuristic_promotion_controls_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/improvement_candidate_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/investigation_eval_controls_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/lane_config_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/legacy_session_resume_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/m2_evidence_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/mcp_catalog_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/mcp_elicitation_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/mcp_http_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/mcp_invocation_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/mcp_server_config_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/mcp_supervisor_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_access_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/memory_boundary_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_engine_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_repository_adapter_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_retrieval_corpus_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_session_integration_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_spec_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_store_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_treatment_profile_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/memory_work_route_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/model_call_node_contract_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/model_client_factory_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/model_conversation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/model_transport_parity_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/model_windows_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/observability_catalog_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/observability_cli_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/observability_correlation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/observability_runtime_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/observability_signal_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_benchmark_environment_loader_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_benchmark_readiness_cli_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_benchmark_readiness_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_durable_cli_adapter_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_mission_controls_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_mission_runner_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/openclaw_scenario_corpus_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/otel_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/packaging_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/profile_boundary_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/public_api_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/reconnection_resume_protocol_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/release_evaluation_manifest_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/release_rehearsal_evidence_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/requirements_manifest_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/research_boundary_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/research_durability_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/research_ledger_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/research_spec_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/research_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/research_tuning_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/runner_input_manifest_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/runtime_directory_config_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/scheduler_consumer_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/scheduler_contract_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/scheduler_due_occurrences_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/scheduler_values_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/schema_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/script_context_bootstrap_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/secret_sweep_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/self_healing_assessor_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/self_healing_coordinator_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/self_healing_live_turn_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/self_healing_worker_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/session_context_controls_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/shared_helpers_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/skills_boundary_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/skills_candidates_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/skills_evidence_verifier_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/skills_lint_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/skills_reachability_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/skills_spec_conformance_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_approval_stores_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_backup_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_boundary_registry_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_boundary_source_audit_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_checkpoint_seams_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_checkpoint_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_circuit_store_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_comms_store_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_convergence_probe_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_crash_recovery_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_deletion_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_effect_journal_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_kernel_test.rb",
+    "status": "done",
+    "reason": "Explicit failure-path regressions retain SQL/busy causes, rollback schema mutations and return pooled connections. Existing kernel cases are unchanged.",
+    "verification": "2026-10-04: kernel 10/74; removing causes fails both new regressions; restored 2/9. Local review; final full lanes in FOLLOWUP_BAR.md."
+  },
+  {
+    "path": "test/sqlite_raw_oracle_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_request_inbox_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_scenario_driver_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_scenario_registry_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_schedule_determinism_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_schedule_store_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_selector_control_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_stale_request_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_store_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/sqlite_trace_recorder_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/stream_approval_relay_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_artifact_manifest_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_decision_builder_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_capability_host_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_crash_matrix_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_end_to_end_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_fixed_graph_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_intent_authority_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_investigation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/stream_episode_loop_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_real_model_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_reconsider_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_replay_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_skills_memory_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_stream_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_witness_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_episode_worker_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_evidence_client_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_invariants_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_learning_loop_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_notification_contract_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/stream_situation_recall_contract_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/stream_situation_request_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_situation_snapshot_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_sse_transport_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/stream_token_custody_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/stream_worker_server_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/subagent_configuration_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/subagent_durability_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/subagent_kill_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/subagent_show_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/subagent_spec_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/subagent_topology_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/subprocess_runner_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/tamoz_brain_hardware_boundary_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/tamoz_telegram_transport_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/telegram_markup_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/telegram_normalizer_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/test_fixture_helpers_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/test_quality_inventory_test.rb",
+    "status": "done",
+    "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/test_source_audit_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/test_suite_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/thermal_evidence_gate_eval_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/thermal_lab_adversarial_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/thermal_lab_decision_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/thermal_lab_facts_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/thermal_manifest_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/thermal_tournament_controls_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/thermal_tournament_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/thread_barrier_test.rb",
+    "status": "done",
+    "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/toolbox_staging_reaper_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/tools_coding_surface_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/tools_gem_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/websearch_adapter_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/websearch_circuit_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/websearch_connector_contract_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/websearch_contract_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/websearch_egress_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/websearch_invocation_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/websearch_provider_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/websearch_reader_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/websearch_recorded_web_test.rb",
+    "status": "done",
+    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/work_loop_investigation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/work_loop_observation_test.rb",
+    "status": "fine",
+    "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
+    "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/work_loop_test.rb",
+    "status": "done",
+    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
+    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  }
+]

@@ -16,7 +16,7 @@ class ObservabilityRuntimeTest < Minitest::Test
     )
 
     document = recorder.signals.first.to_h
-    assert_equal({'error_detail_digest' => document.fetch('content').fetch('error_detail_digest'),
+    assert_equal({'error_detail_digest' => "sha256:#{Digest::SHA256.hexdigest('private prompt')}",
                   'error_detail_bytes' => 14}, document.fetch('content'))
     refute_includes JSON.generate(document), 'private prompt'
     assert_equal Observability::ContentPolicy::NONE.digest, document.fetch('policy_digest')
@@ -89,7 +89,8 @@ class ObservabilityRuntimeTest < Minitest::Test
       journal.close
 
       documents = Observability::Recorder::Journal.read(directory)
-      assert documents.all? { |document| document.key?('name') }
+      refute_empty documents
+      assert_equal ['tamoz.worker.error'], documents.map { |document| document.fetch('name') }.uniq
       assert_operator Observability::Recorder::Journal.inventory(directory).fetch('drops'), :>, 0
     end
   end

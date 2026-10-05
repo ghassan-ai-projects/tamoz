@@ -2,14 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice A (COMMS_TELEGRAM_PLAN §3) — the durable decision store over the
-# versioned Store namespace. Every transition is a compare-and-set: exactly
-# one concurrent claimer wins, an expired claim lease releases the record for
-# crash recovery, and consumption is idempotent. The contract-version pair
-# (dependency rule 9) is verified by the integration layer that loads both.
-#
-# Each case walks the store through one state machine (insert, claim, consume)
-# end to end; the assertions belong to the same scenario.
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
 class CommsDecisionStoreTest < Minitest::Test
   Comms = Tamoz::Comms
@@ -137,8 +129,6 @@ class CommsDecisionStoreTest < Minitest::Test
         claim_expires_at: decided_at + 30, now: decided_at
       )
 
-      # The claimer died before submitting; after the lease expires, the record
-      # is recoverable — the crash-before-submission path (design §9).
       assert_equal :claimed, store.claim_decision(
         decision_id: value.decision_id, owner: 'worker:b', fence: 2,
         claim_expires_at: decided_at + 90, now: decided_at + 60

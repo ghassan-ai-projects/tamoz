@@ -49,7 +49,7 @@ class MemorySpecTest < Minitest::Test
 
   def statements(records) = records.map(&:statement)
 
-  def test_b1_automatic_recall_and_the_brief_are_knowledge_only
+  def test_automatic_recall_and_the_brief_are_knowledge_only
     spec_row('B1') do
       episode = work_episode(@engine, task: 'fix the failing login test', outcome: 'patched the login helper')
       fact = owner_fact(@engine, 'login tests need the fake clock helper')
@@ -60,7 +60,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_b3_relevance_outranks_recency_in_both_directions
+  def test_relevance_outranks_recency_in_both_directions
     spec_row('B3') do
       older_relevant = owner_fact(@engine, 'parser tests load the parser fixture from the parser directory')
       @now += 20 * DAY
@@ -76,7 +76,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_b4_sensitive_never_indexed_and_other_scopes_never_returned
+  def test_sensitive_never_indexed_and_other_scopes_never_returned
     spec_row('B4') do
       mine = owner_fact(@engine, 'alice indents with tabs instead of spaces')
       secret = owner_fact(@engine, 'the staging bastion is reached through jump host seven', sensitivity: :sensitive)
@@ -90,7 +90,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_b5_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row
+  def test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row
     spec_row('B5') do
       active = owner_fact(@engine, 'deploys run from the main branch')
       superseded = owner_fact(@engine, 'deploys go through the blue pipeline')
@@ -107,7 +107,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_b6_the_brief_respects_the_token_budget_and_traces_every_drop
+  def test_the_brief_respects_the_token_budget_and_traces_every_drop
     spec_row('B6') do
       long = Array.new(12) do |index|
         owner_fact(@engine, "long preference #{index}: #{'widgets follow the house style ' * 22}")
@@ -117,7 +117,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_b6_the_brief_caps_the_record_count
+  def test_the_brief_caps_the_record_count
     spec_row('B6') do
       short = Array.new(12) { |index| owner_fact(@engine, "short preference #{index} for widgets") }
       result = assert_brief_bounded(short.map(&:memory_id), 'style the widgets')
@@ -125,7 +125,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_b7_stop_words_alone_never_match
+  def test_stop_words_alone_never_match
     spec_row('B7') do
       fact = owner_fact(@engine, 'the build is a two step process and it is slow')
 
@@ -134,7 +134,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c3_remember_stores_only_a_verbatim_user_quote
+  def test_remember_stores_only_a_verbatim_user_quote
     spec_row('C3') do
       said = 'we keep tests under verify/ and name them check_<name>.rb'
       stored = remember(said, messages: ["Please fix the parser. Also, #{said}."])
@@ -149,7 +149,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c3_a_quote_must_be_a_whole_clause_and_never_a_secret
+  def test_a_quote_must_be_a_whole_clause_and_never_a_secret
     spec_row('C3') do
       reversed = remember('deploy on Fridays', messages: ['Please never deploy on Fridays.'])
       whole = remember('never deploy on Fridays', messages: ['Please note: never deploy on Fridays.'])
@@ -163,7 +163,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c3_unkeyed_quotes_are_scoped_and_replays_change_nothing
+  def test_unkeyed_quotes_are_scoped_and_replays_change_nothing
     spec_row('C3') do
       said = 'the staging database is rebuilt nightly'
       first = remember(said, project: 'proj')
@@ -176,7 +176,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c5_forget_must_name_its_target_and_stays_in_the_project
+  def test_forget_must_name_its_target_and_stays_in_the_project
     spec_row('C5') do
       fact = remember('release notes go in CHANGES.md', key: 'release-notes')
       unnamed = @engine.knowledge.forget(target: 'release-notes', quote: 'update the header',
@@ -197,7 +197,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c4_same_key_supersedes_and_keeps_history
+  def test_same_key_supersedes_and_keeps_history
     spec_row('C4') do
       first = remember('build output goes to out/', key: 'build-output')
       second = remember('build output now goes to dist/', key: 'build-output')
@@ -211,7 +211,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c5_forget_needs_a_quote_and_the_receipt_matches_the_tables
+  def test_forget_needs_a_quote_and_the_receipt_matches_the_tables
     spec_row('C5') do
       fact = remember('the vendor is Northwind B.V.', key: 'vendor')
       id = fact.record.memory_id
@@ -235,7 +235,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c6_experience_expires_after_ninety_days_and_is_purged_after_retention
+  def test_experience_expires_after_ninety_days_and_is_purged_after_retention
     spec_row('C6') do
       episode = work_episode(@engine, task: 'rotate the signing key', outcome: 'rotated')
       @now += 89 * DAY
@@ -253,7 +253,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c7_consolidation_cites_sources_and_deletion_quarantines_the_derived_record
+  def test_consolidation_cites_sources_and_deletion_quarantines_the_derived_record
     spec_row('C7') do
       sources = [
         work_episode(@engine, task: 'flaky test fixed by freezing time', outcome: 'done', session: 's1'),
@@ -273,7 +273,7 @@ class MemorySpecTest < Minitest::Test
     end
   end
 
-  def test_c8_user_scope_follows_the_user_and_project_scope_stays_home
+  def test_user_scope_follows_the_user_and_project_scope_stays_home
     spec_row('C8') do
       remember('I prefer short answers', scope: :user, project: 'proj')
       remember('this repo formats with two spaces', scope: :project, project: 'proj')

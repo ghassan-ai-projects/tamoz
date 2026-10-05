@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/deep_freeze_assertions"
 
 class SQLiteBoundaryRegistryTest < Minitest::Test
+  include DeepFreezeAssertions
+
   REGISTRY_DIGEST =
     "sha256:f8a3cd8d02b014e53f64ece4663b9b8240fd299130d8d94245f2c8f816c86a01"
 
@@ -172,18 +175,5 @@ class SQLiteBoundaryRegistryTest < Minitest::Test
 
   def wire
     Tamoz::SQLite.const_get(:Wire, false)
-  end
-
-  def assert_deeply_frozen(value)
-    assert value.frozen?
-    case value
-    when Hash
-      value.each do |key, entry|
-        assert_deeply_frozen(key)
-        assert_deeply_frozen(entry)
-      end
-    when Array
-      value.each { |entry| assert_deeply_frozen(entry) }
-    end
   end
 end

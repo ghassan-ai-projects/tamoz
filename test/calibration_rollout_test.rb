@@ -11,7 +11,7 @@ require "support/aquaculture_domain"
 # (2) The no-hidden-fallback gate: a FIXTURE-provider worker refuses a
 # tamoz-mode or active request, so a production route never gets a canned
 # answer.
-class P8RolloutTest < Minitest::Test
+class CalibrationRolloutTest < Minitest::Test
   GENERATOR = ROOT.join("script", "generate_calibration_artifact")
 
   def generated_artifacts

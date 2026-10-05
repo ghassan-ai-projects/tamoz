@@ -37,13 +37,13 @@ module Agenteval
       module_function
 
       def questions(set = nil)
-        all = JSON.parse(File.read(QUESTIONS)).fetch("questions")
+        all = JSON.parse(File.read(QUESTIONS, encoding: Encoding::UTF_8)).fetch("questions")
         set ? all.select { |question| question.fetch("set") == set } : all
       end
 
       def ledger
         File.write(LEDGER, JSON.generate("cap" => CAP, "used" => 0)) unless File.exist?(LEDGER)
-        JSON.parse(File.read(LEDGER))
+        JSON.parse(File.read(LEDGER, encoding: Encoding::UTF_8))
       end
 
       # [[control name, passed?]] — every grader must separate a planted good report from a planted bad one.
@@ -150,7 +150,7 @@ module Agenteval
         path = File.join(root, arm, question.fetch("id"), "result.json")
         return nil unless File.exist?(path)
 
-        parsed = JSON.parse(File.read(path))
+        parsed = JSON.parse(File.read(path, encoding: Encoding::UTF_8))
         parsed["status"] == "report" ? parsed : nil
       end
 
@@ -161,8 +161,8 @@ module Agenteval
         single = mine.find { |result| result["arm"] == "single" }
         return unless fanout && single
 
-        first = File.read(File.join(fanout["folder"], "report.md"))
-        second = File.read(File.join(single["folder"], "report.md"))
+        first = File.read(File.join(fanout["folder"], "report.md"), encoding: Encoding::UTF_8)
+        second = File.read(File.join(single["folder"], "report.md"), encoding: Encoding::UTF_8)
         forward = judge.compare(question.fetch("question"), first, second)
         backward = judge.compare(question.fetch("question"), second, first)
         fanout["pairwise"] = Judge::RUBRIC.to_h do |criterion|

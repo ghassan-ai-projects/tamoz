@@ -4,13 +4,6 @@ require_relative 'test_helper'
 require_relative 'support/openclaw_comms_fixture'
 require 'tamoz/evals/benchmark/openclaw_comms_oracles'
 
-# Phase 3 work item 4 (docs/openclaw-chat-study/implementation-plan/
-# 04-phase-3-conversation-model.md): the canonical Telegram + durable CLI
-# composition as ONE continuous story over the B0 harness — real SQLite
-# stores, fake scripted transport, deterministic scripted provider. Two
-# isolated conversations pair, admit, cancel, crash-recover, deduplicate,
-# refuse oversize, and land one ambiguous send, all scored with the
-# controller-owned oracles instead of wall clocks.
 class CanonicalCrossSurfaceCompositionTest < Minitest::Test
   Fixture = Tamoz::Evals::Benchmark::OpenclawCommsFixture
   Oracles = Tamoz::Evals::Benchmark::OpenclawCommsOracles
@@ -124,8 +117,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     fixture.submit([update], now: @clock)
   end
 
-  # Phase 1: first contact -> pairing approval -> admitted turn on BOTH
-  # conversations, plus one durable-CLI leg each for cross-surface parity.
   def pair_both_conversations(fixture)
     code_a = pairing_code(fixture, 101, USER_A, CONVERSATION_A)
     approve_pairing(fixture, code_a, USER_A, CONVERSATION_A)
@@ -209,9 +200,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     leg_snapshot(fixture, conversation:, request_id:, delivery_baseline: baseline)
   end
 
-  # Phase 2: conversation A's slow turn parks waiting on an approval ask,
-  # /cancel lands mid-flight, and the ref-addressed /status renders the clean
-  # stop timeline from durable facts alone.
   def slow_turn_cancel_timeline(fixture)
     conversation = CONVERSATION_A
     thread = fixture.thread_for(conversation)
@@ -253,10 +241,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     drain_all(fixture)
   end
 
-  # Phase 3: conversation B crashes mid-plan, recovers on a fresh worker,
-  # replays a duplicate Telegram update harmlessly, refuses an oversized
-  # update then admits a valid one, and lands one send ambiguous — unknown,
-  # never re-sent.
   def crash_recovery_and_delivery_faults(fixture)
     conversation = CONVERSATION_B
     crash_update = raw_update(140, "Summarize both notes. #{MARKER_CRASH}",
@@ -363,9 +347,6 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     assert_equal :completed, view&.status, 'task truth must survive the delivery ambiguity'
   end
 
-  # Phase 4: cross-cutting invariants scored by the same oracles the B0
-  # scenarios use — meaning-level CLI/Telegram parity, confirmed-deliveries
-  # history, and reference isolation.
   def cross_cutting_oracle_score(fixture, telegram_legs:, cli_legs:)
     facts = fixture.snapshot(conversations: [CONVERSATION_A, CONVERSATION_B])
                    .merge('telegram_legs' => telegram_legs, 'cli_legs' => cli_legs)

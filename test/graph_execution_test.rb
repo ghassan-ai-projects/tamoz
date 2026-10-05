@@ -485,7 +485,7 @@ class GraphExecutionTest < Minitest::Test
         implementation_name: "deterministic.left",
         version: "1"
       ) do |_state, _context|
-        sleep(0.0002)
+        Thread.pass # encourage interleaving; the merged history must not depend on it
         {values: ["left"]}
       end
       node(

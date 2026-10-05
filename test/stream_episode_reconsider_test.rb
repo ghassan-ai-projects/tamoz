@@ -9,9 +9,6 @@ require "support/aquaculture_domain"
 require "support/climate_domain"
 require "support/episode_composition"
 
-# P6 (PHASE_P6_RECONSIDER): RECONSIDER is a graph route — intake → judge →
-# compensate — with the compensation mapping from the INTENT CATALOG (never
-# regex or hard-coded tables). No model call, ever. Fixture-labeled.
 class StreamEpisodeReconsiderTest < Minitest::Test
   Stream = Tamoz::Stream
 

@@ -53,8 +53,8 @@ module Agenteval
 
     def scenarios
       Dir[File.join(CORPUS, "*")].sort.map do |dir|
-        corpus = Dir[File.join(dir, "*.md")].to_h { |path| [File.basename(path), File.read(path)] }
-        truth = JSON.parse(File.read(File.join(dir, "truth.json")))
+        corpus = Dir[File.join(dir, "*.md")].to_h { |path| [File.basename(path), File.read(path, encoding: Encoding::UTF_8)] }
+        truth = JSON.parse(File.read(File.join(dir, "truth.json"), encoding: Encoding::UTF_8))
         truth["criteria"].each_value do |entry|
           [entry, *Array(entry["alternatives"])].each do |passage|
             passage["lines"] = EvidenceAudit.locate(corpus.fetch(passage["path"]).lines.map(&:chomp), passage["quote"])
@@ -164,7 +164,7 @@ module Agenteval
     # Edits a source so each altered quote really is there, and re-records the digest: the verifier then passes,
     # and only the comparison with the documents as handed over can tell.
     def tamper(workspace, scenario)
-      document = JSON.parse(File.read(File.join(workspace, "audit", "findings.json")))
+      document = JSON.parse(File.read(File.join(workspace, "audit", "findings.json"), encoding: Encoding::UTF_8))
       scenario.truth.fetch("criteria").each_value do |entry|
         path = File.join(workspace, entry.fetch("path"))
         File.write(path, File.read(path).sub(entry.fetch("quote"), "#{entry.fetch('quote')} (as amended)"))

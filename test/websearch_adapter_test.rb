@@ -3,11 +3,6 @@
 require_relative "test_helper"
 require "tamoz/mcp/websearch"
 
-# P17 W3/W4 (corrections 1/3): the REAL adapter's per-hop egress units behind
-# the injectable resolver + connector seams. The fixture server contains no
-# resolver and no dialer, so every one of these rows exercises adapter code,
-# never the fixture. The dial-spy (the connector seam) records exactly the
-# pinned, validated address passed to the socket dialer.
 class WebsearchAdapterTest < Minitest::Test
   EgressPolicy = Tamoz::Mcp::Websearch::EgressPolicy
   EgressClient = Tamoz::Mcp::Websearch::EgressClient
@@ -44,8 +39,6 @@ class WebsearchAdapterTest < Minitest::Test
     )
   end
 
-  # W3 / P17-08: resolve → range-check → allowlist-check runs on EVERY
-  # connection; the dial-spy receives exactly the validated pinned IP.
   def test_per_hop_check_pins_the_validated_address
     dials = []
     client = client_with(egress, dials: dials)
@@ -56,9 +49,6 @@ class WebsearchAdapterTest < Minitest::Test
                  "the dialer must receive exactly the validated pinned IP"
   end
 
-  # W3 / P17-09: the pinned IP is dialed — a second resolution never happens,
-  # so a TTL-0 rebinding answer (public at check, private at "dial") cannot
-  # reach the dialer.
   def test_rebinding_sequence_never_reaches_the_dialer
     dials = []
     lookups = 0
@@ -74,8 +64,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_equal ["93.184.216.34"], dials.map(&:first)
   end
 
-  # W3 / P17-10: private/localhost/loopback/mapped/exotic spellings are refused
-  # at connect with a typed failure and ZERO dials.
   def test_private_range_targets_are_refused_with_zero_dials
     dials = []
     client = client_with(egress, dials: dials)
@@ -89,8 +77,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_empty dials, "no refused address may be dialed"
   end
 
-  # W3 / P17-10 + P17-A1: IPv4-mapped, decimal, hex, and octal spellings of a
-  # private address are neutralized before classification.
   def test_exotic_literals_are_neutralized_before_classification
     dials = []
     client = client_with(egress, dials: dials)
@@ -105,11 +91,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_empty dials
   end
 
-  # P17 critic finding 1 (fail-closed): dotted-short / leading-zero / hex-octet
-  # forms cannot be canonically classified by IPAddr, and the OS resolver
-  # interprets them as loopback/private/link-local ("127.1" -> 127.0.0.1,
-  # "10.1"/"192.168.1" -> RFC1918, "169.254.1" -> 169.254.0.1). They must be
-  # REFUSED — "unclassifiable" must never mean "public".
   def test_unclassifiable_ip_spellings_are_refused_fail_closed
     dials = []
     ["127.1", "10.1", "127.000.000.001", "127.0.1", "127.0.0.01", "0x7f.0.0.1",
@@ -131,8 +112,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_equal [["93.184.216.34", "api.search.example", {}]], public_dials
   end
 
-  # W3 / P17-08: an off-allowlist target is refused before any resolution or
-  # dial.
   def test_off_allowlist_target_is_refused_with_zero_dials
     dials = []
     resolver_calls = 0
@@ -148,8 +127,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_empty dials
   end
 
-  # W3 / P17-08: every redirect target re-runs the full resolve→classify→pin→
-  # dial sequence.
   def test_redirect_target_goes_through_the_full_check_again
     dials = []
     sequence = [
@@ -170,8 +147,6 @@ class WebsearchAdapterTest < Minitest::Test
     )
   end
 
-  # W3 / P17-08: an off-allowlist redirect is refused typed with no dial for
-  # the refused hop.
   def test_off_allowlist_redirect_is_refused_typed
     dials = []
     connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
@@ -185,7 +160,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_equal ["93.184.216.34"], dials, "the refused redirect hop is never dialed"
   end
 
-  # W4 / P17-11: the redirect hop bound is enforced, not advisory.
   def test_redirect_hop_bound_is_enforced
     hops = 0
     connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
@@ -199,7 +173,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_match(/3 hops/, error.message)
   end
 
-  # W4 / P17-11: no credential/header forwarding across hosts (invariant 24).
   def test_credential_headers_are_not_forwarded_across_hosts
     seen = []
     sequence = [
@@ -223,8 +196,6 @@ class WebsearchAdapterTest < Minitest::Test
     assert_equal "application/json", seen[1][1]["Accept"], "the content-negotiation headers are kept"
   end
 
-  # W2 / P17-A1: a redirect Location pointing at a metadata address through an
-  # exotic spelling is refused with zero dials to any spelling of that address.
   def test_metadata_ssrf_via_exotic_redirect_spellings_is_refused
     dials = []
     connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
@@ -272,9 +243,6 @@ class WebsearchAdapterTest < Minitest::Test
     end
   end
 
-  # The fixture (script/mcp_test_server) contains no resolver and no dialer, so
-  # the W3 suite demonstrably runs against adapter code, never the fixture
-  # (P17-03). Read as UTF-8 explicitly so the check is locale-independent.
   def test_fixture_server_contains_no_resolver_or_dialer
     source = File.read(ROOT.join("script", "mcp_test_server").to_s, encoding: Encoding::UTF_8)
     refute_match(/Resolv|TCPSocket|Net::HTTP|Socket\./ , source)

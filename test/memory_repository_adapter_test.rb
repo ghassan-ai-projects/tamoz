@@ -2,14 +2,6 @@
 
 require_relative "test_helper"
 
-# P11-ED: the production-memory adapter for the DR-3 treatment harness. The
-# harness's per-cell stores, mandatory expected_delta, and the CI=injection /
-# live=attribution split are preserved, but the cells run through the REAL
-# production memory stack (SQLite Store + MemoryRepository + Memory::Engine):
-# the SQL authorization filter fires before materialization, sensitive rows are
-# never decrypted during a scan (P11-07/P11-25), the treatment ladder is decided
-# by the real retrieval, and store digests are seed-pinned and contamination-
-# detecting (E5/E7).
 class MemoryRepositoryAdapterTest < Minitest::Test
   ADAPTER = Tamoz::Evals::Harness::MemoryRepositoryAdapter
   CORPUS = Tamoz::Evals::Harness::AgentMemoryRepositoryCorpus
@@ -84,9 +76,6 @@ class MemoryRepositoryAdapterTest < Minitest::Test
   end
 
   def test_honest_searchable_claim_full_statement_substring_never_matches
-    # P11-09 over the real surface: the search matches the indexed vocabulary
-    # only — a word that is NOT in the seeded statements (and is not a layer/
-    # class prefix) matches nothing.
     with_store(LADDER_FIXTURES) do |store|
       assert_empty store.scan("pineapple").fetch("matched_ids")
       # The vocabulary intersection drives the query; a partial-vector-style
@@ -96,9 +85,6 @@ class MemoryRepositoryAdapterTest < Minitest::Test
   end
 
   def test_sensitive_records_are_matched_never_injected_never_decrypted
-    # P11-25/C8: the restricted record's metadata class genuinely matches the
-    # query (non-vacuous), yet the scan never decrypts it and it never enters
-    # candidates.
     fixtures = [
       {"memory_id" => "exp.credential-rotation", "record_version" => 1, "epoch" => "experience",
        "classification" => "restricted", "match_keys" => %w[procedure],
@@ -165,9 +151,6 @@ class MemoryRepositoryAdapterTest < Minitest::Test
   end
 
   def test_ci_profile_passes_on_the_real_adapter_with_the_exact_ladder
-    # P11-24/E1 over the real surface: injection correctness — the decisive
-    # turn's prompt carries exactly the records the real retrieval + policy
-    # decided, marks match, no-memory cells inject nothing.
     report = shared_report
     assert report.passed?
     assert_equal "injection_correctness", report.to_h.fetch("decisive_metric")
@@ -203,9 +186,6 @@ class MemoryRepositoryAdapterTest < Minitest::Test
   end
 
   def test_ci_profile_hard_zero_sweep_on_the_real_adapter
-    # P11-25: sensitive/unauthorized recall zero in every cell; the restricted
-    # record is matched (non-vacuous) in every treatment but never injected and
-    # never decrypted.
     report = shared_report
     %w[none experience knowledge wisdom].each do |treatment|
       entry = cell(report, "agent.memory.real-sensitive-guard", treatment)

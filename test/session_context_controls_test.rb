@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/session_edit_plans'
 
-# Phase 3 work item 1: typed context-control semantics at the session layer.
 class SessionContextControlsTest < Minitest::Test
   CONTROLS = Tamoz::Agent::SessionContextControls
   RECORDS = Tamoz::Agent::SessionRecords
   THREAD = "thread.controls"
 
   class ScriptedModel
+    include SessionEditPlans
+
     attr_reader :calls
 
     def initialize(digest, summary)
@@ -31,52 +33,6 @@ class SessionContextControlsTest < Minitest::Test
       else
         JSON.generate("answer" => "value is 2", "satisfied" => true, "evidence" => ["app.rb"])
       end
-    end
-
-    private
-
-    def discovery
-      {
-        "goal" => "read the current value",
-        "done_when" => ["app.rb has been read"],
-        "steps" => [
-          {
-            "id" => "look",
-            "purpose" => "read the file",
-            "tool" => "read_file",
-            "arguments" => {"path" => "app.rb"},
-            "verification" => "the digest is present"
-          }
-        ]
-      }
-    end
-
-    def action
-      {
-        "goal" => "set value to 2",
-        "done_when" => ["app.rb contains value = 2 and the check passes"],
-        "steps" => [
-          {
-            "id" => "edit",
-            "purpose" => "apply the exact replacement",
-            "tool" => "apply_patch",
-            "arguments" => {
-              "path" => "app.rb",
-              "expected_sha256" => @digest,
-              "before" => "value = 1",
-              "after" => "value = 2"
-            },
-            "verification" => "the receipt reports the new digest"
-          },
-          {
-            "id" => "check",
-            "purpose" => "run the configured check",
-            "tool" => "run_check",
-            "arguments" => {"name" => "answer"},
-            "verification" => "the check exits zero"
-          }
-        ]
-      }
     end
   end
 

@@ -2,33 +2,14 @@
 
 require_relative "test_helper"
 
-# P18 (H4/C5 + C3/C6) — surface equivalence. The host is a RE-ORG, not a
-# surface change: the model-visible ids and descriptions exposed through the
-# host are byte-identical to the P18-start committed fixture (captured at
-# `a6ffe04`, the P18-start baseline after P11–P14 close) — never against a
-# self-computed in-memory expectation.
-#
-# Also covers the sealed-registry / closed-world guarantees at the host level:
-# a forged registration fails, and the host wraps only non-ToolError
-# exceptions (C7).
-#
-# This file also owns the binding layer (P15-W, docs/P18_CAPABILITY_HOST_PLAN.md
-# §9): how the host is wired into real session construction — surface order,
-# source split, admission bounding, per-source routing, and exception semantics.
-# Host and binding layers stay in one class deliberately (audit cluster 1:
-# they assert the same surface from two layers), so the size gate is waived.
-
 # rubocop:disable Metrics/ClassLength
 class CapabilityHostTest < Minitest::Test
   Core = Tamoz::Core
   Capability = Core::Capability
-  P18_START_FIXTURE = ROOT.join(
-    "test", "fixtures", "p18_start_toolbox_surface.json"
+  TOOLBOX_START_SURFACE = ROOT.join(
+    "test", "fixtures", "toolbox_start_surface.json"
   )
 
-  # A descriptor honouring exactly the P10 §3 duck-type contract: id, name,
-  # source_id, definition_digest, effect_class. Nothing more — a host that
-  # reads a richer field would reject a conforming caller.
   Descriptor = Struct.new(:id, :name, :source_id, :definition_digest, :effect_class)
 
   # Records every call the session routes to the MCP side, so "the decision
@@ -95,8 +76,6 @@ class CapabilityHostTest < Minitest::Test
     }
   end
 
-  # Build the host's sources from the toolbox's descriptor data + allowed
-  # tools (the P8 admission set is the toolbox's already-derived surface).
   def host_from_toolbox(toolbox)
     sources = []
     local_descriptors = toolbox.descriptions.keys.sort.map do |name|
@@ -157,13 +136,10 @@ class CapabilityHostTest < Minitest::Test
     )
   end
 
-  # H4: the model-visible surface through the host matches the P18-start
-  # committed fixture (names + read-only split; description text lives in the
-  # toolbox, covered by the fixture test below).
-  def test_host_surface_is_byte_identical_to_the_p18_start_fixture
+  def test_host_surface_is_byte_identical_to_the_recorded_start_surface
     with_toolbox do |toolbox|
       host = host_from_toolbox(toolbox)
-      fixture = JSON.parse(File.read(P18_START_FIXTURE))
+      fixture = JSON.parse(File.read(TOOLBOX_START_SURFACE))
 
       assert_equal fixture.fetch("names"), host_surface(host).fetch("names")
       assert_equal(
@@ -173,12 +149,9 @@ class CapabilityHostTest < Minitest::Test
     end
   end
 
-  # H4b: the live toolbox surface equals the committed fixture — the re-org
-  # did not change the toolbox itself, and the fixture is the honest
-  # P18-start baseline.
   def test_live_toolbox_surface_matches_the_committed_fixture
     with_toolbox do |toolbox|
-      fixture = JSON.parse(File.read(P18_START_FIXTURE))
+      fixture = JSON.parse(File.read(TOOLBOX_START_SURFACE))
       live = toolbox_surface(toolbox)
 
       assert_equal fixture.fetch("names"), live.fetch("names")
@@ -293,9 +266,6 @@ class CapabilityHostTest < Minitest::Test
     end
   end
 
-  # H6 (critic F5): the REAL host dispatch success path — a bound dispatcher
-  # runs validate then execute through `CapabilityHost#dispatch` and returns
-  # the typed result.
   def test_real_host_dispatch_success_path
     with_toolbox do |toolbox|
       host = host_from_toolbox(toolbox)
@@ -306,9 +276,6 @@ class CapabilityHostTest < Minitest::Test
     end
   end
 
-  # H6 (critic F5): a typed ToolError (D-7 taxonomy) raised by a real
-  # dispatcher passes through `CapabilityHost#dispatch` with class AND
-  # message bytes identical — the host does not wrap it.
   def test_real_host_typed_error_passes_through_unchanged
     with_toolbox do |toolbox|
       host = host_from_toolbox(toolbox)
@@ -323,8 +290,6 @@ class CapabilityHostTest < Minitest::Test
     end
   end
 
-  # C7 (critic F5): an untyped exception from a real dispatcher is wrapped at
-  # the boundary as ToolError; no raw RuntimeError escapes the host.
   def test_real_host_wraps_untyped_errors
     with_toolbox do |toolbox|
       host = host_from_toolbox(toolbox)
@@ -351,8 +316,6 @@ class CapabilityHostTest < Minitest::Test
     end
   end
 
-  # A toolbox with skills splits into two built-in sources — `local` and
-  # `skill:<epoch>` — while the model-visible ids stay bare (P18 C5).
   def test_skill_tools_register_under_the_skill_source_with_bare_ids
     Dir.mktmpdir("tamoz-binding-skills") do |directory|
       root = File.join(directory, "workspace")
@@ -494,8 +457,6 @@ class CapabilityHostTest < Minitest::Test
         binding.execute(nil, "read_file", {"path" => "a.txt"})
       end
 
-      # The host's own `dispatch` still wraps, exactly as P18 shipped it: this
-      # asserts the two paths differ on purpose rather than by accident.
       assert_raises(Tamoz::Tools::ToolError) do
         binding.host.dispatch("read_file", {"path" => "a.txt"}, context: nil)
       end
@@ -650,8 +611,6 @@ class CapabilityHostTest < Minitest::Test
     end
   end
 
-  # A real per-source dispatcher implementing the P18 interface:
-  # validate(descriptor, arguments) + execute(descriptor, arguments, context:).
   def real_dispatcher
     Object.new.tap do |dispatcher|
       dispatcher.define_singleton_method(:validate) do |descriptor, arguments|

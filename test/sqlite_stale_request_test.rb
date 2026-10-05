@@ -2,19 +2,7 @@
 
 require_relative "test_helper"
 
-# DR-4 acceptance (F1-F6): a stale durable request — enqueued for a thread state that
-# no longer matches at claim/recover time — fails as a TERMINAL request value inside
-# the claim (or recover) transaction, never as an exception out of run_next, never as
-# a silent re-claim, never a wedged queue. Covers the claim-time validator (C1/C3),
-# the StaleRequestError class boundary (C2), the checkpointer-owned single-transaction
-# terminal-fail (D2/C5), the recover-path validation (C4), the FIFO unblock, the
-# atomicity at the new seams (F3/F5), and the CLI typed-reason rendering (D3).
-# The one exception: a :turn whose only verdict is "not terminal" is EARLY, not
-# stale — the claim defers it instead of failing it (see the early-turn case below).
 class SQLiteStaleRequestTest < Minitest::Test
-  # F1 shape 1 (compiled.rb:938 path): a resume whose answers no longer match the
-  # current interrupts terminal-fails at claim; no exception, thread untouched,
-  # never observably claimed, subsequent drain is empty.
   def test_stale_resume_against_paused_different_generation_terminal_fails_at_claim
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.d6-shape1"
@@ -27,8 +15,6 @@ class SQLiteStaleRequestTest < Minitest::Test
         request_id: "request.stale-resume",
         operation: :resume
       )
-      # Owner B advances the thread directly so the queued resume stays queued
-      # (the D-6 two-owner shape): answer index 0, re-pausing at [(tid,1)].
       advance_resume(app, store, thread, {tid => {0 => "b1"}})
       latest_before = app.state(thread:)
       assert_equal 1, latest_before.interrupts.first.call_index
@@ -62,12 +48,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # F1 shape 2 (compiled.rb:527 path): a stale resume against a completed checkpoint
-  # terminal-fails at claim. (A RUNNING latest checkpoint with a queued resume behind
-  # it is unreachable through the FIFO claim — the running request ahead of it is
-  # returned by run_next first and must resolve before the resume is selected; the
-  # predicate pins the running-target precondition directly in
-  # test_shared_predicate_matches_the_precondition_sites.)
   def test_stale_resume_against_completed_checkpoint_terminal_fails_at_claim
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.d6-shape2"
@@ -89,7 +69,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # F2 (:retry latent defect, compiled.rb:567 path).
   def test_stale_retry_after_the_target_recovered_terminal_fails_at_claim
     with_runner(flaky_definition) do |store, app, runner|
       thread = "thread.retry-stale"
@@ -112,11 +91,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # F6 P2: stale :continue / :fork terminal-fail at claim. A :turn whose only
-  # verdict is "not terminal" is EARLY, not stale — it arrived while the thread
-  # was still working. The claim skips it (it stays queued, never forks the
-  # live chain) and it runs once the thread settles, so a message sent mid-turn
-  # is deferred rather than dropped.
   def test_an_early_turn_waits_for_the_thread_to_settle_then_runs
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.stale-turn"
@@ -194,8 +168,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-08: :redirect is never claim-time validated; its wait condition (745) stays a
-  # propagating CheckpointConflictError and is never a terminal value.
   def test_redirect_wait_is_not_validation_and_never_terminal_fails
     with_runner(request_definition) do |store, app, runner|
       thread = "thread.redirect-wait"
@@ -232,8 +204,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-09: FIFO wedge unblocks — stale requests terminal-fail in order and real work
-  # behind them proceeds.
   def test_fifo_wedge_unblocks_stale_requests_in_order_and_real_work_proceeds
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.fifo-wedge"
@@ -267,7 +237,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-10: negative control — a healthy resume is never terminal-failed.
   def test_healthy_resume_is_not_stale
     with_runner(multi_interrupt_definition) do |_store, app, runner|
       thread = "thread.healthy"
@@ -288,10 +257,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-11: predicate condition (c) — re-answering an index already present in
-  # resume_values is stale. Exercised directly on the shared predicate (the executor
-  # never re-pauses at an already-answered index, so the store cannot reach this state
-  # through the ordinary flow; the claim path uses the same predicate — DR4-12).
   def test_predicate_condition_c_rejects_an_answer_already_merged
     with_runner(multi_interrupt_definition) do |_store, app, _runner|
       checkpoint = paused_checkpoint(
@@ -307,8 +272,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-19: the class split — the four precondition sites raise StaleRequestError;
-  # the redirect wait, fork-source-missing, and thread-missing stay CheckpointConflictError.
   def test_stale_request_error_covers_exactly_the_four_precondition_sites
     with_runner(request_definition) do |store, app, _runner|
       thread = "thread.class-split"
@@ -363,8 +326,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-12: one shared predicate serves claim-time AND the execution precondition
-  # sites without drift.
   def test_shared_predicate_matches_the_precondition_sites
     with_runner(multi_interrupt_definition) do |store, app, _runner|
       thread = "thread.predicate"
@@ -414,8 +375,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-13: validator return contract — nil or a bounded string; anything else fails
-  # closed with no partial writes.
   def test_claim_validator_return_contract_fails_closed
     with_runner(multi_interrupt_definition) do |store, _app, runner|
       thread = "thread.validator"
@@ -456,8 +415,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-14/32: the queued -> failed edge exists ONLY inside the claim transaction; the
-  # public fenced transition API still rejects it.
   def test_queued_to_failed_edge_is_only_reachable_inside_the_claim_transaction
     with_runner(multi_interrupt_definition) do |store, _app, runner|
       thread = "thread.edge"
@@ -500,8 +457,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-15: terminal payload shape is canonical, digest-protected, and round-trips
-  # through a fresh adapter; a failed request carries no success response.
   def test_terminal_error_payload_shape_round_trips_through_a_fresh_adapter
     Dir.mktmpdir("tamoz-stale-roundtrip") do |directory|
       path = File.join(directory, "tamoz.db")
@@ -540,8 +495,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-16: the claim-time path and the post-claim backstop serialize byte-identical
-  # terminal payloads for the same cause.
   def test_claim_time_and_backstop_terminal_payloads_are_byte_identical
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread_a = "thread.payload-a"
@@ -585,8 +538,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-17: the claim-validation transition evidence is recorded exactly once with the
-  # reason and the checkpoint the validator saw; no claimed row exists.
   def test_claim_validation_transition_evidence_is_recorded_once
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.evidence"
@@ -629,8 +580,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-18: a terminal-failed request is never re-claimable; identical-input duplicate
-  # delivery returns the prior outcome; different-input duplicates still conflict.
   def test_terminal_failed_request_is_never_reclaimed_and_duplicates_return_prior_outcome
     with_runner(multi_interrupt_definition) do |store, _app, runner|
       thread = "thread.durable-idempotent"
@@ -658,8 +607,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-24: recover validates — a recovered stale claimed request terminal-fails
-  # INSIDE the recover transaction, never re-executes.
   def test_recover_of_a_stale_claimed_request_terminal_fails
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.recover-stale"
@@ -685,8 +632,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-25: recover of a HEALTHY claimed request still executes normally (no
-  # over-validation).
   def test_recover_of_a_healthy_claimed_request_executes_normally
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.recover-healthy"
@@ -712,10 +657,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # F3/F5: a kill inside the claim transaction (simulated by a fault-injector raise,
-  # which rolls back the exact same SQLite transaction a SIGKILL would) leaves the
-  # request queued with NO partial evidence; the restart drain re-validates and
-  # terminal-fails exactly once.
   def test_kill_inside_the_claim_transaction_leaves_queued_or_failed_never_partial
     %i[after_begin before_commit].each do |seam|
       Dir.mktmpdir("tamoz-stale-kill") do |directory|
@@ -789,8 +730,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-A1: two owners draining the same stale request — the lease serializes the
-  # claim; the second owner observes the terminal outcome, never a double write.
   def test_two_owner_claim_race_observes_exactly_one_terminal_outcome
     with_runner(multi_interrupt_definition) do |store, _app, runner|
       thread = "thread.race"
@@ -822,8 +761,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR4-A4: a stale request never takes down a second unrelated thread in the same
-  # drain loop.
   def test_a_stale_request_does_not_poison_an_unrelated_thread
     with_runner(multi_interrupt_definition) do |_store, app, runner|
       thread_one = "thread.isolated-one"
@@ -846,8 +783,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # D3 / DR4-29: the CLI drain renders the typed reason from terminal_error once and
-  # never re-attempts the failed request; the drain terminates cleanly.
   def test_cli_drain_renders_the_typed_reason_and_does_not_re_resume
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.cli"
@@ -908,12 +843,6 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # DR-4 critic hardening: in the durable claim->execute window the checkpoint can
-  # change between claim and merge (lease expiry + an owner-B write), so an
-  # answer/index mismatch at the DURABLE merge must surface as StaleRequestError
-  # (the runner's backstop then terminal-fails it) — never as an escaping
-  # InvalidUpdateError, the D-6 signature. The EPHEMERAL path keeps
-  # InvalidUpdateError for direct caller bugs (pinned by graph_interrupt_test).
   def test_durable_resume_merge_mismatch_is_stale_request_error
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.drift-window"

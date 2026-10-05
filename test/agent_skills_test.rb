@@ -2,8 +2,6 @@
 
 require_relative "test_helper"
 
-# P9-A: the inert skill compiler, its digests, its resource index, and the
-# stage-1 catalog. Adversarial containment lives in agent_skills_adversarial_test.rb.
 class AgentSkillsTest < Minitest::Test
   Skills = Tamoz::Skills
 
@@ -107,7 +105,6 @@ class AgentSkillsTest < Minitest::Test
     refute_equal content_changed, mode_changed, "the executable bit is part of identity"
   end
 
-  # A claimed version cannot prevent a same-version content swap (SKILLS_DESIGN §3).
   def test_same_version_content_swap_changes_identity_and_epoch
     write_skill(@operator, "fix-answer")
     before = compile

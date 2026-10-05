@@ -88,8 +88,6 @@ class McpElicitationTest < Minitest::Test
     )
   end
 
-  # --- §7 descriptor shape ------------------------------------------------------
-
   def test_build_produces_the_durable_interrupt_descriptor_shape
     interrupt = Elicitation.build(
       descriptor: descriptor,

@@ -2,10 +2,6 @@
 
 require_relative "test_helper"
 
-# P11 probes P11-05..P11-09, P11-16..P11-18, P11-06: the lexical index table,
-# the DC-3 one-transaction append, the SQL authorization-before-ranking filters
-# (decryption boundary), the honest-searchable claim, migration ordinal 2 +
-# monotonic ordering, correction/head-join recall, and the purge owner.
 class MemoryStoreTest < Minitest::Test
   NAMESPACE = "tamoz.memory.acme"
   CALLER = {
@@ -38,8 +34,6 @@ class MemoryStoreTest < Minitest::Test
     database
   end
 
-  # A deterministic protection codec (XOR) with a decrypt counter — the
-  # decryption-boundary instrumentation target (P11-07).
   class CountingProtection
     attr_reader :decrypts, :encrypts
 
@@ -111,18 +105,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_migration_2_creates_the_index_table_and_ordinals_are_monotonic
-    # P11-06: CURRENT_VERSION moved 1 -> 2 through a checksummed MIGRATION_2;
-    # P13: CURRENT_VERSION moved 2 -> 3 through MIGRATION_3 (scheduler tables);
-    # P14: CURRENT_VERSION moved 3 -> 4 through MIGRATION_4 (stream tables);
-    # comms moved 5 -> 6 through MIGRATION_6; ADR-049 moved 8 -> 9 and 9 -> 10
-    # through MIGRATION_9/10; the JCS digest-rule cutover moved 10 -> 11
-    # through MIGRATION_11; situation scopes moved 11 -> 12 through
-    # MIGRATION_12; the old stream engine's retirement moved 12 -> 13 through
-    # MIGRATION_13 (T8.3); the verified artifact store moved 14 -> 15 through
-    # MIGRATION_15 (P3); effect logical/attempt identities moved 15 -> 16
-    # through MIGRATION_16. The monotonic-ordering guard makes ordinal reuse
-    # impossible.
-    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, Tamoz::SQLite::Migrator::CURRENT_VERSION
     assert_equal (1..Tamoz::SQLite::Migrator::CURRENT_VERSION).to_a,
                  Tamoz::SQLite::Migrator.migration_ordinals
 
@@ -153,9 +135,6 @@ class MemoryStoreTest < Minitest::Test
     ], verification_columns
     database.close
 
-    # A pre-P11 database (schema version 1) upgrades in place with existing
-    # Store data intact: build a genuine v1 database from the real MIGRATION_1,
-    # then let the adapter migrate it all the way forward.
     old = File.join(@directory, "old.db")
     database = build_legacy_database(old, through: 1)
     bytes = Tamoz::StateCodec.new.dump({ "value" => 1 })
@@ -178,17 +157,7 @@ class MemoryStoreTest < Minitest::Test
     upgraded.close
   end
 
-
-  # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1). A pre-JCS database
-  # carrying circuit rows migrates forward: MIGRATION_11 registers the digest
-  # epoch, clears the canonical-JSON-digest circuit rows, and the reopened
-  # connection verifies. (The stream-engine rows MIGRATION_11 once cleared are
-  # gone with the tables themselves — MIGRATION_13 retires them, T8.3.)
   def test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows
-    # JCS digest-rule cutover (T0.1): a genuine pre-JCS database built from
-    # MIGRATION_1..10 carries a circuit row and a real memory row; the reopen
-    # runs MIGRATION_11 (epoch + clears) AND MIGRATION_12 (situation columns)
-    # against them.
     path = File.join(@directory, "cutover.db")
     database = build_legacy_database(path, through: 10)
     database.execute(
@@ -213,8 +182,6 @@ class MemoryStoreTest < Minitest::Test
     assert_equal 0, database.get_first_value(
       "SELECT COUNT(*) FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'"
     )
-    # T8.3: the old engine's tables are gone after MIGRATION_13; v14 adds its
-    # verification table separately.
     stream_tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name LIKE 'tamoz_stream_%' " \
       "AND name != 'tamoz_stream_verifications'"
@@ -237,10 +204,6 @@ class MemoryStoreTest < Minitest::Test
     upgraded.close
   end
 
-  # T0.3: situation-scoped records are bound by entity type (default
-  # relatedness authority: same tenant AND same entity type). A situation-
-  # scoped caller retrieves only its own entity type; an ordinary caller never
-  # sees the situation dimension at all.
   def test_situation_scoped_records_are_bound_by_entity_type
     admit(memory_id: "s1",
           scopes_situation_type: "equipment", scopes_entity_type: "compressor",
@@ -269,10 +232,6 @@ class MemoryStoreTest < Minitest::Test
     assert_empty found
   end
 
-  # T0.3: ordinary memory and situation memory are disjoint. The boundary is
-  # enforced on BOTH sides of the retrieve — a situation caller never falls
-  # back to general memory, and a general caller never inherits situation
-  # experience.
   def test_situation_and_ordinary_memory_are_disjoint
     admit(memory_id: "general", statement_search: "deployment canary")
     admit(memory_id: "situation",
@@ -289,9 +248,6 @@ class MemoryStoreTest < Minitest::Test
     assert_equal ["situation"], situation.map { |row| row.fetch("memory_id") }
   end
 
-  # T0.3: a partial situation identity is a boundary that cannot be enforced,
-  # so retrieval refuses it instead of silently widening. An explicit nil is
-  # the same as a missing key (value-blind completeness would leak).
   def test_partial_situation_identity_is_refused
     assert_raises(Tamoz::ConfigurationError) do
       @repo.search(caller: CALLER.merge(entity_type: "compressor"), query: {})
@@ -349,9 +305,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_append_writes_store_version_and_index_row_in_one_transaction
-    # P11-05: one admitted record = exactly one Store version row AND one index
-    # row, in one transaction (DC-3). A fault inside the transaction rolls both
-    # back — no best-effort two-write.
     entry = admit
     assert_equal 1, entry.version
 
@@ -378,8 +331,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_version_append_increments_and_original_bytes_never_edited
-    # P11-01 at the repository layer: every update appends record_version + 1;
-    # the original version's bytes stay byte-identical.
     admit
     original = @store.get(NAMESPACE, "experience/m1").value
     @repo.append(
@@ -397,9 +348,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_search_authorizes_in_sql_before_any_materialization_or_decryption
-    # P11-07/P11-08: every filter dimension independently removes its records;
-    # the caller authority is bound as parameters; sensitive rows are never
-    # decrypted during a scan.
     admit(memory_id: "mine", statement_search: "deployment rollout canary")
     admit(memory_id: "other-tenant", scopes_tenant: "other", statement_search: "deployment rollout")
     admit(memory_id: "other-user", scopes_user: "bob", statement_search: "deployment")
@@ -443,7 +391,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_search_filters_are_bound_parameters_not_interpolated
-    # P11-08: a SQL-injection-shaped scope value changes nothing.
     admit(memory_id: "mine", statement_search: "deployment")
     admit(memory_id: "x", scopes_user: "alice' OR '1'='1", statement_search: "deployment")
     result = @repo.search(caller: CALLER, query: {terms: ["deploy"]})
@@ -489,9 +436,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_correction_leaves_active_recall_and_historical_read_works
-    # P11-16 at the repository layer: after a correction append, the old
-    # version is not head, so the index head-join excludes it from active
-    # recall; a historical read still works.
     @repo.append(
       record: {"memory_id" => "r", "statement" => "wrong content"},
       index: index_row(memory_id: "r", statement_search: "wrong content"),
@@ -512,8 +456,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_sensitive_record_never_stores_searchable_statement_text
-    # P11-05/P11-25: sensitive records carry NULL statement_search; the raw
-    # statement bytes live only in the Store's protected payload.
     admit(memory_id: "secret", sensitivity: "sensitive", statement_search: nil, searchable: false)
     row = @repo.index_row(NAMESPACE, "secret", 1)
     assert_nil row.statement_search
@@ -533,9 +475,6 @@ class MemoryStoreTest < Minitest::Test
   end
 
   def test_purge_refuses_before_retention_and_removes_ciphertext_after
-    # P11-18: before the retention boundary the purge refuses with the
-    # StoreConflictError family and emits NO receipt; after it, the ciphertext
-    # version rows AND index rows are physically gone and a receipt is emitted.
     admit(memory_id: "doomed", statement_search: "deployment")
     @store.delete(NAMESPACE, "experience/doomed", if_version: 1)
 

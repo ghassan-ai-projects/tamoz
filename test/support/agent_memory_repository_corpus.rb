@@ -3,18 +3,6 @@
 module Tamoz
   module Evals
     module Harness
-      # P11-ED: the real-adapter treatment corpus. Same suite identity and
-      # mandatory `treatments.expected_delta` (E8) as the DR-3 memory corpus,
-      # but the seed records are WORD-ALIGNED to their tasks: the production SQL
-      # search (P11-B) ANDs query terms at word boundaries over the indexed
-      # statement, and a sensitive record's searchable surface is only its
-      # layer/class (sensitive statements are never indexed). Every record's
-      # `match_keys` are the vocabulary the real adapter queries with, so the
-      # treatment ladder and the non-vacuous hard-zero sweep are deterministic
-      # over the REAL retrieval path. The runners reuse the DR-3 cell runner
-      # (`AgentSmokeCorpus#execute` with the store/memory_config/memory_capture
-      # seam); per-cell isolation, expected_delta, and the CI=injection /
-      # live=attribution split are preserved.
       class AgentMemoryRepositoryCorpus < AgentMemoryCorpus
         SUITE_ID = Verifier::MEMORY_EVAL_SUITE_ID
         SUITE_VERSION = 1

@@ -6,8 +6,6 @@ require 'tmpdir'
 require_relative 'test_helper'
 require_relative '../agenteval/research/pack'
 
-# The research pack's offline controls (docs/deep-research-2026-09-30/EVAL.md §3): every grader separates a planted
-# good report from a planted bad one before any real-model number is read.
 # rubocop:disable Metrics/AbcSize -- each row reads the pre-registered shape from several sides.
 class AgentevalResearchPackTest < Minitest::Test
   Pack = Agenteval::Research::Pack

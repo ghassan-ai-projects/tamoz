@@ -1,36 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/scripted_generation'
+require_relative 'support/tool_recovery_fixture'
 require "digest"
 
-# Fixed behavioural case for the tool-error surfacing and recovery capability.
-# See docs/reviews/AGENT_TOOL_ERROR_RECOVERY_CORRECTION.md.
-#
-# The capability has three parts and each is proved here:
-#   D-7a  a terminal node failure names something actionable on the CLI;
-#   D-7b  a `ToolError` discloses its own message through `safe_message`, while a
-#         `ProtocolError` and a plain `StandardError` still do not;
-#   D-7c  a repairable `ToolError` becomes typed evidence and re-enters the *existing*
-#         bounded repair loop, while a policy rejection and a denial stay terminal.
 class AgentToolErrorRecoveryTest < Minitest::Test
-  class ScriptedModel
-    attr_reader :calls
+  include ToolRecoveryFixture
 
-    def initialize(plan:, review:, verify:)
-      @responses = {plan:, review:, verify:}.transform_values(&:dup)
-      @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      value = @responses.fetch(stage).shift
-      raise "missing #{stage} response" unless value
-
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
+  class ScriptedModel < ScriptedGeneration::QueueModel
   end
-
-  # --- D-7b: message disclosure policy -------------------------------------------
 
   def test_tool_error_discloses_its_own_message_and_other_errors_do_not
     disclosed = Tamoz::NodeError.new(
@@ -82,8 +61,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
     assert_equal Encoding::UTF_8, disclosed_invalid.encoding
     assert disclosed_invalid.valid_encoding?
   end
-
-  # --- D-7c: taxonomy ------------------------------------------------------------
 
   def test_taxonomy_marks_only_argument_failures_repairable
     refute Tamoz::Agent::ToolError.new("x").repairable?
@@ -145,8 +122,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
       end
     end
   end
-
-  # --- D-7c: ephemeral runtime ---------------------------------------------------
 
   def test_runtime_repairs_from_a_patch_text_miss_and_passes_the_check
     Dir.mktmpdir("tamoz-tool-repair") do |root|
@@ -301,8 +276,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
     end
   end
 
-  # --- D-7c: durable session -----------------------------------------------------
-
   def test_session_repairs_from_a_patch_text_miss_and_records_typed_evidence
     with_workspace do |root, adapter|
       write_value(root, 40)
@@ -421,8 +394,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
     end
   end
 
-  # --- D-7a: the operator is told something actionable ---------------------------
-
   def test_cli_reports_a_specific_reason_for_a_terminal_node_failure
     Dir.mktmpdir("tamoz-cli-error") do |directory|
       Dir.mktmpdir("tamoz-cli-outside") do |outside|
@@ -475,20 +446,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
   end
 
   private
-
-  def scripted_model(plans:, reviews:, final_satisfied:)
-    ScriptedModel.new(
-      plan: plans,
-      review: Array.new(reviews) { accepted_review },
-      verify: [
-        {
-          "answer" => "Broken.answer inspection",
-          "satisfied" => final_satisfied,
-          "evidence" => ["controller-owned evidence"]
-        }
-      ]
-    )
-  end
 
   def runtime(root, model, ask: ->(**) { "approve" }, checks: answer_check)
     Tamoz::Agent.build(
@@ -601,21 +558,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
       "expected_sha256" => digest,
       "before" => before,
       "after" => after
-    }
-  end
-
-  def accepted_review
-    {"decision" => "accept", "issues" => [], "rationale" => "bounded and independently verifiable"}
-  end
-
-  def answer_check
-    {
-      "answer" => [
-        RbConfig.ruby,
-        "-I.",
-        "-e",
-        %q{require './broken'; abort("wrong #{Broken.answer}") unless Broken.answer == 42}
-      ]
     }
   end
 

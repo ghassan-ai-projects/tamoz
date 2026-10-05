@@ -1,14 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/mcp_server_fixture'
+require_relative 'support/process_group_probe'
+require_relative "support/scripted_generation"
+require_relative "support/session_plan"
 
-# P10 §10.2 adversarial rows driven through the slice-4 glue: the caller-supplied
-# McpCapabilitySource inside the durable session, against the REAL test server on
-# the REAL wire. Every row proves the typed taxonomy survives the glue: the
-# caller's executor maps tamoz-mcp's taxonomy onto the agent surface, the effect
-# journal grants one attempt, the circuit counts across callers, and teardown
-# leaves no process behind.
 class AgentMcpAdversarialTest < Minitest::Test
+  include McpServerFixture
+
+  include ProcessGroupProbe
+
+  include SessionPlan
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Catalog = Tamoz::Mcp::Catalog
   Supervisor = Tamoz::Mcp::Supervisor
@@ -26,22 +30,7 @@ class AgentMcpAdversarialTest < Minitest::Test
     MCP_TEST_SERVER_PROTOCOL_VERSION MCP_TEST_SERVER_GRANDCHILD
   ].freeze
 
-  class ScriptedModel
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
+  class ScriptedModel < ScriptedGeneration::Model
   end
 
   def setup
@@ -53,19 +42,6 @@ class AgentMcpAdversarialTest < Minitest::Test
     FLAG_NAMES.each { |name| ENV.delete(name) }
     @saved_flags.each { |name, value| ENV[name] = value }
     FileUtils.remove_entry(@dir)
-  end
-
-  def build_config(answer_file, overrides = {})
-    ServerConfig.new(
-      **{
-        server_id: "test-server",
-        transport: :stdio,
-        command: RbConfig.ruby,
-        arguments: [SERVER_SCRIPT, answer_file],
-        working_directory: @dir,
-        env_allowlist: BASE_ENV_ALLOWLIST + FLAG_NAMES
-      }.merge(overrides)
-    )
   end
 
   def descriptor_for(snapshot, name, effect_class: :unknown_effects)
@@ -150,33 +126,8 @@ class AgentMcpAdversarialTest < Minitest::Test
     Tamoz::Agent.build_approval_engine(profile_name: "auto")
   end
 
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
-  end
-
   def accepted_review
     {"decision" => "accept", "issues" => [], "rationale" => "sound"}
-  end
-
-  def group_alive?(pid)
-    Process.kill(0, -pid)
-    true
-  rescue Errno::ESRCH
-    false
-  rescue Errno::EPERM
-    true
   end
 
   def approved_outcome(session, outcome, thread:, request_id:)

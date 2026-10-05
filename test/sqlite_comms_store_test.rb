@@ -2,15 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice C (COMMS_TELEGRAM_PLAN §3) — the CommsStore over SQLite (design §13).
-# Every proof is behavioral: real SQLite, the real inbox enqueue seam, restart
-# via a fresh adapter over the same file. The atomicity seams under test:
-# admission shares the enqueue transaction (a replay dedups), prompt
-# consumption inserts its decision in the same transaction (ADR-043), the
-# poll offset never regresses, and the outbox is bounded and single-claim.
-#
-# Each case walks one primitive's whole state machine; the assertions belong
-# to the same scenario.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:disable Metrics/BlockLength, Metrics/ClassLength
 class SQLiteCommsStoreTest < Minitest::Test
@@ -314,9 +305,6 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
-  # A terminal projection releases its reservation (design §12): once the
-  # request completes, its slot returns and the previously-refused admission
-  # goes through.
   def test_a_completed_request_releases_its_slot_for_the_next_admission
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor(limits: { max_open_requests: 1 }).wire, now:)

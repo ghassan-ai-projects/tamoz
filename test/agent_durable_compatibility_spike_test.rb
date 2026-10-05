@@ -3,12 +3,12 @@
 require_relative 'test_helper'
 
 class AgentDurableCompatibilitySpikeTest < Minitest::Test
-  def test_v1_graph_record_and_node_versions_are_explicitly_pinned
+  def test_graph_record_and_node_versions_are_explicitly_pinned
     assert_equal '1', Tamoz::Agent::GraphVersions::GRAPH_VERSION
     assert_equal 2, Tamoz::Agent::SessionRecords::RECORD_VERSION
   end
 
-  def test_v1_session_record_round_trip_preserves_graph_identity
+  def test_session_record_round_trip_preserves_graph_identity
     record = Tamoz::Agent::SessionRecords.build(
       'session',
       session_id: 'compatibility-spike',

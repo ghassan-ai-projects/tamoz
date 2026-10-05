@@ -2,17 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-G — the user-facing documentation is checked against the REAL surface.
-#
-# Stale documentation is not a cosmetic problem: this repository shipped a
-# README claiming the agent "is not yet crash-durable" for months after P6 made
-# it durable, and a SECURITY.md describing an M0 foundation with "not an
-# operational agent" long after the agent could edit files. A doc that
-# describes a product nobody has is worse than no doc, because a reader
-# believes it.
-#
-# So every claim these pages make about the surface is derived from the surface
-# here, and every gap they disclose is derived from the measured audit.
 class DocumentationSurfaceTest < Minitest::Test
   INSTALL = ROOT.join("documentation", "getting-started", "install.md")
   LIMITATIONS = ROOT.join("documentation", "limitations.md")

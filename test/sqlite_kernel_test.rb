@@ -25,6 +25,50 @@ class SQLiteKernelTest < Minitest::Test
     end
   end
 
+  def test_failed_transaction_maps_the_sqlite_cause_and_rolls_back_schema_changes
+    Dir.mktmpdir('tamoz-sqlite-failed-transaction') do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'tamoz.db'))
+      error = assert_raises(Tamoz::SQLite::Error) do
+        adapter.__send__(:transaction, operation: 'test.failed_write') do |transaction|
+          transaction.execute('test.create', 'CREATE TABLE rollback_probe (value TEXT)', [])
+          transaction.execute('test.invalid', 'INSERT INTO absent_table VALUES (1)', [])
+        end
+      end
+
+      assert_instance_of SQLite3::SQLException, error.cause
+      assert_equal 'test.failed_write: SQLite failure SQLite3::SQLException', error.message
+      assert_equal 4, adapter.stats.fetch('available')
+      tables = adapter.__send__(:read, operation: 'test.rollback') do |transaction|
+        transaction.scalar('test.tables', "SELECT COUNT(*) FROM sqlite_master WHERE name = 'rollback_probe'", [])
+      end
+      assert_equal 0, tables
+    ensure
+      adapter&.close
+    end
+  end
+
+  def test_exhausted_busy_transaction_preserves_its_cause_and_returns_the_connection
+    Dir.mktmpdir('tamoz-sqlite-busy-transaction') do |directory|
+      fault = lambda do |point, metadata|
+        if point == :before_begin && metadata.fetch('operation') == 'test.busy'
+          raise SQLite3::BusyException, 'injected busy'
+        end
+      end
+      adapter = Tamoz::SQLite::Adapter.new(
+        path: File.join(directory, 'tamoz.db'), limits: Tamoz::SQLite::Limits.new(retry_limit: 0), fault_injector: fault
+      )
+      error = assert_raises(Tamoz::SQLite::BusyError) do
+        adapter.__send__(:transaction, operation: 'test.busy') { flunk 'busy transaction reached its body' }
+      end
+
+      assert_instance_of SQLite3::BusyException, error.cause
+      assert_equal 'test.busy: SQLite remained busy', error.message
+      assert_equal 4, adapter.stats.fetch('available')
+    ensure
+      adapter&.close
+    end
+  end
+
   def test_rejects_symlink_and_unsafe_permissions_unless_repair_is_explicit
     Dir.mktmpdir("tamoz-sqlite-permissions") do |directory|
       target = File.join(directory, "target.db")

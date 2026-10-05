@@ -9,6 +9,7 @@ stream plane is a separate Go repository, `agentic-stream` (ADR-055); `*.go` ref
 | Why the system is shaped this way | `documentation/adr/README.md` — every decision, grouped by area |
 | What must always hold | `docs/design-v0.1/INVARIANTS.md` |
 | How to write Ruby here | `docs/CODING_STANDARD.md` (enforced by the gates) |
+| How to write and review tests | `docs/test-quality/TESTING_STANDARD.md`; suite bar and findings in `docs/test-quality/` |
 | Lessons earned in real sessions | `.agent/README.md` → `.agent/rules/*.md` |
 | How to set the bar for a task | `docs/templates/QUALITY_BAR.md` |
 | How to delegate to subagents | `docs/subagent-orchestration.md` |

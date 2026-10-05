@@ -11,12 +11,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# P3 exit gates 1-2, 4-6: the witness gateway becomes the transport the effect
-# adapter calls; its signed records are the evidence (B8 — Tamoz's own events
-# stop being evidence). A dummy-request attack (altered frame bytes or an
-# ignored response) breaks the binding; a tampered retained byte fails the
-# durable verified artifact store; forged receipts are rejected; raw model
-# deltas stay off by default. Fixture-labeled throughout.
 class StreamEpisodeWitnessTest < Minitest::Test
   Stream = Tamoz::Stream
   SIGNING_KEY = "test-signing-key-0123456789abcdef"
@@ -191,12 +185,7 @@ class StreamEpisodeWitnessTest < Minitest::Test
     assert_empty deltas, "raw model deltas must stay off by default"
   end
 
-  def test_audit_f3_forged_provider_marker_invalidates_the_artifact
-    # Audit F3 (B8's stated proof, literal): a receipt carrying a forged
-    # provider marker invalidates the stream artifact EVEN with matching
-    # journal digests — the design's "provider: test anywhere in a stream
-    # artifact invalidates the run". The receipt is journal-backed (its
-    # digests verify); only the provider is forged.
+  def test_audit_forged_provider_marker_invalidates_the_artifact
     _events, _terminal, state = run_episode("witness-f3")
     receipt = state.fetch(:model_receipts).first
     forged = receipt.merge("provider" => "test")
@@ -208,7 +197,7 @@ class StreamEpisodeWitnessTest < Minitest::Test
                  "no forged-marker model event crosses the wire"
   end
 
-  def test_audit_f3_real_fixture_provider_is_not_discriminated
+  def test_audit_real_fixture_provider_is_not_discriminated
     # The guard rejects forged markers only — a real fixture receipt carries
     # provider "ollama" + model "local-model" and must still emit (structural
     # separation is the fixture discrimination, not this guard).

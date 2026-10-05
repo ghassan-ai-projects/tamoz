@@ -2,12 +2,6 @@
 
 require_relative 'test_helper'
 
-# Pairing first contact (design §7): a brand-new sender on a pairing-mode
-# surface is never left in silence. The gateway ensures one live hashed
-# challenge per (surface, correspondent, conversation) and names its code in
-# one bounded line while the durable record stays an ignored
-# :pairing_pending observation. `/start <code>` is feedback only — binding
-# activation remains exclusively the operator's approve_pairing.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 class CommsPairingFirstContactTest < Minitest::Test
   Comms = Tamoz::Comms

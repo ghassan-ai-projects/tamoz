@@ -5,11 +5,6 @@ require_relative 'support/comms_gateway_harness'
 require 'delegate'
 require 'securerandom'
 
-# Phase 3 wave B: the typed session context controls are exposed
-# identically-in-meaning on both surfaces — the channel gateway's command
-# table and the durable CLI — over the landed SessionContextControls
-# semantics. The gateway half drives real serve_once passes against a real
-# SQLite runtime database; the CLI half drives the real argv dispatch.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength, Metrics/ClassLength
 class ContextControlExposureTest < Minitest::Test
   include CommsGatewayHarness

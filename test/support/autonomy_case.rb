@@ -307,11 +307,6 @@ module AutonomyCase
     path
   end
 
-  # The fixture CLIENT the channel cases inject through the CLI's
-  # comms_client_factory seam (design §15: tests inject a fixture client rather
-  # than weakening the production origin rule). It is a scripted Telegram Bot
-  # API: getMe/getUpdates/sendMessage/answerCallbackQuery/getWebhookInfo, with
-  # the send-ambiguity switch case 15 needs.
   class FixtureTelegramClient
     attr_reader :sent
     attr_accessor :updates, :webhook_url, :ambiguous_sends

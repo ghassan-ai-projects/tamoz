@@ -34,7 +34,7 @@ class AgentCliMemoryTest < Minitest::Test
     [status, err.string]
   end
 
-  def test_e5_threads_in_one_session_directory_share_memory_only_when_enabled
+  def test_threads_in_one_session_directory_share_memory_only_when_enabled
     spec_row('E5') do
       with_runtime do |runtime|
         session_dir = File.join(runtime.dir, 'sessions')

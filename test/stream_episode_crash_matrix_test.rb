@@ -9,12 +9,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# P1 gate 6: the crash matrix through the fixed graph — a restart re-claims and
-# re-executes the episode, and the journal's LOGICAL key makes a completed
-# receipt reusable (no second provider call) while a started-without-receipt
-# attempt is a typed `unknown` (no blind retry). The crash itself is simulated
-# by seeding the journal's attempt state, exactly as a mid-call process death
-# would leave it.
 class StreamEpisodeCrashMatrixTest < Minitest::Test
   Stream = Tamoz::Stream
 

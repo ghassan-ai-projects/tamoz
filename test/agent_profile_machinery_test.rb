@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/scripted_generation'
+require_relative 'support/profile_session_fixture'
+require_relative "support/session_plan"
 
-# DR-5 P8 profile machinery completion (accepted rev3 plan): post-override
-# role-resolution recording (D1), registry codec v2 + flocked consumption (D2),
-# resume credential-ref hardening (D3). Maps to acceptance R1-R5 and the
-# DR5-01..A5 probe spec.
 class AgentProfileMachineryTest < Minitest::Test
+  include ProfileSessionFixture
+  include SessionPlan
+
   Profile = Tamoz::Agent::Profile
   ProfilePolicyError = Tamoz::Agent::ProfilePolicyError
   ProfileRoleUnavailableError = Tamoz::Agent::ProfileRoleUnavailableError
@@ -38,18 +40,7 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  class ScriptedModel
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-    end
-
-    def generate(stage:, system:, prompt:)
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
+  class ScriptedModel < ScriptedGeneration::Model
   end
 
   def setup
@@ -65,9 +56,6 @@ class AgentProfileMachineryTest < Minitest::Test
 
   # --- R1: post-override role-resolution recording ----------------------------
 
-  # DR5-01: one shared resolution function. build_model and the recorded
-  # profile_roles agree on every cell of the override matrix — the record is
-  # exactly the tuple build_model used (no second resolution path to drift).
   def test_shared_resolution_build_model_and_profile_roles_agree
     profile = load_profile(
       "primary" => {"provider" => "ollama", "model" => "role-primary"},
@@ -112,8 +100,6 @@ class AgentProfileMachineryTest < Minitest::Test
     assert_equal 7, capture.length
   end
 
-  # DR5-01 end-to-end: the durable session record carries the post-override
-  # tuples; the model that ran is the model the record names.
   def test_session_record_records_post_override_roles_and_budgets
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -146,9 +132,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-02: a credential-shaped override value is refused at construction with
-  # ProfilePolicyError, before any session record or checkpoint exists, and the
-  # refusal cites the failing role.
   def test_secret_shaped_override_never_enters_profile_roles
     profile = load_profile("primary" => {"provider" => "ollama", "model" => "gpt-5"})
     models = model_builder(env: {})
@@ -184,8 +167,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-A5: a normal model id passes the gate; a high-entropy value is rejected
-  # per the cited predicates, and the refusal explains the entropy floor.
   def test_env_secret_gate_distinguishes_normal_ids_from_high_entropy
     profile = load_profile("primary" => {"provider" => "ollama", "model" => "gpt-5"})
     models = model_builder(env: {})
@@ -200,8 +181,6 @@ class AgentProfileMachineryTest < Minitest::Test
     assert_match(/--model/, error.message)
   end
 
-  # DR5-03: profile_id == "legacy" is refused at load; the sentinel semantics in
-  # cli.rb are unchanged (a session record marker, not a loadable profile id).
   def test_legacy_profile_id_refused_at_load
     document = profile_document(ProfileFixture.new(workspace: @workspace, profile_id: "legacy"))
     path = File.join(@dir, "legacy.yaml")
@@ -219,8 +198,6 @@ class AgentProfileMachineryTest < Minitest::Test
     assert_raises(Profile::ValidationError) { Profile.from_authority(tampered) }
   end
 
-  # DR5-04: legacy {} vs profiled {} disambiguated by profile_id; profiled with
-  # zero roles is distinct from "no profile resolution existed".
   def test_legacy_sentinel_and_profiled_empty_roles_are_distinct
     legacy = build_session_record({})
     empty_roles = build_session_record(
@@ -246,10 +223,6 @@ class AgentProfileMachineryTest < Minitest::Test
     assert_equal "gpt-5", with_roles.fetch("profile_roles").fetch("primary").fetch("model")
   end
 
-  # DR5-05: role resolution failure surfaces as the typed
-  # ProfileRoleUnavailableError at session start — before any model I/O, any
-  # checkpoint, any request enqueue — and the store is untouched (no partial
-  # session record).
   def test_unavailable_credential_ref_is_typed_and_leaves_no_partial_session
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -287,10 +260,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR-5 critic corner: a referenced credential that is UNSET must fail typed at
-  # session start even when the GENERIC provider key IS set — the silent generic
-  # fallback is the same divergence class RC-4 fixes at replay, re-introduced at
-  # resolution.
   def test_referenced_credential_unset_fails_typed_even_with_the_generic_key_set
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -305,8 +274,6 @@ class AgentProfileMachineryTest < Minitest::Test
         }
       ))
 
-      # The GENERIC key is set; only the ref-named key is absent. Pre-fix this
-      # silently started the session on the generic key (critic DR5-05 corner).
       without_env_keys("TAMOZ_DOES_NOT_EXIST_XYZ") do
         ENV["OPENAI_API_KEY"] = "sk-generic-fallback-should-not-run"
         err = StringIO.new
@@ -328,10 +295,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR-5 critic blocker: consume_if_candidate! calls Time#iso8601 (a stdlib
-  # extension); the shipped exe/tamoz crashed with NoMethodError in a clean
-  # subprocess because nothing in the agent load chain required "time". Pin the
-  # clean-process load chain (the corpus harness's -I lib paths, no bundler).
   def test_clean_subprocess_load_chain_provides_time_iso8601
     child = <<~'RUBY'
       require "tamoz/agent"
@@ -343,8 +306,6 @@ class AgentProfileMachineryTest < Minitest::Test
     assert_includes output, "ok"
   end
 
-  # DR5-06: budgets recorded per profile — deep-equal to profile.budgets when
-  # present, the documented empty sentinel when absent; no route table invented.
   def test_budgets_recorded_or_empty_sentinel
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -358,8 +319,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-A2: profile_roles construction refuses non-plain values (a model
-  # instance / provider object never reaches a durable record).
   def test_profile_roles_construction_refuses_non_plain_values
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -396,10 +355,6 @@ class AgentProfileMachineryTest < Minitest::Test
 
   # --- R3: consumption recording ----------------------------------------------
 
-  # DR5-07: codec v2 round-trips consumed_by/consumed_at; v1 files read and are
-  # never rewritten on read; a document the codec does not accept — an
-  # out-of-range schema_version, an entry with a key dropped — is refused typed
-  # rather than partially loaded.
   def test_registry_codec_v2_round_trip_and_v1_forward_read
     path = File.join(@dir, "transitions.yaml")
     registry = Profile::TransitionRegistry.new(path:)
@@ -481,9 +436,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-08 / DR5-A3: ONE flocked critical section — concurrent consumers
-  # serialize; the candidate is consumed exactly once and the decision is made on
-  # the current file bytes (a stale before-image is never consumed).
   def test_flocked_consume_is_exactly_once_across_concurrent_writers
     path = File.join(@dir, "transitions.yaml")
     registry = Profile::TransitionRegistry.new(path:)
@@ -564,8 +516,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-A1: flock releases on process death (SIGKILL mid-critical-section); the
-  # lock never wedges the registry and the file stays readable.
   def test_flock_releases_on_process_death
     path = File.join(@dir, "transitions.yaml")
     lock_path = "#{path}.lock"
@@ -610,8 +560,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-09: consumed_by records the ACTUAL request id of the consuming ask —
-  # present in the thread's durable request history.
   def test_consumed_by_is_the_actual_executing_request_id
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -662,10 +610,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-10 + DR5-11: a lost/consumed candidate falls through to pinned replay —
-  # the ask still runs under the old-digest authority, never a typed terminal
-  # error; the thread's record keeps its digest; no re-consume; the burned entry
-  # stays in the registry (audit trail).
   def test_loser_falls_through_to_pinned_replay_and_burned_entry_stays
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -733,9 +677,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-12: dead candidates surfaced at the boundary; consumed entries excluded.
-  # Digests are differentiated by budgets (same tool surface throughout), so the
-  # scripted plan always succeeds and only the authority changes between edits.
   def test_dead_candidates_surfaced_and_consumed_entries_excluded
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -789,8 +730,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-13: boundary rules stay consistent — resume never consumes; ask consumes
-  # exactly once per its own candidate state.
   def test_resume_never_consumes_a_candidate
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -841,9 +780,6 @@ class AgentProfileMachineryTest < Minitest::Test
 
   # --- R4: resume hardening ---------------------------------------------------
 
-  # DR5-14: the ref-named credential resolves IDENTICALLY on pinned replay —
-  # the provider call uses the ref-named key, never the generic fallback; the
-  # snapshot records the NAME, never the VALUE.
   def test_ref_named_credential_resolves_identically_on_pinned_replay
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -882,8 +818,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-15: the reconstructed surface comes from the snapshot, never the current
-  # file — a malicious edited file cannot influence the replay.
   def test_replay_surface_comes_from_snapshot_not_the_current_file
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -915,9 +849,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-16: the EXISTING pinned_authority gate is the resume stop — a changed
-  # digest with no candidate hits the same AdoptionError message as shipped; no
-  # parallel digest check drifts in.
   def test_existing_pinned_authority_gate_is_the_resume_stop
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -945,8 +876,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-A4: the legacy refusal does not break existing legacy-sentinel sessions —
-  # a session whose record carries the sentinel still resumes without --profile.
   def test_legacy_sentinel_session_still_resumes_without_profile
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -967,8 +896,6 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
-  # DR5-18: a repository .tamoz/ suggestion cannot be recorded as a candidate
-  # transition (it is evidence only and refuses to load as authority).
   def test_repository_suggestion_cannot_be_recorded_as_a_candidate
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
@@ -994,11 +921,6 @@ class AgentProfileMachineryTest < Minitest::Test
     Tamoz::Agent::CLI::ModelBuilder.new(env:)
   end
 
-  # Replaces the factory for the duration of the block, appending one entry per
-  # call to `capture` (an Array) and returning a plain struct that answers
-  # model/provider like the real class. `select` picks what is recorded: the
-  # whole kwargs hash by default, or one derived value (DR5-14 records the
-  # environment value the factory was handed, read back as captured[0]).
   def stub_model_factory(capture, select: nil)
     original = Tamoz::Agent::ModelClientFactory.method(:build)
     Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build) do |**kwargs|
@@ -1092,49 +1014,6 @@ class AgentProfileMachineryTest < Minitest::Test
     ).catalog_digest
   end
 
-  def recording_factory(sink)
-    lambda do |options|
-      model = read_factory.call(options)
-      model.singleton_class.prepend(Module.new do
-        define_method(:generate) do |stage:, system:, prompt:|
-          sink << prompt if stage == :plan
-          super(stage:, system:, prompt:)
-        end
-      end)
-      model
-    end
-  end
-
-  def read_factory
-    ->(_options) do
-      ScriptedModel.new(
-        plan: [plan_for("read_file", {"path" => "note.txt"})],
-        review: [accepted_review],
-        verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
-      )
-    end
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
-  end
-
-  def accepted_review
-    {"decision" => "accept", "issues" => [], "rationale" => "the plan is minimal and read-only"}
-  end
-
   def run_cli(argv, workspace:, session_dir:, config_home:, out:, err:,
               input: StringIO.new, factory:, session: nil, allow_changes: false,
               env_overrides: {})
@@ -1143,22 +1022,6 @@ class AgentProfileMachineryTest < Minitest::Test
     global_argv += ["--session", session] if session
     env = {"TAMOZ_CONFIG_HOME" => config_home}.merge(env_overrides)
     Tamoz::Agent::CLI.run(global_argv + argv, out:, err:, input:, env:, model_factory: factory)
-  end
-
-  def session_record(session_dir, thread_id)
-    adapter = Tamoz::SQLite::Adapter.new(
-      path: File.join(session_dir, "#{thread_id}.sqlite3"),
-      limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0)
-    )
-    begin
-      dummy = Object.new
-      def dummy.generate(**) = "{}"
-      toolbox = Tamoz::Agent::Toolbox.new(root: Dir.tmpdir)
-      session = Tamoz::Agent::Session.new(model: dummy, toolbox:, checkpointer: adapter)
-      session.view(thread: thread_id).state.fetch(:session)
-    ensure
-      adapter.close
-    end
   end
 
   def digest_of(value)

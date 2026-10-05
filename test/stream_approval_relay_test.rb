@@ -4,13 +4,6 @@ require_relative "test_helper"
 require "tamoz/stream/approval_relay"
 require "tamoz/comms/surface_descriptor"
 
-# T7 (PLAN_TAMOZ_STREAM_BUILD T7): the approval relay. Approval AUTHORITY
-# stays in the stream; approval DELIVERY moves to Tamoz. The relay renders and
-# delivers the prompt, edits it in place on withdrawal, submits the human's
-# answer with an Idempotency-Key + a signed 11-field assertion
-# (situation-runtime/approval-assertion/v1), refuses a replayed nonce, keeps
-# relay_id != approver_id, and owns escalation. T7.1: the SurfaceDescriptor
-# now expresses affirmative approval with an approver-role allowlist.
 class StreamApprovalRelayTest < Minitest::Test
   Relay = Tamoz::Stream::ApprovalRelay
 
@@ -327,8 +320,6 @@ class StreamApprovalRelayTest < Minitest::Test
                "a spent roster escalates to nobody - the stream owns the deadline"
   end
 
-  # T7.1: the SurfaceDescriptor expresses affirmative approval as a material,
-  # configured security boundary - with an approver-role allowlist, not a flag.
   def test_the_surface_descriptor_accepts_affirmative_approval
     descriptor = Tamoz::Comms::SurfaceDescriptor.build(
       surface_id: "tel-1", revision: 2, transport: {mode: "long_poll", credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},

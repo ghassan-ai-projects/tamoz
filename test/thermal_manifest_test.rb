@@ -6,7 +6,7 @@ require 'tamoz/sqlite'
 require 'support/thermal_tournament'
 require 'support/thermal_manifest'
 
-# Real-world sensor WP-T5: the evidence manifest binds a thermal shadow run to
+# The evidence manifest binds a thermal shadow run to
 # durable evidence (code + domain + model + verdict) in one immutable document,
 # and the parity decision (local path) keeps thermal-lab out of the frozen
 # benchmark protocol.

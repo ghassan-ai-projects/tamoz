@@ -2,16 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-C (ledger §5.5) — the stale staging reaper.
-#
-# Atomic publication stages into a private `.tamoz-*.tmp` beside its target and
-# unlinks it in an `ensure`. SIGKILL runs no `ensure`, so a crash between
-# "staged" and "published" leaves the file behind; the kill matrix has tolerated
-# these since P6 and recorded them as residual risk. This is the sweep.
-#
-# The tests that matter here are the REFUSALS. An agent that deletes files is
-# the thing this project spends most of its effort preventing, so every
-# narrowing rule is proven by planting something the sweep must not touch.
 class ToolboxStagingReaperTest < Minitest::Test
   ANCIENT = Time.now - 3600
 

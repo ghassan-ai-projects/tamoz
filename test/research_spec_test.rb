@@ -37,7 +37,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_p1_no_search_runs_before_the_user_accepts_a_plan
+  def test_no_search_runs_before_the_user_accepts_a_plan
     lead = [{ calls: [wave_call(%w[Q1])] }, { content: 'Waiting.' }, { content: 'Still waiting.' }]
     with_research(lead:) do |session, model, web, _out|
       start_research(session)
@@ -47,7 +47,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_p1_the_lead_has_no_web_tool_and_a_child_has_only_web_tools_and_its_finish
+  def test_the_lead_has_no_web_tool_and_a_child_has_only_web_tools_and_its_finish
     with_research(lead: happy_lead, children: happy_children) do |session, model, _web, _out|
       start_research(session)
       reply(session, 'go')
@@ -57,7 +57,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_p2_an_edit_in_words_changes_the_brief_the_children_receive
+  def test_an_edit_in_words_changes_the_brief_the_children_receive
     revised = plan_call(texts: ['How many people live in Oslo?'])
     lead = [{ calls: [plan_call] }, { calls: [revised] }, { calls: [wave_call(%w[Q1])] },
             { calls: [report_call('Oslo had 717,710 residents at the start of 2025 [C1].')] }]
@@ -79,7 +79,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_p3_stop_at_the_checkpoint_ends_the_turn_with_nothing_searched
+  def test_stop_at_the_checkpoint_ends_the_turn_with_nothing_searched
     with_research(lead: [{ calls: [plan_call] }]) do |session, _model, web, out|
       start_research(session)
       outcome = reply(session, 'stop')
@@ -91,7 +91,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_b2_a_made_up_excerpt_is_refused_until_the_child_quotes_the_page
+  def test_a_made_up_excerpt_is_refused_until_the_child_quotes_the_page
     invented = sources_call('Q1', 'P1', 'Oslo has exactly one million residents according to this page.')
     child = reading_child('Q1', 'Oslo population statistics', SSB_EXCERPT).insert(2, { calls: [invented] })
     lead = [{ calls: [plan_call(texts: ['How many people live in Oslo?'])] }, { calls: [wave_call(%w[Q1])] },
@@ -105,7 +105,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_b2_a_claim_citing_a_read_that_failed_is_refused
+  def test_a_claim_citing_a_read_that_failed_is_refused
     child = [{ calls: [['web_search', { 'query' => 'Oslo population statistics' }]] },
              { calls: [['read_page', { 'ref' => 'S1-1' }]] },
              { calls: [sources_call('Q1', 'P1', SSB_EXCERPT)] },
@@ -122,7 +122,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_s1_a_page_read_names_a_search_result_never_a_url
+  def test_a_page_read_names_a_search_result_never_a_url
     child = [{ calls: [['read_page', { 'ref' => 'S9-9' }]] },
              { calls: [['web_search', { 'query' => 'Oslo population' }]] },
              { calls: [['read_page', { 'ref' => 'S1-1' }]] }, { calls: [sources_call('Q1', 'P1', SSB_EXCERPT)] }]
@@ -139,7 +139,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_b1_b3_a_report_citing_an_unknown_claim_is_refused_and_the_sources_list_is_generated
+  def test_a_report_citing_an_unknown_claim_is_refused_and_the_sources_list_is_generated
     lead = happy_lead.dup
     lead[2] = { calls: [report_call('Made up [C9].')] }
     lead << { calls: [report_call('Oslo had 717,710 residents [C1]; see https://evil.example/x for more [C2].')] }
@@ -155,7 +155,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_b4_a_claim_the_check_finds_unsupported_is_flagged_and_loses_its_source
+  def test_a_claim_the_check_finds_unsupported_is_flagged_and_loses_its_source
     with_research(lead: happy_lead, children: happy_children,
                   reviews: [{ 'unsupported' => ['C2'] }]) do |session, _model, _web, out|
       start_research(session)
@@ -169,7 +169,7 @@ class ResearchSpecTest < Minitest::Test
   end
 
   # GLM-5.3-Flash was seen writing its JSON answer twice; the first answer counts, not a failed check.
-  def test_b4_a_check_that_repeats_its_answer_still_flags_only_what_it_named
+  def test_a_check_that_repeats_its_answer_still_flags_only_what_it_named
     repeated = "{\"unsupported\": [\"C2\"]}\n\n\n{\"unsupported\": [\"C2\"]}\n"
     with_research(lead: happy_lead, children: happy_children, reviews: [repeated]) do |session, _model, _web, out|
       start_research(session)
@@ -181,7 +181,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_b4_a_check_whose_answer_nests_its_json_still_flags_what_it_named
+  def test_a_check_whose_answer_nests_its_json_still_flags_what_it_named
     nested = { 'note' => { 'confidence' => 'low' }, 'unsupported' => ['C2'] }
     with_research(lead: happy_lead, children: happy_children, reviews: [nested]) do |session, _model, _web, out|
       start_research(session)
@@ -193,7 +193,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_b4_an_unreadable_check_refuses_the_report_until_the_lead_retries
+  def test_an_unreadable_check_refuses_the_report_until_the_lead_retries
     lead = happy_lead[0, 2] + [{ calls: [report_call('Oslo had 717,710 residents [C1].')] },
                                { calls: [report_call('Oslo grew [C2].')] }]
     reviews = ['I cannot answer that in JSON.', { 'unsupported' => ['C2'] }]
@@ -212,7 +212,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_c2_the_report_is_refused_while_a_sub_question_is_open_and_budget_remains
+  def test_the_report_is_refused_while_a_sub_question_is_open_and_budget_remains
     lead = [{ calls: [plan_call(depth: 'standard', texts: ['How many people live in Oslo?'])] },
             { calls: [wave_call(%w[Q1])] }, { calls: [report_call('Early [C1].')] }, { calls: [wave_call(%w[Q1])] },
             { calls: [report_call('Oslo had 717,710 residents [C1].')] }]
@@ -236,7 +236,7 @@ class ResearchSpecTest < Minitest::Test
     end.join("\n")
   end
 
-  def test_c2_a_lead_that_answers_in_prose_while_open_is_sent_back_until_it_reports
+  def test_a_lead_that_answers_in_prose_while_open_is_sent_back_until_it_reports
     lead = [{ calls: [plan_call(depth: 'standard', texts: ['How many people live in Oslo?', 'Is Oslo growing?'])] },
             { calls: [wave_call(%w[Q1 Q2])] },
             { content: 'I have found enough; consider the research done.' },
@@ -277,7 +277,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_c4_a_child_cannot_search_past_its_share_of_the_budget
+  def test_a_child_cannot_search_past_its_share_of_the_budget
     budgets = { 'depths' => { 'quick' => { 'searches' => 2 } } }
     searches = Array.new(3) { |index| { calls: [['web_search', { 'query' => "Oslo population #{index}" }]] } }
     child = searches + [{ calls: [['read_page', { 'ref' => 'S1-1' }]] },
@@ -293,7 +293,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_i1_the_plan_and_the_reply_show_no_internals
+  def test_the_plan_and_the_reply_show_no_internals
     with_research(lead: happy_lead, children: happy_children) do |session, _model, _web, _out|
       start_research(session)
       plan = session.view(thread: 'research').interrupts.first.descriptor.fetch('question')
@@ -323,7 +323,7 @@ class ResearchSpecTest < Minitest::Test
     end
   end
 
-  def test_c5_children_run_in_batches_no_larger_than_the_route_allows
+  def test_children_run_in_batches_no_larger_than_the_route_allows
     app = CountingApp.new
     child = Tamoz::Agent::SubagentApps::App.new(role: Tamoz::Harness::SubagentRoles.shipped.fetch('research'), app:)
     delegation = Tamoz::Agent::WorkDelegation.new(services: nil, work: nil)

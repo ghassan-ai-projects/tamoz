@@ -26,6 +26,7 @@ require 'json'
 require 'open3'
 require 'rbconfig'
 require_relative 'quality/coverage_totals'
+require_relative '../test/support/test_suite'
 
 ROOT = File.expand_path('..', __dir__)
 DOCS = File.join(ROOT, 'docs')
@@ -151,10 +152,10 @@ end
 # --- SimpleCov coverage (RUN_COVERAGE=1 rake test) ---
 
 def coverage_run
-  # MT_SEED is pinned so the coverage measurement is reproducible: a random
+  # Seed is pinned so the coverage measurement is reproducible: a random
   # seed moves a line or two between runs, which would make the Q1 ratchet
   # ("coverage may never decrease") fail on noise instead of regressions.
-  out, err, status = Open3.capture3({ 'RUN_COVERAGE' => '1', 'MT_SEED' => '1' }, RbConfig.ruby, '-S',
+  out, err, status = Open3.capture3(TestSuite.coverage_environment, RbConfig.ruby, '-S',
                                     'bundle', 'exec', 'rake', 'test', chdir: ROOT)
   raise "coverage run failed: #{err}" unless status.success?
 

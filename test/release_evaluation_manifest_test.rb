@@ -2,18 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-F (docs/P15_RELEASE_PLAN.md §8, correction 6) — the release evaluation
-# pin, and the tamper tests that make it worth pinning.
-#
-# `evals_verifier_test` proves each case file is INTERNALLY consistent: its
-# digest matches its own content. That is a self-check, and a case edited
-# together with its digest still passes it. The release pin is EXTERNAL: an
-# edited case fails against the candidate even when internally consistent, and
-# a case definition changed without a `case_version` bump is caught by the same
-# comparison, because the version is inside the digested document.
-#
-# A pin nobody can break is not evidence, so three of these tests break it on
-# purpose.
 class ReleaseEvaluationManifestTest < Minitest::Test
   MANIFEST = ROOT.join("docs", "release-evaluation-manifest.json")
   SUITE = ROOT.join("gems", "tamoz-evals", "suites", "agent", "smoke")
@@ -75,9 +63,6 @@ class ReleaseEvaluationManifestTest < Minitest::Test
                  "a case was added or removed without re-pinning"
   end
 
-  # TAMPER 1: a case definition edited WITHOUT bumping `case_version` must be
-  # caught. This is ledger gap 6 — P4/P5/P7 case definitions changed without
-  # version bumps and nothing noticed. It cannot happen silently again.
   def test_an_edited_case_without_a_version_bump_is_caught
     pinned = manifest.fetch("cases").first
     document = read_json(ROOT.join(pinned.fetch("file")))

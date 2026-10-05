@@ -3,12 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/comms_gateway_harness'
 
-# Phase 1 wave B (plan 02, work items 3 and 4) — command registry parity and
-# the truthful status surface: every name in Commands::KNOWN answers through a
-# real handler with its own outcome, every accepted acknowledgement names the
-# request reference derived from the durable identity, /status renders both
-# lifecycle axes in external vocabulary from durable rows only, and /new,
-# /redirect and /whoami behave exactly as the grammar advertises.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength, Metrics/ClassLength
 class CommsCommandParityTest < Minitest::Test
   include CommsGatewayHarness

@@ -8,12 +8,12 @@ require 'support/local_model_endpoint'
 require 'support/thermal_lab_domain'
 require 'support/episode_composition'
 
-# Real-world sensor WP-T4: device data is EVIDENCE, never AUTHORITY. Each case
+# Device data is EVIDENCE, never AUTHORITY. Each case
 # injects hostile fact content and asserts the GOVERNED decision is identical to
 # the clean case (or fails closed). The model's raw proposal is a fixture — this
 # proves the GOVERNANCE boundary at the DecisionBuilder / frame gate, which is
 # where authority actually lives; the model's own prompt-injection resistance is
-# the real-model concern (WP-T3), not this suite.
+# the real-model concern, not this suite.
 class ThermalLabAdversarialTest < Minitest::Test
   Domain = ThermalLabDomain
   ALLOWED = %w[install_watch_condition request_evidence set_indicator request_bounded_cooling].freeze

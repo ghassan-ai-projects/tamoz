@@ -2,522 +2,61 @@
 
 require_relative "test_helper"
 
-# P16 (correction 9): the documented inventory is a pinned HASH of package ->
-# { entry => options }. A `deprecated: true` option marks an entry that still
-# resolves (constant aliases) but lives in another package now. `docs/public-api.json`
-# is regenerated to match this exact shape.
 class PublicAPITest < Minitest::Test
+  PACKAGE_VERSIONS = [
+    Tamoz::Core::VERSION,
+    Tamoz::ContextEngine::VERSION,
+    Tamoz::Harness::VERSION,
+    Tamoz::Graph::VERSION,
+    Tamoz::SQLite::VERSION,
+    Tamoz::Scheduler::VERSION,
+    Tamoz::Stream::VERSION,
+    Tamoz::Tools::VERSION,
+    Tamoz::Agent::Kernel::VERSION,
+    Tamoz::Agent::Memory::VERSION,
+    Tamoz::Agent::Healing::VERSION,
+    Tamoz::Agent::Profile::VERSION,
+    Tamoz::Agent::Capabilities::VERSION,
+    Tamoz::Agent::SessionGem::VERSION,
+    Tamoz::Agent::Improvement::VERSION,
+    Tamoz::Agent::CLI::VERSION,
+    Tamoz::Agent::VERSION,
+    Tamoz::Approval::VERSION,
+    Tamoz::Cancellation::VERSION,
+    Tamoz::Concurrency::VERSION,
+    Tamoz::Evals::VERSION,
+    Tamoz::Mcp::VERSION,
+    Tamoz::Mcp::Websearch::VERSION,
+    Tamoz::Comms::VERSION,
+    Tamoz::Telegram::VERSION,
+    Tamoz::Observability::VERSION,
+    Tamoz::OTel::VERSION
+  ].freeze
+
   def test_documented_inventory_matches_loaded_public_surface
     inventory = read_json(ROOT.join("docs", "public-api.json")).fetch("packages")
 
-    assert_equal(
-      {
-        "tamoz-agent" => {
-          "Tamoz::Agent.build" => {},
-          "Tamoz::Agent::CLI.run" => {},
-          "Tamoz::Agent::CheckReceipt" => {"deprecated" => true},
-          "Tamoz::Agent::Deliberation" => {"deprecated" => true},
-          "Tamoz::Agent::EffectDispatcher" => {"deprecated" => true},
-          "Tamoz::Agent::Error" => {"deprecated" => true},
-          "Tamoz::Agent::Event" => {"deprecated" => true},
-          "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {"deprecated" => true},
-          "Tamoz::Agent::Plan" => {"deprecated" => true},
-          "Tamoz::Agent::PlanRejectedError" => {"deprecated" => true},
-          "Tamoz::Agent::ProtocolError" => { "deprecated" => true },
-          "Tamoz::Agent::Result" => {},
-          "Tamoz::Agent::Runtime" => {},
-          "Tamoz::Agent::SkillSnapshotUnavailableError" => {"deprecated" => true},
-          "Tamoz::Agent::Step" => {"deprecated" => true},
-          "Tamoz::Agent::ToolArgumentError" => {"deprecated" => true},
-          "Tamoz::Agent::Toolbox" => {"deprecated" => true},
-          "Tamoz::Agent::ToolError" => {"deprecated" => true},
-          "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
-          "Tamoz::Agent::VERSION" => {}
-        },
-        "tamoz-context-engine" => {
-          "Tamoz::ContextEngine::Compaction" => {},
-          "Tamoz::ContextEngine::Error" => {},
-          "Tamoz::ContextEngine::InvalidSummaryError" => {},
-          "Tamoz::ContextEngine::MemoryStore" => {},
-          "Tamoz::ContextEngine::Policy" => {},
-          "Tamoz::ContextEngine::Prompts" => {},
-          "Tamoz::ContextEngine::Pruner" => {},
-          "Tamoz::ContextEngine::RequestHeader" => {},
-          "Tamoz::ContextEngine::Section" => {},
-          "Tamoz::ContextEngine::Series" => {},
-          "Tamoz::ContextEngine::Spill" => {},
-          "Tamoz::ContextEngine::Surface" => {},
-          "Tamoz::ContextEngine::TokenMeter" => {},
-          "Tamoz::ContextEngine::ToolSchema" => {},
-          "Tamoz::ContextEngine::Trace" => {},
-          "Tamoz::ContextEngine::Usage" => {},
-          "Tamoz::ContextEngine::VERSION" => {}
-        },
-        "tamoz-harness" => {
-          "Tamoz::Harness::Error" => {},
-          "Tamoz::Harness::Finish" => {},
-          "Tamoz::Harness::Handoff" => {},
-          "Tamoz::Harness::Header" => {},
-          "Tamoz::Harness::Instructions" => {},
-          "Tamoz::Harness::LoopPolicy" => {},
-          "Tamoz::Harness::Persona" => {},
-          "Tamoz::Harness::PlanDocument" => {},
-          "Tamoz::Harness::PlanError" => {},
-          "Tamoz::Harness::PromptPack" => {},
-          "Tamoz::Harness::ToolCalls" => {},
-          "Tamoz::Harness::VERSION" => {}
-        },
-        "tamoz-skills" => {
-          "Tamoz::Skills" => {},
-          "Tamoz::Skills::CATALOG_DIGEST_DOMAIN" => {},
-          "Tamoz::Skills::Catalog" => {},
-          "Tamoz::Skills::Error" => {},
-          "Tamoz::Skills::LIMITS" => {},
-          "Tamoz::Skills::SNAPSHOT_FORMAT_VERSION" => {},
-          "Tamoz::Skills::SkillCollision" => {},
-          "Tamoz::Skills::SkillRejection" => {},
-          "Tamoz::Skills::SkillRecord" => {},
-          "Tamoz::Skills::SkillResource" => {},
-          "Tamoz::Skills::SkillSnapshot" => {},
-          "Tamoz::Skills::SkillSource" => {},
-          "Tamoz::Skills::Snapshot" => {},
-          "Tamoz::Skills.bundled_root" => {},
-          "Tamoz::Skills.canonical" => {},
-          "Tamoz::Skills.compile" => {},
-          "Tamoz::Skills.digest_of" => {},
-          "Tamoz::Skills.empty" => {},
-          "Tamoz::Skills.approve_candidate" => {},
-          "Tamoz::Skills.candidate_manifest" => {},
-          "Tamoz::Skills.candidate_record" => {},
-          "Tamoz::Skills.lint" => {},
-          "Tamoz::Skills.operator_snapshot" => {},
-          "Tamoz::Skills.disjoint!" => {},
-          "Tamoz::Skills.read_resource" => {},
-          "Tamoz::Skills.read_resource_entry!" => {},
-          "Tamoz::Skills.render_load" => {},
-          "Tamoz::Skills.render_resource" => {},
-          "Tamoz::Skills.scaffold" => {},
-          "Tamoz::Skills.manifest_path" => {},
-          "Tamoz::Skills::VERSION" => {}
-        },
-        "tamoz-research" => {
-          "Tamoz::Research" => {},
-          "Tamoz::Research::Error" => {},
-          "Tamoz::Research::VERSION" => {}
-        },
-        "tamoz-agent-healing" => {
-          "Tamoz::Agent::Healing::Remediation" => {},
-          "Tamoz::Agent::Healing::VERSION" => {}
-        },
-        "tamoz-agent-profile" => {
-          "Tamoz::Agent::Profile" => {},
-          "Tamoz::Agent::Profile::VERSION" => {}
-        },
-        "tamoz-agent-improvement" => {
-          "Tamoz::Agent::Improvement::CandidateLifecycle" => {},
-          "Tamoz::Agent::Improvement::VERSION" => {}
-        },
-        "tamoz-agent-capabilities" => {
-          "Tamoz::Agent::Capabilities::VERSION" => {},
-          "Tamoz::Agent::CapabilityBinding" => {},
-          "Tamoz::Agent::ChildTask" => {},
-          "Tamoz::Agent::ChildTaskDispatcher" => {},
-          "Tamoz::Agent::GovernedBrowserSource" => {},
-          "Tamoz::Agent::GovernedDatabaseSource" => {},
-          "Tamoz::Agent::McpCapabilitySource" => {},
-          "Tamoz::Agent::McpSourceBuilder" => {}
-        },
-        "tamoz-agent-session" => {
-          "Tamoz::Agent::Session" => {},
-          "Tamoz::Agent::SessionGem::VERSION" => {},
-          "Tamoz::Agent::SessionNodes" => {},
-          "Tamoz::Agent::SessionOutcome" => {},
-          "Tamoz::Agent::SessionPlanningContext" => {},
-          "Tamoz::Agent::SessionRecords" => {},
-          "Tamoz::Agent::SessionStatusProjection" => {},
-          "Tamoz::Agent::SessionView" => {}
-        },
-        "tamoz-agent-cli" => {
-          "Tamoz::Agent::CLI" => {},
-          "Tamoz::Agent::CLI::VERSION" => {}
-        },
-        "tamoz-agent-kernel" => {
-          "Tamoz::Agent::Deliberation" => {},
-          "Tamoz::Agent::EffectDispatcher" => {},
-          "Tamoz::Agent::Error" => {},
-          "Tamoz::Agent::Event" => {},
-          "Tamoz::Agent::GraphVersions" => {},
-          "Tamoz::Agent::Kernel::VERSION" => {},
-          "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {},
-          "Tamoz::Agent::Plan" => {},
-          "Tamoz::Agent::PlanRejectedError" => {},
-          "Tamoz::Agent::Providers" => {},
-          "Tamoz::Agent::RequestProjection" => {},
-          "Tamoz::Agent::RequestRoute" => {},
-          "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
-          "Tamoz::Agent::Step" => {}
-        },
-        "tamoz-agent-memory" => {
-          "Tamoz::Agent::Memory::Engine" => {},
-          "Tamoz::Agent::Memory::VERSION" => {}
-        },
-        "tamoz-approval" => {
-          "Tamoz::Approval::Answer.parse" => {},
-          "Tamoz::Approval::ConflictingResolutionError" => {},
-          "Tamoz::Approval::Decision" => {},
-          "Tamoz::Approval::DecisionLog" => {},
-          "Tamoz::Approval.bundled_policy_path" => {},
-          "Tamoz::Approval::Engine" => {},
-          "Tamoz::Approval::Error" => {},
-          "Tamoz::Approval::Grant" => {},
-          "Tamoz::Approval::GrantOffer" => {},
-          "Tamoz::Approval::GrantStore" => {},
-          "Tamoz::Approval::InvalidPolicyError" => {},
-          "Tamoz::Approval::InvalidScopeError" => {},
-          "Tamoz::Approval::MemoryDecisionLog" => {},
-          "Tamoz::Approval::MemoryGrantStore" => {},
-          "Tamoz::Approval::PolicyDocument" => {},
-          "Tamoz::Approval::Request" => {},
-          "Tamoz::Approval::UnknownDecisionError" => {},
-          "Tamoz::Approval::VERSION" => {}
-        },
-        "tamoz-cancellation" => {
-          "Tamoz::Cancellation::ProcessGroup" => {},
-          "Tamoz::Cancellation::Trap" => {},
-          "Tamoz::Cancellation::VERSION" => {},
-          "Tamoz::CancellationToken" => {},
-          "Tamoz::Cancellation.interruptible_sleep" => {}
-        },
-        "tamoz-comms" => {
-          "Tamoz::Comms::OutboxDeliverySink" => {},
-
-          "Tamoz::Comms::AmbiguousDeliveryError" => {},
-          "Tamoz::Comms::ApprovalPrompt" => {},
-          "Tamoz::Comms::AuthenticationError" => {},
-          "Tamoz::Comms::AuthorityEvidence.members" => {},
-          "Tamoz::Comms::Binding" => {},
-          "Tamoz::Comms::Canonical" => {},
-          "Tamoz::Comms::Commands" => {},
-          "Tamoz::Comms::CommsError" => {},
-          "Tamoz::Comms::CommsStore" => {},
-          "Tamoz::Comms::Conversation" => {},
-          "Tamoz::Comms::DecisionRecord" => {},
-          "Tamoz::Comms::DecisionStore" => {},
-          "Tamoz::Comms::Delivery" => {},
-          "Tamoz::Comms::DeliverySink" => {},
-          "Tamoz::Comms::InboundEnvelope" => {},
-          "Tamoz::Comms::InterruptDigest" => {},
-          "Tamoz::Comms::PollerConflictError" => {},
-          "Tamoz::Comms::ResponseTooLargeError" => {},
-          "Tamoz::Comms::Shapes" => {},
-          "Tamoz::Comms::SurfaceDescriptor" => {},
-          "Tamoz::Comms::ThrottledError" => {},
-          "Tamoz::Comms::Transport" => {},
-          "Tamoz::Comms::ValidationError" => {},
-          "Tamoz::Comms::VERSION" => {}
-        },
-        "tamoz-comms-gateway" => {
-          "Tamoz::Comms::DeliveryDrainer" => {},
-          "Tamoz::Comms::Gateway" => {}
-        },
-        "tamoz-concurrency" => {
-          "Tamoz::Concurrency::Drain" => {},
-          "Tamoz::Concurrency::EventStream" => {},
-          "Tamoz::Concurrency::VERSION" => {},
-          "Tamoz::Concurrency.join_all" => {},
-          "Tamoz::Pool.for" => {},
-          "Tamoz::StreamSink" => {}
-        },
-        "tamoz-core" => {
-          "Tamoz.configuration" => {},
-          "Tamoz.configure" => {},
-          "Tamoz.configuration_finalized?" => {},
-          "Tamoz.finalize_configuration!" => {},
-          "Tamoz.instrument" => {},
-          "Tamoz::CancelledError" => {},
-          "Tamoz::CheckpointConflictError" => {},
-          "Tamoz::CheckpointCorruptionError" => {},
-          "Tamoz::CheckpointError" => {},
-          "Tamoz::CheckpointVersionError" => {},
-          "Tamoz::Clock.monotonic" => {},
-          "Tamoz::Configuration" => {},
-          "Tamoz::ConfigurationError" => {},
-          "Tamoz::Context" => {},
-          "Tamoz::Core::LEGACY_PROFILE_ID" => {},
-          "Tamoz::Core::LEGACY_SKILL_EPOCH" => {},
-          "Tamoz::Core::TOOL_ERROR_CLASS_NAMES" => {},
-          "Tamoz::Core::ProtocolError" => {},
-          "Tamoz::Core::RawHttp" => {},
-          "Tamoz::Core::ToolArgumentError" => {},
-          "Tamoz::Core::ToolError" => {},
-          "Tamoz::Core::ToolPolicyError" => {},
-          "Tamoz::Core::VERSION" => {},
-          "Tamoz::Core.canonical" => {},
-          "Tamoz::Core.deep_freeze" => {},
-          "Tamoz::Core.parse_object" => {},
-          "Tamoz::Core.string" => {},
-          "Tamoz::Core.strings" => {},
-          "Tamoz::DisclosableMessage" => {},
-          "Tamoz::EffectUnknownError" => {},
-          "Tamoz::Emitter::Null" => {},
-          "Tamoz::Error" => {},
-          "Tamoz::GraphDefinitionError" => {},
-          "Tamoz::InvalidUpdateError" => {},
-          "Tamoz::LeaseLostError" => {},
-          "Tamoz::NodeError" => {},
-          "Tamoz::Notifier::Null" => {},
-          "Tamoz::PoolCircuitOpenError" => {},
-          "Tamoz::PoolWorkerError" => {},
-          "Tamoz::RecursionLimitError" => {},
-          "Tamoz::Secret" => {},
-          "Tamoz::SensitiveValueError" => {},
-          "Tamoz::StaleRequestError" => {},
-          "Tamoz::StateCodec" => {},
-          "Tamoz::StateCodec::Registration" => {},
-          "Tamoz::StateLimitError" => {},
-          "Tamoz::StoreError" => {},
-          "Tamoz::StreamClosedError" => {},
-          "Tamoz::StreamPart" => {},
-          "Tamoz::TaskResult::Cancelled" => {},
-          "Tamoz::TaskResult::Failed" => {},
-          "Tamoz::TaskResult::Interrupted" => {},
-          "Tamoz::TaskResult::Stuck" => {},
-          "Tamoz::TaskResult::Succeeded" => {},
-          "Tamoz::TimeoutError" => {},
-          "Tamoz::UnsupportedValueError" => {}
-        },
-        "tamoz-evals" => {
-          "Tamoz::Evals::Case.load" => {},
-          "Tamoz::Evals::Evidence.load" => {},
-          "Tamoz::Evals::Result.load" => {},
-          "Tamoz::Evals::VERSION" => {},
-          "Tamoz::Evals.verify" => {}
-        },
-        "tamoz-evals-runner" => {
-          "Tamoz::Evals::Runner::InputManifest" => {},
-          "Tamoz::Evals::Runner::ScorecardSummaryConsumer" => {}
-        },
-        "tamoz-graph" => {
-          "Tamoz.graph" => {},
-          "Tamoz.interrupt" => {},
-          "Tamoz.send_to" => {},
-          "Tamoz::Command" => {},
-          "Tamoz::END" => {},
-          "Tamoz::Graph::Branch" => {},
-          "Tamoz::Graph::Channel" => {},
-          "Tamoz::Graph::Checkpoint" => {},
-          "Tamoz::Graph::Compiled" => {},
-          "Tamoz::Graph::Definition" => {},
-          "Tamoz::Graph::Interrupt" => {},
-          "Tamoz::Graph::Limits" => {},
-          "Tamoz::Graph::MemoryCheckpointer" => {},
-          "Tamoz::Graph::NodeSpec" => {},
-          "Tamoz::Graph::RunResult" => {},
-          "Tamoz::Graph::Snapshot" => {},
-          "Tamoz::Graph::Task" => {},
-          "Tamoz::Graph::VERSION" => {},
-          "Tamoz::Managed::RemainingSteps" => {},
-          "Tamoz::Reducers.append" => {},
-          "Tamoz::Reducers.max" => {},
-          "Tamoz::Reducers.merge" => {},
-          "Tamoz::Reducers.min" => {},
-          "Tamoz::Reducers.union" => {},
-          "Tamoz::Reducers::Reducer" => {},
-          "Tamoz::START" => {},
-          "Tamoz::Send" => {}
-        },
-        "tamoz-mcp" => {
-          "Tamoz::Mcp::AmbiguousOutcomeError" => {},
-          "Tamoz::Mcp::Catalog" => {},
-          "Tamoz::Mcp::Catalog.compile" => {},
-          "Tamoz::Mcp::CatalogSnapshotUnavailableError" => {},
-          "Tamoz::Mcp::Elicitation" => {},
-          "Tamoz::Mcp::Elicitation.answer" => {},
-          "Tamoz::Mcp::Elicitation.build" => {},
-          "Tamoz::Mcp::Entry" => {},
-          "Tamoz::Mcp::Error" => {},
-          "Tamoz::Mcp::Invocation" => {},
-          "Tamoz::Mcp::Invocation.call" => {},
-          "Tamoz::Mcp::Invocation.descriptor_for" => {},
-          "Tamoz::Mcp::Invocation.effect_key" => {},
-          "Tamoz::Mcp::Invocation.reissue" => {},
-          "Tamoz::Mcp::MemoryCircuitStore" => {},
-          "Tamoz::Mcp::OutputLimitError" => {},
-          "Tamoz::Mcp::ProtocolError" => {},
-          "Tamoz::Mcp::ServerConfig" => {},
-          "Tamoz::Mcp::ServerConfig::Budgets" => {},
-          "Tamoz::Mcp::Supervisor" => {},
-          "Tamoz::Mcp::ToolArgumentError" => {},
-          "Tamoz::Mcp::ToolPolicyError" => {},
-          "Tamoz::Mcp::UnavailableError" => {},
-          "Tamoz::Mcp::VERSION" => {},
-          "Tamoz::Mcp::ValidationError" => {}
-        },
-        "tamoz-mcp-websearch" => {
-          "Tamoz::Mcp::Websearch::EgressClient" => {},
-          "Tamoz::Mcp::Websearch::EgressClient::Result" => {},
-          "Tamoz::Mcp::Websearch::EgressCircuit" => {},
-          "Tamoz::Mcp::Websearch::EgressPolicy" => {},
-          "Tamoz::Mcp::Websearch::EgressPolicy::ValidationError" => {},
-          "Tamoz::Mcp::Websearch::EgressPolicyError" => {},
-          "Tamoz::Mcp::Websearch::RedirectHopLimitError" => {},
-          "Tamoz::Mcp::Websearch::VERSION" => {},
-          "Tamoz::Mcp::Websearch.credential_shaped_query?" => {},
-          "Tamoz::Mcp::Websearch.egress_budgets" => {},
-          "Tamoz::Mcp::Websearch.sanitize_result" => {}
-        },
-        "tamoz-observability" => {
-          "Tamoz::Observability::Catalog" => {},
-          "Tamoz::Observability::ContentPolicy" => {},
-          "Tamoz::Observability::Correlation" => {},
-          "Tamoz::Observability::DuplicateSignalError" => {},
-          "Tamoz::Observability::ObservabilityError" => {},
-          "Tamoz::Observability::Recorder" => {},
-          "Tamoz::Observability::Recorder::Fanout" => {},
-          "Tamoz::Observability::Recorder::Journal" => {},
-          "Tamoz::Observability::Recorder::Memory" => {},
-          "Tamoz::Observability::Recorder::Null" => {},
-          "Tamoz::Observability::SCHEMA_VERSION" => {},
-          "Tamoz::Observability::SchemaEvolutionError" => {},
-          "Tamoz::Observability::Signal" => {},
-          "Tamoz::Observability::SignalCatalog" => {},
-          "Tamoz::Observability::Metrics" => {},
-          "Tamoz::Observability::ModelCall" => {},
-          "Tamoz::Observability::Notifier" => {},
-          "Tamoz::Observability::Cost" => {},
-          "Tamoz::Observability::PricingTable" => {},
-          "Tamoz::Observability::Producer" => {},
-          "Tamoz::Observability::TelemetryReader" => {},
-          "Tamoz::Observability::Trace" => {},
-          "Tamoz::Observability::Usage" => {},
-          "Tamoz::Observability::UnregisteredSignalError" => {},
-          "Tamoz::Observability::ValidationError" => {},
-          "Tamoz::Observability::VERSION" => {}
-        },
-        "tamoz-otel" => {
-          "Tamoz::OTel::AsyncExporter" => {},
-          "Tamoz::OTel::EgressPolicy" => {},
-          "Tamoz::OTel::HTTPExporter" => {},
-          "Tamoz::OTel::VERSION" => {}
-        },
-        "tamoz-scheduler" => {
-          "Tamoz::Scheduler::ClockRollbackError" => {},
-          "Tamoz::Scheduler::GrantIntersector" => {},
-          "Tamoz::Scheduler::KINDS" => {},
-          "Tamoz::Scheduler::LeaseLostError" => {},
-          "Tamoz::Scheduler::MISFIRE_POLICIES" => {},
-          "Tamoz::Scheduler::MisfireLimitReachedError" => {},
-          "Tamoz::Scheduler::OVERLAP_POLICIES" => {},
-          "Tamoz::Scheduler::Occurrence" => {},
-          "Tamoz::Scheduler::STATES" => {},
-          "Tamoz::Scheduler::Schedule" => {},
-          "Tamoz::Scheduler::ScheduleStore" => {},
-          "Tamoz::Scheduler::SchedulerError" => {},
-          "Tamoz::Scheduler::StoreConflictError" => {},
-          "Tamoz::Scheduler::TERMINAL" => {},
-          "Tamoz::Scheduler::VERSION" => {}
-        },
-        "tamoz-sqlite" => {
-          "Tamoz::SQLite::VERSION" => {}
-        },
-        "tamoz-stream" => {
-          "Tamoz::Stream::ApprovalRelay" => {},
-          "Tamoz::Stream::ArtifactStore" => {},
-          "Tamoz::Stream::BudgetExceededError" => {},
-          "Tamoz::Stream::ContractMismatchError" => {},
-          "Tamoz::Stream::DecisionBuilder" => {},
-          "Tamoz::Stream::EpisodeCapabilityHost" => {},
-          "Tamoz::Stream::EpisodeRequestEnvelope" => {},
-          "Tamoz::Stream::EpisodeRequestInvalidError" => {},
-          "Tamoz::Stream::EpisodeRunner" => {},
-          "Tamoz::Stream::EpisodeStream" => {},
-          "Tamoz::Stream::EpisodeStreamAdapter" => {},
-          "Tamoz::Stream::EpisodeWorker" => {},
-          "Tamoz::Stream::EvidenceClient" => {},
-          "Tamoz::Stream::OutcomeSubscriber" => {},
-          "Tamoz::Stream::Reconsideration" => {},
-          "Tamoz::Stream::ReceivedSnapshot" => {},
-          "Tamoz::Stream::SituationMemory" => {},
-          "Tamoz::Stream::SnapshotDigestMismatchError" => {},
-          "Tamoz::Stream::SnapshotIdentityError" => {},
-          "Tamoz::Stream::StreamError" => {},
-          "Tamoz::Stream::VERSION" => {},
-          "Tamoz::Stream::VerificationStore" => {},
-          "Tamoz::Stream::WorkerServer" => {}
-        },
-        "tamoz-telegram" => {
-          "Tamoz::Telegram::Client" => {},
-          "Tamoz::Telegram::Normalizer" => {},
-          "Tamoz::Telegram::Transport" => {},
-          "Tamoz::Telegram::VERSION" => {}
-        },
-        "tamoz-tools" => {
-          "Tamoz::Tools::CheckReceipt" => {},
-          "Tamoz::Tools::ToolArgumentError" => {},
-          "Tamoz::Tools::ToolError" => {},
-          "Tamoz::Tools::ToolPolicyError" => {},
-          "Tamoz::Tools::Toolbox" => {},
-          "Tamoz::Tools::VERSION" => {}
-        }
-      },
-      inventory
-    )
+    # The expected surface is independent of the generated manifest.
+    assert_equal read_json(ROOT.join('test/fixtures/public_api_expected.json')), inventory
 
     inventory.each do |package, entries|
       entries.each do |entry, options|
         assert_public_entry(entry)
-        assert options.is_a?(Hash), "#{package} #{entry} options must be a Hash"
-        allowed = options.keys.map(&:to_s).sort
-        assert(allowed.all? { |key| key == "deprecated" },
-               "#{package} #{entry} options may only be empty or deprecated: true")
-        assert_equal true, options["deprecated"] if allowed.include?("deprecated")
+        assert_entry_options(entry, options, package:)
       end
     end
   end
 
   def test_package_versions_are_valid_and_begin_in_prerelease
-    # P15-G: every SHIPPED gem's version is pinned here. tamoz-scheduler and
-    # tamoz-stream ship in the release surface and were absent, so a version
-    # skew in either could not have been caught by this gate.
-    versions = [
-      Tamoz::Core::VERSION,
-      Tamoz::ContextEngine::VERSION,
-      Tamoz::Harness::VERSION,
-      Tamoz::Graph::VERSION,
-      Tamoz::SQLite::VERSION,
-      Tamoz::Scheduler::VERSION,
-      Tamoz::Stream::VERSION,
-      Tamoz::Tools::VERSION,
-      Tamoz::Agent::Kernel::VERSION,
-      Tamoz::Agent::Memory::VERSION,
-      Tamoz::Agent::Healing::VERSION,
-      Tamoz::Agent::Profile::VERSION,
-      Tamoz::Agent::Capabilities::VERSION,
-      Tamoz::Agent::SessionGem::VERSION,
-      Tamoz::Agent::Improvement::VERSION,
-      Tamoz::Agent::CLI::VERSION,
-      Tamoz::Agent::VERSION,
-      Tamoz::Approval::VERSION,
-      Tamoz::Cancellation::VERSION,
-      Tamoz::Concurrency::VERSION,
-      Tamoz::Evals::VERSION,
-      Tamoz::Mcp::VERSION,
-      Tamoz::Mcp::Websearch::VERSION,
-      Tamoz::Comms::VERSION,
-      Tamoz::Telegram::VERSION,
-      Tamoz::Observability::VERSION,
-      Tamoz::OTel::VERSION
-    ]
-
     assert_equal GEM_ROOTS.keys.sort,
                  read_json(ROOT.join("docs", "public-api.json")).fetch("packages").keys.sort,
                  "every packaged gem must have a documented public surface"
 
-    assert_equal 1, versions.uniq.length
-    assert Gem::Version.new(versions.first).prerelease?
+    assert_equal 1, PACKAGE_VERSIONS.uniq.length
+    assert Gem::Version.new(PACKAGE_VERSIONS.first).prerelease?
   end
 
-  def test_reference_application_manifest_identifies_the_bounded_repair_slice
+  def test_reference_application_manifest_identifies_the_bounded_repair_milestone
     manifest = read_json(ROOT.join("apps", "tamoz-agent", "app.json"))
 
     assert_equal "Tamoz Agent", manifest.fetch("name")
@@ -528,6 +67,14 @@ class PublicAPITest < Minitest::Test
   end
 
   private
+
+  def assert_entry_options(entry, options, package:)
+    assert options.is_a?(Hash), "#{package} #{entry} options must be a Hash"
+    allowed = options.keys.map(&:to_s).sort
+    assert(allowed.all? { |key| key == "deprecated" },
+           "#{package} #{entry} options may only be empty or deprecated: true")
+    assert_equal true, options["deprecated"] if allowed.include?("deprecated")
+  end
 
   def assert_public_entry(entry)
     if entry.match?(/\.[a-z_][a-z0-9_]*[!?]?\z/)

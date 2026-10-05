@@ -1,15 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/read_note_plan'
 require "tamoz/mcp/websearch"
 
-# P17 W2/W6 (corrections 1/3/6): the websearch capability through the real
-# invocation path against the deterministic fixture — bounded/attributed
-# results, the typed taxonomy (provider error, grant refusal), the operator
-# gate (default-disabled), the credential-shaped query rejection with no call
-# and no sink, and the budget-breach recording. The fixture is stdio-only and
-# deterministic; the live-network provider run is the recorded deferral.
 class WebsearchInvocationTest < Minitest::Test
+  include ReadNotePlan
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Catalog = Tamoz::Mcp::Catalog
   Supervisor = Tamoz::Mcp::Supervisor
@@ -66,19 +63,6 @@ class WebsearchInvocationTest < Minitest::Test
       response = @inner.generate(stage:, system:, prompt:)
       response.is_a?(String) ? response : JSON.generate(response)
     end
-  end
-
-  def read_plan
-    {
-      "goal" => "explain",
-      "done_when" => ["read the note"],
-      "steps" => [
-        {
-          "id" => "s1", "purpose" => "read", "tool" => "read_file",
-          "arguments" => {"path" => "note.txt"}, "verification" => "output present"
-        }
-      ]
-    }
   end
 
   def approve_mcp_session_like(session, outcome, thread:)
@@ -148,8 +132,6 @@ class WebsearchInvocationTest < Minitest::Test
     )
   end
 
-  # P17-01: with no provider config and no grant, no websearch surface exists —
-  # nothing is admitted, nothing is spawned.
   def test_no_provider_config_means_no_websearch_surface
     # A capability source built without a websearch descriptor exposes no
     # websearch name; a bare config admits nothing.
@@ -166,9 +148,6 @@ class WebsearchInvocationTest < Minitest::Test
     assert_empty source.names.grep(/websearch/)
   end
 
-  # P17-01: the websearch fixture refuses the search typed without the operator
-  # grant (the fixture mirrors the real adapter's gate), and serves it once the
-  # grant is present — the surface is deterministic on config.
   def test_search_refused_without_operator_grant_but_served_with_it
     ENV.delete("TAMOZ_WEBSEARCH_GRANT")
     ENV["TAMOZ_WEBSEARCH_EGRESS"] = JSON.generate(egress)
@@ -195,9 +174,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # P17-02: the real adapter is a runnable, SDK-built MCP server with a search
-  # tool that enforces the same operator gate; the enabled fixture path is
-  # deterministic and dial-free.
   def test_real_adapter_enforces_the_operator_gate
     require "tamoz/mcp/websearch"
     adapter_config = ServerConfig.new(
@@ -244,8 +220,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W2 / P17-12: a successful fixture search is attributed, bounded, and
-  # deterministic (the governance path against the in-tree fixture).
   def test_search_success_is_attributed_bounded_and_deterministic
     granted
     config = fixture_config
@@ -262,8 +236,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W2 / P17-12: a provider-declared search error maps to the repairable typed
-  # `mcp_remote_error` row.
   def test_provider_declared_error_is_typed_repairable
     granted
     ENV["TAMOZ_WEBSEARCH_FIXTURE_ERROR"] = "1"
@@ -281,9 +253,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W2 / P17-12: an oversize response is bounded and marked truncated, and the
-  # caller's executor turns that into a budget-breach record on the egress
-  # circuit (both DR-2 open conditions).
   def test_oversize_response_is_bounded_and_opens_the_budget_condition
     granted
     ENV["TAMOZ_WEBSEARCH_FIXTURE_OVERSIZE"] = "1"
@@ -308,9 +277,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W6 / P17-14: a credential-shaped query VALUE is rejected typed before any
-  # call is issued — the source validator refuses it, the supervisor never
-  # spawns, and the value appears in no sink.
   def test_credential_shaped_query_is_rejected_with_no_call_and_no_sink
     granted
     config = fixture_config
@@ -349,9 +315,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W6 / P17-14: the effect journal's invocation arguments never carry a
-  # credential value — the journal records digests, and a real search run's
-  # plan/effect surfaces stay clean.
   def test_journal_invocation_arguments_carry_no_credential_value
     granted
     config = fixture_config
@@ -369,10 +332,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W6 / P17-14 session-level: a scripted model ISSUES a credential-shaped
-  # query; the plan is rejected at the checkpoint boundary, the model replans
-  # cleanly, the search executes — and the credential VALUE appears in NO sink
-  # (the session record's sqlite, the journal, the observation, stderr).
   def test_session_rejects_credential_shaped_query_and_the_value_reaches_no_sink
     granted
     require "tamoz/sqlite"
@@ -444,8 +403,6 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
-  # W6 / P17-A3: a result carrying a credential-shaped line is stripped by the
-  # websearch sanitizer — the rendered evidence never contains the value.
   def test_credential_shaped_result_is_stripped_never_fillable
     text = "The answer is 42. OPENAI_API_KEY=sk-fixture-leaked-value " \
            "field api_token: sk-fixture-leaked-value"
@@ -456,8 +413,6 @@ class WebsearchInvocationTest < Minitest::Test
     assert_includes sanitized, "stripped"
   end
 
-  # P17-06: the egress declaration's budgets are the single effective values
-  # the fixture run uses.
   def test_fixture_run_uses_the_egress_declaration_budgets
     granted
     config = fixture_config

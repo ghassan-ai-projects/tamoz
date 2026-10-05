@@ -310,7 +310,6 @@ class WorkLoopEffectCrashTest < Minitest::Test
       assert_raises(ScriptedConversationModel::Crash) do
         work_session(model: first, root:, adapter:).start('Set VALUE to 2', thread: 'work', request_id: 'work-1')
       end
-      sleep 0.25 # the started attempt must pass its ttl before a new owner may reconcile it
       second = ScriptedConversationModel.new(turns: [{ calls: [['run_check', { 'name' => 'test' }]] },
                                                      { content: 'Done.' }])
       outcome = work_session(model: second, root:, adapter:).recover(thread: 'work', request_id: 'work-1')
@@ -428,7 +427,8 @@ class WorkLoopReviewFindingsTest < Minitest::Test
       { 402 => 'model_out_of_credit', 401 => 'model_key_refused' }.each do |status, reason|
         refusal = ->(_) { raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status:) }
         model = ScriptedConversationModel.new(turns: [refusal])
-        outcome = work_session(model:, root:, adapter:).start("hi", thread: "work-#{status}", request_id: "work-#{status}")
+        outcome = work_session(model:, root:, adapter:).start('hi', thread: "work-#{status}",
+                                                                    request_id: "work-#{status}")
 
         assert_equal reason, outcome.state.fetch(:terminal_reason)
       end

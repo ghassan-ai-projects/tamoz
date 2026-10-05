@@ -2,24 +2,6 @@
 
 require_relative "healing_fixtures"
 
-# P12-H2 (plan §4) — the exact reviewed remediation protocol, proven by running
-# it against a sandboxed fault through the REAL effect machinery:
-#
-#   1. classify → 2. plan → 3. semantic critic review → 4. preflight →
-#   5. execute ONE permitted form → 6. verify with the rule-supplied oracle →
-#   7. recover OR compensate/escalate.
-#
-# The proofs that matter (from the plan §4/§11 and invariants 25–27, 32–34):
-#
-# * `recovered` is reachable ONLY through `Oracle.verify(...).passed` — never
-#   from the remediation model's explanation (invariant 33, C2).
-# * A rejecting semantic critic, a failed preflight, an open circuit, and a
-#   never-mutate class all terminate before `perform` is ever called ("no blind
-#   retry" is control flow, not caller discipline).
-# * Verification failure compensates (or escalates), never `recovered`.
-# * Every non-recovered terminal writes an escalation record whose payload
-#   carries the typed failure, rule identity, digests, and terminal state.
-# * `run` is invoked ONLY from the `:remediating` transition (structural).
 class HealingRemediationTest < Minitest::Test
   include HealingFixtures
 
@@ -48,8 +30,6 @@ class HealingRemediationTest < Minitest::Test
       toolbox ||= real_toolbox
       rule ||= healing_rule(toolbox:)
       preflight_context = overrides.delete(:preflight_context) || {}
-      # `resources_and_locks_canonical` requires the realpath-resolved target
-      # when the failure names one (design §5).
       preflight_context[:canonical_resource] ||=
         File.realpath(File.join(dir, "answer.txt"))
       with_effect_context do |context|
@@ -197,9 +177,6 @@ class HealingRemediationTest < Minitest::Test
     refute outcome.performed
   end
 
-  # Design §2/§7 (critic probe 4): an effect_unknown condition reconciles, then
-  # escalates — the reconciler IS invoked, the perform is NEVER called, and the
-  # outcome is a terminal escalate, never a retry and never a recovery.
   def test_effect_unknown_reconciles_then_escalates_without_an_executor
     record = failure_record(
       failure_code: "effect.timeout_after_dispatch", category: :effect_unknown,
@@ -222,8 +199,6 @@ class HealingRemediationTest < Minitest::Test
           stop_conditions: ["reconciliation completed"],
           preflight_context: {
             canonical_resource: File.realpath(File.join(dir, "answer.txt")),
-            # The §7 gate: an unknown effect state is acceptable ONLY when a
-            # reconciliation is selected (the no-blind-retry precondition).
             reconciliation_selected: true
           },
           context:,
@@ -242,8 +217,6 @@ class HealingRemediationTest < Minitest::Test
     assert_nil outcome.effect_outcome
   end
 
-  # Design §7 (critic probe 6): an effect_unknown classification WITHOUT a
-  # reconciler is a contract error — the protocol refuses rather than guessing.
   def test_effect_unknown_without_a_reconciler_is_a_contract_error
     record = failure_record(
       failure_code: "effect.timeout_after_dispatch", category: :effect_unknown,
@@ -277,9 +250,6 @@ class HealingRemediationTest < Minitest::Test
     end
   end
 
-  # Design §5/§8 (critic probe 4): remediation scope is INTERSECTED with the
-  # original operation's authorization — a target outside the rule's
-  # authorized_resources is refused by preflight before any mutation.
   def test_scope_intersection_refuses_a_target_outside_authorized_resources
     record = failure_record(
       failure_code: "workspace.stale_precondition", category: :stale_precondition,

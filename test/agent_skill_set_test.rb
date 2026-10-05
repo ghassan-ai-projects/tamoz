@@ -3,9 +3,6 @@
 require_relative "test_helper"
 require "tamoz/agent"
 
-# P5/§B6-B9: the skill set — wire-carried refs resolved only from the
-# operator-approved source with tree-digest verification; the canonical
-# skill-set digest is replay-stable. Fixture data throughout.
 class AgentSkillSetTest < Minitest::Test
   SkillSet = Tamoz::Agent::SkillSet
 

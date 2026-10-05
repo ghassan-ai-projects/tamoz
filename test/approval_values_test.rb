@@ -2,7 +2,6 @@
 
 require_relative 'test_helper'
 
-# Approval redesign phase 1 — the immutable interface vocabulary.
 class ApprovalValuesTest < Minitest::Test
   Approval = Tamoz::Approval
 

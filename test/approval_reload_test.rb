@@ -177,12 +177,4 @@ class ApprovalReloadTest < Minitest::Test
       simulations: []
     YAML
   end
-
-  def with_policy(content)
-    Tempfile.create(['policy', '.yaml']) do |file|
-      file.write(content)
-      file.flush
-      yield file.path
-    end
-  end
 end

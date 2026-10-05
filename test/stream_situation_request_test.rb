@@ -1,27 +1,14 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/episode_worker_fixture'
 require "tamoz/stream/episode_worker"
 require "support/local_model_endpoint"
 require "support/episode_composition"
 require "support/aquaculture_domain"
 
-# T1.3'/T1.4 (PLAN_TAMOZ_STREAM_BUILD): the episode request origin. The wire
-# EpisodeRequest is validated (contract, identity, kind, lane, risk ceiling);
-# the durable request id embeds (episode_id, attempt_id, fence) so a fence+1
-# redispatch is a fresh request and a redelivery is idempotent; the runner
-# delivers durably through the durable runner; a tampered snapshot terminates
-# before any graph run. P1: the runner-level tests drive the FIXED production
-# graph (gate 4 — same graph, in-process driver), not throwaway graphs.
 class StreamSituationRequestTest < Minitest::Test
-  def worker
-    Tamoz::Stream::EpisodeWorker.new(
-      worker_version: "0.1.0.alpha.1",
-      lane_config: Tamoz::Agent::LaneConfig.build(
-        "fast" => "flash", "deep" => "pro", "batch" => "flash"
-      )
-    )
-  end
+  include EpisodeWorkerFixture
 
   def snapshot_pair
     value = {
@@ -271,8 +258,6 @@ class StreamSituationRequestTest < Minitest::Test
     end
   end
 
-  # P1: RECONSIDER is out of scope for the fixed diagnose graph — it must
-  # terminate typed at admission, never flow into the diagnose path.
   def test_reconsider_episode_terminates_typed
     with_durable_app do |_adapter, _app, runner|
       events = runner.run(

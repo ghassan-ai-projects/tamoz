@@ -2,9 +2,6 @@
 
 require_relative "test_helper"
 
-# P0B/§4.3/§8.1 conformance: the model-call identities and receipt fail closed
-# on malformed shapes, the logical key is stable across attempts/fences, and
-# missing usage is declared unavailable rather than fabricated as zero.
 class AgentModelReceiptTest < Minitest::Test
   MC = Tamoz::Agent::ModelCall
   DIGEST = "sha256:#{"0" * 64}"
@@ -34,8 +31,6 @@ class AgentModelReceiptTest < Minitest::Test
     assert_includes error.message, code
   end
 
-  # --- logical key: stable across attempt/fence (§8.1) ---
-
   def test_logical_key_is_attempt_and_fence_independent
     a = receipt(invocation: invocation(attempt_id: "at-1", fence: 1))
     b = receipt(invocation: invocation(attempt_id: "at-9", fence: 7))
@@ -55,8 +50,6 @@ class AgentModelReceiptTest < Minitest::Test
     assert_rejected("logical_call_key.episode_id/blank") { logical(episode_id: "") }
     assert_rejected("logical_call_key.request_digest/bad_digest") { logical(request_digest: "nope") }
   end
-
-  # --- usage: unavailable is not zero (§7.3) ---
 
   def test_usage_unavailable_is_nil_not_zero
     u = MC::Usage.unavailable
@@ -109,8 +102,6 @@ class AgentModelReceiptTest < Minitest::Test
     assert_rejected("receipt/logical_call_key_type") { receipt(logical_call_key: {episode_id: "x"}) }
     assert_rejected("receipt/usage_type") { receipt(usage: {available: false}) }
   end
-
-  # --- Profile role resolution (§4.3): fails closed before a model call ---
 
   ProfileDouble = Struct.new(:model_roles, :canonical_digest)
 

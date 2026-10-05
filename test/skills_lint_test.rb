@@ -2,7 +2,6 @@
 
 require_relative 'test_helper'
 
-# QUALITY_BAR Q1–Q5: every bundled skill meets the authoring bar, and each rule catches its own defect.
 class SkillsLintTest < Minitest::Test
   GOOD = { 'description' => 'Does one thing well. Use when the thing is needed.',
            'metadata' => "metadata:\n  tamoz.risk: read_only\n",

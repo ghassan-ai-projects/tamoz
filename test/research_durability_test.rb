@@ -6,9 +6,6 @@ require 'timeout'
 require_relative 'test_helper'
 require_relative 'support/research_spec'
 
-# Quality-bar rows P4 and C7 of docs/deep-research-2026-09-30: a real SIGKILL lands inside a deep-research turn on the
-# SQLite store and the turn is recovered in a new process. An in-process exception would release the lease in `ensure`
-# and hide the risk these rows exist to catch.
 class ResearchDurabilityTest < Minitest::Test
   include ResearchSpec
 
@@ -44,9 +41,7 @@ class ResearchDurabilityTest < Minitest::Test
     end
   RUBY
 
-  # P4: the pause survives the kill, and the answer given after the restart resumes the same turn rather than asking
-  # for the plan a second time.
-  def test_p4_a_killed_checkpoint_resumes_the_same_turn_after_a_restart
+  def test_a_killed_checkpoint_resumes_the_same_turn_after_a_restart
     with_killed_research(stage: 'plan') do |root, adapter, out, directory|
       session = recovered(root, adapter, out, File.join(directory, 'issued.log'))
       paused = session.view(thread: 'research').interrupts
@@ -68,7 +63,7 @@ class ResearchDurabilityTest < Minitest::Test
   # run writes no second receipt for work the crashed run had already recorded — and the turn does not go back to the
   # accepted plan. Known gap, reported in STATUS.md rather than asserted here: the interrupted child's step replays
   # under a NEW effect identity, so the provider is asked for that one page again even though its receipt is held.
-  def test_c7_a_kill_mid_wave_repeats_no_recorded_search_page_read_or_model_call
+  def test_a_kill_mid_wave_repeats_no_recorded_search_page_read_or_model_call
     with_killed_research(stage: 'wave') do |root, adapter, out, directory|
       crashed = recorded_calls(adapter)
 

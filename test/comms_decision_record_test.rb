@@ -2,11 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice A (COMMS_TELEGRAM_PLAN §3) — the immutable DecisionRecord value and
-# its digests. The security property under test: a decision binds the exact
-# interrupt set it answers, deterministically and order-insensitively, so a
-# decision for one question can never answer a later one in the same
-# occurrence (invariant 58).
 class CommsDecisionRecordTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -148,8 +143,6 @@ class CommsDecisionRecordTest < Minitest::Test
     assert_match(/expires_at must follow decided_at/, error.message)
   end
 
-  # MIG-10 (ADR-049, contract §7.1): the operator audit trail — evidence level
-  # and reason — survives the wire round trip.
   def test_operator_evidence_and_reason_round_trip_through_the_store
     value = record(evidence: 'filesystem_operator', reason: 'operator_command')
 

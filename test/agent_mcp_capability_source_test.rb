@@ -1,11 +1,17 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/mcp_server_fixture'
+require_relative "support/scripted_generation"
+require_relative "support/session_plan"
 
-# P10 slice 4: the caller-supplied McpCapabilitySource and its session wiring —
-# catalog pinning in the session record, the resume guard (fails closed), and the
-# caller-level exactly-once proof for the MCP reissue path (invariant 21, advB).
 class AgentMcpCapabilitySourceTest < Minitest::Test
+  include McpServerFixture
+
+  include SessionPlan
+
+  private :plan_for
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Budgets = ServerConfig::Budgets
   Catalog = Tamoz::Mcp::Catalog
@@ -60,22 +66,7 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     def read_only? = effect_class == :read_only
   end
 
-  class ScriptedModel
-    attr_reader :calls
-
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
-
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
+  class ScriptedModel < ScriptedGeneration::Model
   end
 
   # Real SDK client that counts every wire request without changing the wire.
@@ -274,19 +265,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
   end
 
   # --- session glue: pinning, execution, resume guard --------------------------
-
-  def build_config(answer_file, overrides = {})
-    ServerConfig.new(
-      **{
-        server_id: "test-server",
-        transport: :stdio,
-        command: RbConfig.ruby,
-        arguments: [SERVER_SCRIPT, answer_file],
-        working_directory: @dir,
-        env_allowlist: BASE_ENV_ALLOWLIST + FLAG_NAMES
-      }.merge(overrides)
-    )
-  end
 
   def descriptor_for(snapshot, name, effect_class: :unknown_effects)
     entry = snapshot.entries.find { |candidate| candidate.name == name }
@@ -701,8 +679,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     end
   end
 
-  # --- planning surface (P10 §3: the MCP names must reach the planner) ---------
-
   def test_the_planning_prompt_renders_the_mcp_surface
     toolbox = Tamoz::Agent::Toolbox.new(root: @dir)
     allowed = toolbox.names + ["mcp:test-server/set_answer"]
@@ -784,22 +760,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       File.join(root, "broken.rb"),
       "module Broken\n  def self.answer = #{value}\nend\n"
     )
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def accepted_review

@@ -27,7 +27,7 @@ class SubagentDurabilityTest < Minitest::Test
     end
   end
 
-  def test_c2_a_rerun_gate_node_returns_the_stored_child_result_without_calling_the_child_model
+  def test_a_rerun_gate_node_returns_the_stored_child_result_without_calling_the_child_model
     spec_row('C2') do
       with_work_workspace(files: EXPLORE_FILES) do |root, adapter|
         first = SubagentFixtures::ScriptedTeam.new(parent: delegate_once, child: HAPPY_CHILD)
@@ -48,7 +48,7 @@ class SubagentDurabilityTest < Minitest::Test
     end
   end
 
-  def test_c3_a_stop_during_the_child_ends_the_child_and_then_the_parent_with_no_further_model_call
+  def test_a_stop_during_the_child_ends_the_child_and_then_the_parent_with_no_further_model_call
     spec_row('C3') do
       token = Tamoz::CancellationToken.new
       child = [{ calls: [read_call('lib/a.rb')] }, lambda { |_|

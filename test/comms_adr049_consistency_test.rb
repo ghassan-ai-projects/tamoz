@@ -3,11 +3,6 @@
 require_relative 'test_helper'
 require 'yaml'
 
-# PLAN_ADR049 Phase 0 exit — a CI/doc consistency check: ADR-049's status,
-# the ADR-043 retirement in the comms design, the flow contract's §2
-# resolution, and the bar's C1 grade must agree with each other and with the
-# code that implements them. If any of these drift, the authority record no
-# longer matches the graded instrument.
 class CommsAdr049ConsistencyTest < Minitest::Test
   def read_utf8(relative)
     File.read(ROOT.join(relative), encoding: Encoding::UTF_8)

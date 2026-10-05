@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/process_group_probe'
 
 class McpSupervisorTest < Minitest::Test
+  include ProcessGroupProbe
+
   ServerConfig = Tamoz::Mcp::ServerConfig
   Budgets = ServerConfig::Budgets
   Catalog = Tamoz::Mcp::Catalog
@@ -12,8 +15,6 @@ class McpSupervisorTest < Minitest::Test
     PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
   ].freeze
 
-  # Minimal duck-typed CircuitStore implementation that records calls, proving
-  # the caller-injected seam (DR-2) rather than hard-coded in-memory state.
   class CircuitProbe
     attr_reader :calls
 
@@ -71,17 +72,6 @@ class McpSupervisorTest < Minitest::Test
         env_allowlist: BASE_ENV_ALLOWLIST + %w[MCP_TEST_SERVER_GRANDCHILD]
       }.merge(overrides)
     )
-  end
-
-  def group_alive?(pid)
-    Process.kill(0, -pid)
-    true
-  rescue Errno::ESRCH
-    false
-  rescue Errno::EPERM
-    # A zombie group leader (or a group in another session) signals EPERM;
-    # treat it as still present, matching the supervisor's own probe.
-    true
   end
 
   def test_child_environment_is_restricted_to_allowlist_and_credential_refs
@@ -155,16 +145,13 @@ class McpSupervisorTest < Minitest::Test
     )
     supervisor = Supervisor.new(noisy)
     supervisor.start
-    sleep 0.3
+    Timeout.timeout(10) { sleep 0.01 until supervisor.stderr_tail.bytesize.positive? }
     supervisor.close
 
     assert_operator supervisor.stderr_tail.bytesize, :<=, 64
     assert_operator supervisor.stderr_tail.bytesize, :>, 0
   end
 
-  # F2 (progress review, inv 24): a hostile/faulty child that prints its exact
-  # credential value to stderr must not leak it into diagnostic metadata —
-  # stderr_tail redacts resolved credential_refs values.
   def test_stderr_tail_redacts_resolved_credential_values
     ENV["TAMOZ_MCP_TEST_CREDENTIAL"] = "super-secret-value-12345"
     leaky_script = File.join(@dir, "leaky_child.rb")
@@ -180,7 +167,7 @@ class McpSupervisorTest < Minitest::Test
     )
     supervisor = Supervisor.new(leaky)
     supervisor.start
-    sleep 0.3
+    Timeout.timeout(10) { sleep 0.01 until supervisor.stderr_tail.bytesize.positive? }
     supervisor.close
 
     tail = supervisor.stderr_tail
@@ -189,8 +176,6 @@ class McpSupervisorTest < Minitest::Test
   ensure
     ENV.delete("TAMOZ_MCP_TEST_CREDENTIAL")
   end
-
-  # --- §8 circuit ----------------------------------------------------------
 
   def test_health_states_and_circuit_transitions
     supervisor = Supervisor.new(build_config, circuit_threshold: 3)
@@ -300,8 +285,6 @@ class McpSupervisorTest < Minitest::Test
   ensure
     supervisor.close
   end
-
-  # --- §8 restart backoff ------------------------------------------------------
 
   def test_restart_backoff_is_exponential_jittered_and_bounded
     supervisor = Supervisor.new(

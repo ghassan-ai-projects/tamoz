@@ -331,7 +331,6 @@ class AgentWorkerTest < Minitest::Test
       assert_raises(CompactionCrash) { first_worker.poll_once }
       first_runtime.close
 
-      sleep 0.25
       second_runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
         model_factory: ->(profile:) { AdaptiveCompactionModel.new },
@@ -513,7 +512,7 @@ class AgentWorkerTest < Minitest::Test
           poll_interval: 30.0
         )
         stopper = Thread.new do
-          sleep 0.1
+          sleep 0.1 # stop must land after run enters its poll, or the interruptible-sleep property goes untested
           worker.stop!("sigterm")
         end
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)

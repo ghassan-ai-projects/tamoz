@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# Slice E (COMMS_TELEGRAM_PLAN §3) — the worker's DeliverySink projection:
-# lifecycle events become bounded outbox rows via the CommsStore, an unbound
-# thread delivers nothing (nil-safe), and the worker pushes before the
-# occurrence closes.
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class AgentOutboxDeliverySinkTest < Minitest::Test
   Comms = Tamoz::Comms
@@ -103,7 +99,8 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       %w[request.completed request.approved request.denied request.failed].each_with_index do |kind, index|
         sink.push(thread_id: 'tg.ops.abc', kind:, text: 'result text', request_id: "terminal-#{index}")
 
-        assert_equal 'result text', store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).last.fetch('text')
+        assert_equal 'result text',
+                     store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).last.fetch('text')
       end
     end
   end
@@ -341,10 +338,10 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store, surface: descriptor(limits: {
-        max_inbound_bytes: 8192, max_open_requests: 50, max_denial_prompts_per_request: 4,
-        outbox_capacity: 1, control_capacity: 50, per_chat_messages_per_s: 1.0,
-        global_messages_per_s: 25.0
-      }))
+                                                               max_inbound_bytes: 8192, max_open_requests: 50, max_denial_prompts_per_request: 4,
+                                                               outbox_capacity: 1, control_capacity: 50, per_chat_messages_per_s: 1.0,
+                                                               global_messages_per_s: 25.0
+                                                             }))
       interrupts = [{ task_id: 'task', call_index: 0,
                       descriptor: { 'kind' => 'clarify', 'question' => 'Which file?' } }]
 

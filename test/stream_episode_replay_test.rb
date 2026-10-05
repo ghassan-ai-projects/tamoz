@@ -8,11 +8,6 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# P2 exit gates 1-2: the crash/redispatch matrix and replay with the provider
-# network disabled. The journal's LOGICAL keys make a completed tool-loop
-# episode replay byte-identically (same parsed document, same decision, same
-# tool results) with zero provider calls, and an ambiguous in-flight attempt
-# stays typed `unknown` — never a blind retry.
 class StreamEpisodeReplayTest < Minitest::Test
   Stream = Tamoz::Stream
 

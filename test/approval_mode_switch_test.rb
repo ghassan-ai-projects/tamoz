@@ -3,10 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/approval_case'
 
-# Step 7B engine semantics (ADR §2.6): rebind_session swaps ONE session's
-# (profile, policy_rev) for the next decide only; tightening drops old-rev
-# grants for free; a global reload stays invisible to the bound session; every
-# applied switch lands in the decision log exactly once per switch id.
 class ApprovalModeSwitchTest < Minitest::Test
   Approval = Tamoz::Approval
   include ApprovalCase

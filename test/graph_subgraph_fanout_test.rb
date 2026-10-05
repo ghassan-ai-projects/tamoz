@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
-require 'timeout'
+require_relative 'support/thread_barrier'
 
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one parent graph and its fan-out, declared inline
 
@@ -10,12 +10,13 @@ class GraphSubgraphFanoutTest < Minitest::Test
   def test_call_many_runs_children_at_once_and_stores_each_under_its_input_order
     checkpointer = Tamoz::Graph::MemoryCheckpointer.new
     arrived = Queue.new
+    barrier = ThreadBarrier.new(3)
     child = Tamoz.graph(name: 'fanout-child', version: '1') do
       state :label, default: ''
       state :values, reduce: :append, default: []
       node(:work, implementation_name: 'fanout.child.work', version: '1') do |state, _context|
         arrived << state[:label]
-        Timeout.timeout(5) { sleep 0.001 until arrived.length >= 3 }
+        barrier.wait
         { values: ["done:#{state[:label]}"] }
       end
       edge Tamoz::START, :work

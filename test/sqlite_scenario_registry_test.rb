@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/deep_freeze_assertions"
 
 class SQLiteScenarioRegistryTest < Minitest::Test
+  include DeepFreezeAssertions
+
   EXPECTED_IDS = %w[
     checkpoint.commit-advance
     checkpoint.commit-failed
@@ -199,19 +202,6 @@ class SQLiteScenarioRegistryTest < Minitest::Test
           candidate.fetch("template") == statement
         end
       end
-    end
-  end
-
-  def assert_deeply_frozen(value)
-    assert value.frozen?
-    case value
-    when Hash
-      value.each do |key, entry|
-        assert_deeply_frozen(key)
-        assert_deeply_frozen(entry)
-      end
-    when Array
-      value.each { |entry| assert_deeply_frozen(entry) }
     end
   end
 end

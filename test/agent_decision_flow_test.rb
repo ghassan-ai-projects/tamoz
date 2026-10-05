@@ -1,11 +1,5 @@
 # frozen_string_literal: true
 
-# Slice A (COMMS_TELEGRAM_PLAN §3) — the worker's decision consumption, from
-# the direction that matters: a decision answers EXACTLY ONE interrupt set.
-# Two approval rounds in one occurrence cannot reuse a decision (invariant
-# 58), a wrong digest or an expired record is refused (fail closed), and the
-# operator's latest word on the same question wins.
-
 require_relative 'test_helper'
 require_relative 'support/autonomy_case'
 

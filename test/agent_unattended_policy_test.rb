@@ -1,13 +1,5 @@
 # frozen_string_literal: true
 
-# The unattended contract, attacked from every direction (redesign plan §7):
-# headless is not consent; a denial is terminal for the effect; policy data
-# lives in the operator config, never in workspace content; an expired ask
-# resolves to the profile's on_timeout outcome; and an approval answers one
-# occurrence only.
-#
-# The scorecard proves the happy paths: gated work pauses, approval resumes.
-# This file tries to break the rule.
 require_relative "test_helper"
 require_relative "support/autonomy_case"
 
@@ -131,13 +123,14 @@ class AgentUnattendedPolicyTest < Minitest::Test
   # nobody is watching, so the worker applies the outcome itself and the turn
   # continues with a structured denial.
   def test_an_expired_ask_resolves_to_the_profiles_deny_outcome
-    with_runtime(approval_ask: {timeout_s: 1, on_timeout: "deny"}) do |rt|
+    with_runtime(approval_ask: {timeout_s: 0.2, on_timeout: "deny"}) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.cli(%W[queue add --task Fix\ note.txt --profile trusted], factory: edit_factory)
       rt.cli(%w[worker --once --json], factory: edit_factory)
       assert_equal 1, rt.pending_approvals.length, "the ask must park first"
 
-      sleep 1.5
+      # Expiry is checked against the worker wall clock; 0.3 s is 50% past the ask timeout.
+      sleep 0.3
       if ENV['TAMOZ_DEBUG']
         warn('DIAG ev=' + rt.events.map { |e| [e['event'], e['reason']].compact.join(':') }.inspect)
         warn('DIAG err=' + rt.err[0, 400])

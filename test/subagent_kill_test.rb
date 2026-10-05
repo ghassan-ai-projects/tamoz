@@ -73,7 +73,7 @@ class SubagentKillTest < Minitest::Test
     end
   end
 
-  def test_c1_a_killed_process_leaves_a_child_that_resumes_and_replays_its_recorded_calls
+  def test_a_killed_process_leaves_a_child_that_resumes_and_replays_its_recorded_calls
     spec_row('C1') do
       [1, 2].each do |recorded|
         with_killed_process(recorded) do |root, adapter|

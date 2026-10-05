@@ -1,13 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/thread_readiness'
+require_relative 'support/thread_barrier'
 
 class CorePoolTest < Minitest::Test
+  include ThreadReadiness
+
   def test_inline_and_threaded_results_preserve_submission_order
     items = (0...40).to_a
     inline = Tamoz::Pool.for(:inline).map(items) { |item| item * item }
+    barrier = ThreadBarrier.new(4)
     threaded = Tamoz::Pool.for(:threads, size: 4, queue_capacity: 3).map(items) do |item|
-      sleep(((39 - item) % 5) * 0.0001)
+      barrier.wait if item < 4
       item * item
     end
 
@@ -20,20 +25,35 @@ class CorePoolTest < Minitest::Test
     50.times do |seed|
       random = Random.new(seed)
       items = Array.new(random.rand(1..30)) { random.rand(-1_000..1_000) }
-      delays = items.each_index.map { random.rand(0..4) * 0.00005 }
       expected = Tamoz::Pool.for(:inline).map(items) { |item| item * 3 }
       actual = Tamoz::Pool.for(
         :threads,
         size: random.rand(1..4),
         queue_capacity: random.rand(1..5)
-      ).map(items.each_with_index.to_a) do |(item, index)|
-        sleep(delays.fetch(index))
+      ).map(items) do |item|
+        Thread.pass
         item * 3
       end
 
       assert_equal expected.map(&:value), actual.map(&:value), "seed=#{seed}"
       assert_equal items.each_index.to_a, actual.map(&:index), "seed=#{seed}"
     end
+  end
+
+  def test_preserves_input_order_when_callbacks_record_completion_in_reverse
+    second_done = Queue.new
+    finished = Queue.new
+    results = Tamoz::Pool.for(:threads, size: 2).map([0, 1]) do |item|
+      raise ThreadError, 'second task did not finish' if item.zero? && !second_done.pop(timeout: 5)
+
+      finished << item
+      second_done << true if item == 1
+      item
+    end
+
+    assert_equal %i[succeeded succeeded], results.map(&:status)
+    assert_equal [1, 0], Array.new(2) { finished.pop(timeout: 5) }
+    assert_equal [[0, 0], [1, 1]], results.map { |result| [result.index, result.value] }
   end
 
   def test_interrupt_is_captured_inside_each_worker
@@ -177,14 +197,5 @@ class CorePoolTest < Minitest::Test
 
   def tamoz_pool_threads
     Thread.list.select { |thread| thread.name&.start_with?("tamoz-pool-") }
-  end
-
-  def wait_until(timeout: 1.0)
-    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
-    until yield
-      flunk "condition was not reached within #{timeout}s" if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
-
-      Thread.pass
-    end
   end
 end

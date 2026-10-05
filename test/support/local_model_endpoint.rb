@@ -7,27 +7,6 @@ require "net/http"
 require "uri"
 require "tamoz/core"
 
-# P1 test infrastructure: a real, separately-controlled local model endpoint.
-#
-# The design (§4.3) requires P1 to hit a real endpoint that logs the raw
-# request/response digests OUTSIDE the worker — not a fake RubyLLM context,
-# which the anti-cheat protocol rejects as "not a real model call". Two modes:
-#
-#   - :proxy — forwards the worker's request to a REAL pinned upstream model
-#     server (ollama's OpenAI-compatible /v1 in the P1 environment) and logs
-#     the exact request/response bytes it forwards. Gates 1-2 use this mode:
-#     the digests the endpoint observes are compared against the Tamoz
-#     receipt's digests, byte for byte.
-#   - :fixture — serves scripted OpenAI-compatible responses (in order) over
-#     the same real HTTP boundary, logging the same digests. Used ONLY for the
-#     perturbation control (gate 3, output dependence is a plumbing property)
-#     and unit tests. Fixture runs are labeled `fixture` and are never shown
-#     as evidence of a real model path.
-#
-# The request bytes arrive verbatim from the frozen episode transport (the
-# canonical JCS body), so `digest(body)` here equals the receipt's request
-# digest by construction; the response digest is over the exact envelope bytes
-# the endpoint sends.
 class LocalModelEndpoint
   attr_reader :port, :log_path, :mode
 

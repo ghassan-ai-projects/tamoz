@@ -2,10 +2,6 @@
 
 require_relative 'test_helper'
 
-# C7 (PLAN_ADR049 Phase 6) — exact per-command child environments: every
-# child carries the standard runtime allowlist plus only its own credentials.
-# The gateway never sees the model key, the worker never sees the bot token,
-# queue/status see neither, and the harness sees only sanitized pointers.
 # rubocop:disable Minitest/MultipleAssertions
 class ChildEnvironmentsTest < Minitest::Test
   ChildEnvironments = Tamoz::Agent::ChildEnvironments

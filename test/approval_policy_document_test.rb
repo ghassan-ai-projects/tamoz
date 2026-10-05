@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/approval_case'
 require 'tempfile'
 require 'yaml'
 
-# Approval redesign phase 2 — policy data loader/validator.
 class ApprovalPolicyDocumentTest < Minitest::Test
+  include ApprovalCase
+
   Approval = Tamoz::Approval
 
   # A minimal valid document every invalid-variant test perturbs by exactly
@@ -127,13 +129,13 @@ class ApprovalPolicyDocumentTest < Minitest::Test
   end
 
   def test_invalid_yaml_is_rejected
-    write_yaml('version: [') do |path|
+    with_policy('version: [') do |path|
       assert_raises(Approval::InvalidPolicyError) { Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols) }
     end
   end
 
   def test_missing_required_key_is_rejected
-    write_yaml('version: 1') do |path|
+    with_policy('version: 1') do |path|
       error = assert_raises(Approval::InvalidPolicyError) do
         Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
       end
@@ -396,15 +398,7 @@ class ApprovalPolicyDocumentTest < Minitest::Test
   private
 
   def write_policy_yaml(overrides = {}, &)
-    write_yaml(YAML.dump(deep_merge(MINIMAL_POLICY, overrides)), &)
-  end
-
-  def write_yaml(content)
-    Tempfile.create(['policy', '.yaml']) do |file|
-      file.write(content)
-      file.flush
-      yield file.path
-    end
+    with_policy(YAML.dump(deep_merge(MINIMAL_POLICY, overrides)), &)
   end
 
   def write_profile(dir, name, content)

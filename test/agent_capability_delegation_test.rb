@@ -2,7 +2,7 @@
 
 require_relative 'test_helper'
 
-class AgentPhase4CapabilityTest < Minitest::Test
+class AgentCapabilityDelegationTest < Minitest::Test
   # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions -- cross-seam assertions intentionally cover the full contract.
   class ChildRuntime
     attr_reader :child
@@ -61,7 +61,7 @@ class AgentPhase4CapabilityTest < Minitest::Test
   end
 
   def test_candidate_promotion_records_a_next_boundary_transition_without_activation
-    Dir.mktmpdir('phase4-candidate') do |directory|
+    Dir.mktmpdir('capability-candidate') do |directory|
       registry = Tamoz::Agent::Profile::TransitionRegistry.new(
         path: File.join(directory, 'transitions.yml')
       )

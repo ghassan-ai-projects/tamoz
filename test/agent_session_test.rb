@@ -1,24 +1,15 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/scripted_generation"
+require_relative "support/session_plan"
 
 class AgentSessionTest < Minitest::Test
-  class ScriptedModel
-    attr_reader :calls
+  include SessionPlan
 
-    def initialize(**responses)
-      @responses = responses.transform_values(&:dup)
-      @calls = []
-    end
+  private :plan_for
 
-    def generate(stage:, system:, prompt:)
-      @calls << {stage:, system:, prompt:}
-      queue = @responses.fetch(stage)
-      raise "no scripted #{stage} response" if queue.empty?
-
-      value = queue.length == 1 ? queue.first : queue.shift
-      value.is_a?(String) ? value : JSON.generate(value)
-    end
+  class ScriptedModel < ScriptedGeneration::Model
   end
 
   ToolPolicy = Data.define(:allow_changes, :checks) do
@@ -215,8 +206,6 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
-  # A denial is a structured result fed back to the model; the turn continues
-  # (ADR §2.4) — and the denied effect never lands.
   def test_denied_approval_stops_before_any_filesystem_effect
     with_workspace do |root, adapter|
       target = File.join(root, "app.rb")
@@ -354,22 +343,6 @@ class AgentSessionTest < Minitest::Test
 
   def check_argv
     [RbConfig.ruby, "-e", %q{abort("wrong") unless File.read("app.rb") == "value = 2\n"}]
-  end
-
-  def plan_for(tool, arguments, id: "s1")
-    {
-      "goal" => "answer the task",
-      "done_when" => ["the tool returned evidence"],
-      "steps" => [
-        {
-          "id" => id,
-          "purpose" => "gather evidence",
-          "tool" => tool,
-          "arguments" => arguments,
-          "verification" => "the output is present"
-        }
-      ]
-    }
   end
 
   def repair_model(digest)

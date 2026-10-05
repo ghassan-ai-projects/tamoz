@@ -1,16 +1,12 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/comms_approval_fixture'
 
-# ADR-049 / TELEGRAM_COMMUNICATION_FLOW_CONTRACT §7.1 — approval is gated on
-# authority evidence, not on transport. These are the bar's group-C oracles
-# (TELEGRAM_COMMUNICATION_BAR C1-C3) as executable tests.
-#
-# C1 is GREEN since plan Phase 3: `resolve_callback` refuses a chat_bound
-# approve under the v1 policy with a durable refusal and no decision, and
-# deny remains unconditional (INV-A).
 # rubocop:disable Lint/UnusedMethodArgument
 class CommsEvidenceGatedApprovalTest < Minitest::Test
+  include CommsApprovalFixture
+
   Comms = Tamoz::Comms
 
   # The gateway plus the transport it was built on, so no test reaches into
@@ -29,47 +25,10 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  def with_engine
-    Dir.mktmpdir('tamoz-evidence') do |directory|
-      path = File.join(directory, 'runtime.sqlite3')
-      adapter = Tamoz::SQLite::Adapter.new(path:)
-      begin
-        definition = Tamoz.graph(name: 'evidence', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'evidence.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
-        yield adapter, checkpoints
-      ensure
-        adapter&.close
-      end
-    end
+  def with_engine(&block)
+    Dir.mktmpdir('tamoz-evidence') { |directory| with_checkpoints(directory, graph_name: 'evidence', &block) }
   end
 
-  def descriptor
-    Comms::SurfaceDescriptor.build(
-      surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-                   poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990, bot_username: 'ops_bot' },
-      admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
-      threading: 'conversation', profile_id: 'ops',
-      approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
-      limits: { max_inbound_bytes: 8192, max_open_requests: 50,
-                max_denial_prompts_per_request: 4, outbox_capacity: 500,
-                control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 }
-    )
-  end
-
-  # C1 / INV-B + INV-D (GREEN since Phase 3): the prompt pins what its
-  # decision carries (`filesystem_operator` for operator-gated effects), so a
-  # chat_bound Telegram approve must be refused and must NOT put an approve
-  # decision in front of the worker.
   def test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence
     with_engine do |adapter, checkpoints|
       store, harness = boot(adapter, checkpoints)
@@ -86,9 +45,6 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  # C1 / refusal is durable and non-destructive (contract §7.1): the weak
-  # approve records a `rejected`/`insufficient_evidence` inbound row and the
-  # prompt stays ACTIVE — a refusal never consumes it.
   def test_a_refused_approve_records_a_durable_refusal_and_leaves_the_prompt_active
     with_engine do |adapter, checkpoints|
       store, harness = boot(adapter, checkpoints)
@@ -125,9 +81,6 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  # C1 / exact binding (contract §7.1): a press whose correspondent does not
-  # match the prompt's bound correspondent records a durable refusal and
-  # creates no decision.
   def test_a_cross_correspondent_press_is_refused
     with_engine do |adapter, checkpoints|
       store, harness = boot(adapter, checkpoints)
@@ -259,11 +212,6 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  # C4 / the gate is evidence-driven, not a hardcoded transport block: an
-  # approve on a prompt whose pinned requirement `chat_bound` evidence can
-  # meet is granted, while the same press on a `filesystem_operator` prompt is
-  # refused (the Phase 3 asymmetry, driven by the pinned value, not by which
-  # transport pressed).
   def test_an_approve_is_granted_when_the_requirement_meets_chat_bound_evidence
     with_engine do |adapter, checkpoints|
       store, harness = boot(adapter, checkpoints)
@@ -305,9 +253,6 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  # C4 / exact binding across messages (contract §7.1): a press whose
-  # callback message is not the prompt's originating message (the receipt
-  # pinned at activation) is refused with a durable binding refusal.
   def test_a_cross_message_press_is_refused
     with_engine do |adapter, checkpoints|
       store, harness = boot(adapter, checkpoints)

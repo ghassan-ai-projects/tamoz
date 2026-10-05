@@ -2,18 +2,6 @@
 
 require_relative "healing_fixtures"
 
-# P12 §8/§13 — the applicable classification matrix and the H4 promotion gate.
-#
-# The plan's 250-cell matrix (10 fault classes × 5 lifecycle stages × 5 seeds)
-# runs only its APPLICABLE cells: a cell is not applicable only if the fault
-# class cannot occur at that stage within the rule's authorized scope, and every
-# exclusion is stated. For the v1 reference rule (stale conditional file edit)
-# the mandatory cells are the never-mutate classes and the verify-stage class,
-# which this suite runs over the full 12-category synthetic set.
-#
-# Metrics are reported with every denominator (plan §8), and the H4 promotion
-# gate consumes the matrix verbatim (`PromotionGate.evaluate`) rather than
-# re-deriving abstention arithmetic.
 class HealingMatrixTest < Minitest::Test
   include HealingFixtures
 

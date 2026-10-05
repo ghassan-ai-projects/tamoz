@@ -9,11 +9,6 @@ require_relative "aquaculture_domain"
 
 Stream = Tamoz::Stream
 
-# P1 test composition: builds the SAME fixed production episode graph the
-# worker launcher composes (Tamoz::Agent::EpisodeGraph + EpisodeNodes with the
-# profile/frame/model-call/decision ports), wired to a fixture or proxy
-# endpoint. Old runner-level tests that predate P1 used throwaway graphs; they
-# now exercise the real fixed graph (gate 4: same graph, in-process driver).
 module EpisodeComposition
   # The cross-repo prompt digest: the Go runtime computes
   # digest("situation-runtime/prompt/v1\n", {version, text}); the Ruby frame
@@ -82,9 +77,6 @@ module EpisodeComposition
       worker_version: "0.1.0.alpha.1",
       lane_config: Tamoz::Agent::LaneConfig.build("fast" => "flash", "deep" => "pro", "batch" => "flash")
     )
-    # P2: a stub tool port is surfaced through the REAL capability-host seam
-    # (the runner binds it as context.episode_tools), so the graph exercises
-    # the same host path production uses.
     episode_tools = if tool_port
                       implementations = Stream::EpisodeCapabilityHost::PERMITTED.to_h do |name|
                         [name, lambda do |arguments, _context|
@@ -103,7 +95,7 @@ module EpisodeComposition
     {app:, runner:, adapter: checkpointer, directory:}
   end
 
-  # The P0B wire request the fixed graph consumes. All digests are computed by
+  # The wire request the fixed graph consumes. All digests are computed by
   # the same rules the graph verifies, so a well-formed request reaches reason.
   def wire_request(
     episode_id: "ep-1", attempt: 1, fence: 1, kind: :EPISODE_KIND_DIAGNOSE,

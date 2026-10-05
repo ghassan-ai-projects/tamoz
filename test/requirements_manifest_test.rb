@@ -2,24 +2,10 @@
 
 require_relative "test_helper"
 
-# P15-A (docs/P15_RELEASE_PLAN.md §3) — the requirements manifest is the
-# machine-readable basis of release status, so the gate protects it:
-#
-# - it regenerates byte-identically from the authoritative sources (a design
-#   document cannot gain an invariant, an ADR, a CLI verb or a migration
-#   without the manifest gaining its row);
-# - it never claims a passing status (only the audit, which RUNS the tests,
-#   may do that);
-# - every named test it cites exists and defines the case it names.
-#
-# The audit itself is NOT run here: it executes 200+ test cases in their own
-# processes and belongs to the release gate, not to `rake ci`.
 class RequirementsManifestTest < Minitest::Test
   MANIFEST_PATH = ROOT.join("docs", "requirements-manifest.json")
   AUDIT_PATH = ROOT.join("docs", "requirements-audit.json")
 
-  # T8.3: INV-44..51 were the P14 stream engine's invariants; they are
-  # retired with it (mirrors the generator's RETIRED_STREAM_CLAUSES).
   RETIRED_STREAM_CLAUSES = (44..51).freeze
 
   def manifest = @manifest ||= read_json(MANIFEST_PATH)
@@ -38,9 +24,6 @@ class RequirementsManifestTest < Minitest::Test
            "the committed manifest diverges from a fresh generation:\n#{stderr}#{stdout}"
   end
 
-  # Every invariant clause has a row. A clause cannot be
-  # silently dropped from release consideration. T8.3: INV-44..51 are retired
-  # with the P14 stream engine (mirrors the generator's RETIRED_STREAM_CLAUSES).
   def test_every_invariant_clause_has_a_row
     expected = (1..61).reject { |number| RETIRED_STREAM_CLAUSES.cover?(number) }
                       .map { |number| format("INV-%02d", number) }
@@ -76,7 +59,6 @@ class RequirementsManifestTest < Minitest::Test
       row.fetch("id").delete_prefix("CLI-") if row.fetch("category") == "cli_command"
     }.sort
 
-    # MIGRATION_13 is a %w[] literal (T8.3) — both literal styles count.
     ordinals = File.read(
       ROOT.join("gems", "tamoz-sqlite", "lib", "tamoz", "sqlite", "migrator.rb"),
       encoding: Encoding::UTF_8
@@ -146,8 +128,6 @@ class RequirementsManifestTest < Minitest::Test
     end
   end
 
-  # The deferred set is enumerated by the invariants document itself, never
-  # free-form (plan §3, correction 2).
   def test_deferred_clauses_match_the_invariants_document
     matrix = manifest.fetch("promotion_matrix")
 
@@ -168,7 +148,6 @@ class RequirementsManifestTest < Minitest::Test
     assert_equal %w[tamoz-mcp tamoz-scheduler tamoz-stream], promoted
     promoted.each do |package|
       matrix.fetch("conditional_clauses").fetch(package).each do |id|
-        # T8.3: the retired stream clauses (INV-44..51) are no longer rows.
         next if id.match?(/\AINV-(4[4-9]|5[01])\z/)
 
         assert by_id.fetch(id).fetch("release_blocking"),

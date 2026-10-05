@@ -52,9 +52,6 @@ class ModelClientFactoryTest < Minitest::Test
   end
 
   def test_factory_rejects_an_api_base_name_as_a_profile_credential
-    # A credential_ref naming an API-base variable is a malformed role
-    # reference, so it fails typed (ProfileRoleUnavailableError), matching the
-    # DR-5 D1 taxonomy in tamoz-agent-kernel errors.rb.
     error = assert_raises(Tamoz::Agent::ProfileRoleUnavailableError) do
       Factory.build(
         provider: 'ollama', model: 'local-model',

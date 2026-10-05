@@ -3,11 +3,6 @@
 require_relative "test_helper"
 require "stringio"
 
-# P13-P (plan §8, C8) — the product consumer: a READ-ONLY scorecard summary.
-# The pinned surface proof: the consumer grant contains ONLY the scorecard-run
-# capability, no mutation tool; the consumer's subprocess surface is exactly
-# the one deterministic scorecard invocation; delivery is never execution
-# success.
 class SchedulerConsumerTest < Minitest::Test
   Scheduler = Tamoz::Evals::Runner
 

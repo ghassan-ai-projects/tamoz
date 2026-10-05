@@ -58,10 +58,6 @@ class BenchmarkHarnessTest < Minitest::Test
   end
 
   def test_macro_f1_averages_across_codes_not_cells
-    # 10 correct + 10 wrong on the same code is NOT ~0.5 macro-F1: the code
-    # the model is right about carries precision 1 but recall 0.5 (10 of 20
-    # true low_dissolved_oxygen cells were caught), so F1 = 0.667; the other
-    # codes carry 0. The average is over CODES, not cells.
     cells = 10.times.map { cell(primary: "low_dissolved_oxygen", truth: "low_dissolved_oxygen") } +
             10.times.map { cell(primary: "equipment_failure", truth: "low_dissolved_oxygen") }
     assert_in_delta (0.667 + 0.0 + 0.0) / 3, metrics.macro_f1(cells, CODES), 1e-3

@@ -13,7 +13,6 @@ class MemoryBoundaryTest < Minitest::Test
     %r{["'](?:knowledge|experience)/}
   ].freeze
   OWNERS = %w[gems/tamoz-agent-memory/ gems/tamoz-sqlite/].freeze
-  # The DR-3 harness seeds fixture records below the admission policy on purpose.
   SEEDERS = %w[gems/tamoz-evals-runner/lib/tamoz/evals/harness/memory_repository_adapter.rb].freeze
 
   def test_no_gem_outside_memory_reaches_into_its_storage_or_scopes

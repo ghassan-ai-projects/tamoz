@@ -779,18 +779,6 @@ module Tamoz
           end
         end
 
-        # C8 drives visible cancellation across two sub-runs over the Phase 2c
-        # seam (MIGRATION_21 stamps, gateway /cancel same-txn stamping, worker
-        # observation at consume). clean_stop: a turn parked on an approval
-        # ask (the C7 waiting machinery), /cancel issued through the REAL
-        # gateway command path mid-flight, then the observation point stamped
-        # through the store method the turn runner itself calls — the engine
-        # consumes redirects only after the open occurrence settles, so
-        # observed-before-settle is not reachable offline (typed edge in the
-        # oracle). raced_restart: /cancel lands while the turn is crashed
-        # mid-flight, a fresh worker recovers it to completion BEFORE the
-        # redirect is consumed, and the recorded answer settle therefore
-        # reads completed_before_effect.
         def drive_c8
           {
             'clean_stop' => drive_c8_clean_stop,

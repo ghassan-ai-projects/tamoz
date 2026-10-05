@@ -223,7 +223,7 @@ class AgentProbeSourceTest < Minitest::Test
       overlapped ||= !entered.empty?
       entered << :in
       Thread.pass
-      sleep 0.01
+      sleep 0.01 # the window is the probe: a second entrant here proves the per-server lock is gone
       entered.pop
       AgentProbeSourceTest::Inner.instance_method(:execute).bind_call(self, context, name, arguments)
     end

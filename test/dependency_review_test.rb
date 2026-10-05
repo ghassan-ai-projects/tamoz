@@ -2,9 +2,6 @@
 
 require_relative "test_helper"
 
-# P15-D — the dependency, licence and provenance review is a GATE, not a
-# snapshot. Supply-chain facts that are only true on the day someone writes
-# them down are not facts a release can rest on.
 class DependencyReviewTest < Minitest::Test
   REPORT = ROOT.join("docs", "dependency-review.json")
   MARKDOWN = ROOT.join("docs", "DEPENDENCY_REVIEW.md")

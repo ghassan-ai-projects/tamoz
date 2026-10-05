@@ -5,13 +5,6 @@ require "fileutils"
 module Tamoz
   module Evals
     module Harness
-      # DR-3 memory corpus: tasks where memory should matter, every case
-      # carrying the mandatory `treatments.expected_delta` block (C6/E8). The
-      # runners reuse the smoke corpus's cell runner (`AgentSmokeCorpus#execute`,
-      # extended with the store/memory_config/memory_capture seam); each
-      # (case, treatment) cell runs in its own tmpdir with its own store file
-      # (C4). The scripted model IGNORES the prompt, so the corpus measures
-      # injection correctness, never attribution (C1).
       class AgentMemoryCorpus < AgentSmokeCorpus
         SUITE_ID = Verifier::MEMORY_EVAL_SUITE_ID
         SUITE_VERSION = 1
@@ -31,8 +24,6 @@ module Tamoz
           artifacts.freeze
         end
 
-        # The DR-3 cell runner: one (case, treatment) cell, its own tmpdir
-        # (`cell_root`), its own store file, and the envelope capture stream.
         def run_cell(case_artifact, cell_root:, store:, memory_config:, memory_capture:)
           ensure_agent!
           definition = case_definition(case_artifact)

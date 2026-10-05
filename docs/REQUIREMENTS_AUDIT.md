@@ -41,7 +41,7 @@ generating run.
 
 | Requirement | Category | Blocking | Status | Direct evidence |
 |---|---|---|---|---|
-| `ADR-001` | adr | yes | pass | `test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice` |
+| `ADR-001` | adr | yes | pass | `test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_milestone` |
 | `ADR-005` | adr | yes | pass | `test/graph_identity_test.rb#test_interrupt_cursor_is_explicit_positional_and_uses_throw` |
 | `ADR-006` | adr | yes | pass | `test/graph_reducer_test.rb#test_append_merge_union_min_and_max_contracts` |
 | `ADR-007` | adr | yes | pass | `test/graph_state_manager_test.rb#test_unknown_unsupported_and_sensitive_updates_fail_before_candidate` |
@@ -553,7 +553,7 @@ generating run.
 | `INV-39` | invariant | yes | missing | `test/sqlite_schedule_store_test.rb#test_misfire_skip_delivers_only_the_latest_and_records_older_skipped` |
 | `INV-40` | invariant | yes | pass | `test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule` |
 | `INV-41` | invariant | no | deferred-by-contract | `test/agent_skills_test.rb#test_same_version_content_swap_changes_identity_and_epoch` |
-| `INV-42` | invariant | no | deferred-by-contract | `test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing` |
+| `INV-42` | invariant | no | deferred-by-contract | `test/agent_skills_adversarial_test.rb#test_allowed_tools_is_recorded_as_a_request_and_grants_nothing` |
 | `INV-43` | invariant | no | deferred-by-contract | `—` |
 | `INV-52` | invariant | yes | pass | `test/graph_identity_test.rb#test_activation_survives_new_base_while_attempt_identity_changes` |
 | `INV-53` | invariant | yes | pass | `test/sqlite_request_inbox_test.rb#test_redirect_pins_target_and_generation_then_starts_new_turn` |
@@ -589,7 +589,7 @@ generating run.
 | `MIG-8` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `MIG-9` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store` |
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
-| `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
+| `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |
 | `NG-real-actuator` | non_goal | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `NG-second-ui` | non_goal | no | indirect | `—` |
@@ -601,7 +601,7 @@ generating run.
 | `OBJ-5` | objective | yes | pass | `test/capability_host_test.rb#test_the_admission_set_bounds_the_surface` |
 | `OBJ-6` | objective | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
 | `OBJ-7` | objective | yes | missing | `—` |
-| `PHASE-DR-2` | phase_exit_criterion | yes | pass | `test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask` |
+| `PHASE-DR-2` | phase_exit_criterion | yes | pass | `test/sqlite_circuit_store_test.rb#test_consecutive_threshold_opens_and_owner_success_does_not_mask` |
 | `PHASE-DR-3` | phase_exit_criterion | yes | pass | `test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution` |
 | `PHASE-DR-4` | phase_exit_criterion | yes | pass | `test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim` |
 | `PHASE-DR-5` | phase_exit_criterion | yes | pass | `test/agent_profile_machinery_test.rb#test_flocked_consume_is_exactly_once_across_concurrent_writers` |
@@ -612,9 +612,9 @@ generating run.
 | `PHASE-P12` | phase_exit_criterion | yes | pass | `test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle` |
 | `PHASE-P13` | phase_exit_criterion | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `PHASE-P14` | phase_exit_criterion | yes | pass | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
-| `PHASE-P16` | phase_exit_criterion | yes | pass | `test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent` |
+| `PHASE-P16` | phase_exit_criterion | yes | pass | `test/tools_gem_test.rb#test_a_clean_env_runs_the_full_toolbox_surface_without_agent` |
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
-| `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture` |
+| `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_recorded_start_surface` |
 | `PHASE-P2` | phase_exit_criterion | yes | pass | `test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes` |
 | `PHASE-P3` | phase_exit_criterion | yes | pass | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
 | `PHASE-P4` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_compound_patch_applies_two_distinct_replacements` |

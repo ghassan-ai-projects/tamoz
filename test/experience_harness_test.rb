@@ -206,8 +206,7 @@ class ExperienceHarnessTest < Minitest::Test
     cards = @harness.say('/cancel')
 
     assert_includes cards.map { |card| [card[:kind], card[:text]] }, %w[control Stopping…]
-    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms') },
-           'a bare /cancel stamps every open request'
+    assert_every_request_is_stamped
   end
 
   def test_a_second_cancel_stops_the_newer_message_too
@@ -217,7 +216,7 @@ class ExperienceHarnessTest < Minitest::Test
     cards = @harness.say('/cancel')
 
     assert_includes cards.map { |card| card[:text] }, 'Stopping…'
-    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms') }, 'both messages are stamped'
+    assert_every_request_is_stamped
   end
 
   def test_cancel_reference_targets_one_open_request
@@ -285,9 +284,8 @@ class ExperienceHarnessTest < Minitest::Test
     kinds = cards.map { |card| card[:kind] }
 
     assert_equal %w[answer], kinds
-    request_id = harness.request_ids_for(Fixture::CONVERSATION_A).fetch(0)
     assert_equal 'direct_response', harness.snapshot.fetch('session')
-                   .fetch(Fixture::CONVERSATION_A).fetch('terminal_reason')
+                                             .fetch(Fixture::CONVERSATION_A).fetch('terminal_reason')
     assert_equal ['model.generate.route'], harness.effect_census.map { |row| row.fetch(:operation) }
   ensure
     harness&.close
@@ -316,6 +314,15 @@ class ExperienceHarnessTest < Minitest::Test
   end
 
   private
+
+  def assert_every_request_is_stamped
+    requests = @harness.request_ids_for(Fixture::CONVERSATION_A)
+    stamps = @harness.cancellation_stamp_rows
+
+    assert_equal 2, requests.length
+    assert_equal requests.sort, stamps.map { |row| row.fetch('request_id') }.sort
+    stamps.each { |row| refute_nil row.fetch('requested_at_ms') }
+  end
 
   def request_status_text(reference)
     cards = @harness.say("/status #{reference} --diagnostic")

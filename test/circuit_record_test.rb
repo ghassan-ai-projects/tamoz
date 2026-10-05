@@ -2,17 +2,6 @@
 
 require_relative 'test_helper'
 
-# DR-2 §2/§4 — the circuit record's `rate` and `run` predicates.
-#
-# These two condition kinds ship in production scopes (`schedule` and
-# `rule_target` both carry `budget_exceeded`, a rate; `rule_target` carries
-# `fingerprint_repeat_in_run`) and had no test of their own: the only coverage
-# was through `sqlite_circuit_store_test`, which exercises consecutive, window,
-# and immediate only. A broken rate predicate would silently never open a
-# budget circuit — a safety engine failing in the invisible direction.
-#
-# Every row here drives the value directly, because that is the narrowest
-# boundary at which the arithmetic is observable.
 class CircuitRecordTest < Minitest::Test
   Circuit = Tamoz::Circuit
   Record = Tamoz::Circuit::Record
@@ -195,9 +184,6 @@ class CircuitRecordTest < Minitest::Test
 
   # --- bounds --------------------------------------------------------------
 
-  # DR-2 C2/C8: the count map is bounded, and the bound must not be able to
-  # evict the evidence that is closest to opening the circuit — or a noisy run
-  # could hide the repeat it was watching for.
   def repeat(record, print, times:, from:)
     times.times do |index|
       record = fail(record, at: from + index, kind: :fingerprint_recurrence,

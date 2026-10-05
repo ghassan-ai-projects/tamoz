@@ -2,9 +2,6 @@
 
 require_relative 'test_helper'
 
-# Phase 2 of the model-call boundary implementation: the ephemeral one-shot
-# runtime crosses EffectDispatcher like every durable consumer, over an
-# in-memory journal whose receipts live and die with the turn.
 class AgentRuntimeEffectsTest < Minitest::Test
   def test_same_logical_identity_replays_the_recorded_receipt_without_recalling
     journal = Tamoz::Agent::Runtime::EffectsJournal.new

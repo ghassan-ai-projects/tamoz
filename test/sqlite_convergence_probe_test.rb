@@ -1,8 +1,14 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative 'support/sqlite_scenario_fixture'
+require_relative "support/deep_freeze_assertions"
 
 class SQLiteConvergenceProbeTest < Minitest::Test
+  include SQLiteScenarioFixture
+
+  include DeepFreezeAssertions
+
   PROBE_DIGEST =
     "sha256:7d016bab925eb8ad88ad2af5cd6d1c8bb519fd435e4761c54f2f00dd57277594"
   REPORT_FIELDS = %w[
@@ -203,16 +209,6 @@ class SQLiteConvergenceProbeTest < Minitest::Test
     Tamoz::SQLite.const_get(:BoundaryRegistry, false)
   end
 
-  def subject
-    {
-      "id" => "tamoz-sqlite",
-      "version" => Tamoz::SQLite::VERSION,
-      "git_revision" => "a" * 40,
-      "git_tree" => "b" * 40,
-      "dirty" => false
-    }
-  end
-
   def build_state(scenario_id, classification, path)
     if classification == "old"
       observer = lambda do |point, _metadata|
@@ -370,18 +366,5 @@ class SQLiteConvergenceProbeTest < Minitest::Test
     sensitive_paths.each { |path| refute_includes encoded, path }
     refute_match(/owner\.phase2|thread\.phase2|request\.phase2|execution\.phase2/, encoded)
     assert_operator encoded.bytesize, :<, 4_096
-  end
-
-  def assert_deeply_frozen(value)
-    assert value.frozen?
-    case value
-    when Hash
-      value.each do |key, entry|
-        assert_deeply_frozen(key)
-        assert_deeply_frozen(entry)
-      end
-    when Array
-      value.each { |entry| assert_deeply_frozen(entry) }
-    end
   end
 end

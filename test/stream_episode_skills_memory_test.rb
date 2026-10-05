@@ -9,8 +9,6 @@ require "support/aquaculture_domain"
 require "support/climate_domain"
 require "support/episode_composition"
 
-# P5 (PHASE_P5_SKILLS_MEMORY) exit gates 1-5: digest-pinned skills + recalled
-# memory in the frame as attributed, untrusted evidence. Fixture-labeled.
 class StreamEpisodeSkillsMemoryTest < Minitest::Test
   Stream = Tamoz::Stream
 
@@ -269,10 +267,6 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
   end
 
   def test_a_replay_returns_the_recorded_recall_not_a_fresh_read
-    # The P3 hazard: memory changes between live and replay. The recall node
-    # routes through the durable effect journal, so fence+1 reuses the
-    # RECORDED projections — the frame digest stays identical even though the
-    # recaller would now return different memory.
     first_digest = "sha256:#{Digest::SHA256.hexdigest("first memory")}"
     second_digest = "sha256:#{Digest::SHA256.hexdigest("changed memory")}"
     recaller = StubSituationRecaller.new(

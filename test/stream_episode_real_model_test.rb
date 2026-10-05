@@ -10,22 +10,10 @@ require "support/local_model_endpoint"
 require "support/aquaculture_domain"
 require "support/episode_composition"
 
-# P1 gates 1-2, REAL run: one aquaculture episode end to end through the fixed
-# graph with a real pinned local model (ollama, proxy-mode endpoint that logs
-# the raw request/response digests OUTSIDE the worker). The endpoint is a
-# separately-controlled witness; the receipt's digests must equal the
-# endpoint-observed digests byte for byte.
-#
-# This is the "A real LLM adapter path exists" claim (level 2 of 6) — a
-# plumbing claim about the adapter, not an intelligence claim. It runs only
-# when RUN_REAL_E2E=1 (manual evidence run) and the local model is reachable.
 class StreamEpisodeRealModelTest < Minitest::Test
   Stream = Tamoz::Stream
 
   OLLAMA_BASE = ENV.fetch("TAMOZ_OLLAMA_BASE", "http://127.0.0.1:11434")
-  # Audit F1: a PINNED local model tag (a moving :latest tag is not pinned).
-  # Overridable for a hosted provider (e.g. TAMOZ_REAL_MODEL=deepseek-chat
-  # with a compatible OpenAI endpoint).
   DEFAULT_MODEL = ENV.fetch("TAMOZ_REAL_MODEL", "gemma4:26b")
   EVIDENCE_ROOT = File.expand_path("../documentation/benchmark/evidence/p1-real-run", __dir__)
 
@@ -162,10 +150,6 @@ class StreamEpisodeRealModelTest < Minitest::Test
     false
   end
 
-  # Audit F1: the committed witness bundle — the evidence the real run is
-  # reproducible from the repo. Written to a STABLE committed path (the
-  # endpoint log + receipt + digest summary); the report cites the immutable
-  # <utc>/ bundle id.
   def write_evidence_bundle(directory, request, state, terminal, request_digest)
     receipt = state.fetch(:model_receipts).last
     bundle_dir = File.join(EVIDENCE_ROOT, Time.now.utc.strftime("%Y%m%d-%H%M%S-%L"))

@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/worker_runtime_fixture'
 require_relative 'support/autonomy_case'
 require 'stringio'
 
-# Phase 6 boot wiring: the worker builds the durable engine at boot, the run
-# config can point it at operator-owned policy data, and the reload-delivery
-# loop moves a validated pointer into running workers.
 class AgentApprovalBootTest < Minitest::Test
+  include WorkerRuntimeFixture
+
   include AutonomyCase
 
   def test_worker_boots_the_durable_engine_from_the_bundled_policy
@@ -109,16 +109,6 @@ class AgentApprovalBootTest < Minitest::Test
 
   def evidence_set
     Tamoz::Comms::AuthorityEvidence.members
-  end
-
-  def open_runtime(rt)
-    runtime = Tamoz::Agent::WorkerRuntime.open(
-      Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
-      model_factory: ->(profile:) { read_only_factory.call(profile) }
-    )
-    yield runtime
-  ensure
-    runtime&.close
   end
 
   def override_config(rt, approval)
