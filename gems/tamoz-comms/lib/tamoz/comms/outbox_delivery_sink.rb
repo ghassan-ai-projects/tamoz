@@ -32,7 +32,8 @@ module Tamoz
         'request.stopped' => 'stopped',
         'request.blocked' => 'blocked',
         'request.approval_request' => 'approval_request',
-        'request.clarification_request' => 'clarification_request'
+        'request.clarification_request' => 'clarification_request',
+        'healing.escalated' => 'control'
       }.freeze
 
       # Kinds whose rows the admission reservation covers (design §12): the

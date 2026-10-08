@@ -50,9 +50,9 @@ module MemorySpec
     count
   end
 
-  def memory_engine_at(directory, clock:, protection: XorProtection.new)
+  def memory_engine_at(directory, clock:, protection: XorProtection.new, file: 'memory.sqlite3')
     adapter = Tamoz::SQLite::Adapter.new(
-      path: File.join(directory, 'memory.sqlite3'),
+      path: File.join(directory, file),
       state_codec: Memory::Surface.codec,
       store_protection: protection,
       limits: Tamoz::SQLite::Limits.new(deletion_retention: 86_400.0)

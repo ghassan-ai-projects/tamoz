@@ -100,7 +100,7 @@ HEAD proof; it is not yours to chase, and it is not a pass.
 | D1 | Touched test files, one per command | `ruby -Itest test/<file>.rb` | OPEN |
 | D2 | `rake ci` (ADR, design, syntax, `test_fast`, architecture) | output | OPEN |
 | D3 | `rake ci_full`, both locales — only for durability, MCP, packaging, evidence slices | output | OPEN |
-| D4 | RuboCop: no new offense in any touched file | `bundle exec rubocop <files>` vs `git show HEAD:<file>` | OPEN |
+| D4 | RuboCop autocorrect ran on every touched file; leftovers are not hand-fixed | `bundle exec rubocop -a <files>` | OPEN |
 | D5 | enola: `diff_snapshot` vs the 1.4 baseline — no new cycle, layer violation, or unintended coupling | enola output | OPEN |
 
 **Known-red at HEAD:** <gate — one-line reason — how it was proven at HEAD>.

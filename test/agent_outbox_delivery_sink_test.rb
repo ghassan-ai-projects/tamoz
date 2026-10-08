@@ -334,6 +334,20 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
+  def test_a_healing_escalation_is_one_control_notice_per_request
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+      event = { thread_id: 'tg.ops.abc', kind: 'healing.escalated', text: 'it needs you', request_id: 'occurrence-1' }
+
+      assert_equal :accepted, sink.push(event)
+      sink.push(event)
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal([['control', 'it needs you']], rows.map { |row| [row.fetch('kind'), row.fetch('text')] })
+    end
+  end
+
   def test_clarification_delivery_reports_capacity_refusal
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)

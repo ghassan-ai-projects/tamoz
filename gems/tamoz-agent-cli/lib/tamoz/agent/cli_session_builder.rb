@@ -72,7 +72,7 @@ module Tamoz
           memory = nil
           begin
             mcp = build_mcp_source(options, profile:) unless read_only
-            memory = openers[:memory].call(session_dir) unless read_only
+            memory = openers[:memory].call unless read_only
             parts = Parts.new(model:, toolbox:, adapter:, mcp:, memory:, approvals: build_approvals(options),
                               harness: openers[:harness].call)
             yield parts, build_session(parts, options:, thread_id:, profile:)

@@ -90,8 +90,8 @@ Each rule's reasoning and evidence live in the ADR named; the line here is the r
 - Real-model runs need a UTF-8 locale: `LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8`.
 - **Never pay real time in a test** — inject the wait. Lanes, weights, the `ci` budget, file modes:
   `.agent/rules/testing.md`.
-- Lint changed files: `bundle exec rubocop <path>...` — add no new offense. Compare with the HEAD copy
-  (`git show HEAD:<file>`) or a detached worktree, never `git stash`.
+- Lint changed files with autocorrect only: `bundle exec rubocop -a <path>...`, then move on. Never spend
+  time hand-fixing what `-a` leaves (owner, 2026-10-09).
 - Everyday gate: `rake ci` + `rubocop` + `enola check`. `rake ci_full` in both locales only for
   durability, MCP, packaging, or evidence slices. State and policy: `docs/QUALITY_PROGRAM_STATE.md`.
 - A gate already red at HEAD is not yours to chase: prove it in a detached worktree and say so.

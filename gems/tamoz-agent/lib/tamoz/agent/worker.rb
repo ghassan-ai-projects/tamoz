@@ -374,6 +374,7 @@ module Tamoz
           rescue StandardError
             nil
           end
+          emit_healing_assessment(thread_id, occurrence_id) { |healing| healing.assess_crash(error) }
           park(entry, nil, reason: "failed")
         else
           unpark(thread_id)
@@ -796,6 +797,7 @@ module Tamoz
              duration_ms:,
              status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
+        emit_healing_assessment(thread_id, occurrence_id) { |healing| healing.assess_turn(view.state, failed: false) }
         PROGRESSED
       end
 
@@ -809,20 +811,21 @@ module Tamoz
              reason: settled_failure_reason(view),
              status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
-        emit_healing_assessment(view, thread_id, occurrence_id)
+        emit_healing_assessment(thread_id, occurrence_id) { |healing| healing.assess_turn(view.state, failed: true) }
         PROGRESSED
       end
 
-      # ADR-028 shadow stage on the durable path (worker/queue/schedule/Telegram):
-      # classify the failed turn's typed failure and emit an operator event.
-      # Executes nothing; correspondents are unaffected (operator telemetry).
-      def emit_healing_assessment(view, thread_id, occurrence_id)
-        return unless @healing
-
-        assessment = @healing.assess_observations(Array(view.state[:observations]))
+      # ADR-028 shadow stage on the durable path every channel rides: classify a failed turn, emit an operator
+      # event, and tell the turn's channel when the failure needs a person. Executes nothing.
+      def emit_healing_assessment(thread_id, occurrence_id)
+        assessment = @healing && yield(@healing)
         return unless assessment
 
         emit("healing.assessment", thread: thread_id, request_id: occurrence_id, assessment: assessment.to_h)
+        return if assessment.remediable
+
+        @runtime.delivery_sink&.push(thread_id:, kind: "healing.escalated", request_id: occurrence_id,
+                                     text: ChatReply.healing_escalated(assessment.to_h, occurrence_id))
       rescue StandardError => error
         emit("worker.error", reason: "healing assessment failed: #{error.message}")
       end
@@ -836,6 +839,7 @@ module Tamoz
              reason: "effect_unknown",
              status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
+        emit_healing_assessment(thread_id, occurrence_id) { |healing| healing.assess_turn(view.state, failed: false) }
         PROGRESSED
       end
 

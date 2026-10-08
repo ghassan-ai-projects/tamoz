@@ -16,6 +16,26 @@ module Tamoz
 
       STALE_HINTS = ["expected_sha256", "file changed", "stale", "no longer"].freeze
 
+      # Terminal reasons a turn settles with when it ends without its own typed failure record.
+      TERMINAL_CATEGORY = {
+        'effect_unknown' => :effect_unknown,
+        'handed_off' => :resource_exhausted,
+        'work_failed' => :unknown,
+        'model_key_refused' => :policy_denied,
+        'model_out_of_credit' => :resource_exhausted,
+        'model_rate_limited' => :resource_exhausted,
+        'model_provider_down' => :dependency_unavailable,
+        'model_refused' => :unknown,
+        'repair_attempts_exhausted' => :unknown,
+        'repair_plan_rejected' => :unknown,
+        'repeated_action' => :unknown,
+        'repeated_failure' => :unknown,
+        'repeated_tool_failure' => :unknown,
+        'adaptive_effect_failed' => :unknown,
+        'adaptive_invalid_decision' => :unknown,
+        'adaptive_observation_budget_exhausted' => :resource_exhausted
+      }.freeze
+
       Assessment = Data.define(
         :remediable, :route, :category, :action_family, :rule_id, :never_mutate_class, :fingerprint, :confidence
       ) do
@@ -73,7 +93,29 @@ module Tamoz
         nil
       end
 
+      # An assessment of a settled turn, or nil when it did not fail. A finished turn may carry tool failures it
+      # repaired, so only a failed one is classified from its observations.
+      def assess_turn(state, failed:)
+        return assess_observations(state[:observations]) || assess_terminal(state[:terminal_reason]) if failed
+
+        assess_terminal(state[:terminal_reason], fallback: nil)
+      end
+
+      def assess_crash(error)
+        name = error.class.name.to_s.split('::').last
+        assess(build_record(failure_code: "crash.#{name}", category: TOOL_ERROR_CATEGORY.fetch(name, :unknown),
+                            operation: 'turn', tool: nil, effect_state: :unknown))
+      end
+
       private
+
+      def assess_terminal(reason, fallback: :unknown)
+        category = TERMINAL_CATEGORY.fetch(reason.to_s, fallback)
+        return nil unless category
+
+        assess(build_record(failure_code: "turn.#{reason || 'failed'}", category:, operation: 'turn', tool: nil,
+                            effect_state: category == :effect_unknown ? :unknown : :completed))
+      end
 
       def assess(record)
         rule = match_rule(record)

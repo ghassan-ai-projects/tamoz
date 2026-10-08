@@ -99,6 +99,25 @@ class SelfHealingAssessorTest < Minitest::Test
                        .assess_observations([{"tool" => "read_file", "output" => "fine"}])
   end
 
+  def test_an_unmapped_failed_turn_is_unknown_and_never_mutates
+    verdict = Assessor.new(rules: Healing::RuleRegistry.new).assess_turn({terminal_reason: "no_check"}, failed: true)
+
+    assert_equal :unknown, verdict.category
+    assert_equal :unknown, verdict.never_mutate_class
+    refute verdict.remediable
+  end
+
+  def test_a_finished_turn_with_an_ordinary_reason_is_not_assessed
+    assert_nil Assessor.new(rules: Healing::RuleRegistry.new).assess_turn({terminal_reason: "answered"}, failed: false)
+  end
+
+  def test_a_crash_reuses_the_tool_error_categories
+    assessor = Assessor.new(rules: Healing::RuleRegistry.new)
+
+    assert_equal :dependency_unavailable, assessor.assess_crash(Tamoz::Agent::ModelCallError.new("down")).category
+    assert_equal :unknown, assessor.assess_crash(RuntimeError.new("boom")).category
+  end
+
   # A generic ToolError whose reason points at a moved target is a stale
   # precondition — a recoverable class — not an opaque unknown.
   def test_stale_hint_maps_to_stale_precondition
