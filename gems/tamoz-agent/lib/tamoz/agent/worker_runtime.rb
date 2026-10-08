@@ -29,6 +29,8 @@ module Tamoz
       # gate has to REFUSE rather than guess, and it may clear on the next poll.
       class StoreUnavailableError < Error; end
 
+      MCP_RETRY_SECONDS = 60.0
+
       attr_reader :directory, :adapter, :delivery_sink, :approval_engine
 
       # ADR §2.3 teardown: the bound profile session's grants die with it.
@@ -90,6 +92,7 @@ module Tamoz
 
       def close
         @mcp_source&.close if defined?(@mcp_source)
+        @retired_mcp_source&.close
         @adapter.close unless @adapter.closed?
       end
 
@@ -736,6 +739,7 @@ module Tamoz
 
         resolved = validate_thread_profile(binding, thread_id)
         @monitor.synchronize do
+          retry_missing_mcp_servers
           @sessions[profile_id] ||= build_session(profile_id, resolved_profile: resolved)
         end
       end
@@ -786,6 +790,7 @@ module Tamoz
 
       def session_for_profile(profile_id)
         @monitor.synchronize do
+          retry_missing_mcp_servers
           @sessions[profile_id] ||= build_session(profile_id)
         end
       end
@@ -948,19 +953,36 @@ module Tamoz
         {"enabled" => false, "error" => error.message}
       end
 
-      # The governed MCP source (which is also how websearch arrives), built once
-      # per runtime because each server is a supervised subprocess. A server that
-      # cannot be reached removes its tools, never the whole session: the turn runs
-      # with less capability, and the next session build tries the server again.
+      # The governed MCP source (which is also how websearch arrives), built once per runtime because each
+      # server is a supervised subprocess, and rebuilt while a configured server is missing from it.
       def mcp_source
         return @mcp_source if defined?(@mcp_source)
 
-        @mcp_source = McpSourceBuilder.new(@directory).build
+        builder = McpSourceBuilder.new(@directory)
+        @mcp_source = builder.build
+        @mcp_retry_at = builder.missing.empty? ? nil : monotonic_now + MCP_RETRY_SECONDS
+        @mcp_source
       rescue Tamoz::Error, SystemCallError, IOError => e
-        warn "tamoz: an MCP server could not be started (#{e.class.name.split('::').last}: #{e.message}); " \
+        warn "tamoz: the MCP source could not be built (#{e.class.name.split('::').last}: #{e.message}); " \
              'running without its tools'
-        nil
+        @mcp_retry_at = nil
+        @mcp_source = nil
       end
+
+      # A server never reached has no tools in this source: at most once a minute the next session is built on a
+      # fresh source that tries it again. The replaced source stays open one retry longer, since a turn may still be
+      # calling through it; child sessions carry no MCP source and stay.
+      def retry_missing_mcp_servers
+        return unless @mcp_retry_at && monotonic_now >= @mcp_retry_at
+
+        @retired_mcp_source&.close
+        @retired_mcp_source = @mcp_source
+        remove_instance_variable(:@mcp_source)
+        @mcp_retry_at = nil
+        @sessions.select! { |key, _| key.is_a?(Array) }
+      end
+
+      def monotonic_now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
       def local_capability_catalog
         local_toolbox.names.sort.freeze
@@ -1115,6 +1137,8 @@ module Tamoz
       def initialize_session_caches
         @sessions = {}
         @profiles = {}
+        @retired_mcp_source = nil
+        @mcp_retry_at = nil
         # A Monitor, not a Mutex: `build_session` runs under this lock and asks
         # for `profile`, which takes it again. Ruby's Mutex is not reentrant, so
         # that same-thread re-entry would deadlock the worker outright.

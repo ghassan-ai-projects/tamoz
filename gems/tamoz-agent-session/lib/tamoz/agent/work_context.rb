@@ -129,6 +129,14 @@ module Tamoz
 
       def probe?(name) = @configuration.mcp.respond_to?(:probe?) && @configuration.mcp.probe?(name)
 
+      # {shown name => capability} for the remote tools an ordinary turn shows under a tool-name-safe name.
+      def remote_tools
+        @memo[:remote_tools] ||= begin
+          shown = settings.research.nil? && settings.surface != :subagent
+          shown ? chat_web_backings.merge(mcp_aliases) : {}
+        end
+      end
+
       # {tool_call_id => probe name} for this turn's probe calls that answered.
       def gathered(entries)
         entries.select { |entry| entry['kind'] == 'tool_result' && entry['source'] == 'probe' }
@@ -150,8 +158,45 @@ module Tamoz
         case settings.research
         when :lead then Harness::ResearchPack.tools(:lead)
         when :child then web_schemas + Harness::ResearchPack.tools(:child)
-        else toolbox_schemas + delegate_schemas
+        else toolbox_schemas + remote_schemas + delegate_schemas
         end
+      end
+
+      def chat_web_backings
+        Harness::ResearchPack.chat_web_backings.select { |_, id| @configuration.capabilities.descriptor?(id) }
+      end
+
+      def mcp_aliases
+        source = @configuration.mcp
+        return {} unless source
+
+        ids = @configuration.capabilities.names(:action).select do |id|
+          source.name?(id) && !probe?(id) && source.descriptor_for(id).source_id != CapabilityBinding::WEBSEARCH_SERVER_ID
+        end
+        ids.each_with_object({}) do |id, aliases|
+          shown = mcp_alias(id)
+          next aliases[shown] = id unless aliases.key?(shown)
+
+          warn "tamoz: MCP tool #{id} is not shown: its tool name #{shown} is taken by #{aliases[shown]}"
+        end
+      end
+
+      def mcp_alias(id) = "mcp_#{id.delete_prefix('mcp:').gsub(/[^A-Za-z0-9_-]/, '_')}"[0, 64]
+
+      def remote_schemas
+        web = chat_web_backings
+        Harness::ResearchPack.chat_web_tools(remote_tools.keys & web.keys) +
+          (remote_tools.to_a - web.to_a).map { |shown, id| mcp_schema(shown, id) }
+      end
+
+      # A server authors the description and schema: both are shown attributed, never as Tamoz's own words.
+      def mcp_schema(shown, id)
+        descriptor = @configuration.mcp.descriptor_for(id)
+        text = @configuration.capabilities.remote_planning_surface([id]).fetch(id, descriptor.name)
+        schema = descriptor.input_schema
+        parameters = schema.is_a?(Hash) && schema['type'] == 'object' ? schema : { 'type' => 'object' }
+        description = "Remote tool from MCP server #{descriptor.source_id}: #{text}"
+        ContextEngine::ToolSchema.new(name: shown, description:, parameters:)
       end
 
       def web_schemas

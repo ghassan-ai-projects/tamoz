@@ -23,7 +23,7 @@ module Tamoz
         @memory = memory
         @delegation = WorkDelegation.new(services:, work:)
         @research = WorkResearch.new(services:, work:, delegation: @delegation)
-        @web = WorkWeb.new(work:)
+        @web = WorkWeb.new(work:, memory:)
       end
 
       attr_reader :web

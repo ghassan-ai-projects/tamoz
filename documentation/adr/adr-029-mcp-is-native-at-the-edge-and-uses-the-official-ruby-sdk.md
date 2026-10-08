@@ -24,6 +24,11 @@ call a tool, whether a call is safe to retry, or how consent survives a crash â€
   (ADR-016), durable elicitation as an interrupt, bounded and control-stripped content, credential
   references that never appear in state or errors, process supervision, and a circuit per server.
 - Remote annotations and descriptions are untrusted text; they never set an effect class.
+- A catalog is needed to plan, a connection only to call. Each server's last compiled catalog is
+  stored in the runtime directory and reloaded under the compile's admission rules with every digest
+  recomputed. A server that does not answer is planned from it; one that answers wrongly, or has no
+  stored catalog, is left out and retried by a later session; none of these removes another server's
+  tools. A call to a server that is down is a tool error.
 - `tamoz-mcp` loads nothing but `tamoz-core` and the SDK.
 
 ## Consequences
@@ -51,3 +56,9 @@ malicious or compromised MCP server.
 
 **Residual risk:** an MCP server is arbitrary code running with the host access the operator gave
 its process.
+
+## History
+
+- 2026-10-08 â€” Catalogs are stored per server and servers are built independently, after one
+  unreachable server removed every MCP tool from the Telegram worker until restart
+  (`docs/mcp-web-availability-2026-10-08/`).

@@ -220,6 +220,33 @@ class WebsearchInvocationTest < Minitest::Test
     end
   end
 
+  # read_page takes only a URL this process's searches returned; read_url leaves the URL's provenance to Tamoz.
+  def test_real_adapter_reads_an_unsearched_page_only_through_read_url
+    require "tamoz/mcp/websearch"
+    web = File.join(@dir, "web.json")
+    File.write(web, JSON.generate("pages" => [{"url" => "https://answers.example/42", "title" => "The answer",
+                                               "text" => "The configured answer is 42."}]))
+    ENV["TAMOZ_WEBSEARCH_GRANT"] = "1"
+    ENV["TAMOZ_WEBSEARCH_EGRESS"] = JSON.generate(egress)
+    ENV["TAMOZ_WEBSEARCH_PROVIDER"] = JSON.generate("search" => "fixture", "reader" => "fixture", "web" => web)
+    config = ServerConfig.new(
+      server_id: "websearch", transport: :stdio, command: RbConfig.ruby, arguments: [ADAPTER_SCRIPT],
+      working_directory: @dir,
+      env_allowlist: BASE_ENV_ALLOWLIST + %w[TAMOZ_WEBSEARCH_GRANT TAMOZ_WEBSEARCH_EGRESS TAMOZ_WEBSEARCH_PROVIDER]
+    )
+    snapshot = Catalog.compile(config)
+    reader = ->(name) { Invocation.descriptor_for(snapshot.entries.find { |entry| entry.name == name }, snapshot:) }
+    supervisor = Supervisor.new(config)
+    begin
+      arguments = {"url" => "https://answers.example/42"}
+      assert_raises(Tamoz::Mcp::ToolArgumentError) { Invocation.call(reader.call("read_page"), arguments, snapshot:, supervisor:) }
+      page = Invocation.call(reader.call("read_url"), arguments, snapshot:, supervisor:)
+      assert page.observation.text.include?("The configured answer is 42.")
+    ensure
+      supervisor.close
+    end
+  end
+
   def test_search_success_is_attributed_bounded_and_deterministic
     granted
     config = fixture_config

@@ -18,6 +18,17 @@ module Tamoz
         offered.map { |tool| schema(tool) }
       end
 
+      # An ordinary turn's web tools: web_search, and read_url for a page the user or a search named.
+      def chat_web
+        document.fetch('web').select { |tool| tool.fetch('name') == 'web_search' } + document.fetch('chat_web')
+      end
+
+      def chat_web_backings = chat_web.to_h { |tool| [tool.fetch('name'), tool.fetch('backing')] }
+
+      def chat_web_tools(names)
+        chat_web.select { |tool| names.include?(tool.fetch('name')) }.map { |tool| schema(tool) }
+      end
+
       # A lead's waves may run many children one after another.
       def loop_policy = @loop_policy ||= LoopPolicy.from_h(read('research_lead.json').fetch('loop_policy'))
 
@@ -34,7 +45,7 @@ module Tamoz
       def read(file)
         Tamoz::Core.deep_freeze(JSON.parse(File.read(File.join(PromptPack::DIRECTORY, file), encoding: Encoding::UTF_8)))
       end
-      private_class_method :document, :schema, :read
+      private_class_method :document, :schema, :read, :chat_web
     end
   end
 end

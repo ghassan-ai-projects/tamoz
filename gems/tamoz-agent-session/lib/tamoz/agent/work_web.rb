@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module Tamoz
   module Agent
     # A research subagent's web tools: the model names a search result by its ref (S2-3), never a URL.
@@ -10,17 +12,30 @@ module Tamoz
       # Answered here without the approval gate: it only reads what this turn already recorded.
       FINISH = 'report_sources'
 
-      def initialize(work:)
+      READ_URL = 'read_url'
+      # The source a succeeded web_search result is recorded under: the only tool output read_url trusts.
+      SEARCHED = 'web_search'
+      URL = %r{(?:https?://)?(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,}(?::\d+)?(?:/[^\s<>"'`]*)?}i
+      UNSOURCED = 'is not a URL the user wrote in this conversation or a web_search in this turn returned; ' \
+                  'search for it first'
+
+      def initialize(work:, memory:)
         @work = work
+        @memory = memory
         @backings = Harness::ResearchPack.web_backings
         freeze
       end
 
       def web?(name) = @backings.key?(name)
 
-      # The call as the capability takes it, or with an error when its ref names nothing this child searched.
-      def resolve(state, call)
+      # Only a research child's web calls spend a budget and record refs.
+      def budgeted?(state, call) = !state[:research].nil? && web?(call['shown_name'])
+
+      # The call as the capability takes it, or with an error when it names nothing it may read.
+      def resolve(state, context, call)
         name = call.fetch('name')
+        backing = @work.remote_tools[name]
+        return remote(state, context, call, backing) if backing
         return call unless web?(name)
 
         arguments = call.fetch('arguments')
@@ -75,6 +90,44 @@ module Tamoz
       end
 
       private
+
+      def remote(state, context, call, backing)
+        backed = call.merge('name' => backing, 'shown_name' => call.fetch('name'))
+        return backed unless call.fetch('name') == READ_URL
+
+        url = String(call.fetch('arguments')['url'])
+        admitted = admitted_url(state, context, url)
+        return call.merge('error' => "#{url.inspect} #{UNSOURCED}") unless admitted
+
+        backed.merge('arguments' => { 'url' => admitted })
+      end
+
+      # A URL the model composed could carry the conversation out in its path or query, so read_url reads only a URL
+      # the user wrote or a succeeded web_search returned, matched whole, and sends that URL rather than the model's.
+      def admitted_url(state, context, url)
+        wanted = key(url)
+        (user_urls(state, context) + search_urls(state)).find { |candidate| key(candidate) == wanted }
+      end
+
+      def key(url) = url.strip.sub(%r{\Ahttps?://}i, '').chomp('/')
+
+      def user_urls(state, context)
+        @memory.user_messages(state, context).flat_map { |text| text.scan(URL) }.map do |url|
+          url = url.sub(/[.,;:!?)\]}'"]+\z/, '')
+          url.match?(%r{\Ahttps?://}i) ? url : "https://#{url}"
+        end
+      end
+
+      def search_urls(state)
+        state.fetch(:work_entries).flat_map do |entry|
+          next [] unless entry['source'] == SEARCHED && entry['text_ref']
+
+          results = Array(JSON.parse(@work.resolve.call(entry.fetch('text_ref')))['results'])
+          results.filter_map { |result| result['url'] if result.is_a?(Hash) }.grep(String)
+        rescue JSON::ParserError
+          []
+        end
+      end
 
       def searched(research, output)
         ordinal = research.fetch('search_count') + 1

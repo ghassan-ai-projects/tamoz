@@ -31,7 +31,8 @@ classifier was the same object that executed the call.
   engine returns a verdict. An unclassified tool falls to the fallback tier regardless of what its
   descriptor claims. A *classified* tool whose descriptor is `read_only` lands in tier `read`; for MCP
   tools that flag comes from the operator's runtime `read_only_tools` configuration, not from policy
-  data.
+  data. Every MCP tool is classified: `mcp:*` is tier `local_execute` with `once` grants only, so an
+  operator-declared read-only MCP tool is a read and every other MCP tool asks each time.
 - A session binds the policy revision it started with; a mode switch or reload is a logged rebind
   that never re-decides a recorded decision. Grants are keyed by revision: a switch hides them, and
   switching back to the same profile restores them.
@@ -66,10 +67,14 @@ symlink trick, or an over-broad grant.
 
 **Residual risk:** operator runtime configuration (`read_only_tools`) can move a classified tool to
 `read`, outside policy data. Under the `auto` profile, `workspace_write` and `local_execute` — and therefore
-every unclassified tool, including an unclassified MCP tool — run without asking. Base policy allows
+every unclassified tool and every MCP tool (`mcp:*` is `local_execute`) — run without asking. Base policy allows
 workspace writes without asking.
 
 ## History
 
 - 2026-08-22 — Accepted; adopted the approval-policy redesign (now in
   `docs/approval-policy-redesign-2026-08-22/`).
+- 2026-10-08 — Loosened: `base.yaml` classifies `mcp:*` (tier `local_execute`), so a tool the operator
+  lists in `read_only_tools` no longer asks; before, an unclassified MCP tool always fell to the
+  fallback tier. Owner asked for the configured MCP tools to be usable from Telegram, where every
+  ask is refused (`docs/mcp-web-availability-2026-10-08/`).

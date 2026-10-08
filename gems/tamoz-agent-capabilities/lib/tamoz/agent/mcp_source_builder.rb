@@ -41,14 +41,16 @@ module Tamoz
       # and nothing is inferred from the environment.
       REQUIRED_KEYS = %w[command].freeze
 
+      # The servers the last `build` could neither reach nor find a stored catalog for.
+      attr_reader :missing
+
       def initialize(directory)
         @directory = directory
+        @missing = []
       end
 
-      # The composed source, or nil when the operator configured no servers.
-      #
-      # Returns nil rather than an empty source so `Session.new(mcp: nil)` keeps
-      # its exact pre-existing behaviour when MCP is off.
+      # The composed source, or nil when the operator configured no servers. A server is planned from its
+      # stored catalog when it cannot be reached, and left out (named in `missing`) when it has none.
       def build
         require "tamoz/mcp"
 
@@ -75,8 +77,10 @@ module Tamoz
       end
 
       def build_server(config, settings, state)
+        snapshot = catalog_for(config)
+        return @missing << config.server_id unless snapshot
+
         record_source_digest!(config, state)
-        snapshot = Tamoz::Mcp::Catalog.compile(config)
         state.fetch(:catalogs)[snapshot.server_id] = snapshot
         state.fetch(:supervisors)[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
         record_database_policy!(config.server_id, settings, state)
@@ -107,6 +111,20 @@ module Tamoz
       end
 
       private
+
+      # Only a server that did not answer is planned from its stored catalog; one that answered wrongly is left out.
+      def catalog_for(config)
+        store = McpCatalogStore.new(@directory.path)
+        Tamoz::Mcp::Catalog.compile(config).tap { |snapshot| store.store(config, snapshot) }
+      rescue Tamoz::TimeoutError, Tamoz::Mcp::UnavailableError, SystemCallError, IOError => e
+        stored = store.fetch(config)
+        warn "tamoz: MCP server #{config.server_id} did not answer (#{e.class.name.split('::').last}); " +
+             (stored ? "planning with its stored catalog" : "its tools are unavailable until it answers")
+        stored
+      rescue Tamoz::Error => e
+        warn "tamoz: MCP server #{config.server_id} was refused (#{e.message}); its tools are unavailable"
+        nil
+      end
 
       # The executor dispatches a descriptor to the supervisor that owns its
       # server. It resolves the snapshot by the descriptor's OWN source id, so a
@@ -170,13 +188,22 @@ module Tamoz
 
       def probes_enabled? = @directory.enabled_sources.include?("probes")
 
+      # A probe whose server is missing is dropped with it, so a down server never costs another server's tools.
       def with_probes(source, configs)
         return source unless probes_enabled?
 
-        servers = configs.to_h { |config, settings| [config.server_id, settings] }
-        ProbeSource.new(source:, catalog: ProbeCatalog.new(@directory.source_settings("probes"), servers:))
+        settings = @directory.source_settings("probes")
+        probes = Array(settings["probes"]).reject { |probe| missing_backing?(probe) }
+        return source if probes.empty? && !settings["probes"].to_a.empty?
+
+        servers = configs.to_h { |config, server| [config.server_id, server] }
+        ProbeSource.new(source:, catalog: ProbeCatalog.new(settings.merge("probes" => probes), servers:))
       rescue ProbeCatalog::Error => error
         raise Error, error.message
+      end
+
+      def missing_backing?(probe)
+        probe.is_a?(Hash) && probe["backing"].is_a?(Hash) && @missing.include?(probe["backing"]["server"])
       end
 
       def close_supervisors(state)

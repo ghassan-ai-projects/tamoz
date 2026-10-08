@@ -335,7 +335,7 @@ class ResearchSpecTest < Minitest::Test
   end
 
   def test_a_web_result_that_parses_to_nothing_still_spends_the_childs_budget
-    web = Tamoz::Agent::WorkWeb.new(work: nil)
+    web = Tamoz::Agent::WorkWeb.new(work: nil, memory: nil)
     state = { research: { 'mode' => 'child', 'hits' => {}, 'pages' => {}, 'search_count' => 1, 'read_count' => 2,
                           'sub_questions' => %w[Q1], 'searches' => 3, 'page_reads' => 3 } }
 

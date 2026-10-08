@@ -23,6 +23,8 @@ module Tamoz
       DIGEST_DOMAIN = "tamoz.mcp.catalog.v1\n"
       ENTRY_DIGEST_DOMAIN = "tamoz.mcp.catalog.entry.v1\n"
       TOOL_NAME_PATTERN = /\A[A-Za-z\d_\-.]{1,128}\z/
+      # A handshake that failed because nothing answered, as opposed to a server that answered wrongly.
+      UNREACHABLE = [SystemCallError, IOError, SocketError].freeze
 
       # One catalogued capability. `annotations` (when present) are parsed but
       # are always author-claimed server metadata — never local policy.
@@ -55,7 +57,56 @@ module Tamoz
           end
         end
 
+        # Rebuilds a snapshot written by `#to_h` under the same admission rules as `compile`, recomputing every digest:
+        # a corrupted file is a ValidationError. It proves integrity, not origin; the runtime directory is the trust.
+        def from_h(document, config)
+          protocol_version = stored_protocol_version(document, config)
+          entries = Array(document["entries"]).map { |entry| stored_entry(entry, config) }
+          admission = CatalogEntries.new
+          entries.each_with_object({}) { |entry, seen| admission.record_unique_entry_name!(entry.name, seen) }
+          enforce_entry_budget!(entries, config)
+          snapshot_digest = digest_snapshot(config.server_id, protocol_version, entries)
+          unless snapshot_digest == document["snapshot_digest"]
+            raise ValidationError, "the stored MCP catalog does not match its digest"
+          end
+
+          new(server_id: config.server_id, protocol_version:, entries: entries.freeze, snapshot_digest:).freeze
+        end
+
         private
+
+        def stored_protocol_version(document, config)
+          raise ValidationError, "the stored MCP catalog is not a mapping" unless document.is_a?(Hash)
+          unless document["server_id"] == config.server_id
+            raise ValidationError, "the stored MCP catalog names another server"
+          end
+
+          protocol_version = document["protocol_version"]
+          validate_protocol_version_shape!(protocol_version)
+          validate_protocol_version_in_range!(protocol_version, *config.protocol_range)
+          protocol_version.dup.freeze
+        end
+
+        def stored_entry(entry, config)
+          raise ValidationError, "a stored MCP catalog entry is not a mapping" unless entry.is_a?(Hash)
+
+          admission = CatalogEntries.new
+          name = admission.validate_entry_name!(entry["name"])
+          kind = stored_kind(entry["kind"], config)
+          raw_schema = entry["schema"]
+          schema = kind == :tool ? admission.canonicalize_schema(name, raw_schema) : admission.canonicalize(raw_schema)
+          admission.build_entry(name, kind, admission.bounded_description(entry["description"], config), schema,
+                                admission.canonicalize_annotations(entry["annotations"]))
+        end
+
+        def stored_kind(value, config)
+          kind = %i[tool resource prompt].find { |candidate| candidate.to_s == value }
+          unless kind && config.primitives.include?(:"#{kind}s")
+            raise ValidationError, "a stored MCP catalog entry has a kind this server may not serve"
+          end
+
+          kind
+        end
 
         def build_supervisor(config)
           config.transport == :http ? HttpSupervisor.new(config) : Supervisor.new(config)
@@ -78,8 +129,16 @@ module Tamoz
           negotiated.freeze
         rescue ::Timeout::Error
           raise Tamoz::TimeoutError, "The MCP server handshake timed out."
-        rescue MCP::Client::RequestHandlerError, MCP::Client::ServerError, MCP::Client::ValidationError
+        rescue MCP::Client::RequestHandlerError, MCP::Client::ServerError, MCP::Client::ValidationError => e
+          raise UnavailableError, "The MCP server could not be reached." if unreachable?(e)
+
           raise ProtocolError, "The MCP server handshake failed."
+        end
+
+        def unreachable?(error)
+          cause = error
+          cause = cause.cause until cause.nil? || UNREACHABLE.any? { |kind| cause.is_a?(kind) }
+          !cause.nil?
         end
 
         def validate_protocol_version_shape!(negotiated)
@@ -139,7 +198,18 @@ module Tamoz
           )
           "sha256:#{Digest::SHA256.hexdigest(payload)}"
         end
+      end
 
+      def to_h
+        {
+          "server_id" => server_id,
+          "protocol_version" => protocol_version,
+          "snapshot_digest" => snapshot_digest,
+          "entries" => entries.map do |entry|
+            { "name" => entry.name, "kind" => entry.kind.to_s, "description" => entry.description,
+              "schema" => entry.schema, "annotations" => entry.annotations }
+          end
+        }
       end
     end
   end

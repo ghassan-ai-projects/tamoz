@@ -102,23 +102,28 @@ class AgentWorkerMcpTest < Minitest::Test
   # rubocop:enable Metrics/MethodLength
 
   # An MCP server that is down (a laptop off the network that hosts it) must cost its tools,
-  # not every chat turn: the session is built without it and the operator is told once.
-  def test_an_unreachable_server_removes_its_tools_instead_of_failing_every_session
+  # not every chat turn, and only until it answers: the next session tries it again.
+  def test_a_server_never_reached_is_retried_by_the_next_session
     with_runtime do |rt|
-      configure_mcp(rt, { "mcp" => { "enabled" => true, "servers" => [{
-        "id" => "offline", "transport" => "http", "endpoint" => "http://127.0.0.1:9/mcp",
-        "read_only_tools" => ["finish"]
-      }] } })
-      runtime = Tamoz::Agent::WorkerRuntime.open(
-        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
-        model_factory: ->(profile:) { read_only_factory.call(profile) }
-      )
+      flaky = server_settings("id" => "flaky", "env_allowlist" => ENV_ALLOWLIST + ["MCP_TEST_SERVER_MALFORMED_FRAMES"])
+      configure_mcp(rt, { "mcp" => { "enabled" => true, "servers" => [flaky] } })
+      runtime = Tamoz::Agent::WorkerRuntime.open(Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+                                                 model_factory: ->(profile:) { read_only_factory.call(profile) })
       begin
-        assert_output(nil, /an MCP server could not be started .* running without its tools/) do
-          assert_nil runtime.mcp_source
-        end
-        refute_nil runtime.session_for_profile(nil)
+        ENV["MCP_TEST_SERVER_MALFORMED_FRAMES"] = "1"
+        assert_output(nil, /MCP server flaky .* its tools are unavailable/) { runtime.session_for_profile(nil) }
+        assert_empty runtime.mcp_source.mcp_catalogs
+
+        ENV.delete("MCP_TEST_SERVER_MALFORMED_FRAMES")
+        runtime.session_for_profile(nil)
+        assert_empty runtime.mcp_source.mcp_catalogs, "retried before the retry interval passed"
+
+        runtime.instance_variable_set(:@mcp_retry_at, 0.0)
+        runtime.session_for_profile(nil)
+
+        assert_equal ["flaky"], runtime.mcp_source.mcp_catalogs.keys
       ensure
+        ENV.delete("MCP_TEST_SERVER_MALFORMED_FRAMES")
         runtime.close
       end
     end
