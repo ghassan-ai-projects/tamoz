@@ -45,7 +45,7 @@ Three rules bind every row:
 
 | # | Bar | Evidence |
 |---|---|---|
-| C1 | A work turn ending `done`, `verified_no_changes`, `reported`, `answered`, `done_unverified`, or `researched` admits exactly one Experience record; `handed_off`, `cancelled_by_user`, and failures admit none (owner, 2026-10-08: finished chat turns are reported Experience). | `test/memory_work_route_test.rb` |
+| C1 | A work turn ending `done`, `verified_no_changes`, `reported`, `answered`, `done_unverified`, `researched`, or `direct_response` admits exactly one Experience record; `handed_off`, `cancelled_by_user`, and failures admit none (owner, 2026-10-08: finished chat turns are reported Experience). | `test/memory_work_route_test.rb` |
 | C2 | The W1 statement is ≤ 1,536 bytes and carries task, outcome, changed files, and checks; it never contains answer prose past the task line. | same |
 | C3 | `remember` stores the quote verbatim only when the quote is a substring of a user-role message the thread holds; a quote taken from a tool result, file, guidance, or recalled memory is refused and nothing is stored. | same |
 | C4 | `remember` with an existing key supersedes: exactly one active version per `(scope, key)`; the brief and recall show only the newest; the old version stays readable by id. | same |

@@ -35,7 +35,8 @@ class AgentCliMemoryTest < Minitest::Test
   end
 
   def runtime_engine(runtime)
-    memory_engine_at(runtime.dir, clock: -> { Time.now }, file: Tamoz::Agent::RuntimeDirectory::DATABASE_FILE)
+    memory_engine_at(runtime.dir, clock: -> { Time.now }, protection: nil,
+                                  file: Tamoz::Agent::RuntimeDirectory::DATABASE_FILE)
   end
 
   def test_threads_share_the_runtime_memory_only_when_enabled
@@ -69,6 +70,22 @@ class AgentCliMemoryTest < Minitest::Test
 
         assert_includes stored, SAID
       end
+    end
+  end
+
+  def test_the_operator_sees_what_a_channel_remembered_without_naming_a_root
+    with_runtime do |runtime|
+      enable_memory(runtime)
+      engine, adapter = runtime_engine(runtime)
+      project = Tamoz::Agent::Memory::Surface.project_scope(runtime.workspace)
+      record = owner_fact(engine, 'the chat user wants answers as bullet points', user: 'alice', project:)
+      adapter.close
+      out = StringIO.new
+      status = Tamoz::Agent::CLI.run(['--runtime-dir', runtime.dir, 'memory', 'list', 'bullet'],
+                                     out:, err: StringIO.new, input: StringIO.new, env: {})
+
+      assert_equal 0, status
+      assert_includes out.string, record.memory_id
     end
   end
 

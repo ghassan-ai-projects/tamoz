@@ -11,9 +11,8 @@ module Agenteval
   # last one (docs/memory-next-level-2026-09-28/EVAL.md §3). Each session is a separate
   # `tamoz code` thread, so nothing carries between them except what memory kept — and
   # whatever the agent chose to write into the workspace, which is part of the behaviour
-  # being measured.
+  # being measured. Memory lives in the chain's one runtime database, as it does for the worker.
   module SessionChain
-    MEMORY_FILE = "memory.sqlite3"
     ARMS = %w[memory-on memory-off].freeze
 
     # One step of a chain: the prompt and which project workspace it runs in.
@@ -29,12 +28,14 @@ module Agenteval
 
     # What the judge can see: each project's workspace and the memory store.
     class Chain
-      attr_reader :root, :workspaces, :session_dir, :runs
+      attr_reader :root, :workspaces, :session_dir, :runtime_dir, :runs
 
       def initialize(root, scenario)
         @root = root
         @session_dir = File.join(root, "sessions")
+        @runtime_dir = File.join(root, "runtime")
         FileUtils.mkdir_p(@session_dir, mode: 0o700)
+        FileUtils.mkdir_p(@runtime_dir, mode: 0o700)
         @workspaces = scenario.files.to_h do |project, files|
           workspace = Workspace.new(File.join(root, "project-#{project}"))
           workspace.materialize(files)
@@ -45,7 +46,7 @@ module Agenteval
 
       def workspace(project = "a") = @workspaces.fetch(project)
       def read(path, project: "a") = workspace(project).read(path)
-      def memory_path = File.join(@session_dir, MEMORY_FILE)
+      def memory_path = File.join(@runtime_dir, 'runtime.sqlite3')
 
       # Every Knowledge statement version the store holds, whatever its state. Plain SQLite,
       # so the judge does not depend on the agent's own code to say what it stored.
@@ -104,13 +105,12 @@ module Agenteval
       target
     end
 
-    # The runtime directory a `tamoz code` session reads; memory is on only in the memory-on arm.
-    def runtime_dir(chain, project, arm)
-      dir = File.join(chain.root, "runtime-#{project}")
-      FileUtils.mkdir_p(dir, mode: 0o700)
+    # The runtime directory every `tamoz code` session of a chain reads; `--root` scopes each project's memory.
+    # Memory is on only in the memory-on arm.
+    def runtime_dir(chain, arm)
+      dir = chain.runtime_dir
       sources = arm == "memory-on" ? { "memory" => { "enabled" => true, "tenant" => "eval", "owner" => "eval-user" } } : {}
-      config = { "runtime" => { "schema_version" => 1 }, "workspace" => { "root" => chain.workspace(project).dir },
-                 "sources" => sources }
+      config = { "runtime" => { "schema_version" => 1 }, "workspace" => { "root" => chain.root }, "sources" => sources }
       File.write(File.join(dir, "config.yaml"), Psych.dump(config))
       File.chmod(0o600, File.join(dir, "config.yaml"))
       dir

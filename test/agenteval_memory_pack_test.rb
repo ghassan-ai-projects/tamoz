@@ -27,6 +27,23 @@ class AgentevalMemoryPackTest < Minitest::Test
     assert_equal %w[MP6], tripped.map(&:id)
   end
 
+  def test_the_judge_reads_the_store_the_cli_writes
+    Dir.mktmpdir('agenteval-chain') do |root|
+      chain = Agenteval::SessionChain::Chain.new(root, PACK::SCENARIOS.first)
+      runtime = Agenteval::SessionChain.runtime_dir(chain, 'memory-on')
+      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {})
+      engine = Tamoz::Agent::Memory::Engine.open(path: directory.database_path, tenant: 'eval', lease_ttl: 30)
+      engine.admission.admit_owner_request(
+        statement: 'fixtures live in spec/data', owner: 'eval-user', authority: 'owner', klass: :preference,
+        sensitivity: :internal,
+        scopes: { 'tenant' => 'eval', 'user' => 'eval-user', 'project' => 'p', 'session' => 's' }
+      )
+      engine.close
+
+      assert(chain.knowledge_texts.any? { |text| text.include?('fixtures live in spec/data') })
+    end
+  end
+
   def test_session_metrics_decode_a_real_checkpoint_shape
     state = ['object', [['terminal_reason', ['string', 'done']],
                         ['work_entries', ['array', [['object', [['kind', ['string', 'tool_result']],

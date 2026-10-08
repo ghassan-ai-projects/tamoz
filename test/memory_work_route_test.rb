@@ -49,14 +49,17 @@ class MemoryWorkRouteTest < Minitest::Test
                 [])
   end
 
-  def experience_statements(engine)
+  def experience_records(engine)
     ids = nil
     engine.adapter.store.open_transaction(label: 'spec.experience') do |tx|
       ids = tx.rows('spec.experience', "SELECT DISTINCT memory_id FROM tamoz_memory_index WHERE layer = 'experience'",
                     [])
     end
-    ids.map { |(id)| engine.store.get(engine.namespace, "experience/#{id}").value.statement }
+    ids.map { |(id)| engine.store.get(engine.namespace, "experience/#{id}").value }
   end
+
+  def experience_statements(engine) = experience_records(engine).map(&:statement)
+  def experience_kinds(engine) = experience_records(engine).map(&:epistemic_kind).uniq
 
   def project(root) = Tamoz::Agent::Memory::Surface.project_scope(root)
 
@@ -141,6 +144,7 @@ class MemoryWorkRouteTest < Minitest::Test
 
         assert_equal ['Task: Hey | Outcome: answered', 'Task: Thanks | Outcome: answered'],
                      experience_statements(engine).sort
+        assert_equal [:reported], experience_kinds(engine)
       end
     end
   end

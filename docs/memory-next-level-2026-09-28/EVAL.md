@@ -77,8 +77,9 @@ The real retriever is then scored and must meet B2/B7.
 agenteval runs one session per trial in a fresh tmpdir. Memory needs a *chain*: several
 sessions against the same workspace and the same memory store. A small runner,
 `Agenteval::SessionChain`, runs a scenario's sessions in order, keeping the workspace
-directory, the session directory, and a runtime directory that enables (or, for the
-memory-off arm, omits) the `memory` source. Each session is an ordinary `tamoz code`
+directory, the session directory, and one runtime directory that enables (or, for the
+memory-off arm, omits) the `memory` source; its database is the chain's memory store, and
+each project's `--root` scopes what it sees. Each session is an ordinary `tamoz code`
 invocation through the existing `tamoz-code` adapter; the judge runs after the last
 session.
 

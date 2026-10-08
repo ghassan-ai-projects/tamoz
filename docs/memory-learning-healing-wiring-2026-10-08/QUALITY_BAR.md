@@ -24,6 +24,11 @@ last loop iteration changed nothing.
 rules and running `SelfHealingCoordinator` remediation; generating improvement candidates from chat
 turns; per-correspondent memory owners.
 
+**Owner decision still open:** chat Experience is written under the one `sources.memory.owner`, so with
+more than one admitted correspondent each could `recall_memory` the others' messages (Experience is never
+auto-injected). Safe today — `telegram-ops` admits one correspondent — and `FUTURE_PLAN.md` §4 has the
+fix; the owner accepts or blocks it.
+
 **Owner decisions taken (2026-10-08, "all"):** (1) assess chat-route failures and crashes, mark ADR-028
 Partial; (2) one memory store per runtime; (3) finished chat turns admit reported Experience — this
 reverses `docs/memory-next-level-2026-09-28` row C1 for `answered` and `done_unverified`; (4) automatic
@@ -47,6 +52,7 @@ learning and remediation become a future plan.
 | A3 | Healing stays read-only: the assessor executes nothing; an unmapped failure or crash is `unknown`, which never mutates and escalates | `test/self_healing_assessor_test.rb` (10 runs, 0 failures); assessor still only builds records and classifies | PASS |
 | A4 | A successful turn with a repaired tool failure produces no assessment | `test/self_healing_worker_test.rb`; mutation: assess observations on completed turns → 1 failure | PASS |
 | A5 | The CLI reaches memory only through `Memory::Engine.open`; boundary test green | `test/memory_boundary_test.rb` green inside `rake ci` test_fast (332 files passed) | PASS |
+| A7 | Sharing the runtime database: the CLI is a second writer and claims pending behavior transitions; recorded in memory DESIGN | review | PASS |
 | A6 | Child-task sessions still get no memory | unchanged code path (`build_child_session`), reviewed: `build_child_session` still passes `memory: nil` | PASS |
 
 ## B. Function (scripted providers — plumbing, not intelligence)
@@ -96,10 +102,11 @@ learning and remediation become a future plan.
 
 | Package | Findings (c / h / m / l) | Resolution | Commit |
 |---|---|---|---|
-| all | independent subagent review still running when the owner asked for the PR | findings land as follow-up commits on the PR | first commit |
+| all | 0 / 2 / 3 / 6 — H1 the agenteval memory pack judged `<session-dir>/memory.sqlite3`, which no longer exists; H2 `tamoz memory list` scoped to cwd, so it missed what the worker stored; M1 shared owner; M2 ADR-028 overclaimed and plan/adaptive-route reasons were unmapped; M3 shared-DB side effects undocumented; lows: lint, a comment, `model_refused` category, cli.md flag, `:reported` untested, test DB protection | H1/H2 fixed with tests seen to fail on revert; M2 reasons mapped, `direct_response` added, ADR reworded; M3 documented; M1 put to the owner; lows fixed except the anonymous-class crash code (cannot happen) and history docs PLAN/STATUS (left as history) | follow-up commit |
 
 ## Loop log
 
 | Iteration | Date | What changed | Rows moved | Still open | Next |
 |---|---|---|---|---|---|
 | 1 | 2026-10-08 | healing on every settle path and crash; one memory store; finished chat turns admit Experience; docs, ADR-028 | all to PASS | review log | apply review findings |
+| 2 | 2026-10-08 | review fixes (eval store path, `tamoz memory` scope, route coverage, docs) | D4 back to PASS after lint | M1 owner decision | none |

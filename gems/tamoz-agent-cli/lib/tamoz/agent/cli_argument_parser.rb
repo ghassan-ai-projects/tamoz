@@ -74,6 +74,7 @@ module Tamoz
             end
             value.on('--root PATH', 'Workspace root (default: current directory)') do |entry|
               options[:root] = entry
+              options[:explicit_root] = true
             end
             value.on('--session-dir PATH', 'Durable session directory') do |entry|
               options[:session_dir] = entry

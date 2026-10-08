@@ -25,7 +25,15 @@ module Tamoz
         'model_out_of_credit' => :resource_exhausted,
         'model_rate_limited' => :resource_exhausted,
         'model_provider_down' => :dependency_unavailable,
-        'model_refused' => :dependency_unavailable
+        'model_refused' => :unknown,
+        'repair_attempts_exhausted' => :unknown,
+        'repair_plan_rejected' => :unknown,
+        'repeated_action' => :unknown,
+        'repeated_failure' => :unknown,
+        'repeated_tool_failure' => :unknown,
+        'adaptive_effect_failed' => :unknown,
+        'adaptive_invalid_decision' => :unknown,
+        'adaptive_observation_budget_exhausted' => :resource_exhausted
       }.freeze
 
       Assessment = Data.define(
@@ -85,7 +93,7 @@ module Tamoz
         nil
       end
 
-      # A settled turn's state, or nil when it did not fail. A finished turn may carry tool failures it
+      # An assessment of a settled turn, or nil when it did not fail. A finished turn may carry tool failures it
       # repaired, so only a failed one is classified from its observations.
       def assess_turn(state, failed:)
         return assess_observations(state[:observations]) || assess_terminal(state[:terminal_reason]) if failed

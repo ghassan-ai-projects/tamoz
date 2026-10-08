@@ -46,11 +46,12 @@ module Tamoz
         engine&.close
       end
 
-      # The same root the session's toolbox uses, so the project scope matches.
+      # The project scope: a profile's or --root's, else the runtime's workspace, where the worker's channels write.
       def memory_root(options)
         return load_operator_profile(options).canonical_root if options[:profile]
+        return options[:root] if options[:explicit_root]
 
-        options[:root] || Dir.pwd
+        memory_directory(options).workspace_root || options[:root]
       end
 
       def run_memory_action(action, argv, access, options)
