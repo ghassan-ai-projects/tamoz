@@ -28,6 +28,8 @@ require_relative "subagent_apps"
 require_relative "work_compaction"
 require_relative "work_nudge"
 require_relative "work_gate"
+require_relative "attachment_text"
+require_relative "work_attachment"
 require_relative "session_work"
 
 module Tamoz

@@ -235,8 +235,15 @@ until you send `/new`. Replies come in the language you write in.
   automatic check covered this change, so give it a quick look." A turn that
   failed, gave up, or lost its provider says so in one sentence. Long answers
   arrive whole, split across messages at Telegram's 4096-character limit.
-- **Other messages.** Photos, stickers and other non-text messages get "I can
-  only read text messages for now."
+- **Files.** Send a text file (txt, md, csv, json, code) or a PDF, with your
+  question as the caption; the bot reads it and answers from it. Its content is
+  shown to the model as material, never as instructions, so a document cannot
+  tell the bot what to do. PDFs are read with poppler's `pdftotext`, which must
+  be installed on the worker's machine (`brew install poppler`); without it the
+  bot says PDF reading is not set up. Up to 20 MB; the first 24,000 characters
+  are read. A scanned PDF has no text layer — send its pages as photos.
+- **Other messages.** Stickers, videos and formats the bot cannot read yet get
+  one line saying what it can read.
 
 ### Checking the experience yourself
 

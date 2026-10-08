@@ -106,8 +106,10 @@ class TelegramBotApiFake
 
   def push(fields)
     @lock.synchronize do
-      @updates << { 'update_id' => (@update_id += 1) }.merge(fields)
+      update = { 'update_id' => (@update_id += 1) }.merge(fields)
+      @updates << update
       @arrived.broadcast
+      update
     end
   end
 

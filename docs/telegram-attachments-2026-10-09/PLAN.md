@@ -104,7 +104,7 @@ Worker opened:  WorkAttachment.read(state) — before the memory brief
 | `attachment` state channel | `SessionGraph::WORK_SCALAR_CHANNELS` | Declared in the same commit as the payload key. No version bump (precedent: `research`, d0d07d02): new turns on existing threads run; a thread paused across the upgrade fails `CheckpointVersionError` as any definition change does. **Attachments need the work route** (`tamoz telegram start` runs `--work-routing`); a legacy-routing worker refuses the payload exactly as it refuses `/research` |
 | `WorkAttachment` | `tamoz-agent-session` | Called from `SessionWork#opened`; uses entry kind `user` (no new context-engine kind); scrubbing already happens in `WorkContext#entry` |
 | Document reader | `tamoz-agent-session` `AttachmentText` | `pdftotext` spawned with `rlimit_cpu`, its own process group, a 20 s wall clock (group killed on timeout) and a bounded stdout; missing binary → typed `pdf_reader_missing`; non-zero exit → `unreadable`; no gem dependency |
-| Text cap | `WorkAttachment` | `min(24,000 characters, 25% of the route's context window by TokenMeter)`; the note says "pages read p of P" or "first N characters" |
+| Text cap | `WorkAttachment` | `min(24,000 characters, the window in tokens)` — about a quarter of the window for Latin text, more for denser scripts; the note says "It has N pages", "These are its first 200 pages", or "Only the first N characters are shown"; marker runs inside the content are neutralized so it cannot close its frame |
 | Vision read | reuses `SessionEffects#converse` | Stage `attachment_image`, no tools; the configured chat model |
 | Transcription | `EpisodeModelTransport#transcribe` (multipart `<base>/audio/transcriptions`, refused in witness-gateway mode); a second model built by `ModelClientFactory.build` from `TAMOZ_TRANSCRIPTION_PROVIDER` / `_MODEL` / `_API_BASE`; `SessionOptions` + `WorkerRuntime#build_session` carry it; `ChildEnvironments.worker_env` passes those names and the provider's key | Unset → the turn says voice is not set up on this bot |
 | Prompts | `gems/tamoz-harness/prompts/attachment_*.md` | Data, digest-tracked by `PromptPack.digests` |
@@ -118,7 +118,7 @@ Worker opened:  WorkAttachment.read(state) — before the memory brief
 | Voice/audio duration | 10 minutes | gateway, from `duration` |
 | Download time | 60 s per file | Telegram client |
 | PDF | 200 pages, 20 s wall clock, CPU-limited `pdftotext` process, 2 MB of extracted text read | worker |
-| Text shown to the model | `min(24,000 chars, 25% of the window)` | worker |
+| Text shown to the model | `min(24,000 chars, window tokens)`; text files normalized from their first 100,000 characters | worker |
 
 ### 3.5 Failure model — every failure ends as one reply, never a crash or a stall
 

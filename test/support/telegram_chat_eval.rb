@@ -28,7 +28,7 @@ class TelegramChatEval
     [/\b(effect_unknown|effect_key|occurrence_id|request_id|execution_id)\b|sha256:\h{8}/, 'internal vocabulary'],
     [/\A\s*[{\[]/, 'raw JSON']
   ].freeze
-  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY].freeze
+  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY ZAI_API_KEY ZAI_API_BASE].freeze
   TOKEN = '123:eval'
   USERS = (1001..1040).to_a.freeze
   STRANGER = 9_999
@@ -133,14 +133,15 @@ class TelegramChatEval
   end
 
   # A tap on Approve resumes work whose answer follows the ack; a Deny only closes the request.
-  def turn(user, text = nil, photo: false, tap: nil, timeout: 180)
+  # A block sends something other than text (a file, a sticker) through the fake; `text` labels it.
+  def turn(user, text = nil, tap: nil, timeout: 180, &send)
     resumes = tap&.last.to_s.start_with?('approve:')
     sent_at = Time.now.to_f
     if tap then @fake.tap(user, *tap)
-    elsif photo then @fake.send_photo(user)
+    elsif send then yield(@fake)
     else @fake.say(user, text)
     end
-    settle_and_record(user, tap ? "(tap #{tap.last})" : text || '(photo)', sent_at,
+    settle_and_record(user, tap ? "(tap #{tap.last})" : text, sent_at,
                       SettleWindow.new(timeout:, awaiting_work: resumes))
   end
 
