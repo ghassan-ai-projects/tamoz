@@ -10,6 +10,7 @@ module Tamoz
     # rubocop:disable Metrics/ClassLength -- one gate owns all work tool routing and approval state.
     class WorkGate
       PLAN_BOUND_TOOLS = (WorkContext::MUTATING_TOOLS + %w[run_check]).freeze
+      UNSPILLED = %w[read_file web_search].freeze
 
       def initialize(services:, work:, tools:)
         @services = services
@@ -23,7 +24,7 @@ module Tamoz
         cursor = state.fetch(:work_cursor)
         return round_complete(state) if cursor >= pending.length
 
-        call = with_arguments(state, pending.fetch(cursor))
+        call = with_arguments(state, context, pending.fetch(cursor))
         # A call refused while parsing carries placeholder arguments and ran nothing: it is not a repeat.
         return result(state, call, "Error: #{call.fetch('error')}") if call['error']
 
@@ -41,7 +42,7 @@ module Tamoz
       # rubocop:disable Metrics/AbcSize -- preview, dispatch and outcome of one effect stay in journal order
       def execute(state, context)
         prepared = state.fetch(:work_prepared)
-        call = with_arguments(state, state.fetch(:work_pending).fetch(state.fetch(:work_cursor)))
+        call = with_arguments(state, context, state.fetch(:work_pending).fetch(state.fetch(:work_cursor)))
         step = prepared.fetch('step').merge(
           'arguments' => pinned(state, call.fetch('name'), call.fetch('arguments'))
         )
@@ -60,11 +61,11 @@ module Tamoz
 
       private
 
-      # A research child's web call comes back as the capability that backs it, with its shown name kept.
-      def with_arguments(state, call)
+      # A web or MCP call comes back as the capability that backs it, with its shown name kept.
+      def with_arguments(state, context, call)
         arguments = JSON.parse(@work.resolve.call(call.fetch('arguments_ref')))
         windowed = @work.settings.context_policy.window_arguments(call.fetch('name'), arguments)
-        @tools.web.resolve(state, call.merge('arguments' => windowed))
+        @tools.web.resolve(state, context, call.merge('arguments' => windowed))
       end
 
       # Reminders wait until every call of the step is answered: a user message between the
@@ -98,7 +99,7 @@ module Tamoz
 
       # :reek:LongParameterList
       def web_gate(state, context, call, cursor)
-        refusal = call['shown_name'] && @tools.web.refusal(state, call)
+        refusal = @tools.web.budgeted?(state, call) && @tools.web.refusal(state, call)
         refusal ? result(state, call, refusal) : toolbox_gate(state, context, call, cursor)
       end
 
@@ -265,7 +266,7 @@ module Tamoz
                else
                  "Error: #{@services.evidence.tool_error_message(outcome)}"
                end
-        source = 'probe' if outcome.status == :succeeded && @work.probe?(name)
+        source = executed_source(call, name, outcome)
         text, research = web_result(state, call, outcome, text)
         result(state, call, text, summary: summary(name, outcome), source:)
           .merge(flags(state, name, outcome), effect_receipts: [receipt(prepared, outcome)], work_prepared: nil,
@@ -273,6 +274,14 @@ module Tamoz
                                               **WorkMemory.turn_facts(name, call.fetch('arguments'), outcome),
                                               **skill_trace(name, call, outcome),
                                               **(research ? { research: } : {}))
+      end
+
+      # A succeeded probe is evidence a findings report may cite; a succeeded search names the pages read_url may read.
+      def executed_source(call, name, outcome)
+        return unless outcome.status == :succeeded
+        return 'probe' if @work.probe?(name)
+
+        WorkWeb::SEARCHED if call['shown_name'] == WorkWeb::SEARCHED
       end
 
       def skill_trace(name, call, outcome)
@@ -301,8 +310,9 @@ module Tamoz
 
       # :reek:LongParameterList
       def web_result(state, call, outcome, text)
-        shown = call['shown_name']
-        return [text, nil] unless shown
+        return [text, nil] unless @tools.web.budgeted?(state, call)
+
+        shown = call.fetch('shown_name')
         return [text, @tools.web.charged(state, shown)] unless outcome.status == :succeeded
 
         @tools.web.observed(state, shown, String(outcome.value.fetch('output')))
@@ -355,7 +365,6 @@ module Tamoz
                                           step_id: intent.fetch('step_id'), operation: intent.fetch('operation'))
       end
 
-      # source 'probe' marks a probe result a findings report may cite.
       def result(state, call, text, summary: nil, source: nil)
         name = call.fetch('shown_name', call.fetch('name'))
         spilled = spilled_result(name, text, summary: summary || name)
@@ -365,10 +374,11 @@ module Tamoz
       end
 
       # A read is never spilled: the file is re-readable, so a stub plus recall_output is a worse
-      # copy of read_file with an offset. Its bytes are bounded by the read tool's own caps.
+      # copy of read_file with an offset. Its bytes are bounded by the read tool's own caps. Search
+      # results stay whole, bounded by the adapter, so read_url can find the URLs they returned.
       def spilled_result(name, text, summary:)
         scrubbed = @work.scrub(text)
-        return ContextEngine::Spill::Result.new(text: scrubbed, spilled: nil) if name == 'read_file'
+        return ContextEngine::Spill::Result.new(text: scrubbed, spilled: nil) if UNSPILLED.include?(name)
 
         limit = @work.settings.context_policy.max_inline_bytes
         ContextEngine::Spill.new(store: @work.store, max_inline_bytes: limit).apply(scrubbed, summary:)

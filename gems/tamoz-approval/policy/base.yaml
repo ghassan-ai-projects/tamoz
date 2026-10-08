@@ -45,6 +45,14 @@ tool_tiers:
   "mcp:websearch/read_page":
     tier: network
     verb: read
+  "mcp:websearch/read_url":
+    tier: network
+    verb: read
+  # Any other operator MCP tool. Declared read-only by the operator it lands in tier read; undeclared, every call asks.
+  "mcp:*":
+    tier: local_execute
+    verb: unknown
+    grant_scopes: [once]
 
 fallback_tier:
   tier: local_execute
@@ -117,5 +125,13 @@ simulations:
     expect: allow
   - request:
       tool: "mcp:websearch/read_page"
+      verb: read
+    expect: ask
+  - request:
+      tool: "mcp:alms/learning.store"
+      verb: unknown
+    expect: ask
+  - request:
+      tool: "mcp:websearch/read_url"
       verb: read
     expect: ask

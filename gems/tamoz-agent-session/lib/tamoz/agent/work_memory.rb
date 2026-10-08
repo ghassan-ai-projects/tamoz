@@ -73,6 +73,12 @@ module Tamoz
         "Not forgotten: #{e.message}"
       end
 
+      # What the user wrote in this conversation: the turn's task and every earlier user message.
+      def user_messages(state, context)
+        prior = Array(@transcript.call(context)).select { |fragment| fragment['role'] == 'user' }
+        [state.fetch(:task)] + prior.map { |fragment| fragment.fetch('text') }
+      end
+
       private
 
       def remembered_text(result)
@@ -85,11 +91,6 @@ module Tamoz
 
       def access = @configuration.memory_access
       def session_id(state) = state.dig(:session, 'session_id') || 'session'
-
-      def user_messages(state, context)
-        prior = Array(@transcript.call(context)).select { |fragment| fragment['role'] == 'user' }
-        [state.fetch(:task)] + prior.map { |fragment| fragment.fetch('text') }
-      end
 
       def open_record(id)
         record = access.find(id)

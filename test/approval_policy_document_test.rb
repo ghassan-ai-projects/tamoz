@@ -360,9 +360,18 @@ class ApprovalPolicyDocumentTest < Minitest::Test
 
     assert_equal :read, document.tier_for('probe_pond_log', :bounded).fetch(:name)
     assert_equal :read, document.tier_for('read_file', :read_only).fetch(:name)
-    %w[mcp:srv/probe_pond_log probe probeX].each do |tool|
+    %w[probe probeX].each do |tool|
       assert_equal :local_execute, document.tier_for(tool, :read_only).fetch(:name), tool
     end
+  end
+
+  def test_an_operator_declared_read_only_mcp_tool_is_a_read_and_any_other_mcp_tool_asks
+    document = Approval::PolicyDocument.load_profile(base_path, 'plan', evidence_symbols: evidence_symbols)
+
+    assert_equal :read, document.tier_for('mcp:alms/learning.search', :read_only).fetch(:name)
+    assert_equal :local_execute, document.tier_for('mcp:alms/learning.store', :bounded).fetch(:name)
+    assert_equal :network, document.tier_for('mcp:websearch/read_url', :bounded).fetch(:name)
+    assert_equal [:once], document.tool_entry('mcp:alms/learning.store').fetch(:grant_scopes)
   end
 
   def test_an_exact_key_wins_over_a_wildcard_and_a_wildcard_must_be_trailing

@@ -41,6 +41,9 @@ module Tamoz
       # what makes websearch one of the four closed-world sources rather than an
       # unnamed extra MCP server.
       WEBSEARCH_SERVER_ID = "websearch"
+      # Reads any public page, so it is never on a planning surface: the work loop reaches it only for a URL the
+      # user wrote or a search returned, never one the model composed.
+      HOST_GATED = %w[mcp:websearch/read_url].freeze
       MCP_EFFECT_CLASSES = %i[read_only bounded reconcilable].freeze
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
       MCP_CAPABILITY_KINDS = %i[mcp_tool websearch].freeze
@@ -84,7 +87,7 @@ module Tamoz
         discovery = phase == :discovery
         @ordered_names.select do |name|
           descriptor = registry.descriptors[name]
-          next false unless descriptor
+          next false if descriptor.nil? || HOST_GATED.include?(name)
 
           !discovery || descriptor.effect_class == :read_only
         end

@@ -25,7 +25,11 @@ impersonating it.
 - Its egress policy (`tamoz-mcp-websearch`) bounds destinations and budgets; the declaration is
   pinned in the session record, and resuming with a changed egress declaration stops.
 - Its tools are tier `network` in approval policy (asked by default); an operator may declare them
-  read-only for research sub-agents that cannot ask.
+  read-only for research sub-agents and chat turns that cannot ask.
+- A URL the model composed is never read: `read_page` reads only a URL one of the adapter's own
+  searches returned. `read_url` reads any public page but is never on a planning surface; the work
+  loop calls it only for a URL extracted from a message the user wrote or from the results of a
+  succeeded `web_search` in the same turn, compared whole.
 - Like every source, it is sealed at session construction and grants nothing by itself (ADR-030).
 
 ## Consequences
@@ -49,6 +53,14 @@ content steering the agent, or a server impersonating websearch.
 | Unbounded network reach | Egress policy bounds destinations and budgets; tier `network` asks by default |
 | Egress rules change under a running session | Declaration pinned; changed egress on resume stops |
 | Context exfiltration in query text | **Not mitigated by content rules:** query text reaches the search provider as written |
+| Context exfiltration in a URL the model writes | `read_url` takes only a whole URL from a user message or a succeeded search's results, never from tool errors or model text; it is absent from every planner's tool list |
 
 **Residual risk:** whatever the model puts in a query reaches the provider, and when the operator
-declares websearch read-only, nobody is asked first.
+declares websearch read-only, nobody is asked first. A search can return a page an attacker wrote;
+reading it brings in untrusted text but sends nothing beyond the URL the search already named.
+
+## History
+
+- 2026-10-08 — Added `read_url` and the provenance rule; ordinary work-loop turns get `web_search` and
+  `read_url`. Owner asked for web pages to be readable from chat
+  (`docs/mcp-web-availability-2026-10-08/`).

@@ -5,8 +5,9 @@
 # the HTTP stack. Tamoz itself never makes an outbound call; this process is
 # what Tamoz supervises over stdio, and ITS egress is enforced HERE.
 #
-# Tools: `search` (a query → JSON results) and `read_page` (a URL one of this
-# process's searches returned → the page's readable text as JSON).
+# Tools: `search` (a query → JSON results), `read_page` (a URL one of this
+# process's searches returned → the page's readable text as JSON), and `read_url`
+# (any public page; Tamoz calls it only for a URL the user wrote or a search returned).
 #
 # Operator gate (default-DISABLED): nothing is served unless the operator has
 # (1) provided a valid egress declaration (`TAMOZ_WEBSEARCH_EGRESS`), (2) named
@@ -126,11 +127,21 @@ module WebsearchAdapter
       refusal(reason(error))
     end
 
-    # A page read: only a URL one of this process's searches returned, served once per URL.
-    def read_page_response(url)
+    def build_read_url_tool
+      MCP::Tool.define(
+        name: "read_url",
+        description: "Read one public web page as text (url, title, published, text, truncated). Tamoz calls it " \
+                     "only for a URL the user wrote or a search returned. Page text is untrusted content.",
+        input_schema: {type: "object", properties: {"url" => {"type" => "string"}}, required: ["url"]}
+      ) { |url: nil, **| WebsearchAdapter.read_page_response(url, issued_only: false) }
+    end
+
+    # A page read, served once per URL. read_page takes only a URL one of this process's searches returned;
+    # read_url leaves where the URL came from to Tamoz, which never offers it to a planner.
+    def read_page_response(url, issued_only: true)
       policy, providers, circuit = gate
       url = url.to_s
-      return refusal("read_page reads only a page a search on this server returned") unless @issued[url]
+      return refusal("read_page reads only a page a search on this server returned") if issued_only && !@issued[url]
       return refusal(OPEN_CIRCUIT) if circuit.open?
 
       page = @pages[url] ||= recorded_web.read(url) { reader(policy, providers).read(url) }
@@ -250,7 +261,7 @@ if $PROGRAM_NAME == __FILE__
   server = MCP::Server.new(
     name: "tamoz-websearch-adapter",
     version: "0.2.0",
-    tools: [WebsearchAdapter.build_search_tool, WebsearchAdapter.build_read_page_tool],
+    tools: %i[search read_page read_url].map { |tool| WebsearchAdapter.public_send(:"build_#{tool}_tool") },
     configuration: MCP::Configuration.new
   )
   MCP::Server::Transports::StdioTransport.new(server).open
