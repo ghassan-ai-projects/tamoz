@@ -46,6 +46,11 @@ module Tamoz
         REASONS.fetch(reason) { UNVERIFIED if view.state&.dig(:route, 'route') == 'managed_action' }
       end
 
+      def healing_escalated(assessment, request_id)
+        "Self-healing has no automatic fix for that failure (#{assessment.fetch('category').tr('_', ' ')}), " \
+          "so it is escalated to you. Reference: #{request_id.to_s[0, 12]}"
+      end
+
       def stopped(reason, budget: nil)
         return "I stopped because this conversation reached its #{budget.tr('_', ' ')} limit." if budget
 

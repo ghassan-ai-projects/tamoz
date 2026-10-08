@@ -815,13 +815,17 @@ module Tamoz
         PROGRESSED
       end
 
-      # ADR-028 shadow stage on the durable path every channel rides: classify a failed turn and emit an
-      # operator event. Executes nothing; correspondents are unaffected.
+      # ADR-028 shadow stage on the durable path every channel rides: classify a failed turn, emit an operator
+      # event, and tell the turn's channel when the failure needs a person. Executes nothing.
       def emit_healing_assessment(thread_id, occurrence_id)
         assessment = @healing && yield(@healing)
         return unless assessment
 
         emit("healing.assessment", thread: thread_id, request_id: occurrence_id, assessment: assessment.to_h)
+        return if assessment.remediable
+
+        @runtime.delivery_sink&.push(thread_id:, kind: "healing.escalated", request_id: occurrence_id,
+                                     text: ChatReply.healing_escalated(assessment.to_h, occurrence_id))
       rescue StandardError => error
         emit("worker.error", reason: "healing assessment failed: #{error.message}")
       end

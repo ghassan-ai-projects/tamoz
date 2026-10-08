@@ -2,8 +2,8 @@
 
 require_relative 'test_helper'
 
-# The durable path every channel (queue, schedule, Telegram) rides: each settled turn that failed, and each
-# crashed request, emits a `healing.assessment` operator event. Executes nothing; correspondents are unaffected.
+# The durable path every channel rides: each settled turn that failed, and each crashed request, emits a
+# `healing.assessment` operator event and, when nothing can fix it, tells the turn's channel after its reply.
 class SelfHealingWorkerTest < Minitest::Test
   class RuntimeDouble
     attr_reader :delivered
@@ -19,7 +19,8 @@ class SelfHealingWorkerTest < Minitest::Test
 
   def setup
     @events = []
-    @worker = Tamoz::Agent::Worker.new(runtime: RuntimeDouble.new, session_builder: ->(_thread) {},
+    @runtime = RuntimeDouble.new
+    @worker = Tamoz::Agent::Worker.new(runtime: @runtime, session_builder: ->(_thread) {},
                                        emitter: ->(document) { @events << document })
   end
 
@@ -51,6 +52,42 @@ class SelfHealingWorkerTest < Minitest::Test
 
     assert_equal 'verification_failed', assessment.fetch('category')
     assert_equal 'escalated', assessment.fetch('route')
+  end
+
+  def notices = @runtime.delivered.select { |push| push[:kind] == 'healing.escalated' }
+
+  def test_an_escalated_failure_is_told_to_its_channel_after_its_reply
+    settle(view(:completed, 'work_failed'))
+
+    assert_equal(%w[request.completed healing.escalated], @runtime.delivered.map { |push| push[:kind] })
+    assert_equal 'r1', notices.first.fetch(:request_id)
+    assert_includes notices.first.fetch(:text), 'escalated to you. Reference: r1'
+  end
+
+  def test_a_failure_a_rule_can_fix_sends_no_notice
+    remediable = Tamoz::Agent::SelfHealingAssessor::Assessment.new(
+      remediable: true, route: :remediate, category: :stale_precondition, action_family: :refresh_recompute,
+      rule_id: 'rule.x', never_mutate_class: nil, fingerprint: 'sha256:x', confidence: 1.0
+    )
+    healing = Object.new
+    healing.define_singleton_method(:assess_turn) { |*, **| remediable }
+    worker = Tamoz::Agent::Worker.new(runtime: @runtime, session_builder: ->(_thread) {}, emitter: ->(_) {}, healing:)
+    worker.send(:settle_view, view(:completed, 'work_failed'), 'tg.thread', 'r1', 5)
+
+    assert_empty notices
+  end
+
+  def test_a_crashed_request_is_told_to_its_channel
+    entry = { thread_id: 'tg.thread', head_request_id: 'r1', head_status: :queued }
+    @worker.send(:handle_thread_failure, entry, Tamoz::CheckpointConflictError.new('lease'))
+
+    assert_equal(%w[request.failed healing.escalated], @runtime.delivered.map { |push| push[:kind] })
+  end
+
+  def test_a_clean_turn_sends_no_notice
+    settle(view(:completed, 'answered', satisfied: true))
+
+    assert_empty notices
   end
 
   def test_a_model_refusal_is_classified_from_its_terminal_reason

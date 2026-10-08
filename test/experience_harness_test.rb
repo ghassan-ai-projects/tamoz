@@ -53,7 +53,7 @@ class ExperienceHarnessTest < Minitest::Test
     assert_match(/Which file did you mean/, question_cards.first.fetch(:text))
     assert_equal %w[answer], JSON.parse(question_cards.first.fetch(:markup)).fetch('actions')
     refute_includes cards.map { |card| card[:kind] }, 'approval_request'
-    refute harness.events.any? { |event| event['event'] == 'request.failed' }
+    refute(harness.events.any? { |event| event['event'] == 'request.failed' })
     refute_nil paused
     assert_equal 'clarification_required', paused.fetch('reason')
     assert_equal 1, harness.conversation_status.fetch('open_requests')
@@ -81,6 +81,7 @@ class ExperienceHarnessTest < Minitest::Test
 
     assert_equal 1, request_ids.length
     actual_ref = Tamoz::Comms::Lifecycle::RequestRef.for(request_ids.first)
+
     assert_equal expected_ref, actual_ref
     assert resumed.any? { |card| TERMINAL_KINDS.include?(card[:kind]) },
            "expected the clarification answer to finish the original occurrence; got: #{resumed.inspect}"
@@ -110,13 +111,14 @@ class ExperienceHarnessTest < Minitest::Test
     assert_equal %i[turn turn resume], history.map(&:operation)
     assert_equal %i[completed queued completed], history.map(&:status)
     assert_includes resumed.map { |card| card[:kind] }, 'answer'
-    refute harness.events.any? { |event| event['event'] == 'request.failed' }
+    refute(harness.events.any? { |event| event['event'] == 'request.failed' })
   ensure
     harness&.close
   end
 
   def test_reply_without_a_pending_question_remains_a_new_request
     first = @harness.say('answer the task')
+
     refute_empty first
 
     second = @harness.reply('thanks, also what about other.txt?')
@@ -128,16 +130,20 @@ class ExperienceHarnessTest < Minitest::Test
   # OF-4 / I4 (finished worker migration): a conversational turn is routed to a
   # direct answer in the worker — no plan, no review, no PlanRejectedError — and
   # its terminal card is the answer alone. The turn is still a durable request.
-  def test_a_provider_that_refuses_the_call_is_named_in_one_plain_reply
+  def test_a_provider_that_refuses_the_call_is_named_in_a_plain_reply_then_escalated
     out_of_credit = Object.new
     def out_of_credit.generate(**) = raise(Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: 402))
     harness = Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { out_of_credit }, routing: :experimental)
 
     cards = harness.say('hi')
 
-    assert_equal [['failed', Tamoz::Agent::ChatReply::REASONS.fetch('model_out_of_credit')]],
-                 cards.map { |card| [card[:kind], card[:text]] }
-    assert harness.events.any? { |event| event['event'] == 'request.failed' && event['reason'] == 'model_out_of_credit' }
+    assert_equal([['failed', Tamoz::Agent::ChatReply::REASONS.fetch('model_out_of_credit')]],
+                 cards.first(1).map { |card| [card[:kind], card[:text]] })
+    assert_equal 2, cards.length
+    assert_match(/resource exhausted.*escalated to you/, cards.fetch(1)[:text])
+    assert(harness.events.any? do |event|
+      event['event'] == 'request.failed' && event['reason'] == 'model_out_of_credit'
+    end)
   ensure
     harness&.close
   end
@@ -151,7 +157,7 @@ class ExperienceHarnessTest < Minitest::Test
     @harness.send(:serve)
     cards = @harness.work_off
 
-    assert_equal [Tamoz::Comms::Admission::TEXT_ONLY_REPLY], cards.map { |card| card[:text] }
+    assert_equal([Tamoz::Comms::Admission::TEXT_ONLY_REPLY], cards.map { |card| card[:text] })
     assert_empty @harness.request_ids_for(Fixture::CONVERSATION_A), 'a photo is not a task'
   end
 
@@ -268,8 +274,10 @@ class ExperienceHarnessTest < Minitest::Test
     @harness.work_off
 
     completed = @harness.ref_status(reference)
+
     assert_equal 'completed', completed.fetch('task_state')
     effects = @harness.effect_census.select { |row| row[:request_id] == request_id }
+
     assert_equal effects.length, effects.map { |row| row.fetch(:effect_key) }.uniq.length
   end
 
@@ -285,8 +293,8 @@ class ExperienceHarnessTest < Minitest::Test
 
     assert_equal %w[answer], kinds
     assert_equal 'direct_response', harness.snapshot.fetch('session')
-                                             .fetch(Fixture::CONVERSATION_A).fetch('terminal_reason')
-    assert_equal ['model.generate.route'], harness.effect_census.map { |row| row.fetch(:operation) }
+                                           .fetch(Fixture::CONVERSATION_A).fetch('terminal_reason')
+    assert_equal(['model.generate.route'], harness.effect_census.map { |row| row.fetch(:operation) })
   ensure
     harness&.close
   end
@@ -339,7 +347,7 @@ class ExperienceHarnessTest < Minitest::Test
 
     assert_equal :appended, store.append_delivery(
       delivery, surface_id: Fixture::SURFACE_ID, capacity: 500,
-      reserved_request_id: request_id, now:
+                reserved_request_id: request_id, now:
     )
     assert_equal :claimed, store.claim_delivery(
       delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1,
@@ -350,6 +358,7 @@ class ExperienceHarnessTest < Minitest::Test
         delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1, now: now + 1
       )
     end
+
     assert_equal :marked, store.mark_delivery(
       delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1,
       status:, receipt: status == 'succeeded' ? { 'message_id' => 1 } : nil, now: now + 2
