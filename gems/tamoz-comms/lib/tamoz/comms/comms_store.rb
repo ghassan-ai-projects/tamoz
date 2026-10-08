@@ -19,7 +19,7 @@ module Tamoz
     # rubocop:disable Metrics/ParameterLists -- the signatures ARE the §13
     #   contract; every field is mandatory at the seam.
     module CommsStore
-      CONTRACT_VERSION = 2
+      CONTRACT_VERSION = 3
 
       # Deploy one surface revision (upsert, digest-addressed).
       # @return [:deployed, :duplicate]
@@ -40,10 +40,11 @@ module Tamoz
       # a durable integrity conflict recorded on the ONE anchor row — its
       # conflict counter advances, nothing is enqueued (invariant 1).
       # `history` is the conversation so far; `research` (TurnContext::RESEARCH_INPUT, or nil) rides in the payload and
-      # makes the turn a deep-research turn.
+      # makes the turn a deep-research turn; `attachment` (the stored file's kind, digest and labels, or nil) rides
+      # the same way and is read by the worker, never by the gateway.
       # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
       def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
-                            history: [], research: nil)
+                            history: [], research: nil, attachment: nil)
         raise NotImplementedError
       end
 
@@ -52,6 +53,13 @@ module Tamoz
       # allowing the worker to reject a stale answer after the pause changes.
       # @return [:enqueued, :duplicate, :integrity_conflict]
       def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+        raise NotImplementedError
+      end
+
+      # Whether this update identity already has a durable disposition — read before work that a
+      # redelivery must not repeat (an attachment download).
+      # @return [Boolean]
+      def inbound_observed?(envelope_wire, bot_id:)
         raise NotImplementedError
       end
 

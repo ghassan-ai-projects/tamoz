@@ -148,17 +148,18 @@ class ExperienceHarnessTest < Minitest::Test
     harness&.close
   end
 
-  def test_a_photo_from_the_correspondent_gets_a_text_only_reply
+  def test_a_sticker_from_the_correspondent_says_what_the_bot_reads
     @harness.transport.enqueue('update_id' => 9_001, 'message' => {
                                  'message_id' => 9_001, 'date' => Time.now.to_i, 'from' => { 'id' => Fixture::USER_BOUND },
-                                 'chat' => { 'id' => 22_222_222, 'type' => 'private' }, 'photo' => [{ 'file_id' => 'p' }]
+                                 'chat' => { 'id' => 22_222_222, 'type' => 'private' },
+                                 'sticker' => { 'file_id' => 's', 'file_unique_id' => 'u-s' }
                                })
 
     @harness.send(:serve)
     cards = @harness.work_off
 
-    assert_equal([Tamoz::Comms::Admission::TEXT_ONLY_REPLY], cards.map { |card| card[:text] })
-    assert_empty @harness.request_ids_for(Fixture::CONVERSATION_A), 'a photo is not a task'
+    assert_equal([Tamoz::Comms::Admission::UNSUPPORTED_REPLY], cards.map { |card| card[:text] })
+    assert_empty @harness.request_ids_for(Fixture::CONVERSATION_A), 'a sticker is not a task'
   end
 
   def test_conversational_turn_is_routed_to_a_direct_answer_without_planning

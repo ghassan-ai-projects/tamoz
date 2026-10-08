@@ -39,7 +39,9 @@ module Tamoz
           case decision.disposition
           when :request
             reference = clarification_reply_reference(envelope)
-            if reference
+            if envelope.fetch('kind') == 'attachment'
+              admit_attachment(envelope, now:)
+            elsif reference
               admit_answer(envelope, reference, envelope.fetch('text'), now:)
             else
               admit_request(envelope, now:)
@@ -62,8 +64,9 @@ module Tamoz
           append_control(decision.control_reply, envelope, now:) if decision.control_reply
         end
 
-        # `research` makes the admitted turn a deep-research turn (the /research command).
-        def admit_request(envelope, now:, research: nil)
+        # `research` makes the admitted turn a deep-research turn (the /research command); `attachment` is a stored
+        # file the turn reads.
+        def admit_request(envelope, now:, research: nil, attachment: nil)
           conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
           thread = admission_thread(envelope, conversation)
           thread = fresh_thread_for_new_authority(envelope, conversation, now:) if stale_authority?(thread)
@@ -73,7 +76,7 @@ module Tamoz
           )
           outcome = @store.admit_and_enqueue(
             envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
-                      reservation: reservation_slots, now:, history:, research:
+                      reservation: reservation_slots, now:, history:, research:, attachment:
           )
           return if %i[enqueued duplicate].include?(outcome)
 

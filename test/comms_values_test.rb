@@ -98,6 +98,22 @@ class CommsValuesTest < Minitest::Test
     assert_raises(Comms::ValidationError) { envelope(command: 'help', arguments: nil, text: '/help') }
   end
 
+  ATTACHMENT = { 'kind' => 'document', 'file_id' => 'D', 'file_unique_id' => 'u', 'media_type' => 'text/plain',
+                 'name' => 'notes.txt', 'size_bytes' => 5, 'duration_s' => nil }.freeze
+
+  def test_an_attachment_envelope_is_bounded_and_round_trips
+    wire = envelope(kind: 'attachment', text: nil, attachment: ATTACHMENT.dup).wire
+
+    assert_equal ATTACHMENT, Comms::InboundEnvelope.from_wire(wire).attachment
+    [ATTACHMENT.merge('kind' => 'video'), ATTACHMENT.merge('extra' => 1), ATTACHMENT.except('name'),
+     ATTACHMENT.merge('file_id' => ''), ATTACHMENT.merge('name' => 'n' * 256),
+     ATTACHMENT.merge('size_bytes' => -1)].each do |bad|
+      assert_raises(Comms::ValidationError, bad.inspect) { envelope(kind: 'attachment', text: nil, attachment: bad) }
+    end
+    assert_raises(Comms::ValidationError) { envelope(kind: 'attachment', text: nil) }
+    assert_raises(Comms::ValidationError) { envelope(kind: 'text', attachment: ATTACHMENT.dup) }
+  end
+
   def test_envelope_wire_round_trip
     value = envelope
     copy = Comms::InboundEnvelope.from_wire(value.wire)

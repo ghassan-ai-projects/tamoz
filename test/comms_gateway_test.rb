@@ -26,7 +26,7 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
-  def with_gateway(limits: {}, controls: nil)
+  def with_gateway(limits: {}, controls: nil, readable: %w[document image voice audio])
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
@@ -50,6 +50,7 @@ class CommsGatewayTest < Minitest::Test
           adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
           poller_owner: 'gateway:test', controls:
         )
+        gateway.singleton_class.define_method(:readable_kinds) { readable }
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
         adapter&.close
@@ -90,6 +91,201 @@ class CommsGatewayTest < Minitest::Test
       assert_equal Tamoz::Comms::Gateway::UNADMITTABLE_REPLY, appended.last.fetch('text')
       assert_includes err, 'could not admit update 1'
       assert_operator store.poll_offset(bot_id: 7_463_512_990), :>, 1, 'the offset moves past the message'
+    end
+  end
+
+  def document_update(id, file_id: 'D1', size: 5, caption: 'what is in it?', user_id: 111_111_11)
+    message = update(id, user_id:).fetch('message').except('text')
+    message['document'] = { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'file_name' => 'notes.txt',
+                            'mime_type' => 'text/plain', 'file_size' => size }.compact
+    message['caption'] = caption
+    { 'update_id' => id, 'message' => message }
+  end
+
+  def enqueued_payload(checkpoints)
+    thread = Tamoz::Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+    checkpoints.request_history(thread_id: thread).last&.payload
+  end
+
+  def test_an_admitted_attachment_is_retained_and_its_turn_carries_only_the_digest
+    with_gateway do |gateway, transport, store, adapter, checkpoints|
+      seed_binding(store)
+      transport.files = { 'D1' => "MARIGOLD-7341\x00\xFF".b }
+      transport.batch([document_update(1)])
+
+      gateway.serve_once(drain: false)
+      payload = enqueued_payload(checkpoints)
+      digest = "sha256:#{Digest::SHA256.hexdigest("MARIGOLD-7341\x00\xFF".b)}"
+
+      assert_equal '[file] what is in it?', payload.fetch('task')
+      assert_equal({ 'kind' => 'document', 'media_type' => 'text/plain', 'name' => 'notes.txt', 'duration_s' => nil,
+                     'digest' => digest, 'size_bytes' => 15 }, payload.fetch('attachment'))
+      refute_match(/D1|file_id|bot/, JSON.generate(payload), 'the worker never sees a file handle')
+      assert_equal "MARIGOLD-7341\x00\xFF".b,
+                   adapter.bind_artifact_store(tenant: 'profile:ops').resolve(digest).fetch('bytes').b
+    end
+  end
+
+  def test_a_redelivered_attachment_is_not_fetched_again_and_gets_no_second_reply
+    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      seed_binding(store)
+      transport.files = { 'D1' => 'bytes' }
+      transport.batch([document_update(1), document_update(2, file_id: 'gone')])
+      capture_io { gateway.serve_once(drain: false) }
+      replies = appended.length
+
+      gateway.serve_once(drain: false)
+      thread = Tamoz::Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_equal 1, checkpoints.request_history(thread_id: thread).length
+      assert_equal %w[D1 gone], transport.fetches
+      assert_equal replies, appended.length, 'a redelivered refusal is not said twice'
+    end
+  end
+
+  def test_a_strangers_attachment_is_never_downloaded
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.files = { 'D1' => 'bytes' }
+      transport.batch([document_update(1, user_id: 99)])
+
+      gateway.serve_once(drain: false)
+
+      assert_empty transport.fetches
+      assert_nil enqueued_payload(checkpoints)
+    end
+  end
+
+  def voice_update(id, duration)
+    message = update(id).fetch('message').except('text')
+    { 'update_id' => id,
+      'message' => message.merge('voice' => { 'file_id' => 'V', 'file_unique_id' => 'u-v', 'duration' => duration }) }
+  end
+
+  def test_refused_attachments_get_one_reply_a_recorded_disposition_and_no_turn
+    cases = {
+      'announced too large' => [document_update(1, size: 20_000_001), 'too large', []],
+      'download failed' => [document_update(1, file_id: 'gone'), "couldn't download", %w[gone]],
+      'voice too long' => [voice_update(1, 601), 'too long', []]
+    }
+    cases.each do |name, (incoming, reply, fetched)|
+      with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+        seed_binding(store)
+        transport.batch([incoming])
+
+        capture_io { gateway.serve_once(drain: false) }
+
+        assert_match(/#{reply}/, appended.last.fetch('text'), name)
+        assert_equal [%w[rejected]], [inbound_dispositions(store, 1).map(&:first)], name
+        assert_equal fetched, transport.fetches, name
+        assert_nil enqueued_payload(checkpoints), name
+      end
+    end
+  end
+
+  def test_a_kind_this_bot_cannot_read_yet_is_refused_without_a_download
+    with_gateway(readable: %w[image]) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([document_update(1)])
+
+      gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Admission::UNSUPPORTED_REPLY, appended.last.fetch('text')
+      assert_empty transport.fetches
+    end
+  end
+
+  # One attachment that cannot be fetched or stored must never stall the pass or kill the gateway.
+  def test_every_fetch_or_store_failure_is_isolated_to_its_own_update
+    failures = [Comms::TransientTransportError.new('timeout'), Comms::ValidationError.new('bad path'),
+                SocketError.new('dns'), Errno::ENOSPC.new, Tamoz::SQLite::ArtifactStore::ArtifactStoreError.new('x')]
+    failures.each do |failure|
+      with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+        seed_binding(store)
+        transport.singleton_class.define_method(:fetch_attachment) { |*, **| raise failure }
+        transport.batch([document_update(1), update(2, text: 'still here?')])
+
+        _out, err = capture_io { assert_equal :served, gateway.serve_once(drain: false) }
+
+        assert_match(/couldn't download/, appended.first.fetch('text'), failure.class.name)
+        assert_includes err, failure.class.name
+        assert_equal 'still here?', enqueued_payload(checkpoints).fetch('task'), failure.class.name
+        assert_equal 3, store.poll_offset(bot_id: 7_463_512_990), failure.class.name
+      end
+    end
+  end
+
+  def test_telegrams_too_big_refusal_reads_as_too_large
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.singleton_class.define_method(:fetch_attachment) do |*, **|
+        raise Comms::ResponseTooLargeError, 'Bad Request: file is too big'
+      end
+      transport.batch([document_update(1, size: nil)])
+
+      gateway.serve_once(drain: false)
+
+      assert_match(/too large/, appended.last.fetch('text'))
+    end
+  end
+
+  def test_a_throttled_download_stays_pass_level_and_the_update_is_read_again
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.singleton_class.define_method(:fetch_attachment) { |*, **| raise Comms::ThrottledError, 'slow down' }
+      transport.batch([document_update(1)])
+
+      assert_equal :throttled, gateway.serve_once(drain: false)
+      assert_nil store.poll_offset(bot_id: 7_463_512_990)
+      assert_nil enqueued_payload(checkpoints)
+    end
+  end
+
+  def test_a_lease_lost_during_a_download_stops_the_pass_as_a_poller_conflict
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      gateway.start(now: Time.utc(2026, 8, 10, 12, 0, 0))
+      gateway.singleton_class.define_method(:renew_poller) { |now| now == Time.utc(2026, 8, 10, 12, 0, 1) }
+      transport.files = { 'D1' => 'a' }
+      transport.batch([document_update(1)])
+
+      assert_raises(Comms::PollerConflictError) do
+        gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 1), drain: false)
+      end
+      assert_nil enqueued_payload(checkpoints)
+    ensure
+      gateway&.stop
+    end
+  end
+
+  def test_an_image_over_its_own_limit_names_that_limit
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      update = document_update(1, size: 5_000_001)
+      update['message']['document']['mime_type'] = 'image/png'
+      transport.batch([update])
+
+      gateway.serve_once(drain: false)
+
+      assert_match(/limit is 5 MB/, appended.last.fetch('text'))
+      assert_empty transport.fetches
+    end
+  end
+
+  def test_the_poller_lease_is_renewed_after_each_download
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
+      seed_binding(store)
+      gateway.start(now: Time.utc(2026, 8, 10, 12, 0, 0))
+      renewals = []
+      gateway.singleton_class.define_method(:renew_poller) { |now| renewals << now }
+      transport.files = { 'D1' => 'a', 'D2' => 'b' }
+      transport.batch([document_update(1), document_update(2, file_id: 'D2')])
+
+      gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 1), drain: false)
+
+      assert_equal 5, renewals.length, 'once for the pass, then before and after each download'
+    ensure
+      gateway&.stop
     end
   end
 
@@ -281,7 +477,7 @@ class CommsGatewayTest < Minitest::Test
       ).wire
       assert_equal :appended, store.append_delivery(
         terminal, surface_id: 'telegram-ops', capacity: 500,
-        reserved_request_id: request_id, now:
+                  reserved_request_id: request_id, now:
       )
       assert_equal :claimed, store.claim_delivery(
         delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
@@ -495,7 +691,7 @@ class CommsGatewayTest < Minitest::Test
       assert_equal 0, cancellation_stamped_count(store, old_thread),
                    'the pre-rotation request keeps running untouched'
       assert_empty checkpoints.request_history(thread_id: old_thread)
-                      .select { |request| request.operation == :redirect },
+                              .select { |request| request.operation == :redirect },
                    'no cancel operation lands on the old thread'
       assert_equal %i[turn redirect], checkpoints.request_history(thread_id: new_thread).map(&:operation)
     end
@@ -822,8 +1018,8 @@ class CommsGatewayTest < Minitest::Test
 
   def test_every_fixed_control_reply_constant_fits_the_delivery_ceiling
     replies = Tamoz::Comms::Gateway.constants.sort
-                                         .filter_map { |name| Tamoz::Comms::Gateway.const_get(name) }
-                                         .select { |value| value.is_a?(String) }
+                                   .filter_map { |name| Tamoz::Comms::Gateway.const_get(name) }
+                                   .select { |value| value.is_a?(String) }
 
     refute_empty replies
     replies.each do |reply|
@@ -850,7 +1046,7 @@ class CommsGatewayTest < Minitest::Test
       replies = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
                      .select { |row| row.fetch('kind') == 'control' }
 
-      assert_equal ["That message exceeds this channel's size limit."], replies.map { |row| row.fetch('text') }
+      assert_equal(["That message exceeds this channel's size limit."], replies.map { |row| row.fetch('text') })
     end
   end
 
@@ -1049,7 +1245,7 @@ class CommsGatewayTest < Minitest::Test
   # A scripted Transport for the loop: batches of raw updates, optional
   # receipt, optional ambiguity.
   class ScriptedTransport
-    attr_accessor :receipt, :raise_ambiguous, :transient_polls, :comms_errors, :authenticated_id
+    attr_accessor :receipt, :raise_ambiguous, :transient_polls, :comms_errors, :authenticated_id, :files
 
     def initialize
       @updates = []
@@ -1102,8 +1298,20 @@ class CommsGatewayTest < Minitest::Test
 
     def deliveries = @sent || []
 
+    def fetches = @fetches ||= []
+
+    def fetch_attachment(file_id, max_bytes:)
+      fetches << file_id
+      bytes = (@files || {}).fetch(file_id) { raise Comms::TransientTransportError, 'file is gone' }
+      raise Comms::ResponseTooLargeError, 'too large' if bytes.bytesize > max_bytes
+
+      bytes
+    end
+
     def normalize(update)
-      if (callback = update['callback_query'])
+      if update['message']&.key?('document') || update['message']&.key?('voice')
+        Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1).normalize(update).wire
+      elsif (callback = update['callback_query'])
         Comms::InboundEnvelope.new(
           surface_id: 'telegram-ops', surface_revision: 1,
           update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),

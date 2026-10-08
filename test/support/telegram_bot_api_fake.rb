@@ -7,6 +7,7 @@ require 'socket'
 # A live Bot API stand-in that refuses what Telegram refuses, so a send that fails in production fails here.
 class TelegramBotApiFake
   MAX_TEXT = 4096
+  MAX_DOWNLOAD = 20 * 1024 * 1024
   HTML_TAGS = %w[b strong i em u ins s strike del code pre a blockquote tg-spoiler].freeze
   Call = Struct.new(:name, :params, :at, :ok, keyword_init: true)
 
@@ -22,6 +23,8 @@ class TelegramBotApiFake
     @updates = []
     @calls = []
     @messages = {}
+    @files = {}
+    @downloads = []
     @update_id = first_update_id - 1
     @message_id = 1_000
     @running = true
@@ -44,9 +47,30 @@ class TelegramBotApiFake
     message
   end
 
-  def send_photo(user_id)
-    push('message' => user_message(user_id, 'photo' => [{ 'file_id' => 'ph1', 'width' => 90, 'height' => 90 }]))
+  def send_sticker(user_id)
+    push('message' => user_message(user_id, 'sticker' => { 'file_id' => 'st1', 'file_unique_id' => 'u-st1' }))
   end
+
+  # A file the bot can fetch with getFile; `announced` is the size Telegram reports, which may differ from the bytes.
+  def send_document(user_id, bytes, name:, mime_type:, caption: nil, announced: bytes.bytesize)
+    file = add_file(bytes, "documents/#{name}", announced)
+    push('message' => user_message(user_id, { 'document' => file.merge('file_name' => name, 'mime_type' => mime_type),
+                                              'caption' => caption }.compact))
+  end
+
+  def send_photo(user_id, bytes, caption: nil)
+    file = add_file(bytes, 'photos/file.jpg', bytes.bytesize)
+    sizes = [file.merge('file_id' => 'thumb', 'width' => 90, 'height' => 60),
+             file.merge('width' => 1280, 'height' => 960)]
+    push('message' => user_message(user_id, { 'photo' => sizes, 'caption' => caption }.compact))
+  end
+
+  def send_voice(user_id, bytes, duration:)
+    file = add_file(bytes, 'voice/file.oga', bytes.bytesize)
+    push('message' => user_message(user_id, 'voice' => file.merge('duration' => duration, 'mime_type' => 'audio/ogg')))
+  end
+
+  def downloads = @lock.synchronize { @downloads.dup }
 
   def tap(user_id, message_id, data)
     push('callback_query' => { 'id' => "cb#{next_update_id}", 'data' => data, 'from' => user(user_id),
@@ -87,6 +111,17 @@ class TelegramBotApiFake
     end
   end
 
+  def add_file(bytes, path, announced)
+    @lock.synchronize do
+      id = "file#{@files.length + 1}"
+      # Telegram names the stored file itself (documents/file_12.pdf); the user's file name never reaches the path.
+      folder = path.split('/').first
+      extension = File.extname(path)[/\A\.[A-Za-z0-9]{1,8}\z/]
+      @files[id] = { bytes:, path: "#{folder}/#{id}#{extension}", size: announced }
+      { 'file_id' => id, 'file_unique_id' => "u-#{id}", 'file_size' => announced }
+    end
+  end
+
   def next_update_id = @lock.synchronize { @update_id += 1 }
   def next_message_id = @lock.synchronize { @message_id += 1 }
 
@@ -101,12 +136,30 @@ class TelegramBotApiFake
 
   def serve(socket)
     line = socket.gets or return
+    return serve_file(socket, line.split[1].to_s) if line.split[1].to_s.start_with?('/file/bot')
+
     method = line.split[1].to_s.split('/').last
     params = read_body(socket)
     status, body = dispatch(method, params)
     payload = JSON.generate(body)
     socket.write("HTTP/1.1 #{status} X\r\nContent-Type: application/json\r\n" \
                  "Content-Length: #{payload.bytesize}\r\nConnection: close\r\n\r\n#{payload}")
+  rescue IOError, Errno::EPIPE, Errno::ECONNRESET
+    nil
+  ensure
+    socket.close
+  end
+
+  # Telegram serves a file at /file/bot<token>/<file_path>, the path getFile returned.
+  def serve_file(socket, path)
+    read_body(socket)
+    file_path = path.split('/', 4).last
+    file = @lock.synchronize { @files.values.find { |entry| entry[:path] == file_path } }
+    @lock.synchronize { @downloads << file_path }
+    status, bytes = file ? ['200 OK', file[:bytes]] : ['404 Not Found', 'Not Found']
+    socket.write("HTTP/1.1 #{status}\r\nContent-Type: application/octet-stream\r\n" \
+                 "Content-Length: #{bytes.bytesize}\r\nConnection: close\r\n\r\n")
+    socket.write(bytes)
   rescue IOError, Errno::EPIPE, Errno::ECONNRESET
     nil
   ensure
@@ -129,8 +182,17 @@ class TelegramBotApiFake
     when 'editMessageText' then record(method, params) { edit_message(params) }
     when 'editMessageReplyMarkup' then record(method, params) { edit_markup(params) }
     when 'sendChatAction', 'answerCallbackQuery' then record(method, params) { ok(true) }
+    when 'getFile' then record(method, params) { file_info(params['file_id']) }
     else [404, { 'ok' => false, 'error_code' => 404, 'description' => 'Not Found' }]
     end
+  end
+
+  def file_info(file_id)
+    file = @lock.synchronize { @files[file_id] }
+    return bad('invalid file_id') unless file
+    return bad('file is too big') if file[:size] > MAX_DOWNLOAD
+
+    ok('file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'file_size' => file[:size], 'file_path' => file[:path])
   end
 
   def polled

@@ -16,7 +16,7 @@ module Tamoz
     #
     # This is a structural contract: `tamoz-telegram` implements it without a
     # runtime reference to this constant (dependency rule 9), and the
-    # conformance suite drives all four methods against an in-memory fixture
+    # conformance suite drives the methods against an in-memory fixture
     # that can duplicate/reorder updates, throttle, lose a poll response, and
     # time out mid-send.
     # :reek:UnusedParameters -- contract signatures; the bodies raise because
@@ -45,6 +45,15 @@ module Tamoz
       # @raise [AmbiguousDeliveryError] the send may or may not have happened.
       # @raise [ThrottledError] carries the server's authoritative retry_after.
       def deliver(delivery)
+        raise NotImplementedError
+      end
+
+      # @param file_id [String] the platform's handle for one inbound attachment.
+      # @param max_bytes [Integer] the largest file the caller accepts.
+      # @return [String] the file's bytes (binary).
+      # @raise [ResponseTooLargeError] the file is larger than `max_bytes`.
+      # @raise [TransientTransportError] the file could not be read.
+      def fetch_attachment(file_id, max_bytes:)
         raise NotImplementedError
       end
 

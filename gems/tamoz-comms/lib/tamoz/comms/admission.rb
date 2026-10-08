@@ -22,7 +22,7 @@ module Tamoz
     module Admission
       # The disposition of one update. `command_intent` is typed and bounded;
       # it is not task text and cannot be forwarded to a model.
-      TEXT_ONLY_REPLY = 'I can only read text messages for now.'
+      UNSUPPORTED_REPLY = 'I can read text, text files, PDFs, images and voice messages — not this kind of message yet.'
       Decision = Data.define(
         :disposition, :reason, :control_reply, :thread_id, :command_intent
       )
@@ -41,7 +41,7 @@ module Tamoz
       def screening_decision(envelope, surface:, binding:)
         return reject(:surface_disabled, 'the surface is disabled') if surface.disabled?
         return unsupported(envelope, surface:, binding:) if envelope.fetch('kind') == 'unsupported'
-        return ignore(:unsupported_kind) unless %w[text command callback].include?(envelope.fetch('kind'))
+        return ignore(:unsupported_kind) unless %w[text command callback attachment].include?(envelope.fetch('kind'))
         return reject(:group_chat, 'group chats are refused in v1') if group_chat?(envelope.fetch('conversation_id'))
 
         reject(:unbound, 'the correspondent is not bound') if binding && binding.fetch('status') != 'active'
@@ -101,12 +101,12 @@ module Tamoz
         end
       end
 
-      # A photo or sticker from someone allowed to talk gets told why nothing happens.
+      # A sticker or video from someone allowed to talk gets told why nothing happens.
       def unsupported(envelope, surface:, binding:)
         conversation_id = envelope.fetch('conversation_id')
         return ignore(:unsupported_kind) if group_chat?(conversation_id) || !authorized?(envelope, surface:, binding:)
 
-        Decision.new(:ignored, :unsupported_kind, TEXT_ONLY_REPLY, nil, nil)
+        Decision.new(:ignored, :unsupported_kind, UNSUPPORTED_REPLY, nil, nil)
       end
 
       def authorized?(envelope, surface:, binding:)

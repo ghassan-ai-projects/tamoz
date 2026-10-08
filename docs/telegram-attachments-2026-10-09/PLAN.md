@@ -45,7 +45,8 @@ Constraints that decide the design:
 | Same endpoint, `glm-4.6v` / `glm-4.5v` | Both read it; `glm-5v-turbo` refused (not in plan) | — |
 | Same endpoint, `/audio/transcriptions`, `glm-asr-2512` | OGG refused as a format; WAV answered `1113 Insufficient balance` | **No funded transcription endpoint.** Voice ships as a configured endpoint; its real-model row is BLOCKED on owner action O1 |
 | Same endpoint, chat completion with an `input_audio` part | `1210 Invalid API parameter` | The chat model cannot take audio |
-| Host tools under the pinned Ruby 3.3.11 | `ffmpeg` present; `tesseract`, `pdftotext`, `whisper` absent; **`pdf-reader` not installed** (an earlier "installed" reading came from the system Ruby) | `pdf-reader` is a new dependency to install and review (OD3) |
+| Host tools under the pinned Ruby 3.3.11 | `ffmpeg` present; `tesseract`, `pdftotext`, `whisper` absent; **`pdf-reader` not installed** (an earlier "installed" reading came from the system Ruby) | — |
+| `pdf-reader` licence closure (revision 3, P2) | `ttfunk` is Ruby-or-GPL-2/3 and `ruby-rc4` declares no licence; `script/generate_dependency_review` requires every runtime licence on the permissive allowlist | **`pdf-reader` would fail the dependency gate.** PDFs are read by poppler's `pdftotext` as a host tool in its own process (OD3, revised); not installed here — owner action O3 |
 
 ## 3. Design
 
@@ -53,7 +54,7 @@ Constraints that decide the design:
 
 | Telegram message | Attachment kind | Treatment (worker) | Shown to the model as |
 |---|---|---|---|
-| `document`: PDF (`%PDF-` magic) | `document` | `pdf-reader` text layer in a forked, time-limited child, up to 200 pages and the text cap | Material: between markers, read, never obeyed |
+| `document`: PDF (`%PDF-` magic) | `document` | `pdftotext` (poppler) in its own process: CPU-limited, 20 s wall clock, first 200 pages, bounded output, NFKC-normalized | Material: between markers, read, never obeyed |
 | `document`: valid UTF-8 without NUL bytes (txt, md, csv, json, code) | `document` | Decoded as text, NFC-normalized | Material |
 | `photo` (largest size), `document` with an image mime | `image` | Bytes allow-listed by magic (PNG, JPEG, WebP, GIF), ≤ 5 MB; one journaled `converse` call with an image part: transcribe every piece of text verbatim, then describe the image in two sentences | Material |
 | `voice`, not forwarded | `voice` | One journaled `/audio/transcriptions` call; the bytes go as sent (OGG/Opus) | **The user's own words**: the transcript becomes the turn's task |
@@ -102,7 +103,7 @@ Worker opened:  WorkAttachment.read(state) — before the memory brief
 | Payload `attachment` | `CommsStore#admit_and_enqueue(attachment:)` (contract + sqlite) | Beside `research:` |
 | `attachment` state channel | `SessionGraph::WORK_SCALAR_CHANNELS` | Declared in the same commit as the payload key. No version bump (precedent: `research`, d0d07d02): new turns on existing threads run; a thread paused across the upgrade fails `CheckpointVersionError` as any definition change does. **Attachments need the work route** (`tamoz telegram start` runs `--work-routing`); a legacy-routing worker refuses the payload exactly as it refuses `/research` |
 | `WorkAttachment` | `tamoz-agent-session` | Called from `SessionWork#opened`; uses entry kind `user` (no new context-engine kind); scrubbing already happens in `WorkContext#entry` |
-| Document reader | `tamoz-agent-session` `AttachmentText` | `pdf-reader` required only inside the PDF branch; `Process.fork` child with `RLIMIT_CPU` and a 20 s wall clock, killed on timeout; every reader error → typed `unreadable` |
+| Document reader | `tamoz-agent-session` `AttachmentText` | `pdftotext` spawned with `rlimit_cpu`, its own process group, a 20 s wall clock (group killed on timeout) and a bounded stdout; missing binary → typed `pdf_reader_missing`; non-zero exit → `unreadable`; no gem dependency |
 | Text cap | `WorkAttachment` | `min(24,000 characters, 25% of the route's context window by TokenMeter)`; the note says "pages read p of P" or "first N characters" |
 | Vision read | reuses `SessionEffects#converse` | Stage `attachment_image`, no tools; the configured chat model |
 | Transcription | `EpisodeModelTransport#transcribe` (multipart `<base>/audio/transcriptions`, refused in witness-gateway mode); a second model built by `ModelClientFactory.build` from `TAMOZ_TRANSCRIPTION_PROVIDER` / `_MODEL` / `_API_BASE`; `SessionOptions` + `WorkerRuntime#build_session` carry it; `ChildEnvironments.worker_env` passes those names and the provider's key | Unset → the turn says voice is not set up on this bot |
@@ -116,7 +117,7 @@ Worker opened:  WorkAttachment.read(state) — before the memory brief
 | Image size | 5 MB (base64 grows it a third, and it is canonicalized into the request) | gateway (announced), worker (actual) |
 | Voice/audio duration | 10 minutes | gateway, from `duration` |
 | Download time | 60 s per file | Telegram client |
-| PDF | 200 pages, 20 s wall clock, CPU-limited child | worker |
+| PDF | 200 pages, 20 s wall clock, CPU-limited `pdftotext` process, 2 MB of extracted text read | worker |
 | Text shown to the model | `min(24,000 chars, 25% of the window)` | worker |
 
 ### 3.5 Failure model — every failure ends as one reply, never a crash or a stall
@@ -135,6 +136,7 @@ Worker opened:  WorkAttachment.read(state) — before the memory brief
 | `:wait` outcome (lease lost) | worker | `LeaseLostError`, as `SessionWork#stepped` |
 | `/cancel` during a vision or transcription call | worker | the call is abandoned (`until_cancelled`); the turn ends "Stopped." |
 | An album (several photos at once) | — | each item is its own turn and reply (albums as one request deferred) |
+| A stranger's attachment under pairing admission | gateway | the same pairing challenge a stranger's text gets; nothing is downloaded |
 
 ### 3.6 What later turns see
 
@@ -154,7 +156,7 @@ only in the phase that can read it.
 |---|---|---|---|
 | **P0** Plan | This folder, reviewed from both lenses, findings folded in | `docs/telegram-attachments-2026-10-09/` | review |
 | **P1** Inbound path | Attachments normalize, admit, download into the artifact store and enqueue with the `attachment` channel declared; `READABLE_KINDS` is empty, so users still get the unsupported reply; every gateway failure path is isolated per update | normalizer, envelope, admission, transport (comms + telegram), client, gateway, comms store, artifact store limit, session graph channel | plumbing |
-| **P2** Documents and PDFs | `document` readable: text and PDF text layer reach the turn as framed material; caps; hostile-PDF isolation | `work_attachment.rb`, `attachment_text.rb`, `session_work.rb`, prompts, gemspec + lock | plumbing + **real model** (`document`, `pdf`, `arabic_document`, `scanned_pdf`, `injection`) |
+| **P2** Documents and PDFs | `document` readable: text and PDF text layer reach the turn as framed material; caps; hostile-PDF isolation | `work_attachment.rb`, `attachment_text.rb`, `session_work.rb`, `work_context.rb`, prompts | plumbing + **real model** (`document`, `arabic_document`, `injection`; `pdf`, `scanned_pdf` BLOCKED on O3) |
 | **P3** Images | `image` readable through one journaled vision call | `work_attachment.rb`, `session_effects.rb` use, prompts | plumbing + **real model** (`image_ocr`) |
 | **P4** Voice and audio | `voice`/`audio` readable through one journaled transcription call; own voice becomes the task | `episode_model_transport.rb`, `session_options.rb`, `worker_runtime.rb`, `child_environments.rb`, CLI flags, ADR-048 | plumbing (local fake transcription server) + **real model BLOCKED on O1** |
 | **P5** End-to-end and records | Telegram eval plays every attachment scenario on the real worker and model; the existing 91 checks still pass; GOAL.md, README, guide, ADR-041/042/048 true | `test/support/telegram_chat_*`, `test/support/telegram_bot_api_fake.rb`, docs, ADRs | **real model** |
@@ -197,8 +199,9 @@ Taken under the owner's request to build this (each flagged again in the final a
   it there (ADR-042 kept: the worker never holds the bot token).
 - **OD2** `Comms::Transport` gains `fetch_attachment` — a cross-gem interface change (AGENTS.md: ask
   first); the smallest extension that keeps downloads in the transport gem.
-- **OD3** `pdf-reader` (MIT) and its closure (Ascii85, afm, hashery, ruby-rc4, ttfunk — licences reviewed
-  in D6) become runtime dependencies of `tamoz-agent-session`.
+- **OD3** (revised in P2) PDFs are read by poppler's `pdftotext` as a host tool, in its own limited
+  process — not by the `pdf-reader` gem, whose closure fails the permissive-licence gate (`ttfunk`
+  Ruby-or-GPL, `ruby-rc4` unlicensed). No new gem dependency.
 - **OD4** Images are read by the configured chat model; voice and audio by a separately configured
   OpenAI-compatible transcription endpoint, bytes sent as received (no ffmpeg).
 - **OD5** `ArtifactStore::MAX_ARTIFACT_BYTES` rises from 4 MB to 20 MB.
@@ -209,3 +212,6 @@ Open:
   fund one (OpenAI `whisper-1` and Groq accept OGG directly), or approve installing `whisper-cpp` and a
   model locally and running its server with `--convert`.
 - **O2** Attachments are kept in the runtime database (no retention yet), 20 MB each; `FUTURE_PLAN.md` §3.
+- **O3** `pdftotext` is not installed on this machine. To grade PDFs for real: approve
+  `brew install poppler` (Homebrew bottle). Without it a PDF gets one plain line saying PDF reading is
+  not set up on this machine.

@@ -25,9 +25,10 @@ class TelegramFixtureServer
   # @param body [Hash] the JSON body
   # @param times [Integer] how many requests this script answers; 0 = always
   # @param delay_s [Float] sleep before responding (for timeout tests)
-  def script(method, status: 200, body: nil, times: 0, delay_s: 0.0)
+  # `raw` answers with these bytes instead of a JSON body (a file download).
+  def script(method, status: 200, body: nil, times: 0, delay_s: 0.0, raw: nil)
     @lock.synchronize do
-      (@script[method] ||= []) << { status:, body:, remaining: times, delay_s: }
+      (@script[method] ||= []) << { status:, body:, remaining: times, delay_s:, raw: }
     end
   end
 
@@ -57,9 +58,10 @@ class TelegramFixtureServer
     request_line = socket.gets
     return socket.close unless request_line
 
-    method = request_line.split[1].split('/').last
+    path = request_line.split[1]
+    method = path.split('/').last
     body = consume_headers_and_body(socket)
-    @lock.synchronize { @requests << { method:, body: } }
+    @lock.synchronize { @requests << { method:, body:, path: } }
     response = response_for(method)
     sleep response[:delay_s] if response[:delay_s].positive?
     socket.write http_response(response)
@@ -94,7 +96,7 @@ class TelegramFixtureServer
   end
 
   def http_response(entry)
-    body = entry[:body] ? JSON.generate(entry[:body]) : '{}'
+    body = entry[:raw] || (entry[:body] ? JSON.generate(entry[:body]) : '{}')
     status = entry[:status]
     reason = { 200 => 'OK', 401 => 'Unauthorized', 429 => 'Too Many Requests' }.fetch(status, 'OK')
     headers = "Content-Type: application/json\r\nContent-Length: #{body.bytesize}\r\nConnection: close\r\n\r\n"

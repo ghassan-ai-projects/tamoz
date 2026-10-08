@@ -34,6 +34,15 @@ module Tamoz
 
       def enqueue(update) = (@queue << update)
 
+      def files = (@files ||= {})
+
+      def fetch_attachment(file_id, max_bytes:)
+        bytes = files.fetch(file_id) { raise Tamoz::Comms::TransientTransportError, 'no such file' }
+        raise Tamoz::Comms::ResponseTooLargeError, 'file is too big' if bytes.bytesize > max_bytes
+
+        bytes
+      end
+
       def poll(next_offset:, limit:, timeout_s: nil) # rubocop:disable Lint/UnusedMethodArgument
         pending = @queue.select { |u| next_offset.nil? || u.fetch('update_id') >= next_offset }
         served = pending.first(limit || 50)
@@ -99,6 +108,19 @@ module Tamoz
         enqueue_message(text, reply_to: nil)
         serve
         new_outbound
+      end
+
+      # Send a file with an optional caption, the way Telegram delivers a document.
+      def send_document(bytes, name:, mime_type:, caption: nil)
+        file_id = "doc-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        document = { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'file_name' => name,
+                     'mime_type' => mime_type, 'file_size' => bytes.bytesize }
+        message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },
+                    'date' => Time.now.to_i, 'document' => document, 'caption' => caption }.compact
+        enqueue_update('message' => message)
+        serve
+        work_off
       end
 
       # Run one worker pass and drain; returns new cards.

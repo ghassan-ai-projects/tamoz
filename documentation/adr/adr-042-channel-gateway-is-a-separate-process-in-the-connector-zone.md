@@ -20,6 +20,10 @@ would be a diagram, not a boundary.
 
 - The gateway admits and normalizes inbound updates, writes their durable disposition, enqueues
   requests, resolves approval callbacks (ADR-049), and drains the delivery outbox.
+- It downloads an admitted attachment through the transport and retains the bytes in the shared
+  artifact store; the request carries only their digest, so the worker reads the file without a
+  channel handle or the transport credential. A file it cannot fetch or store is refused on its own
+  update and never stalls the poll.
 - It never constructs a `Session`, loads a model credential, opens a toolbox, or reads workspace
   files.
 - It and the worker share one SQLite runtime database, so admission and request enqueue are one
@@ -46,9 +50,15 @@ side). **Adversary:** a remote chat sender, or code execution in one of the two 
 | Compromised gateway steals the model credential | The gateway never loads it |
 | Compromised worker sends arbitrary channel messages | The worker has no transport credential — but appending outbox rows makes the gateway send any text to any bound conversation |
 | A replayed update runs twice | Admission dedups in the same transaction as enqueue |
+| A sent file makes the worker reach the channel | The gateway fetches it; the request carries a digest, never a file handle or URL |
 
 **Residual risk:** both processes can write the shared SQLite file. A compromised gateway can write
 any runtime table — including approval decisions and requests — directly, bypassing every check in
 code. Only OS-level separation (different users, read-only views) would close that, and none exists. Both
 credentials come from environment variables, so the credential split holds only if the operator
 starts each process with only its own variable set.
+
+## History
+
+- 2026-10-09 — the gateway also downloads admitted attachments into the shared artifact store (owner
+  request: Telegram documents, images and voice); the credential split is unchanged.

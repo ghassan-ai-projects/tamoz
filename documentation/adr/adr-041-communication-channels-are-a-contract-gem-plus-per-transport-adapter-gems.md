@@ -19,7 +19,8 @@ that only needs channel values.
 ## Decision
 
 - `tamoz-comms` owns surface and message values, identity and admission policy, rendering, the
-  `Transport` contract, and the structural `CommsStore` contract. It loads no HTTP client.
+  `Transport` contract (authenticate, poll, deliver, signal, and fetch an inbound attachment), and the
+  structural `CommsStore` contract. It loads no HTTP client.
 - Each transport (`tamoz-telegram` today) is a separate gem depending only on `tamoz-comms` and the
   standard library.
 - The worker emits events to a `DeliverySink`; with no channel configured it is a null sink. Only
