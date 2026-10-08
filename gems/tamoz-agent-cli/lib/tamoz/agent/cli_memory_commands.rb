@@ -5,22 +5,21 @@ require 'json'
 module Tamoz
   module Agent
     # Durable memory for CLI sessions, and `tamoz memory` for the operator. Memory exists only
-    # when the runtime directory enables the `memory` source; it lives in one file per session
-    # directory, so every thread there shares it.
+    # when the runtime directory enables the `memory` source; it lives in the runtime database, so
+    # CLI sessions and every channel the worker serves share it.
     module CLIMemoryCommands
-      MEMORY_FILE = 'memory.sqlite3'
       MAX_CONSOLIDATION_GROUPS = 5
       NOT_FOUND = 'tamoz: no remembered item %s in this project'
 
       private
 
       # [engine, owner] or nil. The caller closes the engine.
-      def open_memory(options, session_dir)
+      def open_memory(options)
         directory = memory_directory(options)
         return nil unless directory
 
         settings = directory.source_settings('memory')
-        [Memory::Engine.open(path: File.join(session_dir, MEMORY_FILE), tenant: settings['tenant'] || 'default',
+        [Memory::Engine.open(path: directory.database_path, tenant: settings['tenant'] || 'default',
                              lease_ttl: @sessions.lease_ttl),
          settings['owner'] || 'operator']
       end
@@ -36,7 +35,7 @@ module Tamoz
       def cmd_memory(options, argv)
         action = argv.shift
         require 'tamoz/sqlite'
-        engine, owner = open_memory(options, @sessions.provision_session_dir!(options))
+        engine, owner = open_memory(options)
         unless engine
           @err.puts 'tamoz: sources.memory is not enabled in the runtime config (--runtime-dir)'
           return 1

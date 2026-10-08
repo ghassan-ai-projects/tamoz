@@ -3,7 +3,7 @@
 **Status:** Accepted 2026-07-30
 **Date:** 2026-07-30
 **Tier:** F
-**Implementation:** Complete
+**Implementation:** Partial — the typed failure model, rules, classification, remediation protocol and durable circuit exist and are tested, and the worker classifies every failed turn and crashed request on every channel (shadow stage, `healing.assessment`). No rule is loaded in production (the worker's registry is empty, so every assessment escalates) and `SelfHealingCoordinator#remediate` has no caller: nothing remediates automatically yet (`docs/memory-learning-healing-wiring-2026-10-08/FUTURE_PLAN.md`)
 **Relates to:** [ADR-022](./adr-022-reviewed-plan-gate.md) (remediation acts under a reviewed plan), [ADR-016](./adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md) (unknown effects reconcile first)
 
 Automatic recovery runs only a versioned rule for a typed failure, under a reviewed plan and the

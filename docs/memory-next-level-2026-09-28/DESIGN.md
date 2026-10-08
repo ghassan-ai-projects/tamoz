@@ -50,7 +50,7 @@ admits `project IN (?, '*')`. That is the only scope widening, and only `remembe
 
 | Path | Trigger | Authority | Gate (existing) | Model call |
 |---|---|---|---|---|
-| **W1** working → Experience | a work turn ends `done`, `verified_no_changes`, or `reported` | the turn's own terminal record | admission gate (a), `:reported` | none |
+| **W1** working → Experience | a work turn ends `done`, `verified_no_changes`, `reported`, `answered`, `done_unverified`, or `researched` | the turn's own terminal record | admission gate (a), `:reported` | none |
 | **W2** working → Knowledge | the model calls `remember` | the `quote` is a whole clause (bounded by the message start/end or `. ! ? ; : ,`) of a **user-role** message the thread holds (task or transcript user fragment); the stored statement *is* the quote; secret-shaped quotes are refused | admission gate (b), `authority: owner`, `:reported` | none |
 | **W3** Experience → Knowledge | `tamoz memory consolidate` (operator) | consolidation gates (provenance, scope, recurrence, diversity, confidence, taint, budget) | admission gate (c) | one, through `EffectDispatcher` (exists) |
 | **W4** Knowledge → Wisdom | improvement pipeline (exists) | development eval, holdout, human gate | `Wisdom#promote` / `BehaviorTransition` | eval runs only |
@@ -59,7 +59,7 @@ What W1 stores (no model call, ≤ 1,536 bytes, never the answer prose):
 
 ```text
 Task: <task, clipped to 300 bytes>
-Outcome: done | verified_no_changes | reported — <verification evidence line>
+Outcome: done | verified_no_changes | reported | answered | done_unverified | researched — <verification evidence line, when there is one>
 Files changed: <paths from the observation ledger>
 Checks: <check name> passed|failed
 Plan goal: <work_plan goal>
@@ -67,8 +67,10 @@ Decisions: <work_plan decisions>
 Ruled out: <work_plan ruled_out>
 ```
 
-`answered` (no change, no check), `done_unverified`, `handed_off`, `cancelled_by_user`,
-and failures store nothing: no observed outcome, so no purpose (write default is skip).
+`handed_off`, `cancelled_by_user`, and failures store nothing. A finished chat turn
+(`answered`, `done_unverified`, `researched`) is stored like any other episode — self-reported,
+expiring after 90 days, never auto-injected — so a conversation on any channel leaves material
+for recall and consolidation (owner, 2026-10-08; this reversed the earlier skip).
 
 A child task's text is written by the parent model, so child sessions get no memory
 engine at all: they cannot read, remember, or forget.
@@ -168,8 +170,8 @@ is task state for this thread only.
 - Worker / chat (`WorkerRuntime`): the engine exists when the runtime directory enables
   the `memory` source (unchanged).
 - CLI `tamoz ask|code|investigate`: when the runtime directory passed with `--runtime-dir`
-  enables `memory`, the CLI opens the engine on `<session-dir>/memory.sqlite3` with the
-  memory codec. One file per session directory, shared by every thread in it, so the
-  next `tamoz code` in the same directory remembers.
+  enables `memory`, the CLI opens the engine on that runtime's database with the memory
+  codec — the store the worker uses — so CLI sessions and every chat channel share one
+  memory (owner, 2026-10-08; it was one file per session directory before).
 - Default: memory stays opt-in until the real-model evaluation (EVAL.md §4) passes its
   gates; then the owner decides whether to turn it on by default.

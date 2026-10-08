@@ -7,8 +7,8 @@ require_relative 'support/autonomy_case'
 require_relative 'support/work_loop_fixtures'
 require_relative 'support/memory_spec'
 
-# Quality-bar row E5: the CLI opens memory only when the runtime directory enables it, in
-# one file per session directory, shared by the threads there. Scripted model: plumbing only.
+# Quality-bar row E5: the CLI opens memory only when the runtime directory enables it, in the
+# runtime database the worker's channels use, shared by every thread. Scripted model: plumbing only.
 class AgentCliMemoryTest < Minitest::Test
   include AutonomyCase
   include WorkLoopFixtures
@@ -34,7 +34,11 @@ class AgentCliMemoryTest < Minitest::Test
     [status, err.string]
   end
 
-  def test_threads_in_one_session_directory_share_memory_only_when_enabled
+  def runtime_engine(runtime)
+    memory_engine_at(runtime.dir, clock: -> { Time.now }, file: Tamoz::Agent::RuntimeDirectory::DATABASE_FILE)
+  end
+
+  def test_threads_share_the_runtime_memory_only_when_enabled
     spec_row('E5') do
       with_runtime do |runtime|
         session_dir = File.join(runtime.dir, 'sessions')
@@ -54,9 +58,16 @@ class AgentCliMemoryTest < Minitest::Test
         assert_includes [0, 2], status, err
         code(runtime, session_dir, 'two', 'Add a test for slugify.', second)
 
-        assert_path_exists File.join(session_dir, 'memory.sqlite3')
+        refute_path_exists File.join(session_dir, 'memory.sqlite3')
         assert_match(/Remembered mem\./, tool_results(first).first)
         assert_includes second.requests.first, SAID
+        engine, adapter = runtime_engine(runtime)
+        project = Tamoz::Agent::Memory::Surface.project_scope(runtime.workspace)
+        stored = engine.retrieval.recall(caller: engine.caller(user: 'alice', project:),
+                                         query: { terms: %w[verify] }).records.map(&:statement)
+        adapter.close
+
+        assert_includes stored, SAID
       end
     end
   end
@@ -75,7 +86,7 @@ class AgentCliMemoryTest < Minitest::Test
       enable_memory(runtime)
       session_dir = File.join(runtime.dir, 'sessions')
       FileUtils.mkdir_p(session_dir, mode: 0o700)
-      engine, adapter = memory_engine_at(session_dir, clock: -> { Time.now })
+      engine, adapter = runtime_engine(runtime)
       project = Tamoz::Agent::Memory::Surface.project_scope(runtime.workspace)
       %w[s1 s2].each do |session|
         work_episode(engine, task: "flaky clock test fixed by freezing time in #{session}", outcome: 'done',
@@ -99,7 +110,7 @@ class AgentCliMemoryTest < Minitest::Test
 
       assert_equal 2, ids.length
 
-      engine, adapter = memory_engine_at(session_dir, clock: -> { Time.now })
+      engine, adapter = runtime_engine(runtime)
       records = ids.map { |id| engine.store.get(engine.namespace, "experience/#{id}").value }
       model.refs = records.sort_by(&:memory_id).map(&:digest)
       adapter.close
@@ -108,7 +119,7 @@ class AgentCliMemoryTest < Minitest::Test
       assert_equal 0, status, err
       knowledge = JSON.parse(consolidated).fetch('results').first.fetch('knowledge')
 
-      engine, adapter = memory_engine_at(session_dir, clock: -> { Time.now })
+      engine, adapter = runtime_engine(runtime)
       elsewhere = owner_fact(engine, 'another project keeps its fixtures in spec/data', user: 'alice',
                                                                                         project: 'ws:elsewhere')
       adapter.close

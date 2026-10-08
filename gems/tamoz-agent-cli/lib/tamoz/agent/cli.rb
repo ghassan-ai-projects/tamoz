@@ -206,7 +206,7 @@ module Tamoz
 
       def run_openers(options, thread_id)
         { harness: -> { work_harness(options, thread_id) },
-          memory: ->(dir) { open_memory(options, dir) } }
+          memory: -> { open_memory(options) } }
       end
 
       def install_signal_handlers

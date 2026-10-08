@@ -82,8 +82,7 @@ module Tamoz
       end
 
       def record_episode_memory(state, verification)
-        return unless completed?(state)
-        return unless verification && verification.fetch('satisfied') == true
+        return unless verification && recordable?(state.fetch(:terminal_reason), verification)
 
         @configuration.memory_access.record_experience(
           session: state.fetch(:session).fetch('session_id'), task: state.fetch(:task),
@@ -95,17 +94,21 @@ module Tamoz
       end
 
       COMPLETED = %w[completed completed_without_check check_passed done verified_no_changes reported].freeze
+      # A chat turn that finished without a verified outcome still happened; like every episode, it is self-reported.
+      FINISHED = %w[answered done_unverified researched].freeze
       EPISODE_BYTES = 1_536
       TASK_BYTES = 300
 
       private
 
-      def completed?(state) = COMPLETED.include?(state.fetch(:terminal_reason))
+      def recordable?(reason, verification)
+        FINISHED.include?(reason) || (COMPLETED.include?(reason) && verification.fetch('satisfied') == true)
+      end
 
       # What happened, from the turn's own records: never the answer prose.
       def episode_statement(state, verification)
         parts = ["Task: #{clip(state.fetch(:task), TASK_BYTES)}",
-                 "Outcome: #{state.fetch(:terminal_reason)} - #{Array(verification['evidence']).first}"]
+                 ["Outcome: #{state.fetch(:terminal_reason)}", Array(verification['evidence']).first].compact.join(' - ')]
         parts += turn_parts(state) + plan_parts(state.dig(:work_plan, 'document') || {})
         clip(parts.join(' | '), EPISODE_BYTES)
       end
