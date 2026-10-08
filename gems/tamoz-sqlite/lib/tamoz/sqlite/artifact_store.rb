@@ -19,9 +19,9 @@ module Tamoz
         CATEGORY = "stream_artifact_store"
       end
 
-      # Generous above any real compaction envelope; a payload beyond it is
-      # refused at retention instead of landing unbounded in the database.
-      MAX_ARTIFACT_BYTES = 4 * 1024 * 1024
+      # Telegram's own download limit, so a received attachment fits; a payload
+      # beyond it is refused at retention instead of landing unbounded.
+      MAX_ARTIFACT_BYTES = 20_000_000
 
       def initialize(adapter:, tenant:)
         @adapter = adapter
