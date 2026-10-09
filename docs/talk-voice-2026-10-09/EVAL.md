@@ -203,7 +203,7 @@ because `say` output is not available in CI; plus, when `tmp/talk-fixtures` exis
 - Headless Google Chrome (`/Applications/Google Chrome.app`) with `--use-fake-ui-for-media-stream
   --use-fake-device-for-media-stream --use-file-for-fake-audio-capture=<wav>%noloop
   --autoplay-policy=no-user-gesture-required`, driven over `--remote-debugging-pipe` by a small node CDP
-  client (`script/talk_canary.mjs`; node 26's built-in pipes and JSON, no dependency).
+  client (`script/talk/canary.mjs`; node 26's built-in pipes and JSON, no dependency).
 - The WAV holds 1.5 s of leading silence (noise-floor calibration), the utterance, then silence.
 - Scenarios, **3 runs each**: `ask_workspace_fact`; `approval_by_voice` (the Approve button clicked through
   CDP); `barge_in` — in the default half-duplex mode, a CDP click on the speaking indicator during playback.

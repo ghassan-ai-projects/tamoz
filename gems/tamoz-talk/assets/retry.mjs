@@ -2,8 +2,12 @@
 export const MAX_UPDATE_ID = 2 ** 53 - 1;
 export const DELAYS_MS = Object.freeze([500, 1000, 2000, 4000, 8000]);
 
+let last = 0;
+
+// Never repeats within a page, even within one millisecond or when the clock steps back.
 export function newUpdateId(now = Date.now(), random = Math.random) {
-  return now * 1000 + Math.floor(random() * 1000);
+  last = Math.max(last + 1, now * 1000 + Math.floor(random() * 1000));
+  return last;
 }
 
 // send(): Promise<{status}>; resolves 'admitted', 'refused' (a 4xx that a resend cannot fix) or keeps trying.

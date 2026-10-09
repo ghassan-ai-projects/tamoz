@@ -53,6 +53,7 @@ const state = {
   restartPoll: false,
   reconnected: false,
   seen: new Set(),
+  heardIds: new Set(),
   micStarting: null,
   nodes: [],
 };
@@ -145,7 +146,11 @@ function apply(event) {
   if (event.type === 'ack') return toast(event.text);
   if (event.type === 'buttons_cleared') return resolveCard(event.message_id);
   if (event.type !== 'message') return undefined;
-  if (event.kind === 'control' && heardText(event.text) !== null) return heard(event);
+  if (event.kind === 'control' && heardText(event.text) !== null) {
+    if (state.heardIds.has(event.message_id)) return undefined;
+    state.heardIds.add(event.message_id);
+    return heard(event);
+  }
   if (event.replaces && state.messages.has(event.replaces)) return replace(event);
   if (state.messages.has(event.message_id)) return undefined;
   return message(event);
@@ -467,6 +472,7 @@ async function playNext() {
       setState('Speaking — tap Talk or press Space to interrupt');
     };
     player.onended = () => { if (generation === state.generation) finished(); };
+    player.onpause = () => { if (generation === state.generation && !player.ended) finished(); };
     player.onerror = () => { if (generation === state.generation) finished(); };
     await player.play();
   } catch (error) {

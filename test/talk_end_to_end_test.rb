@@ -20,10 +20,10 @@ class TalkEndToEndTest < Minitest::Test
     env = { 'PATH' => ENV.fetch('PATH'), 'HOME' => Dir.home,
             'ZAI_API_KEY' => 'chat-key', 'ZAI_API_BASE' => provider.base_url,
             'TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
-            'TAMOZ_TRANSCRIPTION_API_BASE' => provider.base_url, 'TAMOZ_TRANSCRIPTION_CREDENTIAL' => 'SPEECH_KEY',
+            'TAMOZ_TRANSCRIPTION_API_BASE' => provider.base_url, 'TAMOZ_TRANSCRIPTION_CREDENTIAL' => 'SPEECH_API_KEY',
             'TAMOZ_VOICE_PROVIDER' => 'openai', 'TAMOZ_VOICE_MODEL' => 'tts-1', 'TAMOZ_VOICE_NAME' => 'alloy',
-            'TAMOZ_VOICE_API_BASE' => provider.base_url, 'TAMOZ_VOICE_CREDENTIAL' => 'SPEECH_KEY',
-            'SPEECH_KEY' => 'speech-key', 'TAMOZ_PROVIDER' => 'zai', 'TAMOZ_MODEL' => 'glm-5.3-flash' }
+            'TAMOZ_VOICE_API_BASE' => provider.base_url, 'TAMOZ_VOICE_CREDENTIAL' => 'SPEECH_API_KEY',
+            'SPEECH_API_KEY' => 'speech-key', 'TAMOZ_PROVIDER' => 'zai', 'TAMOZ_MODEL' => 'glm-5.3-flash' }
     eval = TalkChatEval.new(env:).start
     started = eval.now
 

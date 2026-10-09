@@ -63,7 +63,7 @@ class ChildEnvironmentsTest < Minitest::Test
   end
 
   def test_a_role_may_not_name_a_channel_secret_or_a_runtime_variable
-    %w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_ENV_FILE PATH TAMOZ_TALK_TOKEN].each do |name|
+    %w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_ENV_FILE PATH TAMOZ_TALK_TOKEN AWS_SECRET_ACCESS_KEY GITHUB_TOKEN].each do |name|
       configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
                               'TAMOZ_TRANSCRIPTION_CREDENTIAL' => name)
 

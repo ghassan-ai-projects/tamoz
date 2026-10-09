@@ -69,8 +69,9 @@ module Tamoz
       def self.role_credential(base, role)
         name = base["TAMOZ_#{role}_CREDENTIAL"]
         return nil if name.to_s.empty?
-        if STANDARD.include?(name) || name.start_with?('TAMOZ_')
-          raise ArgumentError, "TAMOZ_#{role}_CREDENTIAL may not name a runtime or channel variable"
+        if STANDARD.include?(name) || name.start_with?('TAMOZ_') || !name.end_with?('_API_KEY')
+          raise ArgumentError,
+                "TAMOZ_#{role}_CREDENTIAL must name an *_API_KEY variable, never a runtime or channel one"
         end
 
         name

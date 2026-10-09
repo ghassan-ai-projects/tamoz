@@ -17,6 +17,8 @@ module Tamoz
       DEFAULT_PORT = 8787
       LOOPBACK = %w[127.0.0.1 localhost ::1].freeze
       NO_CHANNEL = 'no talk channel is configured; run `tamoz talk setup` first'
+      RUNTIME_IN_WORKSPACE = 'the runtime folder is inside the workspace, so the agent could read the talk token; ' \
+                             'choose another --workspace or --runtime-dir'
 
       def cmd_talk(options, argv)
         case argv.first
@@ -32,7 +34,11 @@ module Tamoz
       def talk_hub(descriptor, store)
         @talk_hubs ||= {}
         @talk_hubs[descriptor.surface_id] ||= begin
-          require 'tamoz/talk'
+          begin
+            require 'tamoz/talk'
+          rescue LoadError
+            raise CLICommsShared::MissingAdapterError, 'the talk channel (tamoz-talk) is not installed'
+          end
           hub = Tamoz::Talk::Hub.new(
             descriptor:, token: credential(descriptor), synthesize: voice_synthesizer,
             floor: store.poll_offset(bot_id: descriptor.identity.fetch(:expected_bot_id)).to_i,
@@ -77,6 +83,7 @@ module Tamoz
         end.parse!(argv)
         workspace = File.expand_path(workspace || Dir.pwd)
         return talk_fail("workspace folder does not exist: #{workspace}") unless Dir.exist?(workspace)
+        return talk_fail(RUNTIME_IN_WORKSPACE) if inside?(telegram_runtime_path(options), workspace)
 
         directory = telegram_runtime(telegram_runtime_path(options), workspace, explicit: explicit_workspace)
         write_chat_profile(directory, PROFILE)
@@ -85,6 +92,7 @@ module Tamoz
         @out.puts "Talk channel ready. Start it with:\n  tamoz --runtime-dir #{directory.path} talk start --env-file .env"
         @out.puts "The link it prints carries a private token (#{token.length} characters); whoever has it can talk to " \
                   'Tamoz and approve its changes.'
+        @out.puts 'A running Tamoz keeps accepting the old link until it is restarted.' if rotate
         0
       rescue Comms::ValidationError => e
         talk_fail(e.message)
@@ -143,6 +151,9 @@ module Tamoz
         return talk_fail(NO_CHANNEL) unless File.exist?(File.join(runtime, RuntimeDirectory::CONFIG_FILE))
 
         directory = RuntimeDirectory.resolve(path: runtime, env: base)
+        return talk_fail(RUNTIME_IN_WORKSPACE) if directory.workspace_root && inside?(directory.path,
+                                                                                      directory.workspace_root)
+
         entry = directory.channels[SURFACE]
         token_path = File.join(directory.path, 'talk', 'token')
         return talk_fail(NO_CHANNEL) unless entry && entry['kind'] == 'talk' && File.exist?(token_path)
@@ -292,6 +303,12 @@ module Tamoz
         log = File.join(logs, "#{name}.log")
         Process.spawn(env, RbConfig.ruby, CLITelegramCommands::EXE, *args,
                       out: [log, 'a', 0o600], err: [log, 'a', 0o600], unsetenv_others: true)
+      end
+
+      def inside?(path, folder)
+        path = File.expand_path(path)
+        folder = File.expand_path(folder)
+        path == folder || path.start_with?("#{folder}/")
       end
 
       def talk_fail(message)

@@ -6,6 +6,7 @@ module Tamoz
     module SpokenText
       SPOKEN_KINDS = %w[answer approval_request failed stopped blocked].freeze
       MAX_CHARACTERS = 400
+      MAX_INPUT = 8000
       APPROVAL = "I need your approval for a change. It's on your screen."
       CODE = 'The code is on screen.'
       TABLE = 'The table is on screen.'
@@ -21,7 +22,7 @@ module Tamoz
         return nil unless SPOKEN_KINDS.include?(kind)
         return APPROVAL if kind == 'approval_request'
 
-        spoken = speakable(text.to_s)
+        spoken = speakable(text.to_s[0, MAX_INPUT])
         return nil if spoken.empty?
 
         cut(spoken, more:)

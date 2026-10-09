@@ -7,11 +7,16 @@ module Tamoz
   module Talk
     # One talk surface in one process: the inbox, event log, speaker and server that both transports share.
     class Hub
+      MIN_TOKEN = 32
+      FINAL_KINDS = %w[answer failed stopped blocked approval_request].freeze
+
       attr_reader :inbox, :log, :speaker, :normalizer, :identity_id, :submit_timeout_s
 
       # rubocop:disable Metrics/ParameterLists -- the surface's facts plus the two injected collaborators.
       def initialize(descriptor:, token:, floor:, synthesize: nil, host: '127.0.0.1', port: nil, trace: false,
                      submit_timeout_s: 20.0, deadlines: {})
+        raise ArgumentError, 'the talk token must be at least 32 characters' if token.to_s.length < MIN_TOKEN
+
         @descriptor = descriptor
         @token_digest = Digest::SHA256.digest(token)
         @host = host
@@ -51,6 +56,8 @@ module Tamoz
       # Delivered outbox rows keep their original receipts, so a live approval card still binds after a restart.
       def seed(rows)
         rows.each do |row|
+          next unless row['receipt']
+
           message_id = JSON.parse(row.fetch('receipt')).fetch('message_id')
           delivery = Comms::Delivery.from_wire(row.merge('journaled' => row.fetch('journaled') == 1))
           register_speech(@log.seed(message_event(delivery, message_id)), delivery)
@@ -58,6 +65,7 @@ module Tamoz
       end
 
       def deliver(delivery)
+        @log.settle(delivery.conversation_id) if FINAL_KINDS.include?(delivery.kind)
         editing = delivery.operation == 'edit_message'
         fields = message_event(delivery, editing ? delivery.reply_to : nil)
         event = @log.append_message(fields)

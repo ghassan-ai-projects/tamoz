@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require 'timeout'
 
 # rubocop:disable Minitest/MultipleAssertions
 class CoreSpokenTextTest < Minitest::Test
@@ -46,8 +47,15 @@ class CoreSpokenTextTest < Minitest::Test
     assert_equal "Short. #{Spoken::REST}", speak('Short.', more: true)
   end
 
+  def test_a_huge_answer_is_cut_before_it_is_parsed
+    spoken = Timeout.timeout(5) { Spoken.project('*a ' * 30_000, kind: 'answer') }
+
+    assert_operator spoken.length, :<=, Spoken::MAX_CHARACTERS + Spoken::REST.length + 1
+  end
+
   def test_emoji_are_never_read_out
-    assert_equal 'Glad it works! So, what next?', Spoken.project("Glad it works! 🎉\n\nSo, what next? ✅️", kind: 'answer')
+    assert_equal 'Glad it works! So, what next?',
+                 Spoken.project("Glad it works! 🎉\n\nSo, what next? ✅️", kind: 'answer')
   end
 
   def test_nothing_left_to_say_is_silence

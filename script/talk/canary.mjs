@@ -4,7 +4,7 @@
 // Headless Chrome on macOS never resolves getUserMedia (the OS microphone permission), so the capture stream is built
 // from the WAV in the page itself; everything after the browser's capture layer is the real page.
 //
-//   node script/talk_canary.mjs --url URL --wav PATH --scenario ask|approval|barge_in [--timeout 180]
+//   node script/talk/canary.mjs --url URL --wav PATH --scenario ask|approval|barge_in [--timeout 180]
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

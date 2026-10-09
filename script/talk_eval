@@ -207,7 +207,7 @@ if blocked.empty? && options[:canary]
       begin
         talk.start(timeout: 180)
         clip = File.join(ROOT, 'test/fixtures/talk/wav', "#{id}-Samantha.wav")
-        line, = Open3.capture2('node', File.join(ROOT, 'script/talk_canary.mjs'), '--url', talk.page_url, '--wav', clip,
+        line, = Open3.capture2('node', File.join(ROOT, 'script/talk/canary.mjs'), '--url', talk.page_url, '--wav', clip,
                                '--scenario', scenario, '--timeout', '180')
         found = JSON.parse(line.lines.last.to_s)
       rescue StandardError => e

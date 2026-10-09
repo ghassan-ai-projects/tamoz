@@ -28,6 +28,13 @@ test('update ids fit a JS number and a resend keeps the id', async () => {
   assert.equal(refused.outcome, 'refused');
 });
 
+test('update ids never repeat within a page, even in one millisecond or after the clock steps back', () => {
+  const first = newUpdateId(1_760_000_000_000, () => 0.5);
+  const same = newUpdateId(1_760_000_000_000, () => 0.5);
+  const earlier = newUpdateId(1_759_999_999_000, () => 0.5);
+  assert.ok(first < same && same < earlier);
+});
+
 test('a Heard pairs with the oldest admitted voice bubble still waiting', () => {
   const bubbles = [{ voice: true, admitted: true, heard: 'old' }, { voice: false, admitted: true }, { voice: true, admitted: true }, { voice: true, admitted: true }];
   assert.equal(pairHeard(bubbles, 'Heard: «check pond 7»'), bubbles[2]);

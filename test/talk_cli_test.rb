@@ -124,7 +124,7 @@ class TalkCliTest < Minitest::Test
     with_runtime do |runtime, workspace|
       setup_talk(runtime, workspace)
       [SPEECH.merge('TAMOZ_VOICE_CREDENTIAL' => 'DEEPSEEK_API_KEY'),
-       SPEECH.merge('TAMOZ_VOICE_CREDENTIAL' => 'MY_COPY', 'MY_COPY' => 'chat-key')].each do |env|
+       SPEECH.merge('TAMOZ_VOICE_CREDENTIAL' => 'MY_COPY_API_KEY', 'MY_COPY_API_KEY' => 'chat-key')].each do |env|
         status, _out, err, spawned = start(runtime, env:)
 
         assert_equal 1, status
@@ -233,6 +233,16 @@ class TalkCliTest < Minitest::Test
     Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
                      .send(:with_comms_runtime, { runtime_dir: runtime }) do |_directory, _adapter, store, _checkpoints|
       store.acquire_poller_lease(surface_id: 'talk', bot_id:, owner:, fence: 1, ttl_s: 60, now: Time.now.utc)
+    end
+  end
+
+  def test_a_workspace_holding_the_runtime_is_refused_so_the_agent_cannot_read_the_token
+    Dir.mktmpdir('tamoz-talk-cli') do |root|
+      status, _out, err = setup_talk(File.join(root, '.tamoz'), root)
+
+      assert_equal 1, status
+      assert_includes err, 'could read the talk token'
+      refute_path_exists File.join(root, '.tamoz', 'talk', 'token')
     end
   end
 

@@ -7,6 +7,7 @@ require 'json'
 class TalkHubTest < Minitest::Test
   Talk = Tamoz::Talk
   Comms = Tamoz::Comms
+  TOKEN = 'a' * 32
 
   LIMITS = { max_inbound_bytes: 8192, max_open_requests: 50, max_denial_prompts_per_request: 4, outbox_capacity: 500,
              control_capacity: 50, per_chat_messages_per_s: 20.0, global_messages_per_s: 50.0 }.freeze
@@ -29,8 +30,31 @@ class TalkHubTest < Minitest::Test
                           operation:, reply_to:)
   end
 
+  def test_a_short_token_is_refused
+    assert_raises(ArgumentError) { Talk::Hub.new(descriptor:, token: 'a' * 31, floor: 0) }
+  end
+
+  def test_a_final_reply_ends_the_working_state_and_a_control_notice_does_not
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
+    hub.transport.signal(:typing, conversation_id: 'talk:chat:1')
+    hub.deliver(delivery('Heard: «pond 7»', kind: 'control'))
+
+    refute_nil hub.log.since(after: 0, epoch: nil, timeout_s: 0)['working']
+    hub.deliver(delivery('Pond 7 is fine.'))
+
+    assert_nil hub.log.since(after: 0, epoch: nil, timeout_s: 0)['working']
+  end
+
+  def test_a_seed_row_without_a_receipt_is_skipped
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
+    row = delivery('Lost.').wire.merge('receipt' => nil, 'journaled' => 1)
+    hub.seed([row])
+
+    assert_empty hub.log.since(after: 0, epoch: nil, timeout_s: 0)['events']
+  end
+
   def test_both_transports_share_one_hub_so_a_drainer_delivery_reaches_the_page
-    hub = Talk::Hub.new(descriptor:, token: 't', floor: 0)
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
     poller = hub.transport
     drainer = hub.transport
     receipt = drainer.deliver(delivery('Pond 7 is fine.'))
@@ -42,7 +66,7 @@ class TalkHubTest < Minitest::Test
   end
 
   def test_only_the_first_part_of_a_spoken_kind_is_spoken
-    hub = Talk::Hub.new(descriptor:, token: 't', floor: 0, synthesize: ->(text) { "ID3#{text}".b })
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0, synthesize: ->(text) { "ID3#{text}".b })
     first = hub.deliver(delivery('Part one.', part_count: 2))
     second = hub.deliver(delivery('Part two.', part_index: 1, part_count: 2))
     heard = hub.deliver(delivery('Heard: «pond 7»', kind: 'control'))
@@ -56,7 +80,7 @@ class TalkHubTest < Minitest::Test
   end
 
   def test_an_approval_card_carries_its_reference_and_an_edit_keeps_the_message_id
-    hub = Talk::Hub.new(descriptor:, token: 't', floor: 0)
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
     card = hub.deliver(delivery('Approve the change?', kind: 'approval_request',
                                                        markup: JSON.generate('reference' => 'abc', 'actions' => %w[approve deny])))
     edit = hub.deliver(delivery('Approved.', kind: 'control', operation: 'edit_message',
@@ -69,7 +93,7 @@ class TalkHubTest < Minitest::Test
   end
 
   def test_a_seeded_card_keeps_its_original_id_and_new_ids_come_after_it
-    hub = Talk::Hub.new(descriptor:, token: 't', floor: 0)
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
     old_id = (Process.clock_gettime(Process::CLOCK_REALTIME, :microsecond) * 2)
     card = delivery('Approve?', kind: 'approval_request', markup: JSON.generate('reference' => 'r1'))
     hub.seed([card.wire.merge('journaled' => 1, 'receipt' => JSON.generate('message_id' => old_id))])
@@ -80,7 +104,7 @@ class TalkHubTest < Minitest::Test
   end
 
   def test_the_transport_hands_out_held_audio_and_maps_signals
-    hub = Talk::Hub.new(descriptor:, token: 't', floor: 0)
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
     transport = hub.transport
 
     assert_raises(Comms::TransientTransportError) { transport.fetch_attachment('talk-1', max_bytes: 10) }
@@ -92,7 +116,7 @@ class TalkHubTest < Minitest::Test
 
   def test_a_listening_page_gets_speech_prefetched_once
     calls = Queue.new
-    hub = Talk::Hub.new(descriptor:, token: 't', floor: 0, synthesize: lambda { |text|
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0, synthesize: lambda { |text|
       calls << text
       "ID3#{text}".b
     })
