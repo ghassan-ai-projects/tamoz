@@ -9,10 +9,13 @@ class WorkAttachmentTest < Minitest::Test
   Store = Struct.new(:bytes) do
     def read(_handoff, digest:) = (bytes if digest)
   end
-  Effects = Struct.new(:outcome) do
-    def converse(*, **) = outcome
+  Effects = Struct.new(:outcome, :models) do
+    def converse(*, model: :conversation, **)
+      (self.models ||= []) << model
+      outcome
+    end
   end
-  Configuration = Struct.new(:attachment_spool)
+  Configuration = Struct.new(:attachment_spool, :image_reader)
   IMAGE = { 'kind' => 'image', 'handoff' => 'x', 'digest' => 'sha256:x', 'media_type' => 'image/png',
             'name' => nil }.freeze
 
@@ -38,6 +41,17 @@ class WorkAttachmentTest < Minitest::Test
       assert_includes reading.material, 'the image could not be read', status
       assert_equal status.to_s, reading.request['status']
     end
+  end
+
+  def test_a_named_image_model_reads_images_instead_of_the_conversation_model
+    effects = Effects.new(Outcome.new(status: :succeeded, value: { 'content' => 'TOTAL 93.50' }))
+    reader = Object.new
+    [nil, reader].each do |image_reader|
+      Tamoz::Agent::WorkAttachment.new(configuration: Configuration.new(Store.new(PNG), image_reader), effects:)
+                                  .read(IMAGE, window: 20_000, context: nil)
+    end
+
+    assert_equal [:conversation, reader], effects.models
   end
 
   def test_a_lost_lease_stops_the_turn

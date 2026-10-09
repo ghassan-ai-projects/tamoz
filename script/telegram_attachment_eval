@@ -1,0 +1,113 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Attachment eval: every scenario in test/fixtures/telegram_attachments/scenarios.json, run --runs times, each run on a
+# fresh runtime through the real `tamoz telegram setup|start` and a real model. A scenario passes a run only when all
+# its checks pass; its pass rate must reach the spec's threshold. A capability this machine lacks is BLOCKED.
+#
+#   bundle exec ruby script/telegram_attachment_eval [--runs 5] [--only document,pdf] [--provider NAME --model NAME]
+#
+# Models per role come from the environment or .env: TAMOZ_VISION_* reads images (else the chat model),
+# TAMOZ_TRANSCRIPTION_* transcribes voice; PDFs need poppler's pdftotext. Report: tmp/telegram-attachment-eval/<stamp>/.
+
+require 'bundler/setup'
+require 'optparse'
+
+$LOAD_PATH.unshift(File.expand_path('../test/support', __dir__))
+require 'tamoz/agent'
+require 'telegram_chat_eval'
+require 'telegram_chat_scenarios'
+
+spec = TelegramChatScenarios.attachment_spec
+suite = spec.fetch('suite')
+options = { provider: ENV.fetch('TAMOZ_PROVIDER', nil), model: ENV.fetch('TAMOZ_MODEL', nil),
+            runs: suite.fetch('runs'), only: TelegramChatScenarios.attachments }
+OptionParser.new do |parser|
+  parser.on('--runs N', Integer) { |runs| options[:runs] = runs }
+  parser.on('--only LIST') { |list| options[:only] = list.split(',') }
+  parser.on('--provider NAME') { |name| options[:provider] = name }
+  parser.on('--model NAME') { |name| options[:model] = name }
+end.parse!
+
+unknown = options[:only] - TelegramChatScenarios.attachments
+abort("unknown scenarios: #{unknown.join(', ')}") unless unknown.empty?
+names = TelegramChatScenarios.attachments & options[:only]
+abort('no scenario selected') if names.empty?
+stamp = Time.now.strftime('%Y%m%d-%H%M%S')
+root = File.expand_path("../tmp/telegram-attachment-eval/#{stamp}", __dir__)
+outcomes = Hash.new { |hash, name| hash[name] = [] }
+capabilities = nil
+
+options[:runs].times do |index|
+  evaluation = nil
+  begin
+    evaluation = TelegramChatEval.new(provider: options[:provider], model: options[:model])
+    evaluation.start
+    capabilities ||= evaluation.capabilities
+    puts "run #{index + 1}/#{options[:runs]} — #{evaluation.label}"
+    names.each do |name|
+      before = evaluation.results.length
+      begin
+        TelegramChatScenarios.public_send(name, evaluation)
+      rescue StandardError => e
+        evaluation.check(name, 'scenario ran', false, "#{e.class}: #{e.message}")
+      end
+      checks = evaluation.results.drop(before)
+      outcomes[name] << if checks.any? { |check| check[:pass].nil? }
+                          :blocked
+                        else
+                          checks.all? { |check| check[:pass] } ? :pass : checks.reject { |check| check[:pass] }
+                        end
+      puts "  #{name}: #{outcomes[name].last.is_a?(Symbol) ? outcomes[name].last : 'FAIL'}"
+    end
+  rescue StandardError => e
+    warn "run #{index + 1} could not run: #{e.class}: #{e.message}"
+    names.each do |name|
+      outcomes[name] << [{ check: "run #{index + 1} did not run" }] if outcomes[name].length <= index
+    end
+  ensure
+    evaluation&.shutdown
+    evaluation&.write_report(File.join(root, "run-#{index + 1}"))
+  end
+end
+
+rows = names.map do |name|
+  runs = outcomes[name]
+  scenario = spec.fetch('scenarios').fetch(name)
+  threshold = scenario['safety'] ? suite.fetch('safety_min_pass_rate') : suite.fetch('min_pass_rate')
+  graded = runs.reject { |run| run == :blocked }
+  passed = graded.count(:pass)
+  verdict = if graded.empty? then 'BLOCKED'
+            elsif passed.fdiv(graded.length) < threshold then 'FAIL'
+            elsif graded.length < suite.fetch('runs') then 'SHORT'
+            else 'PASS'
+            end
+  failures = graded.grep(Array).flatten.map { |check| check[:check] }.tally
+  { name:, needs: scenario.fetch('needs'), safety: scenario['safety'] ? true : false, runs: graded.length,
+    passed:, rate: graded.empty? ? nil : passed.fdiv(graded.length).round(3),
+    wilson_lower: TelegramAttachmentChecks.wilson_lower(passed, graded.length).round(3), threshold:, verdict:,
+    failed_checks: failures }
+end
+
+lines = ["# Telegram attachment eval — #{stamp}", '',
+         "Runs: #{options[:runs]} (fresh runtime each; the spec asks for #{suite['runs']}, and fewer is SHORT, " \
+         "never PASS). Thresholds: #{suite['min_pass_rate']} (safety #{suite['safety_min_pass_rate']}).", '',
+         '## Capabilities', '',
+         '| capability | runs on |', '|---|---|']
+lines += (capabilities || {}).map { |name, by| "| #{name} | #{by || '**missing**'} |" }
+lines += ['', '## Scenarios', '', '| scenario | needs | safety | passed | rate | 95% lower | threshold | verdict | failed checks |',
+          '|---|---|---|---|---|---|---|---|---|']
+rows.each do |row|
+  lines << "| #{row[:name]} | #{row[:needs]} | #{'yes' if row[:safety]} | #{row[:passed]}/#{row[:runs]} | " \
+           "#{row[:rate] || '—'} | #{row[:wilson_lower]} | #{row[:threshold]} | **#{row[:verdict]}** | " \
+           "#{row[:failed_checks].map { |check, count| "#{check} ×#{count}" }.join('; ')} |"
+end
+FileUtils.mkdir_p(root)
+File.write(File.join(root, 'summary.md'), "#{lines.join("\n")}\n")
+File.write(File.join(root, 'summary.json'), JSON.pretty_generate({ capabilities:, rows: }))
+puts "\n#{lines.drop(6).join("\n")}\n\n#{root}/summary.md"
+verdicts = rows.map { |row| row[:verdict] }
+exit(if verdicts.include?('FAIL') then 1
+     elsif (verdicts - ['PASS']).any? then 2
+     else 0
+     end)

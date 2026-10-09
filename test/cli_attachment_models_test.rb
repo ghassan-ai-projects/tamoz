@@ -2,9 +2,10 @@
 
 require_relative 'test_helper'
 
-class CLITranscriberTest < Minitest::Test
+class CLIAttachmentModelsTest < Minitest::Test
   def transcriber(env)
-    Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env:).send(:worker_transcriber)
+    Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env:).send(:attachment_model,
+                                                                                                'TRANSCRIPTION')
   end
 
   def test_no_provider_means_no_transcriber
@@ -23,5 +24,13 @@ class CLITranscriberTest < Minitest::Test
     error = assert_raises(Tamoz::ConfigurationError) { transcriber('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai') }
 
     assert_match(/TAMOZ_TRANSCRIPTION_MODEL/, error.message)
+  end
+
+  def test_the_image_reader_is_named_on_its_own
+    built = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new,
+                                  env: { 'TAMOZ_VISION_PROVIDER' => 'openai', 'TAMOZ_VISION_MODEL' => 'gpt-4o-mini',
+                                         'OPENAI_API_KEY' => 'k' }).send(:attachment_model, 'VISION')
+
+    assert_equal %w[openai gpt-4o-mini], [built.provider, built.model]
   end
 end

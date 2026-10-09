@@ -64,9 +64,11 @@ class TelegramBotApiFake
     push('message' => user_message(user_id, { 'photo' => sizes, 'caption' => caption }.compact))
   end
 
-  def send_voice(user_id, bytes, duration:)
+  def send_voice(user_id, bytes, duration:, forwarded: false)
     file = add_file(bytes, 'voice/file.oga', bytes.bytesize)
-    push('message' => user_message(user_id, 'voice' => file.merge('duration' => duration, 'mime_type' => 'audio/ogg')))
+    message = user_message(user_id, 'voice' => file.merge('duration' => duration, 'mime_type' => 'audio/ogg'))
+    message['forward_origin'] = { 'type' => 'hidden_user', 'sender_user_name' => 'Someone', 'date' => 1 } if forwarded
+    push('message' => message)
   end
 
   def downloads = @lock.synchronize { @downloads.dup }

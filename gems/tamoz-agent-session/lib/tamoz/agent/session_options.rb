@@ -30,6 +30,7 @@ module Tamoz
         artifact_tenant: nil,
         child_task_runtime: nil,
         transcriber: nil,
+        image_reader: nil,
         attachment_spool: nil,
         routing: :legacy,
         harness: {}
@@ -44,7 +45,7 @@ module Tamoz
         :approval_engine, :approval_session_id, :model_call_safety,
         :profile, :mcp, :profile_roles, :profile_budgets, :profile_narrowed,
         :memory, :memory_owner, :artifact_store, :artifact_tenant,
-        :child_task_runtime, :transcriber, :attachment_spool, :routing, :harness
+        :child_task_runtime, :transcriber, :image_reader, :attachment_spool, :routing, :harness
       ) do
         # Pipeline A: every durable session has exactly one policy owner. A
         # caller that supplies none gets the driver's bundled default (the
@@ -69,7 +70,7 @@ module Tamoz
             approval_engine:, approval_session_id:, model_call_safety:,
             profile:, mcp:, profile_roles:, profile_budgets:, profile_narrowed:,
             memory:, memory_owner:, artifact_store:, artifact_tenant:,
-            child_task_runtime:, transcriber:, attachment_spool:, transcript_reader:, harness:, previous_turn_reader:,
+            child_task_runtime:, transcriber:, image_reader:, attachment_spool:, transcript_reader:, harness:, previous_turn_reader:,
             subagent_apps:, allowed_capabilities:
           }
         end

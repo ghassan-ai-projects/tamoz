@@ -29,7 +29,8 @@ class TelegramChatEval
     [/\A\s*[{\[]/, 'raw JSON']
   ].freeze
   PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY ZAI_API_KEY ZAI_API_BASE OPENAI_API_KEY
-                     TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE].freeze
+                     TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE
+                     TAMOZ_VISION_PROVIDER TAMOZ_VISION_MODEL TAMOZ_VISION_API_BASE].freeze
   TOKEN = '123:eval'
   USERS = (1001..1040).to_a.freeze
   STRANGER = 9_999
@@ -89,8 +90,6 @@ class TelegramChatEval
   end
 
   def fresh_user = @users.shift
-
-  def transcription = [secret('TAMOZ_TRANSCRIPTION_PROVIDER'), secret('TAMOZ_TRANSCRIPTION_MODEL')].compact.join('/')
 
   def model = @model || 'deepseek/deepseek-v4.1-flash'
 
@@ -172,6 +171,52 @@ class TelegramChatEval
 
   def check(scenario, name, pass, detail = nil)
     @results << { scenario:, check: name, pass: pass ? true : false, detail: detail.to_s.gsub(/\s+/, ' ')[0, 200] }
+  end
+
+  # A scenario this machine cannot run: recorded, never counted as a pass or a failure.
+  def blocked(scenario, reason) = @results << { scenario:, check: 'blocked', pass: nil, detail: reason }
+
+  def handoffs
+    folder = File.join(@runtime, 'attachments')
+    Dir.exist?(folder) ? Dir.children(folder) : []
+  end
+
+  # What runs each attachment capability on this machine, or nil when it is missing.
+  def capabilities
+    { 'documents' => 'built in',
+      'pdf_reader' => system('command -v pdftotext >/dev/null') ? 'pdftotext' : nil,
+      'vision' => configured_model('VISION') || "the chat model (#{label})",
+      'transcription' => configured_model('TRANSCRIPTION') }
+  end
+
+  def capability_gap(need)
+    return nil if capabilities.fetch(need)
+
+    { 'pdf_reader' => 'pdftotext is not installed (brew install poppler)',
+      'transcription' => 'no transcription model (TAMOZ_TRANSCRIPTION_PROVIDER, TAMOZ_TRANSCRIPTION_MODEL)' }.fetch(need)
+  end
+
+  def configured_model(role)
+    provider = secret("TAMOZ_#{role}_PROVIDER")
+    provider && "#{provider}/#{secret("TAMOZ_#{role}_MODEL")}"
+  end
+
+  # The digest of the configured image model, when one is named, so the eval can see which model read.
+  def vision_digest
+    provider = secret('TAMOZ_VISION_PROVIDER') or return nil
+    environment = (Tamoz::Agent::ModelClientFactory.environment_names(provider:) + ['TAMOZ_VISION_API_BASE'])
+                  .to_h { |name| [name, secret(name)] }.compact
+    Tamoz::Agent::ModelClientFactory.build(
+      provider:, model: secret('TAMOZ_VISION_MODEL'), profile_role: nil, environment:,
+      explicit_api_base: secret('TAMOZ_VISION_API_BASE'), safety: :idempotent
+    ).provider_configuration_digest
+  end
+
+  def read_by?(user, since, digest)
+    rows('select count(*) from tamoz_effect_attempts a join tamoz_effects e on e.effect_key = a.effect_key ' \
+         "where e.operation = 'model.converse.attachment_image' and e.created_at_ms >= #{(since * 1000).to_i} " \
+         "and e.thread_id in (select thread_id from tamoz_comms_requests where conversation_id = '#{chat(user)}') " \
+         "and instr(cast(a.result as text), '#{digest}') > 0").first.to_i.positive?
   end
 
   # Every text the chat showed, including versions later edited away.
@@ -317,12 +362,25 @@ class TelegramChatEval
   def env_file
     @env_file ||= File.join(@root, 'eval.env').tap do |path|
       keys = PROVIDER_KEYS.filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
-      File.write(path, "#{["TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}", *keys].join("\n")}\n")
+      keys += role_keys
+      File.write(path, "#{["TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}", *keys.uniq].join("\n")}\n")
       File.chmod(0o600, path)
     end
   end
 
   def chat(user) = "telegram:chat:#{user}"
+
+  # Every role's provider key and base, so a model the owner adds later reaches the worker.
+  def role_keys
+    %w[VISION TRANSCRIPTION].flat_map do |role|
+      provider = secret("TAMOZ_#{role}_PROVIDER")
+      next [] unless provider
+
+      names = Tamoz::Agent::ModelClientFactory.environment_names(provider:) +
+              %w[PROVIDER MODEL API_BASE].map { |part| "TAMOZ_#{role}_#{part}" }
+      names.filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
+    end
+  end
 
   def query(sql)
     out, err, status = Open3.capture3('sqlite3', File.join(@runtime, 'runtime.sqlite3'), sql)
@@ -451,10 +509,13 @@ class TelegramChatEval
 
   def report
     passed = @results.count { |result| result[:pass] }
-    lines = ["# Telegram chat eval — #{label}", '', "**#{passed}/#{@results.length} checks pass.**", '',
+    blocked = @results.count { |result| result[:pass].nil? }
+    lines = ["# Telegram chat eval — #{label}", '',
+             "**#{passed}/#{@results.length - blocked} checks pass; #{blocked} blocked.**", '',
              '| scenario | check | result | detail |', '|---|---|---|---|']
     @results.each do |result|
-      lines << "| #{result[:scenario]} | #{result[:check]} | #{result[:pass] ? 'pass' : '**FAIL**'} | " \
+      verdict = { true => 'pass', false => '**FAIL**', nil => 'BLOCKED' }.fetch(result[:pass])
+      lines << "| #{result[:scenario]} | #{result[:check]} | #{verdict} | " \
                "#{result[:detail].to_s.tr('|', '/')[0, 140]} |"
     end
     lines += ['', '## Transcript', '']

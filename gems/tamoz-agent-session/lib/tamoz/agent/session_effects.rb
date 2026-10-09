@@ -96,8 +96,9 @@ module Tamoz
 
       # One tool-calling conversation turn. A model call changes nothing outside,
       # so an unanswered one is safely retried (:idempotent).
-      def converse(context, stage:, messages:, tools:, iteration:, tool_choice: 'auto', attempt: 0)
-        model = conversation_model
+      # `model` is the conversation model unless a stage has its own, such as the image reader.
+      def converse(context, stage:, messages:, tools:, iteration:, tool_choice: 'auto', attempt: 0,
+                   model: conversation_model)
         request = conversation_request(model, stage, messages, tools, tool_choice)
         operation = "model.converse.#{stage}"
         outcome = EffectDispatcher.run(
@@ -300,7 +301,8 @@ module Tamoz
           'stage' => stage.to_s,
           'request_digest' => model.request_digest(bytes),
           'message_count' => messages.length,
-          'provider_configuration_digest' => model_configuration_digest
+          'provider_configuration_digest' => (model.provider_configuration_digest if
+                                                model.respond_to?(:provider_configuration_digest))
         }.compact
       end
 

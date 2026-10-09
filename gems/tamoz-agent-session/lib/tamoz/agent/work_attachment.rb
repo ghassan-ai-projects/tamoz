@@ -58,7 +58,7 @@ module Tamoz
         end
 
         call = @effects.converse(context, stage: :attachment_image, messages: image_messages(bytes, type), tools: [],
-                                          iteration: 0)
+                                          iteration: 0, **image_reader)
         journaled(call, 'content', unread: :image_unread, silent: :image_unread)
       end
 
@@ -70,6 +70,9 @@ module Tamoz
                                             media_type: type)
         journaled(call, 'text', unread: :voice_unread, silent: :heard_nothing)
       end
+
+      # The operator's own image model when one is named; otherwise the conversation model reads images.
+      def image_reader = @configuration.image_reader ? { model: @configuration.image_reader } : {}
 
       def journaled(call, field, unread:, silent:)
         raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait

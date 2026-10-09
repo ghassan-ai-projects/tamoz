@@ -96,6 +96,24 @@ Each rule's reasoning and evidence live in the ADR named; the line here is the r
   durability, MCP, packaging, or evidence slices. State and policy: `docs/QUALITY_PROGRAM_STATE.md`.
 - A gate already red at HEAD is not yours to chase: prove it in a detached worktree and say so.
 
+## Channel attachments (Telegram)
+
+- **Never stored.** A received file is a temporary handoff (`<runtime>/attachments/`, deleted once the turn
+  has read it) — never a database row, never kept, unless a future user request or policy says so
+  (owner, 2026-10-09). Only what was read from it stays, like a typed message.
+- **One model per role.** The chat model answers. `TAMOZ_VISION_PROVIDER` / `_MODEL` / `_API_BASE` names the
+  image-reading (OCR) model (unset: the chat model reads images). `TAMOZ_TRANSCRIPTION_*` names the
+  speech-to-text model (unset: voice is "not set up"). PDFs need poppler's `pdftotext`, no model. Each
+  role's key comes from its provider's usual variable; the worker gets only the roles configured.
+- **Strong eval, before and after any change here.** `script/telegram_attachment_eval [--runs 5]` plays
+  every scenario in `test/fixtures/telegram_attachments/scenarios.json` (English; facts, traps, injections,
+  "nothing kept", time budgets) on a fresh runtime per run with the real model, and reports each
+  scenario's pass rate and 95% lower bound against the thresholds in that file (safety scenarios must pass
+  every run). A missing model or tool is **BLOCKED** and fewer runs than the spec is **SHORT** — reported, never a pass. Scenario changes are data
+  in that JSON, pinned by `telegram_attachment_fixtures_test`; the graders live in
+  `test/support/telegram_attachment_checks.rb`, tested by `telegram_attachment_checks_test`. Raise the
+  bar (harder fixtures, more runs) rather than weaken a check to make a model pass.
+
 ## Comments
 
 Default to none: name things so the code reads without them. When a "why" is genuinely needed — a

@@ -245,10 +245,12 @@ until you send `/new`. Replies come in the language you write in.
   temporary file in the runtime's `attachments/` folder, deleted as soon as the
   turn has read it; only what was read from it stays in the conversation. A scanned PDF has no text layer — send its pages as photos.
 - **Photos and images.** A photo, or a PNG/JPEG/WebP/GIF sent as a file (up to
-  5 MB), is read by the configured model in one extra call: every piece of text
-  in it verbatim, then two sentences on what it shows; the answer is built from
-  that. The model must accept image input (the Z.ai coding-plan `glm-5.3-flash`
-  does); if it refuses, the bot says it could not read the image.
+  5 MB), is read in one extra model call: every piece of text in it verbatim,
+  then two sentences on what it shows; the answer is built from that. Name an
+  image-reading model with `TAMOZ_VISION_PROVIDER`, `TAMOZ_VISION_MODEL` (and
+  optionally `TAMOZ_VISION_API_BASE`); without one, the chat model reads images,
+  so it must accept image input. If the model refuses, the bot says it could
+  not read the image.
 - **Voice messages.** A voice note is transcribed and answered as if you had
   typed it, in the language you spoke. A forwarded voice note or an audio file is
   someone else's speech: its transcript is shown to the model as material, not as

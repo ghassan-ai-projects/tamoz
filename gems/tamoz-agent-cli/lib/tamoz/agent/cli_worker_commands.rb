@@ -681,17 +681,16 @@ module Tamoz
           research_dir: File.join(runtime_dir_path(options), 'research') }
       end
 
-      def worker_transcriber
-        provider = @env['TAMOZ_TRANSCRIPTION_PROVIDER']
+      # TAMOZ_<ROLE>_PROVIDER / _MODEL / _API_BASE name a model for one attachment role; unset means none.
+      def attachment_model(role)
+        provider = @env["TAMOZ_#{role}_PROVIDER"]
         return nil if provider.to_s.empty?
 
-        model = @env['TAMOZ_TRANSCRIPTION_MODEL']
-        raise ConfigurationError, 'TAMOZ_TRANSCRIPTION_PROVIDER is set without TAMOZ_TRANSCRIPTION_MODEL' if
-          model.to_s.empty?
+        model = @env["TAMOZ_#{role}_MODEL"]
+        raise ConfigurationError, "TAMOZ_#{role}_PROVIDER is set without TAMOZ_#{role}_MODEL" if model.to_s.empty?
 
-        ModelClientFactory.build(provider:, model:, profile_role: nil,
-                                 environment: @env, explicit_api_base: @env['TAMOZ_TRANSCRIPTION_API_BASE'],
-                                 safety: :idempotent)
+        ModelClientFactory.build(provider:, model:, profile_role: nil, environment: @env,
+                                 explicit_api_base: @env["TAMOZ_#{role}_API_BASE"], safety: :idempotent)
       end
 
       def with_worker_runtime(options)
@@ -702,7 +701,8 @@ module Tamoz
           lease_ttl: @sessions.lease_ttl,
           routing: worker_routing(options),
           harness: worker_harness(options),
-          transcriber: worker_transcriber
+          transcriber: attachment_model('TRANSCRIPTION'),
+          image_reader: attachment_model('VISION')
         )
         begin
           yield runtime

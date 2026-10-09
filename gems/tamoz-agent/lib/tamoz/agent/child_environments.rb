@@ -41,17 +41,16 @@ module Tamoz
           'TAMOZ_MODEL' => base.fetch('TAMOZ_MODEL')
         ).merge(
           ModelClientFactory.worker_environment(provider:, profile_role:, environment: base)
-        ).merge(transcription_env(base))
+        ).merge(attachment_model_env(base, 'TRANSCRIPTION')).merge(attachment_model_env(base, 'VISION'))
       end
 
-      TRANSCRIPTION = %w[TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE].freeze
-
-      def self.transcription_env(base)
-        provider = base['TAMOZ_TRANSCRIPTION_PROVIDER']
+      def self.attachment_model_env(base, role)
+        provider = base["TAMOZ_#{role}_PROVIDER"]
         return {} if provider.to_s.empty?
 
-        TRANSCRIPTION.filter_map { |name| [name, base[name]] if base[name] }.to_h
-                     .merge(ModelClientFactory.worker_environment(provider:, environment: base))
+        %w[PROVIDER MODEL API_BASE].filter_map { |part| ["TAMOZ_#{role}_#{part}", base["TAMOZ_#{role}_#{part}"]] }
+                                   .select(&:last).to_h
+                                   .merge(ModelClientFactory.worker_environment(provider:, environment: base))
       end
 
       def self.queue_status_env(base, runtime_dir:)
