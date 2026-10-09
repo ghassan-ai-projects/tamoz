@@ -183,7 +183,8 @@ class TestSuiteTest < Minitest::Test
     sources = { 'test/fast_test.rb' => minitest_source('FastTest', ''),
                 'test/slow_test.rb' => minitest_source('SlowTest', 'sleep 0.15') }
     with_sources(sources) do |root|
-      output, status = run_fixture(*sources.keys.map { |path| File.join(root, path) }, env: { 'TEST_FILE_CAP_SECONDS' => '0.1' })
+      paths = sources.keys.map { |path| File.join(root, path) }
+      output, status = run_fixture(*paths, env: { 'TEST_FILE_CAP_SECONDS' => '0.1' })
 
       refute_predicate status, :success?, output
       assert_equal %w[slow_test.rb], output.scan(%r{TEST FILE OVER CAP: \S+/test/(\S+) took}).flatten
@@ -192,7 +193,8 @@ class TestSuiteTest < Minitest::Test
 
   def test_file_clock_charges_each_file_the_run_time_of_its_classes
     io = StringIO.new
-    reporter = TestSuite::FileClock::Reporter.new(cap: 5.0, owners: { 'A' => 'a_test.rb', 'B' => 'b_test.rb' }, io:)
+    owners = { 'A' => 'a_test.rb', 'B' => 'b_test.rb' }
+    reporter = TestSuite::FileClock::Reporter.new(cap: 5.0, owners:, io:)
     [['A', 3.0], ['A', 1.5], ['B', 4.9]].each { |klass, time| reporter.record(clock_result(klass, time)) }
 
     assert_predicate reporter, :passed?
@@ -224,7 +226,8 @@ class TestSuiteTest < Minitest::Test
   end
 
   def minitest_source(name, body)
-    "require 'minitest/autorun'\nclass #{name} < Minitest::Test\n  def test_runs\n    #{body}\n    assert true\n  end\nend\n"
+    "require 'minitest/autorun'\nclass #{name} < Minitest::Test\n" \
+      "  def test_runs\n    #{body}\n    assert true\n  end\nend\n"
   end
 
   def with_sources(sources)

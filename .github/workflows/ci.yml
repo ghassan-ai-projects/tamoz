@@ -35,6 +35,4 @@ jobs:
           # than the repo's. Track .ruby-version exactly.
           ruby-version: ".ruby-version"
           bundler-cache: true
-      - run: bundle exec ruby -e 'p RubyVM::YJIT.enabled?' && bundle exec rake ci
-        env:
-          RUBY_YJIT_ENABLE: "1"
+      - run: bundle exec rake ci

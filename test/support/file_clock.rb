@@ -46,7 +46,8 @@ module TestSuite
 
       def report
         offenders.each do |path, seconds|
-          @io.puts format('TEST FILE OVER CAP: %<path>s took %<seconds>.1fs (cap %<cap>.1fs)', path:, seconds:, cap: @cap)
+          @io.puts format('TEST FILE OVER CAP: %<path>s took %<seconds>.1fs (cap %<cap>.1fs)', path:, seconds:,
+                                                                                               cap: @cap)
         end
       end
 

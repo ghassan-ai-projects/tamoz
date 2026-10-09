@@ -100,12 +100,6 @@ class WebsearchInvocationTest < Minitest::Test
     }
   end
 
-  def self.snapshots = @snapshots ||= {}
-
-  def compiled(config)
-    self.class.snapshots[[config.server_id, config.arguments]] ||= Catalog.compile(config)
-  end
-
   def fixture_config(server_id: "websearch", extra_env: [])
     ServerConfig.new(
       server_id:,
@@ -142,7 +136,7 @@ class WebsearchInvocationTest < Minitest::Test
     # A capability source built without a websearch descriptor exposes no
     # websearch name; a bare config admits nothing.
     config = fixture_config(server_id: "other-server")
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     echo = Invocation.descriptor_for(
       snapshot.entries.find { |entry| entry.name == "echo_constant" },
       snapshot:,
@@ -158,7 +152,7 @@ class WebsearchInvocationTest < Minitest::Test
     ENV.delete("TAMOZ_WEBSEARCH_GRANT")
     ENV["TAMOZ_WEBSEARCH_EGRESS"] = JSON.generate(egress)
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     supervisor = Supervisor.new(config)
     begin
       error = assert_raises(Tamoz::Mcp::ToolArgumentError) do
@@ -190,7 +184,7 @@ class WebsearchInvocationTest < Minitest::Test
       working_directory: @dir,
       env_allowlist: BASE_ENV_ALLOWLIST + %w[TAMOZ_WEBSEARCH_GRANT TAMOZ_WEBSEARCH_EGRESS TAMOZ_WEBSEARCH_PROVIDER]
     )
-    snapshot = compiled(adapter_config)
+    snapshot = Catalog.compile(adapter_config)
     assert snapshot.entries.map(&:name).include?("search")
 
     supervisor = Supervisor.new(adapter_config)
@@ -240,7 +234,7 @@ class WebsearchInvocationTest < Minitest::Test
       working_directory: @dir,
       env_allowlist: BASE_ENV_ALLOWLIST + %w[TAMOZ_WEBSEARCH_GRANT TAMOZ_WEBSEARCH_EGRESS TAMOZ_WEBSEARCH_PROVIDER]
     )
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     reader = ->(name) { Invocation.descriptor_for(snapshot.entries.find { |entry| entry.name == name }, snapshot:) }
     supervisor = Supervisor.new(config)
     begin
@@ -256,7 +250,7 @@ class WebsearchInvocationTest < Minitest::Test
   def test_search_success_is_attributed_bounded_and_deterministic
     granted
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     supervisor = Supervisor.new(config)
     begin
       outcome = call_search(supervisor:, snapshot:)
@@ -273,7 +267,7 @@ class WebsearchInvocationTest < Minitest::Test
     granted
     ENV["TAMOZ_WEBSEARCH_FIXTURE_ERROR"] = "1"
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     supervisor = Supervisor.new(config)
     begin
       error = assert_raises(Tamoz::Mcp::ToolArgumentError) do
@@ -290,7 +284,7 @@ class WebsearchInvocationTest < Minitest::Test
     granted
     ENV["TAMOZ_WEBSEARCH_FIXTURE_OVERSIZE"] = "1"
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     circuit = Tamoz::Mcp::Websearch::EgressCircuit.new(
       threshold: 3, scope_id: "egress:websearch", budget_breach: true
     )
@@ -313,7 +307,7 @@ class WebsearchInvocationTest < Minitest::Test
   def test_credential_shaped_query_is_rejected_with_no_call_and_no_sink
     granted
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     circuit = Tamoz::Mcp::Websearch::EgressCircuit.new(
       threshold: 3, scope_id: "egress:websearch", budget_breach: true
     )
@@ -351,7 +345,7 @@ class WebsearchInvocationTest < Minitest::Test
   def test_journal_invocation_arguments_carry_no_credential_value
     granted
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     supervisor = Supervisor.new(config)
     begin
       outcome = call_search(supervisor:, snapshot:)
@@ -374,7 +368,7 @@ class WebsearchInvocationTest < Minitest::Test
     FileUtils.mkdir_p(workspace)
     File.write(File.join(workspace, "note.txt"), "Tamoz is awake.\n")
     config = fixture_config
-    snapshot = compiled(config)
+    snapshot = Catalog.compile(config)
     circuit = Tamoz::Mcp::Websearch::EgressCircuit.new(
       threshold: 3, scope_id: "egress:websearch", budget_breach: true
     )

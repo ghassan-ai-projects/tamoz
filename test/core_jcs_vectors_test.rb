@@ -23,7 +23,8 @@ class CoreJcsVectorsTest < Minitest::Test
 
   def test_strings_escape_only_the_quote_the_backslash_and_control_characters
     raw = "q\"b\\n\n\t\b\f\r\u0000\u001f\u007f \u00e9\u4e2d\u{1f600}\u2028"
-    expected = '"q\\"b\\\\n\\n\\t\\b\\f\\r\\u0000\\u001f' + "\u007f \u00e9\u4e2d\u{1f600}\u2028\""
+    escaped = '"q\\"b\\\\n\\n\\t\\b\\f\\r\\u0000\\u001f'
+    expected = "#{escaped}\u007f \u00e9\u4e2d\u{1f600}\u2028\""
 
     assert_equal expected, Tamoz::Core.jcs(raw)
     assert_equal expected, Tamoz::Core.jcs(raw.encode("UTF-16LE"))

@@ -44,6 +44,10 @@ TEST_FILE_CAP_SECONDS = 0.0
 # skips them and `ci_full` still runs every one.
 # work_loop / subagent_spec / research_spec are the three slowest everyday files (13.2s / 10.3s /
 # 7.4s); the owner moved them here on 2026-10-09 to keep `rake ci` inside its budget.
+# subagent_topology / memory_work_route / agent_session_operations / agent_cli / agent_worker /
+# experience_harness stay over the cap on CI: they drive real durable sessions, whose cost is the graph
+# re-encoding the whole state every step (docs/test-quality/STATE_REENCODE_PLAN.md).
+# websearch_invocation spawns a real MCP server per test.
 SLOW_TESTS = %w[
   test/investigation_eval_controls_test.rb
   test/benchmark_comms_b0_test.rb
@@ -58,6 +62,13 @@ SLOW_TESTS = %w[
   test/work_loop_test.rb
   test/subagent_spec_test.rb
   test/research_spec_test.rb
+  test/subagent_topology_test.rb
+  test/memory_work_route_test.rb
+  test/agent_session_operations_test.rb
+  test/agent_cli_test.rb
+  test/agent_worker_test.rb
+  test/experience_harness_test.rb
+  test/websearch_invocation_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
@@ -270,7 +281,7 @@ task :test_parallel, [:mode] => :test_inventory do |_task, args|
 
         warn lines[index, 4].join
       end
-      warn lines.grep(/^TEST FILE OVER CAP:/).join
+      lines.grep(/^TEST FILE OVER CAP:/).each { |line| warn line }
       warn output unless lines.any? { |line| line =~ /^\s*\d+\) (Failure|Error):/ }
       warn lines.grep(/runs,/).last.to_s
     end

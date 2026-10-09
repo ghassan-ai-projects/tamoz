@@ -39,7 +39,7 @@ class TelegramFixtureServer
       nil
     end
     @worker.join(2)
-    @threads.each { |thread| thread.kill.join }
+    @threads.each { |thread| thread.kill.join(2) }
   end
 
   private
