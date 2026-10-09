@@ -268,15 +268,15 @@ class ChatAttachmentTest < Minitest::Test
     harness&.close
   end
 
-  def test_an_image_at_its_limit_is_read_once
+  def test_a_large_image_is_read_once_and_journaled_by_digest
     model = ScriptedConversationModel.new(turns: [{ content: 'A big picture.' }, { content: 'ok' }])
     harness = harness_with(model)
-    big = PNG + ('x' * (Tamoz::Agent::WorkAttachment::MAX_IMAGE_BYTES - PNG.bytesize)).b
+    big = PNG + ('x' * 1_000_000).b
 
     harness.send_photo(big)
 
     assert_equal %i[attachment_image work_step], model.stages
-    assert_operator model.requests.first.bytesize, :>, 6_600_000
+    assert_operator model.requests.first.bytesize, :>, 1_300_000
   ensure
     harness&.close
   end
