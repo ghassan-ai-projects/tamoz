@@ -16,6 +16,7 @@ class TalkClientJsTest < Minitest::Test
     output = output.dup.force_encoding(Encoding::UTF_8)
 
     assert_predicate status, :success?, output
-    assert_match(/^ℹ fail 0$/, output)
+    assert_match(/^(?:ℹ|#) fail 0$/, output)
+    assert_match(/^(?:ℹ|#) pass [1-9]/, output)
   end
 end
