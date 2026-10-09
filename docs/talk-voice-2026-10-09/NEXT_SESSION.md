@@ -35,6 +35,18 @@ for every channel (§3).
   everyday files to the slow lane (`work_loop_test` 13.2 s, `subagent_spec_test` 10.3 s, `research_spec_test`
   7.4 s); making them faster and bringing them back is a candidate task.
 
+### 1.2 Test time rule (owner, 2026-10-09)
+
+No everyday test file may take more than 5 s on the pipeline (`.agent/rules/testing.md`). Measured locally
+(`TEST_WEIGHTS`, CI is about 2× slower), 15 everyday files probably break it; all but `chat_attachment_test`
+(3.8 s, +0.7 s from this PR) predate the talk work: `agenteval_memory_pack_test` 6.6, `websearch_invocation_test`
+5.4, `subagent_topology_test` 5.1, `memory_work_route_test` 4.9, `tamoz_telegram_transport_test` 4.7,
+`agent_cli_test` 4.2, `agent_session_operations_test` 4.1, `chat_attachment_test` 3.8, `agent_worker_test` 3.4,
+`agent_cli_research_test` 3.3, `agent_mcp_capability_source_test` 3.2, `agent_profile_machinery_test` 3.1,
+`experience_harness_test` 3.0, `agent_unattended_policy_test` 2.8, `graph_execution_test` 2.7 (seconds, local).
+Proposed as its own PR after #73: measure each on the runner, make it faster (inject waits, share fixtures),
+move to `SLOW_TESTS` only what cannot be, and add a guard that names any everyday file over 5 s.
+
 ## 2. Findings from the owner's live sessions (Chrome, real models)
 
 What worked: English heard almost word for word; Tamoz answered, followed language switches (English ↔

@@ -12,6 +12,9 @@
 - A deadline the child's own startup must fit inside is a race, not a test — Ruby boot can
   be the whole budget. Size it for the boot, or drop the case; don't widen the sleep.
 - `rake test_profile` after adding gates; refresh `TEST_WEIGHTS`.
+- **No everyday test file takes more than 5 s on the pipeline** (owner, 2026-10-09). The CI runner is about
+  2× slower than a developer Mac, so a file over 2.5 s locally needs work: make it faster first; a file that
+  cannot be made faster goes to `SLOW_TESTS`, where `rake ci_full` still runs it.
 - **A file this session creates is mode 600; `gem build` then refuses it.** `packaging_test` is the
   only gate that notices, and it reports it as 15 errors in gem *building*, not as a permission
   problem: `Gem::InvalidSpecificationException: specification has warnings`. `chmod 644` every new
