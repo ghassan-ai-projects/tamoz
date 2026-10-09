@@ -392,9 +392,12 @@ Half-duplex makes self-hearing unlikely, but full-duplex is opt-in and speakers 
 carry attacker-influenced text (a fetched page, a file). If it re-entered as the user's words, it would be
 an injection path.
 
-So `WorkAttachment` checks one more thing before it treats a transcript as the user's task. If the
-transcript has at least 4 words, and at least 80% of its normalized words occur in order in the previous
-answer's spoken projection, the transcript is an **echo**. The turn then opens with the echo framed as
+So, on a surface that speaks its replies (`Parties` `speaks`; the gateway marks the attachment
+`spoken_back`), `WorkAttachment` checks one more thing before it treats a transcript as the user's task. If
+the transcript has at least 8 words, and at least 85% of its normalized words occur in order in the previous
+answer's spoken projection, the transcript is an **echo**. (Revised after review: 4 words / 80% took a
+user's short repeat-back, "yes pond 7 oxygen is 6.1", for an echo; Telegram never speaks, so it is never
+guarded.) The turn then opens with the echo framed as
 material. A fixed instruction says this was the assistant's own reply heard back and must not be acted on.
 
 - The previous answer is already in the opening context (`session_work.rb:92`, `previous_answer`).

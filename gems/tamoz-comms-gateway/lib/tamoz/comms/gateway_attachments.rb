@@ -79,6 +79,7 @@ module Tamoz
           attachment.slice('kind', 'media_type', 'name', 'duration_s')
                     .merge('handoff' => handoff, 'digest' => @attachments.put(handoff,
                                                                               bytes), 'size_bytes' => bytes.bytesize)
+                    .merge(Comms::Parties::KINDS.fetch(@descriptor.kind).speaks ? { 'spoken_back' => true } : {})
         end
 
         def assert_poller_held

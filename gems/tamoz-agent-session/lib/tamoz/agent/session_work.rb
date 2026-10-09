@@ -34,7 +34,10 @@ module Tamoz
       def opened(base, context, attachment)
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
-        reading = @attachment.read(attachment, window: work(base).window, context:) if attachment
+        if attachment
+          reading = @attachment.read(attachment, window: work(base).window, context:,
+                                                 last_answer: last_answer(context))
+        end
         brief = @memory.brief(told(base, reading))
         entries = opening(base, context, previous, brief, reading)
         base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
@@ -133,6 +136,11 @@ module Tamoz
       end
 
       def now_ms = (Time.now.to_f * 1000).to_i
+
+      def last_answer(context)
+        @services.planning_context.conversation_transcript(context).reverse
+                 .find { |fragment| fragment['role'] == 'assistant' }&.fetch('text')
+      end
 
       # A chat transcript already holds the reply as delivered; a CLI transcript holds only the operator's lines.
       def previous_answer(previous, transcript)

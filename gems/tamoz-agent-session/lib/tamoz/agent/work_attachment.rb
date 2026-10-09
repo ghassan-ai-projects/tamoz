@@ -7,6 +7,7 @@ module Tamoz
       MAX_CHARACTERS = 24_000
       MAX_IMAGE_BYTES = 5_000_000
       MAX_NAME_CHARACTERS = 60
+      HEARD_CHARACTERS = 600
       MARKER = /<<<|>>>/
       AUDIO_TYPES = { 'audio/ogg' => '.ogg', 'audio/mpeg' => '.mp3', 'audio/mp4' => '.m4a', 'audio/x-m4a' => '.m4a',
                       'audio/wav' => '.wav', 'audio/x-wav' => '.wav', 'audio/webm' => '.webm',
@@ -21,18 +22,34 @@ module Tamoz
         @effects = effects
       end
 
-      def read(attachment, window:, context:)
+      def read(attachment, window:, context:, last_answer: nil)
         read = read_of(attachment, context)
         result = read.result
         limit = [MAX_CHARACTERS, window].min
         event = event(attachment, result, limit)
         request = read.call && request_trace(read.call, attachment.fetch('kind'))
         if result.outcome == :read && attachment.fetch('kind') == 'voice'
-          return Reading.new(material: labels.fetch('voice'), event:, request:, task: result.text[0, limit])
+          return spoken(result.text[0, limit], event, request, context, attachment['spoken_back'] ? last_answer : nil)
         end
 
         material = result.outcome == :read ? material(attachment, result, limit) : unreadable(attachment, result)
         Reading.new(material:, event:, request:, task: nil)
+      end
+
+      # Tamoz's own reply heard back through a speaker is material, never the user's request.
+      def spoken(text, event, request, context, last_answer)
+        if last_answer && Core::SpokenText.echo?(text, Core::SpokenText.project(last_answer, kind: 'answer').to_s)
+          return Reading.new(material: format(labels.fetch('echo'), content: framed(text)), event:, request:, task: nil)
+        end
+
+        heard(context, text)
+        Reading.new(material: labels.fetch('voice'), event:, request:, task: text)
+      end
+
+      def heard(context, text)
+        @configuration.notice&.call(context, "Heard: «#{text[0, HEARD_CHARACTERS]}»")
+      rescue StandardError => e
+        warn "tamoz: the heard notice was not delivered (#{e.class})"
       end
 
       # The file is gone as soon as the opened turn holds what was read from it.
