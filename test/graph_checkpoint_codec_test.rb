@@ -50,6 +50,22 @@ class GraphCheckpointCodecTest < Minitest::Test
     assert_equal checkpoint.total_tasks, restored.fetch(:total_tasks)
   end
 
+  def test_rejects_state_bytes_that_decode_but_are_not_canonical
+    app = Tamoz.graph(name: "codec-canonical", version: "1") do
+      state :events, reduce: :append, default: []
+      node(:note, implementation_name: "codec.note", version: "1") { |_state, _context| {events: ["é"]} }
+      edge Tamoz::START, :note
+      edge :note, Tamoz::END
+    end.compile
+    app.invoke({}, thread: "thread.canonical", request_id: "request.canonical", concurrency: :inline)
+    checkpoint = app.checkpointer.latest(thread_id: "thread.canonical", namespace: [])
+    wire = JSON.parse(app.checkpoint_codec.dump(checkpoint.to_h))
+    wire[8] = wire[8].sub('["tamoz.state",1,', '["tamoz.state", 1,')
+
+    error = assert_raises(Tamoz::CheckpointCorruptionError) { app.checkpoint_codec.load(JSON.generate(wire)) }
+    assert_includes error.message, "non-canonical"
+  end
+
   def test_rejects_graph_identity_before_decoding_user_values
     decoded = 0
     value_class = Class.new do

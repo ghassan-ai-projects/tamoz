@@ -21,6 +21,16 @@ class CoreJcsVectorsTest < Minitest::Test
     end
   end
 
+  def test_strings_escape_only_the_quote_the_backslash_and_control_characters
+    raw = "q\"b\\n\n\t\b\f\r\u0000\u001f\u007f \u00e9\u4e2d\u{1f600}\u2028"
+    escaped = '"q\\"b\\\\n\\n\\t\\b\\f\\r\\u0000\\u001f'
+    expected = "#{escaped}\u007f \u00e9\u4e2d\u{1f600}\u2028\""
+
+    assert_equal expected, Tamoz::Core.jcs(raw)
+    assert_equal expected, Tamoz::Core.jcs(raw.encode("UTF-16LE"))
+    assert_raises(Tamoz::Core::JCS::Error) { Tamoz::Core.jcs("\xFF".dup.force_encoding(Encoding::UTF_8)) }
+  end
+
   def test_native_only_double_integral_cases
     # JSON cannot distinguish the double 1.0 from the integer 1, so these MUST
     # be constructed natively. A harness that skips them has a hole exactly

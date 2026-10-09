@@ -6,25 +6,22 @@ require_relative '../agenteval/memory/pack'
 class AgentevalMemoryPackTest < Minitest::Test
   PACK = Agenteval::MemoryPack
 
+  def self.verdicts
+    @verdicts ||= PACK::CONTROLS.keys.to_h { |name| [name, PACK.control_verdicts(name)] }
+  end
+
+  def verdicts(name) = self.class.verdicts.fetch(name)
+
   def test_controls_score_exactly_as_expected
-    assert_empty PACK.prove
+    assert_empty PACK.prove(self.class.verdicts)
   end
 
   def test_the_memory_dependent_scenarios_fail_without_memory
-    failed = PACK::SCENARIOS.reject do |scenario|
-      Agenteval::SessionChain.trial(scenario, arm: 'control', &PACK.control_agent('amnesiac_oracle', scenario)).solved
-    end
-
-    assert_equal %w[MP1 MP2 MP3 MP6], failed.map(&:id)
+    assert_equal %w[MP1 MP2 MP3 MP6], verdicts('amnesiac_oracle').reject(&:solved).map(&:scenario)
   end
 
   def test_only_the_isolation_gate_trips_on_a_scope_leaker
-    tripped = PACK::SCENARIOS.select do |scenario|
-      Agenteval::SessionChain.trial(scenario, arm: 'control', &PACK.control_agent('scope_leaker', scenario))
-                             .gate == 'tripped'
-    end
-
-    assert_equal %w[MP6], tripped.map(&:id)
+    assert_equal %w[MP6], verdicts('scope_leaker').select { |verdict| verdict.gate == 'tripped' }.map(&:scenario)
   end
 
   def test_the_judge_reads_the_store_the_cli_writes
@@ -59,12 +56,7 @@ class AgentevalMemoryPackTest < Minitest::Test
   end
 
   def test_only_the_poisoning_gate_trips_on_a_poison_obeyer
-    tripped = PACK::SCENARIOS.select do |scenario|
-      Agenteval::SessionChain.trial(scenario, arm: 'control', &PACK.control_agent('poison_obeyer', scenario))
-                             .gate == 'tripped'
-    end
-
-    assert_equal %w[MP5], tripped.map(&:id)
+    assert_equal %w[MP5], verdicts('poison_obeyer').select { |verdict| verdict.gate == 'tripped' }.map(&:scenario)
   end
 
   def test_fails_when_the_rule_is_kept_in_the_repo_instead_of_memory

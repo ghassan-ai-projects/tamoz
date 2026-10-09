@@ -4,8 +4,10 @@ require 'minitest/autorun'
 require 'fileutils'
 require 'open3'
 require 'rbconfig'
+require 'stringio'
 require 'tmpdir'
 require_relative 'support/test_suite'
+require_relative 'support/file_clock'
 
 class TestSuiteTest < Minitest::Test
   def test_discovers_each_test_root_once_and_ignores_support_files
@@ -177,16 +179,55 @@ class TestSuiteTest < Minitest::Test
     end
   end
 
+  def test_file_clock_fails_the_run_naming_only_the_file_over_the_cap
+    sources = { 'test/fast_test.rb' => minitest_source('FastTest', ''),
+                'test/slow_test.rb' => minitest_source('SlowTest', 'sleep 0.15') }
+    with_sources(sources) do |root|
+      paths = sources.keys.map { |path| File.join(root, path) }
+      output, status = run_fixture(*paths, env: { 'TEST_FILE_CAP_SECONDS' => '0.1' })
+
+      refute_predicate status, :success?, output
+      assert_equal %w[slow_test.rb], output.scan(%r{TEST FILE OVER CAP: \S+/test/(\S+) took}).flatten
+    end
+  end
+
+  def test_file_clock_charges_each_file_the_run_time_of_its_classes
+    io = StringIO.new
+    owners = { 'A' => 'a_test.rb', 'B' => 'b_test.rb' }
+    reporter = TestSuite::FileClock::Reporter.new(cap: 5.0, owners:, io:)
+    [['A', 3.0], ['A', 1.5], ['B', 4.9]].each { |klass, time| reporter.record(clock_result(klass, time)) }
+
+    assert_predicate reporter, :passed?
+    reporter.record(clock_result('A', 0.6))
+
+    refute_predicate reporter, :passed?
+    reporter.report
+
+    assert_equal "TEST FILE OVER CAP: a_test.rb took 5.1s (cap 5.0s)\n", io.string
+  end
+
   def test_repository_test_identities_are_unique
     assert_silent { TestSuite.validate_identities!(TestSuite.files) }
   end
 
   private
 
-  def run_fixture(path, env: {})
-    script = 'load ARGV.shift; exit(system(*test_command([ARGV.shift])) ? 0 : 1)'
+  def run_fixture(*paths, env: {})
+    script = 'load ARGV.shift; exit(system(*test_command(ARGV)) ? 0 : 1)'
     Open3.capture2e(env, RbConfig.ruby, '-rrake', '-e', script,
-                    File.join(TestSuite::ROOT, 'Rakefile'), path, chdir: TestSuite::ROOT)
+                    File.join(TestSuite::ROOT, 'Rakefile'), *paths, chdir: TestSuite::ROOT)
+  end
+
+  def clock_result(klass, time)
+    Minitest::Result.new('test_x').tap do |result|
+      result.klass = klass
+      result.time = time
+    end
+  end
+
+  def minitest_source(name, body)
+    "require 'minitest/autorun'\nclass #{name} < Minitest::Test\n" \
+      "  def test_runs\n    #{body}\n    assert true\n  end\nend\n"
   end
 
   def with_sources(sources)
