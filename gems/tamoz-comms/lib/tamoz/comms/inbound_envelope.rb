@@ -144,15 +144,10 @@ module Tamoz
       end
 
       def validate_parties!(correspondent_id, conversation_id)
-        unless Shapes.bounded_string?(correspondent_id, max_bytes: MAX_ID_BYTES) &&
-               correspondent_id.start_with?('telegram:user:')
-          raise ValidationError, 'correspondent_id must be a bound telegram user id'
-        end
-        return if Shapes.bounded_string?(conversation_id, max_bytes: MAX_ID_BYTES) &&
-                  conversation_id.start_with?('telegram:chat:', 'telegram:group:',
-                                              'telegram:supergroup:', 'telegram:channel:')
-
-        raise ValidationError, 'conversation_id must be a bound telegram chat id'
+        Shapes.require_prefixed!(correspondent_id, Parties.correspondent_prefixes,
+                                 'correspondent_id must be a bound user id', max_bytes: MAX_ID_BYTES)
+        Shapes.require_prefixed!(conversation_id, Parties.admissible_prefixes,
+                                 'conversation_id must be a bound chat id', max_bytes: MAX_ID_BYTES)
       end
 
       def validate_message_refs!(fields)

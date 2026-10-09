@@ -93,10 +93,13 @@ module Tamoz
       end
 
       def validate_parties!(correspondent_id, conversation_id)
-        Shapes.require_prefixed!(correspondent_id, ['telegram:user:'],
-                                 'correspondent_id must be a bound telegram user id', max_bytes: MAX_ID_BYTES)
-        Shapes.require_prefixed!(conversation_id, ['telegram:chat:'],
-                                 'conversation_id must be a bound telegram chat id', max_bytes: MAX_ID_BYTES)
+        Shapes.require_prefixed!(correspondent_id, Parties.correspondent_prefixes,
+                                 'correspondent_id must be a bound user id', max_bytes: MAX_ID_BYTES)
+        Shapes.require_prefixed!(conversation_id, Parties.bindable_prefixes,
+                                 'conversation_id must be a bound chat id', max_bytes: MAX_ID_BYTES)
+        return if Parties.of_correspondent(correspondent_id) == Parties.of_conversation(conversation_id)
+
+        raise ValidationError, 'a binding pairs a user and a chat of one surface kind'
       end
     end
   end

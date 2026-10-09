@@ -39,8 +39,8 @@ module Tamoz
     #   an empty interrupt list would forge a different question.
     class DecisionRecord
       DIRECTIONS = %w[approve deny].freeze
-      ACTOR_KINDS = %w[os_user telegram_user].freeze
-      SOURCES = %w[cli telegram].freeze
+      ACTOR_KINDS = %w[os_user telegram_user talk_user].freeze
+      SOURCES = %w[cli telegram talk].freeze
       STATUSES = %w[pending claimed consumed].freeze
       DEFAULT_TTL_S = 900
       ID_DOMAIN = 'tamoz.comms.decision.v1'

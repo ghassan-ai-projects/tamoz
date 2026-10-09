@@ -27,7 +27,7 @@ module Tamoz
     # :reek:TooManyInstanceVariables, :reek:TooManyStatements
     # :reek:DuplicateMethodCall, :reek:FeatureEnvy
     class SurfaceDescriptor
-      KINDS = %w[telegram].freeze
+      KINDS = %w[telegram talk].freeze
       POLL_MODES = %w[long_poll].freeze
       ADMISSION_MODES = %w[disabled allowlist pairing].freeze
       THREADING_MODES = %w[conversation per_message].freeze
@@ -37,6 +37,7 @@ module Tamoz
       RENDER_OVERFLOWS = %w[truncate].freeze
       CLASSIFICATIONS = %w[restricted].freeze
       DIGEST_DOMAIN = 'tamoz.comms.surface.v1'
+      HOST = /\A(?=.{1,253}\z)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\z/i
       MAX_IDS = 1024
       STRUCTURED_FIELDS = %i[transport identity admission approvals rendering limits].freeze
       private_constant :STRUCTURED_FIELDS
@@ -147,6 +148,7 @@ module Tamoz
         validate_classification!(fields)
         validate_references!(fields)
         validate_transport!(fields.fetch(:transport))
+        validate_talk!(fields.fetch(:transport)) if fields.fetch(:kind) == 'talk'
         validate_identity!(fields.fetch(:identity))
         validate_admission!(fields.fetch(:admission))
         validate_approvals!(fields.fetch(:approvals))
@@ -184,6 +186,16 @@ module Tamoz
         cap = transport.fetch(:max_response_bytes)
         return if cap.nil? || Shapes.bounded_integer?(cap, max: 10_000_000)
         raise ValidationError, 'max_response_bytes must be positive'
+      end
+
+      def validate_talk!(transport)
+        port = transport[:port]
+        raise ValidationError, 'a talk surface needs a port' unless port.is_a?(Integer) && (1..65_535).cover?(port)
+
+        hosts = transport.fetch(:allow_hosts, [])
+        valid = hosts.is_a?(Array) && hosts.length <= 16
+        valid &&= hosts.uniq.length == hosts.length && hosts.all? { |host| host.is_a?(String) && host.match?(HOST) }
+        raise ValidationError, 'allow_hosts must be at most 16 host names' unless valid
       end
 
       def validate_identity!(identity)

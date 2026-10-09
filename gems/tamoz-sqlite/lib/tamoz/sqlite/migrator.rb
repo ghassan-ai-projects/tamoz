@@ -11,7 +11,7 @@ module Tamoz
       # monotonic-ordering assertions in test/sqlite_approval_stores_test.rb,
       # test/cancellation_visibility_test.rb, and test/memory_store_test.rb.
       # Each migration's own history is documented beside its constant.
-      CURRENT_VERSION = 24
+      CURRENT_VERSION = 25
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1381,6 +1381,50 @@ module Tamoz
 
       MIGRATION_24_CHECKSUM = migration_checksum(MIGRATION_24)
 
+      # The talk channel: 24 -> 25 through MIGRATION_25. A decision's actor and source CHECKs admit
+      # 'talk_user' and 'talk'; every row and column is carried, so a pending approval survives.
+      MIGRATION_25 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_decisions_v25 (
+            decision_id TEXT NOT NULL PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            occurrence_id TEXT NOT NULL,
+            interrupt_digest TEXT NOT NULL,
+            direction TEXT NOT NULL CHECK (direction IN ('approve', 'deny')),
+            actor_kind TEXT NOT NULL CHECK (actor_kind IN ('os_user', 'telegram_user', 'talk_user')),
+            actor_id TEXT NOT NULL,
+            source TEXT NOT NULL CHECK (source IN ('cli', 'telegram', 'talk')),
+            decided_at_ms INTEGER NOT NULL,
+            expires_at_ms INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'consumed')),
+            claim_owner TEXT,
+            claim_fence INTEGER CHECK (claim_fence IS NULL OR claim_fence > 0),
+            claim_expires_at_ms INTEGER,
+            consumed_at_ms INTEGER,
+            evidence TEXT,
+            reason TEXT
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          INSERT INTO tamoz_comms_decisions_v25
+            (decision_id, thread_id, occurrence_id, interrupt_digest, direction, actor_kind, actor_id, source,
+             decided_at_ms, expires_at_ms, status, claim_owner, claim_fence, claim_expires_at_ms, consumed_at_ms,
+             evidence, reason)
+          SELECT decision_id, thread_id, occurrence_id, interrupt_digest, direction, actor_kind, actor_id, source,
+                 decided_at_ms, expires_at_ms, status, claim_owner, claim_fence, claim_expires_at_ms, consumed_at_ms,
+                 evidence, reason
+          FROM tamoz_comms_decisions
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_decisions
+        SQL
+        <<~SQL.freeze
+          ALTER TABLE tamoz_comms_decisions_v25 RENAME TO tamoz_comms_decisions
+        SQL
+      ].freeze
+
+      MIGRATION_25_CHECKSUM = migration_checksum(MIGRATION_25)
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1407,7 +1451,8 @@ module Tamoz
         21 => [MIGRATION_21, MIGRATION_21_CHECKSUM],
         22 => [MIGRATION_22, MIGRATION_22_CHECKSUM],
         23 => [MIGRATION_23, MIGRATION_23_CHECKSUM],
-        24 => [MIGRATION_24, MIGRATION_24_CHECKSUM]
+        24 => [MIGRATION_24, MIGRATION_24_CHECKSUM],
+        25 => [MIGRATION_25, MIGRATION_25_CHECKSUM]
       }.freeze
 
       def self.verify_connection!(connection)

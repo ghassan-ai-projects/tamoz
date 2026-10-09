@@ -43,6 +43,9 @@ module Tamoz
         return unsupported(envelope, surface:, binding:) if envelope.fetch('kind') == 'unsupported'
         return ignore(:unsupported_kind) unless %w[text command callback attachment].include?(envelope.fetch('kind'))
         return reject(:group_chat, 'group chats are refused in v1') if group_chat?(envelope.fetch('conversation_id'))
+        unless Parties.same_kind?(envelope.fetch('correspondent_id'), envelope.fetch('conversation_id'), surface.kind)
+          return reject(:party_kind_mismatch, 'this identity does not belong to this channel')
+        end
 
         reject(:unbound, 'the correspondent is not bound') if binding && binding.fetch('status') != 'active'
       end
@@ -55,14 +58,15 @@ module Tamoz
       # because the digest input changed.
       def thread_id(surface_id, conversation_id, generation: 0)
         digest = ::Digest::SHA256.hexdigest("#{thread_domain}\n#{conversation_id}\n#{generation}")[0, 16]
-        "tg.#{surface_id}.#{digest}"
+        kind = Parties.of_conversation(conversation_id)
+        raise ValidationError, 'conversation_id belongs to no surface kind' unless kind
+
+        "#{kind.thread_prefix}#{surface_id}.#{digest}"
       end
 
       def thread_domain = 'tamoz.comms.thread.v2'
 
-      def group_chat?(conversation_id)
-        conversation_id.start_with?('telegram:supergroup:', 'telegram:channel:', 'telegram:group:')
-      end
+      def group_chat?(conversation_id) = Parties.group_chat?(conversation_id)
 
       def command_admission(envelope, surface:, binding:, bot_username:)
         refusal = admission_refusal(envelope, surface:, binding:)
