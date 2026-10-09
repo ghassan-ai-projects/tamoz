@@ -109,8 +109,7 @@ module Tamoz
         attachment_too_large: ['rejected', 'That file is too large for me; the limit is 20 MB.'],
         image_too_large: ['rejected', 'That image is too large for me; the limit is 5 MB.'],
         voice_too_long: ['rejected', 'That voice message is too long for me; the limit is 10 minutes.'],
-        attachment_unavailable: ['rejected', "I couldn't download that file. Please send it again."],
-        attachment_unreadable: ['rejected', Comms::Admission::UNSUPPORTED_REPLY]
+        attachment_unavailable: ['rejected', "I couldn't download that file. Please send it again."]
       }.freeze
 
       include Admission

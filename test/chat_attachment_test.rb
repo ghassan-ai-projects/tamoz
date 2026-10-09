@@ -302,4 +302,18 @@ class ChatAttachmentTest < Minitest::Test
   ensure
     harness&.close
   end
+
+  # A photo at the 5 MB limit: about 6.7 MB of base64 is built, digested and journaled by digest only.
+  def test_an_image_at_its_limit_is_read_once
+    model = ScriptedConversationModel.new(turns: [{ content: 'A big picture.' }, { content: 'ok' }])
+    harness = harness_with(model)
+    big = PNG + ('x' * (Tamoz::Agent::WorkAttachment::MAX_IMAGE_BYTES - PNG.bytesize)).b
+
+    harness.send_photo(big)
+
+    assert_equal %i[attachment_image work_step], model.stages
+    assert_operator model.requests.first.bytesize, :>, 6_600_000
+  ensure
+    harness&.close
+  end
 end

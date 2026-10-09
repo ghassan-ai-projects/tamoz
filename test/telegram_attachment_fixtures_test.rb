@@ -9,11 +9,12 @@ class TelegramAttachmentFixturesTest < Minitest::Test
   PINNED = {
     'arabic.txt' => 'c9369f1e3979f279e1522c9216025429cec6ce7b9ba123afdb140555153b9012',
     'injection.txt' => 'b5ff860a6f8d78ad5817f0738001fe942f561d7c44b2517315909a5fec99c701',
+    'label.png' => 'cfcdbe0e7cf89447f18932bbc57547ee9bcaaff2f8f7d593fd104bbf71929d4f',
     'invoice.pdf' => 'd642a2c954b786fae450349817bc46219bdb2ed3aa77cb0f3fc6433c9182dd88',
     'invoice.png' => 'ab615670a4e2f1cf3334776b4882548dcab99a362ef82620847f4e3617aca9a9',
     'notes.txt' => '8153177be92dff30b19359aca2a267da69048bcd9ec2536428e5a1636da25939',
     'scanned.pdf' => '8e0cfbf3cedd0ef0765351c2158c44afc9845ade369354aaaf9bf852ea29843e',
-    'scenarios.json' => '9aa0a6c0a86f58f54669a3c9d9f4ac43673dfd741be5f00fd296002bb32f91af',
+    'scenarios.json' => 'b2075aeb175e360fb00336ab75a5c6b2ceb0b8880c47eeebf2439d6c1488a579',
     'voice.ogg' => 'd40cb90804f5f3c2e4a82731dfbacd3d96ed0c7c8af80b11ca7c6d59dc8bf0d1'
   }.freeze
 

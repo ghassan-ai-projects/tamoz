@@ -6,7 +6,6 @@ module Tamoz
       # Downloads an admitted attachment into the runtime's artifact store, so the worker reads bytes and never the
       # channel. One attachment that cannot be fetched or stored is refused on its own; it never stalls the pass.
       module Attachments
-        READABLE_KINDS = %w[document image voice audio].freeze
         MAX_ATTACHMENT_BYTES = 20_000_000
         MAX_IMAGE_BYTES = 5_000_000
         MAX_VOICE_SECONDS = 600
@@ -42,20 +41,16 @@ module Tamoz
         end
 
         def attachment_refusal(attachment)
-          kind = attachment.fetch('kind')
-          return :attachment_unreadable unless readable_kinds.include?(kind)
-          return too_large(attachment) if attachment['size_bytes'].to_i > attachment_limit(kind)
+          return too_large(attachment) if attachment['size_bytes'].to_i > attachment_limit(attachment.fetch('kind'))
 
           :voice_too_long if attachment['duration_s'].to_i > MAX_VOICE_SECONDS
         end
-
-        def readable_kinds = READABLE_KINDS
 
         def attachment_limit(kind) = kind == 'image' ? MAX_IMAGE_BYTES : MAX_ATTACHMENT_BYTES
 
         def too_large(attachment) = attachment.fetch('kind') == 'image' ? :image_too_large : :attachment_too_large
 
-        # The lease is renewed on both sides of a download, so a slow file never outlives it.
+        # The lease is renewed around each download, so one slow file cannot take a pass's whole lease.
         def stored_attachment(attachment)
           held!
           bytes = @transport.fetch_attachment(attachment.fetch('file_id'),

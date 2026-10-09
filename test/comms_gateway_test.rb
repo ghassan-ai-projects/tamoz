@@ -26,7 +26,7 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
-  def with_gateway(limits: {}, controls: nil, readable: %w[document image voice audio])
+  def with_gateway(limits: {}, controls: nil)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
@@ -50,7 +50,6 @@ class CommsGatewayTest < Minitest::Test
           adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
           poller_owner: 'gateway:test', controls:
         )
-        gateway.singleton_class.define_method(:readable_kinds) { readable }
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
         adapter&.close
@@ -180,18 +179,6 @@ class CommsGatewayTest < Minitest::Test
         assert_equal fetched, transport.fetches, name
         assert_nil enqueued_payload(checkpoints), name
       end
-    end
-  end
-
-  def test_a_kind_this_bot_cannot_read_yet_is_refused_without_a_download
-    with_gateway(readable: %w[image]) do |gateway, transport, store, _adapter, _checkpoints, appended|
-      seed_binding(store)
-      transport.batch([document_update(1)])
-
-      gateway.serve_once(drain: false)
-
-      assert_equal Tamoz::Comms::Admission::UNSUPPORTED_REPLY, appended.last.fetch('text')
-      assert_empty transport.fetches
     end
   end
 

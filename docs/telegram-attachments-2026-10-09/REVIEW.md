@@ -2,7 +2,9 @@
 
 Two fresh subagents reviewed `PLAN.md` revision 1 against the code, one per lens. Totals: architecture
 0 critical · 3 high · 6 medium · 3 low; correctness 1 critical · 5 high · 7 medium · 3 low. Every finding
-is resolved in revision 2 of the plan or the bar; none was declined.
+is resolved in revision 2 of the plan or the bar; none was declined. Revision 3 (P2) later replaced the
+PDF reader: `pdf-reader` failed the licence gate, so architecture M5 and correctness H2's "forked child"
+became poppler's `pdftotext` in its own limited process group (PLAN §2, §3.3).
 
 ## Architecture lens
 

@@ -102,3 +102,9 @@
   table in a separate SQLite snapshot and silently limited explanations. Pin one reader transaction and
   declare each kind that reaches the limit. Schedule `reason` can contain completion evidence, so column
   names alone do not establish that a projection contains metadata.
+- **A new SQLite migration has a second home: `script/tamoz_sqlite_oracle`.** The oracle is an
+  independent verifier that pins `SCHEMA_VERSION` and every migration checksum; until it learns the new
+  ordinal, every scenario database reads `schema_invalid`. Only `rake ci_full`'s slow lane
+  (`sqlite_convergence_probe_test`, `sqlite_raw_oracle_test`) notices — `rake ci` stays green. Telegram
+  attachments' migration 24 shipped two commits before `ci_full` caught it. Add the ordinal and checksum
+  (`Tamoz::SQLite::Migrator::MIGRATION_<n>_CHECKSUM`, read through `bundle exec ruby`) in the same change.

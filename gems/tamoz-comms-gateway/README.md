@@ -9,7 +9,9 @@ The process receives its collaborators from the caller:
 
 - a transport implementing `Tamoz::Comms::Transport`;
 - an adapter that binds the existing `Tamoz::Comms::CommsStore` and its
-  lease, offset, disposition, delivery, pacing, and journal operations;
+  lease, offset, disposition, delivery, pacing, and journal operations, and
+  `bind_artifact_store(tenant:)`, where a received attachment's bytes are kept
+  for the worker under `profile:<profile_id>`;
 - checkpoint and request-inbox operations used for command controls;
 - an optional request-inbox/profile controls adapter; and
 - the existing durable effect binding carried by the CommsStore projection.
