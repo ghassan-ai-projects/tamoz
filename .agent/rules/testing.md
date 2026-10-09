@@ -14,7 +14,18 @@
 - `rake test_profile` after adding gates; refresh `TEST_WEIGHTS`.
 - **No everyday test file takes more than 5 s on the pipeline** (owner, 2026-10-09). The CI runner is about
   2× slower than a developer Mac, so a file over 2.5 s locally needs work: make it faster first; a file that
-  cannot be made faster goes to `SLOW_TESTS`, where `rake ci_full` still runs it.
+  cannot be made faster goes to `SLOW_TESTS`, where `rake ci_full` still runs it. The rule is a median
+  over CI runs; one run varies about ±30% per file, so `rake ci` fails on `TEST FILE OVER CAP: <file>` only
+  above `TEST_FILE_CAP_SECONDS × TEST_FILE_RUN_NOISE` (owner, 2026-10-10). Each shard charges every file the
+  run time of the tests it defines (`test/support/file_clock.rb`). Measure on the runner, not the Mac: a
+  throwaway PR with the cap at 0 lists every file's CI time; a loaded Mac misreads files by 2–5×.
+- **A child `ruby` under `bundle exec` re-resolves the whole bundle.** `RUBYOPT=-rbundler/setup` is
+  inherited, so each spawn pays ~135 ms locally and more on CI; `agenteval_memory_pack_test` went 1.2 s →
+  4.3 s under bundler from its workspace checks alone. A subprocess that runs someone else's project (an
+  eval workspace) gets `Bundler.unbundled_env`; one that needs the bundle keeps it and spawns less.
+- **Cost that grows with the state is in the codec, not the fixture.** Profile with thread CPU time before
+  trimming a session test: per-codepoint JCS escaping was 80% of `work_loop_test`
+  (`docs/test-quality/STATE_REENCODE_PLAN.md` has what remains).
 - **A file this session creates is mode 600; `gem build` then refuses it.** `packaging_test` is the
   only gate that notices, and it reports it as 15 errors in gem *building*, not as a permission
   problem: `Gem::InvalidSpecificationException: specification has warnings`. `chmod 644` every new
