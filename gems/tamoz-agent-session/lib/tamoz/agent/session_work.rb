@@ -35,8 +35,10 @@ module Tamoz
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
         reading = @attachment.read(attachment, window: work(base).window, context:) if attachment
+        asked = base.fetch(:task)
+        base = base.merge(task: "#{asked}\n#{reading.task}") if reading&.task
         brief = @memory.brief(base.fetch(:task))
-        entries = opening(base, context, previous, brief, reading)
+        entries = opening(base, context, previous, brief, reading, asked)
         base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
                    work_execution_id: context.execution_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
@@ -85,13 +87,16 @@ module Tamoz
 
       def research_available? = @services.configuration.subagent_apps.key?('research')
 
-      def opening(base, context, previous, brief, reading)
+      # `asked` is the message as admitted; a voice note's turn answers its transcript but its history line is the label.
+      # rubocop:disable Metrics/ParameterLists
+      def opening(base, context, previous, brief, reading, asked)
         transcript = @services.planning_context.conversation_transcript(context)
         work(base).opening(task: base.fetch(:task), transcript:, previous_answer: previous_answer(previous, transcript),
                            updates: directive_updates(previous),
                            carried: { memory: brief.text, checkpoint: previous[:work_checkpoint],
-                                      material: reading&.material })
+                                      material: reading&.material, asked: })
       end
+      # rubocop:enable Metrics/ParameterLists
 
       def stopped?(context) = Tamoz::Cancellation::Stops.requested?(context.thread_id)
 

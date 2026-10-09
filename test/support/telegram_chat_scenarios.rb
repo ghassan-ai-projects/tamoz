@@ -15,7 +15,7 @@ module TelegramChatScenarios
 
   def all
     %w[setup returning_owner greet memory reset arabic formatting workspace_read create_file deny long help
-       status_cancel burst unsupported document arabic_document injection pdf scanned_pdf image_ocr oversize
+       status_cancel burst unsupported document arabic_document injection pdf scanned_pdf image_ocr voice oversize
        stranger long_conversation restart provider_down]
   end
 
@@ -262,7 +262,9 @@ module TelegramChatScenarios
     spec = attachment_case(name)
     bytes = File.binread(File.join(ATTACHMENTS, spec.fetch('file')))
     eval.turn(user, "(#{spec.fetch('file')}) #{spec['caption']}", timeout:) do |fake|
-      if spec['photo']
+      if spec['voice']
+        fake.send_voice(user, bytes, duration: spec.fetch('duration'))
+      elsif spec['photo']
         fake.send_photo(user, bytes, caption: spec['caption'])
       else
         fake.send_document(user, bytes, name: spec.fetch('file'), mime_type: spec.fetch('mime_type'),
@@ -341,6 +343,16 @@ module TelegramChatScenarios
     eval.check('image_ocr', 'the image was read by one journaled model call',
                turn.steps.include?('model:attachment_image'), turn.steps.inspect)
     eval.hygiene('image_ocr', [turn])
+  end
+
+  # The voice note is the user's question; the answer must carry what they said. Needs a transcription model.
+  def voice(eval)
+    eval.check('voice', 'a transcription model is configured', !eval.transcription.to_s.empty?, eval.transcription)
+    turn = send_attachment(eval, eval.fresh_user, 'voice')
+    check_facts(eval, 'voice', turn)
+    eval.check('voice', 'the recording was transcribed by one journaled call', turn.steps.include?('model.transcribe'),
+               turn.steps.inspect)
+    eval.hygiene('voice', [turn])
   end
 
   def oversize(eval)

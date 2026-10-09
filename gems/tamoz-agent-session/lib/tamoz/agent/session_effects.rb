@@ -111,6 +111,24 @@ module Tamoz
         outcome.status == :succeeded ? outcome.with(value: ConversationProjection.validate!(outcome.value)) : outcome
       end
 
+      # One speech-to-text call through the operator's transcription model. Reading changes nothing outside, so an
+      # unanswered call is safely retried (:idempotent); a replay returns the recorded transcript.
+      def transcribe(context, audio:, filename:, media_type:)
+        model = @configuration.transcriber
+        request = { 'stage' => 'transcribe',
+                    'request_digest' => model.transcription_digest(Digest::SHA256.hexdigest(audio)),
+                    'provider_configuration_digest' => model.provider_configuration_digest }
+        EffectDispatcher.run(
+          context:, operation: 'model.transcribe', safety: :idempotent, call_index: 0, request:,
+          actor: 'tamoz.agent.session',
+          logical_identity: logical_identity(context:, operation: 'model.transcribe', capability_id: 'model:transcribe',
+                                             arguments: request, iteration: 0, sub_operation: 0)
+        ) do
+          transcript = until_cancelled(context) { model.transcribe(audio:, filename:, media_type:) }
+          transcript.to_h.transform_keys(&:to_s)
+        end
+      end
+
       # A stop from the user abandons the call in flight and records it as a failed attempt.
       def until_cancelled(context, &)
         token = Tamoz::Cancellation::Stops.token(context.thread_id)

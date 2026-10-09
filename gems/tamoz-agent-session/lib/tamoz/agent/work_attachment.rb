@@ -8,10 +8,14 @@ module Tamoz
       MAX_CHARACTERS = 24_000
       MARKER = /<<<|>>>/
       MAX_IMAGE_BYTES = 5_000_000
+      # Speech-to-text endpoints tell formats by extension; Telegram voice notes are OGG/Opus.
+      AUDIO_TYPES = { 'audio/ogg' => '.ogg', 'audio/mpeg' => '.mp3', 'audio/mp4' => '.m4a', 'audio/x-m4a' => '.m4a',
+                      'audio/wav' => '.wav', 'audio/x-wav' => '.wav', 'audio/webm' => '.webm', 'audio/flac' => '.flac' }.freeze
       IMAGE_TYPES = { "\x89PNG".b => 'image/png', "\xFF\xD8\xFF".b => 'image/jpeg', 'GIF8'.b => 'image/gif' }.freeze
 
-      # `request` is the trace entry of the model call an image read cost, so turn usage counts it.
-      Reading = Data.define(:material, :event, :request)
+      # `request` is the trace entry of the model call a read cost, so turn usage counts it. `task` replaces the
+      # turn's task when the attachment is the user's own words (their voice note).
+      Reading = Data.define(:material, :event, :request, :task)
 
       def initialize(configuration:, effects:)
         @configuration = configuration
@@ -23,8 +27,14 @@ module Tamoz
       def read(attachment, window:, context:)
         result, call = text_of(attachment, context)
         limit = [MAX_CHARACTERS, window].min
+        event = event(attachment, result, limit)
+        request = call && request_trace(call, attachment.fetch('kind') == 'image' ? 'attachment_image' : 'transcribe')
+        if result.outcome == :read && attachment.fetch('kind') == 'voice'
+          return Reading.new(material: labels.fetch('voice'), event:, request:, task: result.text[0, limit])
+        end
+
         material = result.outcome == :read ? material(attachment, result, limit) : unreadable(attachment, result)
-        Reading.new(material:, event: event(attachment, result, limit), request: call && request_trace(call))
+        Reading.new(material:, event:, request:, task: nil)
       end
 
       private
@@ -36,6 +46,7 @@ module Tamoz
         case attachment.fetch('kind')
         when 'document' then [AttachmentText.read(bytes)]
         when 'image' then image(bytes.b, context)
+        when 'voice', 'audio' then speech(bytes.b, attachment, context)
         else [AttachmentText::Result.new(:unsupported_format, nil, nil)]
         end
       end
@@ -54,9 +65,24 @@ module Tamoz
          call]
       end
 
-      def request_trace(call)
+      def request_trace(call, stage)
         usage = call.status == :succeeded ? ContextEngine::Usage.from_provider(call.value['usage'])&.to_h : nil
-        { 'event' => 'request', 'stage' => 'attachment_image', 'status' => call.status.to_s, 'usage' => usage }
+        { 'event' => 'request', 'stage' => stage, 'status' => call.status.to_s, 'usage' => usage }
+      end
+
+      # One journaled call to the operator's transcription model, with the audio as received.
+      def speech(bytes, attachment, context)
+        return [AttachmentText::Result.new(:voice_not_set_up, nil, nil)] unless @configuration.transcriber
+
+        type = AUDIO_TYPES.key?(attachment['media_type']) ? attachment['media_type'] : 'audio/ogg'
+        call = @effects.transcribe(context, audio: bytes, filename: attachment['name'] || "audio#{AUDIO_TYPES.fetch(type)}",
+                                            media_type: type)
+        raise LeaseLostError, "another owner still holds effect #{call.effect_key}" if call.status == :wait
+        return [AttachmentText::Result.new(:voice_unread, nil, nil), call] unless call.status == :succeeded
+
+        text = call.value.fetch('text').strip
+        [text.empty? ? AttachmentText::Result.new(:heard_nothing, nil, nil) : AttachmentText::Result.new(:read, text, nil),
+         call]
       end
 
       # The bytes decide the type, never the sender's label; a WebP is RIFF....WEBP.

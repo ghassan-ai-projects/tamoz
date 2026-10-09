@@ -24,6 +24,10 @@
     "file": "invoice.png", "photo": true, "caption": "What are the invoice number and the total in this picture?",
     "expect": [["4471"], ["93.50", "93.5"]]
   },
+  "voice": {
+    "file": "voice.ogg", "voice": true, "duration": 4,
+    "expect": [["4719", "four seven one nine"]]
+  },
   "oversize": {
     "file": "notes.txt", "mime_type": "text/plain", "announced": 25000000
   }

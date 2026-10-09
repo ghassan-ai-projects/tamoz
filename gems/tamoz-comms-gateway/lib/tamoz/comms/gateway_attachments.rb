@@ -6,7 +6,7 @@ module Tamoz
       # Downloads an admitted attachment into the runtime's artifact store, so the worker reads bytes and never the
       # channel. One attachment that cannot be fetched or stored is refused on its own; it never stalls the pass.
       module Attachments
-        READABLE_KINDS = %w[document image].freeze
+        READABLE_KINDS = %w[document image voice audio].freeze
         MAX_ATTACHMENT_BYTES = 20_000_000
         MAX_IMAGE_BYTES = 5_000_000
         MAX_VOICE_SECONDS = 600

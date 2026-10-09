@@ -28,7 +28,8 @@ class TelegramChatEval
     [/\b(effect_unknown|effect_key|occurrence_id|request_id|execution_id)\b|sha256:\h{8}/, 'internal vocabulary'],
     [/\A\s*[{\[]/, 'raw JSON']
   ].freeze
-  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY ZAI_API_KEY ZAI_API_BASE].freeze
+  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY ZAI_API_KEY ZAI_API_BASE OPENAI_API_KEY
+                     TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE].freeze
   TOKEN = '123:eval'
   USERS = (1001..1040).to_a.freeze
   STRANGER = 9_999
@@ -88,6 +89,8 @@ class TelegramChatEval
   end
 
   def fresh_user = @users.shift
+
+  def transcription = [secret('TAMOZ_TRANSCRIPTION_PROVIDER'), secret('TAMOZ_TRANSCRIPTION_MODEL')].compact.join('/')
 
   def model = @model || 'deepseek/deepseek-v4.1-flash'
 

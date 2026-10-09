@@ -498,7 +498,8 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
   # Lost after the image receipt is journaled but before the opened turn commits: intake runs again and the
   # journal answers the image read without a second call.
   module LoseWorkerOnceAfterTheRead
-    def brief(*)
+    def brief(task)
+      LoseWorkerOnceAfterTheRead.seen << task
       if LoseWorkerOnceAfterTheRead.armed
         LoseWorkerOnceAfterTheRead.armed = false
         raise WorkLoopFixtures::ScriptedConversationModel::Crash, 'simulated worker loss inside intake'
@@ -508,6 +509,8 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
 
     class << self
       attr_accessor :armed
+
+      def seen = (@seen ||= [])
     end
   end
   Tamoz::Agent::WorkMemory.prepend(LoseWorkerOnceAfterTheRead)
@@ -535,6 +538,49 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
       assert_equal %w[attachment_image], requests.filter_map { |entry|
         entry['stage']
       }, 'turn usage counts the image call'
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+    ensure
+      LoseWorkerOnceAfterTheRead.armed = false
+    end
+  end
+
+  class CountingTranscriber
+    attr_reader :calls
+
+    def initialize = (@calls = 0)
+    def provider_configuration_digest = "sha256:#{'c' * 64}"
+    def transcription_digest(audio_digest) = "sha256:#{audio_digest}"
+
+    def transcribe(audio:, **)
+      @calls += 1
+      Tamoz::Agent::EpisodeModelTransport::Transcript.new(
+        text: 'my locker code is four seven one nine', request_digest: transcription_digest(Digest::SHA256.hexdigest(audio)),
+        response_digest: "sha256:#{'d' * 64}", provider_configuration_digest:
+      )
+    end
+  end
+
+  def test_a_crash_inside_intake_after_the_transcription_replays_its_receipt
+    with_work_workspace do |root, adapter|
+      ogg = "OggS\x00voice".b
+      digest = "sha256:#{Digest::SHA256.hexdigest(ogg)}"
+      adapter.bind_artifact_store(tenant: 'work-test').retain(digest:, bytes: ogg, media_type: 'audio/ogg')
+      payload = { 'task' => '[voice message]',
+                  'attachment' => { 'kind' => 'voice', 'digest' => digest, 'media_type' => 'audio/ogg', 'name' => nil,
+                                    'duration_s' => 3, 'size_bytes' => ogg.bytesize } }
+      first = CountingTranscriber.new
+      LoseWorkerOnceAfterTheRead.armed = true
+      assert_raises(ScriptedConversationModel::Crash) do
+        work_session(model: ScriptedConversationModel.new(turns: []), root:, adapter:, transcriber: first)
+          .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
+      end
+      second = CountingTranscriber.new
+      model = ScriptedConversationModel.new(turns: [{ content: 'Noted.' }])
+      outcome = work_session(model:, root:, adapter:, transcriber: second).recover(thread: 'work', request_id: 'work-1')
+
+      assert_equal [1, 0], [first.calls, second.calls]
+      assert_equal "[voice message]\nmy locker code is four seven one nine", outcome.state.fetch(:task)
+      assert_equal outcome.state.fetch(:task), LoseWorkerOnceAfterTheRead.seen.last, 'memory recall sees the words'
       assert_equal 'answered', outcome.state.fetch(:terminal_reason)
     ensure
       LoseWorkerOnceAfterTheRead.armed = false

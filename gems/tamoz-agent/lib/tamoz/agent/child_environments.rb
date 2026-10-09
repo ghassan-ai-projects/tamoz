@@ -41,7 +41,18 @@ module Tamoz
           'TAMOZ_MODEL' => base.fetch('TAMOZ_MODEL')
         ).merge(
           ModelClientFactory.worker_environment(provider:, profile_role:, environment: base)
-        )
+        ).merge(transcription_env(base))
+      end
+
+      TRANSCRIPTION = %w[TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE].freeze
+
+      # The transcription model's settings and its provider's key, when the operator configured one.
+      def self.transcription_env(base)
+        provider = base['TAMOZ_TRANSCRIPTION_PROVIDER']
+        return {} if provider.to_s.empty?
+
+        TRANSCRIPTION.filter_map { |name| [name, base[name]] if base[name] }.to_h
+                     .merge(ModelClientFactory.worker_environment(provider:, environment: base))
       end
 
       def self.queue_status_env(base, runtime_dir:)

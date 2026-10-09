@@ -247,6 +247,17 @@ until you send `/new`. Replies come in the language you write in.
   in it verbatim, then two sentences on what it shows; the answer is built from
   that. The model must accept image input (the Z.ai coding-plan `glm-5.3-flash`
   does); if it refuses, the bot says it could not read the image.
+- **Voice messages.** A voice note is transcribed and answered as if you had
+  typed it, in the language you spoke. A forwarded voice note or an audio file is
+  someone else's speech: its transcript is shown to the model as material, not as
+  your request. Transcription needs an OpenAI-compatible speech-to-text model the
+  operator names in the env file the worker reads, for example:
+  `TAMOZ_TRANSCRIPTION_PROVIDER=openai`, `TAMOZ_TRANSCRIPTION_MODEL=whisper-1` and
+  `OPENAI_API_KEY`, or a local whisper server with
+  `TAMOZ_TRANSCRIPTION_PROVIDER=ollama` (no key is sent) and
+  `TAMOZ_TRANSCRIPTION_API_BASE` pointing at it. The audio is sent as Telegram delivered it
+  (OGG/Opus), so the endpoint must accept that format. Without a transcription
+  model the bot says voice is not set up. Up to 10 minutes per message.
 - **Other messages.** Stickers, videos and formats the bot cannot read yet get
   one line saying what it can read.
 

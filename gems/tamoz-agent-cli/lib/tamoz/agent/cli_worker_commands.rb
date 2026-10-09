@@ -681,6 +681,21 @@ module Tamoz
           research_dir: File.join(runtime_dir_path(options), 'research') }
       end
 
+      # Voice attachments need a speech-to-text model the operator names; without one a voice note is answered with
+      # one line saying voice is not set up.
+      def worker_transcriber
+        provider = @env['TAMOZ_TRANSCRIPTION_PROVIDER']
+        return nil if provider.to_s.empty?
+
+        model = @env['TAMOZ_TRANSCRIPTION_MODEL']
+        raise ConfigurationError, 'TAMOZ_TRANSCRIPTION_PROVIDER is set without TAMOZ_TRANSCRIPTION_MODEL' if
+          model.to_s.empty?
+
+        ModelClientFactory.build(provider:, model:, profile_role: nil,
+                                 environment: @env, explicit_api_base: @env['TAMOZ_TRANSCRIPTION_API_BASE'],
+                                 safety: :idempotent)
+      end
+
       def with_worker_runtime(options)
         directory = RuntimeDirectory.resolve(path: options[:runtime_dir], env: @env)
         runtime = WorkerRuntime.open(
@@ -688,7 +703,8 @@ module Tamoz
           model_factory: ->(profile:) { @models.build(options, profile:) },
           lease_ttl: @sessions.lease_ttl,
           routing: worker_routing(options),
-          harness: worker_harness(options)
+          harness: worker_harness(options),
+          transcriber: worker_transcriber
         )
         begin
           yield runtime

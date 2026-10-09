@@ -137,6 +137,23 @@ module Tamoz
         run ? work_off : new_outbound
       end
 
+      # A voice note (or, forwarded, someone else's) the way Telegram sends one.
+      def send_voice(bytes, duration: 4, forwarded: false)
+        file_id = "voice-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },
+                    'date' => Time.now.to_i,
+                    'voice' => { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'duration' => duration,
+                                 'mime_type' => 'audio/ogg', 'file_size' => bytes.bytesize } }
+        if forwarded
+          message['forward_origin'] =
+            { 'type' => 'hidden_user', 'sender_user_name' => 'someone', 'date' => 1 }
+        end
+        enqueue_update('message' => message)
+        serve
+        work_off
+      end
+
       # Run one worker pass and drain; returns new cards.
       def work_off
         @worker.poll_once

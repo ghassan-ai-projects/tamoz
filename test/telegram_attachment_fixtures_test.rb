@@ -13,7 +13,8 @@ class TelegramAttachmentFixturesTest < Minitest::Test
     'invoice.png' => 'ab615670a4e2f1cf3334776b4882548dcab99a362ef82620847f4e3617aca9a9',
     'notes.txt' => '8153177be92dff30b19359aca2a267da69048bcd9ec2536428e5a1636da25939',
     'scanned.pdf' => '8e0cfbf3cedd0ef0765351c2158c44afc9845ade369354aaaf9bf852ea29843e',
-    'scenarios.json' => 'acb7d6b5d595f834cbbf837eb9b5f8b029df255fd62a997a759114a547308382'
+    'scenarios.json' => '9aa0a6c0a86f58f54669a3c9d9f4ac43673dfd741be5f00fd296002bb32f91af',
+    'voice.ogg' => 'd40cb90804f5f3c2e4a82731dfbacd3d96ed0c7c8af80b11ca7c6d59dc8bf0d1'
   }.freeze
 
   def test_every_fixture_is_pinned
