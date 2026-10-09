@@ -983,6 +983,8 @@ module Tamoz
             'Try rephrasing it or adding more detail about what you want done.'
         elsif error.is_a?(Tamoz::CheckpointConflictError)
           'That request stopped safely. Check its status before retrying.'
+        elsif error.is_a?(Tamoz::CheckpointVersionError)
+          'This conversation was started by an older version of me and cannot continue. Send /new to start a fresh one.'
         else
           ChatReply::FAILED
         end
