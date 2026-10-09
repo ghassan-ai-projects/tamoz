@@ -188,13 +188,15 @@ OPENROUTER_API_KEY=<your key>
 From a checkout, two commands:
 
 ```bash
-rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project --env-file .env   # pair, once
-rbenv exec bundle exec tamoz telegram start --env-file .env                            # run the bot
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project                      # once
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env               # pair, once
+rbenv exec bundle exec tamoz telegram start --env-file .env                                            # run the bot
 ```
 
-`setup` authenticates the token, waits for your first private message to the
-bot, asks you to confirm it is you, and writes a runtime directory (default
-`~/.tamoz`; `--runtime-dir PATH` on both commands keeps it elsewhere). `start`
+`setup` writes the runtime directory and its chat profile. `channel add telegram`
+authenticates the token, waits for your first private message to the bot, asks
+you to confirm it is you, and writes the channel (`start` defaults to `~/.tamoz`;
+`--runtime-dir PATH` keeps it elsewhere). `start`
 checks the token, tries each configured provider with one real call and uses the
 first that answers, then runs the gateway and the worker together until Ctrl-C.
 A missing or refused token or key, or an empty provider account, is one named
@@ -243,7 +245,8 @@ speaks a short form of the answer. It is a channel like Telegram — same memory
 `/cancel`, and changes still wait for a tap on **Approve** (a spoken "yes" never approves).
 
 ```bash
-rbenv exec bundle exec tamoz talk setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add talk
 rbenv exec bundle exec tamoz talk start --env-file .env        # prints the link to open
 ```
 

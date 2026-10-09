@@ -8,25 +8,24 @@ require 'socket'
 
 module Tamoz
   module Agent
-    # `tamoz talk setup|start`: a browser voice chat from a model key, a speech key and a local link.
+    # `tamoz channel add talk` and `tamoz talk start`: a browser voice chat from a model key, a speech key and a link.
     # rubocop:disable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength -- two guided operator flows.
     module CLITalkCommands
       SURFACE = 'talk'
-      PROFILE = 'talk'
       TOKEN_ENV = 'TAMOZ_TALK_TOKEN'
       DEFAULT_PORT = 8787
+      TOKEN_MIN = 32
       LOOPBACK = %w[127.0.0.1 localhost ::1].freeze
-      NO_CHANNEL = 'no talk channel is configured; run `tamoz talk setup` first'
+      NO_CHANNEL = 'no talk channel is configured; run `tamoz channel add talk` first'
       RUNTIME_IN_WORKSPACE = 'the runtime folder is inside the workspace, so the agent could read the talk token; ' \
-                             'choose another --workspace or --runtime-dir'
+                             'choose another --runtime-dir'
 
       def cmd_talk(options, argv)
         case argv.first
-        when 'setup' then talk_setup(options, argv.drop(1))
         when 'start' then talk_start(options, argv.drop(1))
         when '-h', '--help' then talk_usage
         when nil then talk_usage(1)
-        else raise OptionParser::InvalidArgument, 'usage: tamoz talk setup|start'
+        else raise OptionParser::InvalidArgument, 'usage: tamoz talk start'
         end
       end
 
@@ -54,76 +53,61 @@ module Tamoz
       private
 
       def talk_usage(status = 0)
-        @out.puts 'Usage: tamoz talk setup|start'
-        @out.puts '  setup  Write the talk channel, its workspace profile and a private access link'
+        @out.puts 'Usage: tamoz talk start'
         @out.puts '  start  Check the chat, speech-to-text and voice models, then run the gateway and worker'
+        @out.puts 'Add the channel first with `tamoz channel add talk`.'
         status
       end
 
-      def talk_setup(options, argv)
-        workspace = options[:root]
-        explicit_workspace = false
-        port = nil
-        hosts = []
-        rotate = false
-        OptionParser.new do |parser|
-          parser.banner = 'Usage: tamoz talk setup [--workspace PATH] [--port N] [--allow-host NAME] [--rotate-token]'
-          parser.on('--workspace PATH', 'Folder the agent works in (default: current folder)') do |path|
-            workspace = path
-            explicit_workspace = true
-          end
-          parser.on('--port N', Integer, "Local port for the talk page (default #{DEFAULT_PORT})") do |value|
-            port = value
-          end
-          parser.on('--allow-host NAME', 'A host name the page is reached by, e.g. a tailscale serve name') do |name|
-            hosts << name.downcase
-          end
-          parser.on('--rotate-token', 'Replace the access link; old links stop working') { rotate = true }
-          telegram_help(parser)
-        end.parse!(argv)
-        workspace = File.expand_path(workspace || Dir.pwd)
-        return talk_fail("workspace folder does not exist: #{workspace}") unless Dir.exist?(workspace)
-        return talk_fail(RUNTIME_IN_WORKSPACE) if inside?(telegram_runtime_path(options), workspace)
+      def channel_add_talk(options, argv)
+        request = talk_channel_options(argv)
+        directory = channel_runtime(options)
+        return talk_fail(RUNTIME_IN_WORKSPACE) if inside?(directory.path, directory.workspace_root)
 
-        directory = telegram_runtime(telegram_runtime_path(options), workspace, explicit: explicit_workspace)
-        write_chat_profile(directory, PROFILE)
-        write_talk_channel(directory, port:, hosts:)
-        token = talk_token(directory, rotate:)
+        save_channel(directory, SURFACE, talk_entry(directory.channels[SURFACE], **request.except(:rotate)))
+        token = talk_token(directory, rotate: request.fetch(:rotate))
         @out.puts "Talk channel ready. Start it with:\n  tamoz --runtime-dir #{directory.path} talk start --env-file .env"
         @out.puts "The link it prints carries a private token (#{token.length} characters); whoever has it can talk to " \
                   'Tamoz and approve its changes.'
-        @out.puts 'A running Tamoz keeps accepting the old link until it is restarted.' if rotate
+        @out.puts 'A running Tamoz keeps accepting the old link until it is restarted.' if request.fetch(:rotate)
         0
-      rescue Comms::ValidationError => e
-        talk_fail(e.message)
       end
 
-      def write_talk_channel(directory, port:, hosts:)
-        path = File.join(directory.path, RuntimeDirectory::CONFIG_FILE)
-        document = Psych.safe_load_file(path, aliases: false) || {}
-        channels = document['channels'] ||= {}
-        existing = channels[SURFACE]
-        talk = (existing && existing['talk']) || {}
-        channels[SURFACE] = {
-          'kind' => 'talk', 'revision' => existing ? existing.fetch('revision') + 1 : 1, 'enabled' => true,
-          'profile' => PROFILE, 'credential_ref' => { 'kind' => 'env', 'name' => TOKEN_ENV },
-          'expected_bot_id' => existing&.fetch('expected_bot_id') || (SecureRandom.random_number(9 * (10**11)) + (10**11)),
+      def talk_channel_options(argv)
+        request = { port: nil, hosts: [], rotate: false }
+        OptionParser.new do |parser|
+          parser.banner = 'Usage: tamoz channel add talk [--port N] [--allow-host NAME] [--rotate-token]'
+          parser.on('--port N', Integer, "Local port for the talk page (default #{DEFAULT_PORT})") do |value|
+            request[:port] = value
+          end
+          parser.on('--allow-host NAME', 'A host name the page is reached by, e.g. a tailscale serve name') do |name|
+            request[:hosts] << name.downcase
+          end
+          parser.on('--rotate-token', 'Replace the access link; old links stop working') { request[:rotate] = true }
+          telegram_help(parser)
+        end.parse!(argv)
+        request
+      end
+
+      def talk_entry(existing, port:, hosts:)
+        talk = existing&.fetch('talk', nil) || {}
+        { 'kind' => 'talk', 'enabled' => true, 'credential_ref' => { 'kind' => 'env', 'name' => TOKEN_ENV },
+          'expected_bot_id' => existing&.fetch('expected_bot_id') ||
+            (SecureRandom.random_number(9 * (10**11)) + (10**11)),
           'transport' => { 'poll_timeout_s' => 10 },
           'talk' => { 'port' => port || talk['port'] || DEFAULT_PORT,
-                      'allow_hosts' => (Array(talk['allow_hosts']) | hosts) },
+                      'allow_hosts' => Array(talk['allow_hosts']) | hosts },
           'admission' => { 'direct' => 'allowlist', 'correspondents' => ['talk:user:1'] },
           'approvals' => { 'mode' => 'deny_only', 'prompt_ttl_s' => 900 },
-          'limits' => { 'per_chat_messages_per_s' => 20.0, 'global_messages_per_s' => 50.0 }
-        }
-        build_descriptor(SURFACE, channels[SURFACE], directory)
-        write_private(path, Psych.dump(document))
+          'limits' => { 'per_chat_messages_per_s' => 20.0, 'global_messages_per_s' => 50.0 } }
       end
 
       def talk_token(directory, rotate:)
         folder = File.join(directory.path, 'talk')
         Tamoz::Core::PrivateDirectory.secure(folder)
         path = File.join(folder, 'token')
-        return File.read(path).strip if File.exist?(path) && !rotate
+        kept = File.exist?(path) ? File.read(path).strip : ''
+        return kept if kept.length >= TOKEN_MIN && !rotate
 
         SecureRandom.urlsafe_base64(32).tap { |token| write_private(path, "#{token}\n") }
       end
@@ -161,15 +145,17 @@ module Tamoz
         host ||= base['TAMOZ_TALK_HOST'] || '127.0.0.1'
         hosts = Array(entry.dig('talk', 'allow_hosts'))
         if !LOOPBACK.include?(host) && hosts.empty?
-          return talk_fail("listening on #{host} needs `tamoz talk setup --allow-host NAME` for the name the page is " \
-                           'reached by')
+          return talk_fail("listening on #{host} needs `tamoz channel add talk --allow-host NAME` for the name the " \
+                           'page is reached by')
         end
 
         problem = already_running(options, entry)
         return talk_fail(problem) if problem
 
         token = File.read(token_path).strip
-        return talk_fail('the talk token is damaged; run `tamoz talk setup --rotate-token`') if token.length < 32
+        if token.length < TOKEN_MIN
+          return talk_fail('the talk token is damaged; run `tamoz channel add talk --rotate-token`')
+        end
 
         port = entry.dig('talk', 'port') || DEFAULT_PORT
         problem = port_problem(host, port)
@@ -262,7 +248,7 @@ module Tamoz
         nil
       rescue SystemCallError => e
         "the talk page cannot listen on #{host}:#{port} (#{e.class.name.split('::').last}); is another program " \
-        'using it? Pick another with `tamoz talk setup --port N`'
+        'using it? Pick another with `tamoz channel add talk --port N`'
       end
 
       def print_talk_link(entry, host, token)
@@ -271,7 +257,7 @@ module Tamoz
         @out.puts "Talk to Tamoz: http://#{local}:#{port}/#token=#{token}"
         Array(entry.dig('talk', 'allow_hosts')).each { |name| @out.puts "  or https://#{name}/#token=#{token}" }
         @out.puts 'Whoever has this link can talk to Tamoz and approve its changes. Rotate it with ' \
-                  '`tamoz talk setup --rotate-token`.'
+                  '`tamoz channel add talk --rotate-token`.'
       end
 
       def run_talk(directory, base)

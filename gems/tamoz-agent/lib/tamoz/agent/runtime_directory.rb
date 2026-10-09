@@ -107,6 +107,12 @@ module Tamoz
         end
       end
 
+      def self.put_channel!(path, surface_id, entry, env: ENV)
+        edit_config!(resolve(path:, env:)) do |document|
+          document.merge('channels' => (document['channels'] || {}).merge(surface_id => entry))
+        end
+      end
+
       def database_path = File.join(path, DATABASE_FILE)
       def profiles_path = File.join(path, PROFILES_DIR)
       def attachment_spool = Tamoz::Core::AttachmentSpool.new(File.join(path, 'attachments'))

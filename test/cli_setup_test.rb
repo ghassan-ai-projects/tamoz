@@ -59,6 +59,20 @@ class CLISetupTest < Minitest::Test
     end
   end
 
+  def test_the_chat_profile_offers_the_skill_tools_when_skills_are_enabled
+    with_dirs do |runtime, workspace|
+      RuntimeDirectory.create!(runtime, workspace:)
+      File.write(config_path(runtime),
+                 Psych.dump(config(runtime).merge('sources' => { 'skills' => { 'enabled' => true } })))
+      FileUtils.mkdir_p(File.join(runtime, 'skills'))
+      FileUtils.cp_r(File.join(Tamoz::Skills.bundled_root, 'evidence-audit'), File.join(runtime, 'skills'))
+      setup_cli(runtime)
+
+      assert_includes Psych.safe_load_file(File.join(runtime, 'profiles', 'chat.yaml')).dig('tools', 'allowed'),
+                      'load_skill'
+    end
+  end
+
   def test_a_new_runtime_works_in_the_root_unless_a_workspace_is_named
     with_dirs do |runtime, workspace|
       status, = tamoz('--runtime-dir', runtime, '--root', workspace, 'setup')
@@ -185,9 +199,9 @@ class CLISetupTest < Minitest::Test
       setup_cli(runtime)
       profile = File.join(runtime, 'profiles', 'telegram.yaml')
       File.write(profile, before = "#{File.read(profile)}# the operator's edit\n")
-      setup_cli(runtime, '--chat', 'zai/glm-5.3-flash')
+      status, = setup_cli(runtime, '--chat', 'zai/glm-5.3-flash')
 
-      assert_equal before, File.read(profile)
+      assert_equal [0, before], [status, File.read(profile)]
     end
   end
 

@@ -32,6 +32,7 @@ module Tamoz
       include CLITelegramCommands
       include CLITalkCommands
       include CLISetupCommands
+      include CLIChannelCommands
       include CLISelfObservationCommands
 
       # Every subcommand dispatches to exactly one same-shaped cmd_* method
@@ -64,6 +65,7 @@ module Tamoz
         "comms" => :cmd_comms,
         "telegram" => :cmd_telegram,
         "talk" => :cmd_talk,
+        "channel" => :cmd_channel,
         "config" => :cmd_config,
         "setup" => :cmd_setup,
         "queue" => :cmd_queue,
@@ -88,7 +90,7 @@ module Tamoz
       # and stops there, without opening a runtime directory it was never
       # asked to touch.
       NEEDS_HELP_CATCH = %w[
-        comms telegram config setup queue worker status schedule approve observe trace
+        comms telegram channel config setup queue worker status schedule approve observe trace
         diagnose explain postmortem mcp
       ].freeze
 

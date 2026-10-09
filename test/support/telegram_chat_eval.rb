@@ -13,8 +13,8 @@ require 'tamoz/agent_cli'
 require 'tamoz/telegram'
 require_relative 'telegram_bot_api_fake'
 
-# Drives the real `tamoz telegram setup` and `tamoz telegram start` against a stand-in Bot API, on a
-# real model provider, from a fresh runtime or a copy of a lived-in one; see docs/telegram-chat/GOAL.md.
+# Drives the real `tamoz setup`, `channel add telegram` and `telegram start` against a stand-in Bot API, on a real
+# model provider, from a fresh runtime or a copy of a lived-in one; see docs/telegram-chat/GOAL.md.
 # rubocop:disable Metrics/ClassLength -- one collaborator per concern (processes, the
 #   fake, DB observations, settlement, reporting); splitting it would scatter the settle
 #   rules every scenario depends on.
@@ -279,8 +279,8 @@ class TelegramChatEval
 
   private
 
-  # The runtime is written by the documented one command (S1), pairing by message the way a person
-  # does it: the owner messages the bot, `setup` shows who wrote, the operator answers y. Two operator
+  # The runtime is written by the documented commands (S1), pairing by message the way a person
+  # does it: the owner messages the bot, `channel add` shows who wrote, the operator answers y. Two operator
   # edits follow, both of which a real operator makes: the allowlist is widened the way a teammate is
   # added, and the approval profile is tightened to `unattended` so a workspace write really asks.
   def provision
@@ -335,12 +335,26 @@ class TelegramChatEval
   end
 
   def run_setup
+    @runtime_from ? point_copy_at_workspace : set_up_runtime
     @fake.say(@owner, '/start')
-    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'telegram', 'setup',
-                                  '--workspace', @workspace, '--env-file', env_file, stdin_data: "y\n", chdir: ROOT)
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'channel', 'add',
+                                  'telegram', '--env-file', env_file, stdin_data: "y\n", chdir: ROOT)
     directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {})
     { status: status.exitstatus, out:, err: out, channel: telegram_channel(directory.channels) || {},
-      profile: File.join(directory.profiles_path, 'telegram.yaml') }
+      profile: File.join(directory.profiles_path, "#{directory.chat_profile_id}.yaml") }
+  end
+
+  def set_up_runtime
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'setup',
+                                  '--workspace', @workspace, chdir: ROOT)
+    raise "tamoz setup failed: #{out}" unless status.success?
+  end
+
+  # The copy works in the eval's workspace; a profile is pinned to its root, so the copy gets a fresh one.
+  def point_copy_at_workspace
+    edit_config { |document| document['workspace'] = { 'root' => @workspace } }
+    profile = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {}).chat_profile_id
+    FileUtils.rm_f(File.join(@runtime, 'profiles', "#{profile}.yaml"))
   end
 
   def telegram_channel(channels) = channels.values.find { |channel| channel['kind'] == 'telegram' }

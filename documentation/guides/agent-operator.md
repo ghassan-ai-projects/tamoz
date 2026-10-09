@@ -320,8 +320,10 @@ sources:
     bundled: true
 ```
 
-`tamoz telegram setup` adds `load_skill` and `read_skill_resource` to the chat profile
-when the enabled source holds at least one skill. For any other profile, add the two
+The chat profile `tamoz setup` writes includes `load_skill` and `read_skill_resource`
+when the enabled source holds at least one skill. The profile is written once and never
+rewritten (bound conversations pin it), so enable the skills source before the first
+`setup`. For any other profile, add the two
 tools and re-pin its catalog digests.
 
 Look before you run:
@@ -376,7 +378,7 @@ held-out scenarios, and stages it for `tamoz skills promote`.
 
 ## 7. Telegram gateway
 
-For one bot on one machine, `tamoz telegram setup` pairs it and `tamoz telegram
+For one bot on one machine, `tamoz channel add telegram` pairs it and `tamoz telegram
 start --env-file .env` runs the gateway and a `--work-routing` worker together;
 see [`telegram.md`](telegram.md) §0. The rest of this section is for running the
 processes under your own supervisor.

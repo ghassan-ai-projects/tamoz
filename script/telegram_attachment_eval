@@ -2,8 +2,9 @@
 # frozen_string_literal: true
 
 # Attachment eval: every scenario in test/fixtures/telegram_attachments/scenarios.json, run --runs times, each run on a
-# fresh runtime through the real `tamoz telegram setup|start` and a real model. A scenario passes a run only when all
-# its checks pass; its pass rate must reach the spec's threshold. A capability this machine lacks is BLOCKED.
+# fresh runtime through the real `tamoz setup`, `channel add telegram` and `telegram start` and a real model. A scenario
+# passes a run only when all its checks pass; its pass rate must reach the spec's threshold. A capability this machine
+# lacks is BLOCKED.
 #
 #   bundle exec ruby script/telegram_attachment_eval [--runs 5] [--only document,pdf] [--provider NAME --model NAME]
 #

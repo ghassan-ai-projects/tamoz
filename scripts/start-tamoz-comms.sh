@@ -7,7 +7,7 @@
 #   ./scripts/start-tamoz-comms.sh [--runtime-dir PATH] [--provider P --model M]
 #
 # Ctrl-C stops both processes. Configure the channel once first with:
-#   tamoz --runtime-dir PATH telegram setup
+#   tamoz --runtime-dir PATH setup --workspace DIR && tamoz --runtime-dir PATH channel add telegram
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

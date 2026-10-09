@@ -64,6 +64,25 @@ class RuntimeDirectoryUpdateTest < Minitest::Test
     end
   end
 
+  def test_a_channel_is_added_beside_the_others
+    with_runtime do |path|
+      RuntimeDirectory.put_channel!(path, 'talk', channel('chat'), env: {})
+      directory = RuntimeDirectory.put_channel!(path, 'talk2', channel('chat'), env: {})
+
+      assert_equal %w[talk talk2], directory.channels.keys.sort
+    end
+  end
+
+  def test_a_channel_naming_another_profile_is_refused_before_writing
+    with_runtime do |path|
+      RuntimeDirectory.put_channel!(path, 'talk', channel('chat'), env: {})
+      before = File.read(config_path(path))
+      assert_raises(RuntimeDirectory::Error) { RuntimeDirectory.put_channel!(path, 'talk2', channel('other'), env: {}) }
+
+      assert_equal before, File.read(config_path(path))
+    end
+  end
+
   def test_every_channel_names_the_same_profile
     with_runtime do |path|
       document = Psych.safe_load_file(config_path(path))

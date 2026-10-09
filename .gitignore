@@ -96,8 +96,8 @@ documentation/benchmark/holdout-pin/leak-scan.json
 # benchmark scenario driver runtime fixture
 scenario/
 
-# A runtime directory created inside the checkout (e.g. `tamoz telegram setup
-# --runtime-dir .runtime-telegram`): operator state and a live database, never
+# A runtime directory created inside the checkout (e.g. `tamoz --runtime-dir
+# .runtime-telegram setup`): operator state and a live database, never
 # repository content.
 .runtime-*/
 

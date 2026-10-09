@@ -185,6 +185,7 @@ request inboxes and the checkpoints.
 | Subcommand | What it does |
 |---|---|
 | `setup` | Create or update the runtime: its workspace, models and chat profile |
+| `channel` | `channel add telegram` pairs a bot; `channel add talk` adds the browser talk page and its private link. Every channel serves the runtime's one chat profile |
 | `queue` | Submit a task durably (`add`), or list pending work (`list`) |
 | `worker` | Run the foreground worker that executes queued and scheduled work |
 | `status` | Report pending work, capability sources and safety counters |
@@ -197,8 +198,8 @@ request inboxes and the checkpoints.
 | `postmortem` | Write a Markdown + JSON postmortem of a window, optionally with a model analysis |
 | `mcp` | Serve Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for probes |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
-| `talk` | Set up and run the browser talk channel: `setup` writes it once, `start` checks the models, runs the gateway and worker, and prints the link |
-| `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
+| `talk` | `start` checks the models, runs the talk gateway and worker, and prints the link (add the channel with `channel add talk`) |
+| `telegram` | `start` runs the Telegram gateway and worker together (pair with `channel add telegram`) |
 | `config` | Explicit configuration migration (`migrate`) |
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 
@@ -311,8 +312,9 @@ performs the explicit, backup-and-atomic-rename migration:
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
 ```
 
-The short path is two commands — `tamoz telegram setup --workspace PATH
---env-file .env` once, then `tamoz telegram start --env-file .env` — and needs
+The short path is `tamoz --runtime-dir ~/.tamoz setup --workspace PATH` and
+`tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env` once, then
+`tamoz telegram start --env-file .env` — and needs
 only the bot token and one provider key. The full channel walkthrough — creating the bot, authenticating it, collecting
 the allowlist, configuring the surface, and running the gateway and worker — is
 in [`../guides/telegram.md`](../guides/telegram.md). The gateway holds the bot

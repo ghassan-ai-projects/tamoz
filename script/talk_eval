@@ -2,9 +2,9 @@
 # frozen_string_literal: true
 
 # Talk eval (docs/talk-voice-2026-10-09/EVAL.md): every scenario in test/fixtures/talk/scenarios.json against the real
-# chat, speech-to-text and voice models, each run on a fresh runtime through the real `tamoz talk setup|start`. A
-# check whose precondition did not hold is INVALID and re-run (up to twice the stated runs); fewer valid runs than
-# stated is SHORT; a missing tool, key, credit or corpus is BLOCKED. None of those is a pass.
+# chat, speech-to-text and voice models, each run on a fresh runtime through the real `tamoz setup`, `channel add talk`
+# and `talk start`. A check whose precondition did not hold is INVALID and re-run (up to twice the stated runs); fewer
+# valid runs than stated is SHORT; a missing tool, key, credit or corpus is BLOCKED. None of those is a pass.
 #
 #   bundle exec ruby script/talk_eval [--runs N] [--only a,b] [--provider zai --model glm-5.3-flash] [--skip-noisy]
 #

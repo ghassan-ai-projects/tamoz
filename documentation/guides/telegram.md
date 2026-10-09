@@ -23,21 +23,23 @@ TAMOZ_TELEGRAM_BOT_TOKEN=<token from BotFather>
 OPENROUTER_API_KEY=<your key>
 ```
 
-Then two commands. `setup` is the one-time pairing; `start` runs the gateway and
-the worker together in the foreground until Ctrl-C:
+Then three commands. `setup` makes the runtime and its chat profile, `channel add
+telegram` is the one-time pairing, and `start` runs the gateway and the worker
+together in the foreground until Ctrl-C:
 
 ```bash
-rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project --env-file .env
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env
 rbenv exec bundle exec tamoz telegram start --env-file .env
 ```
 
-`setup` authenticates the token (`getMe`), waits up to 120s for your first
+`channel add telegram` authenticates the token (`getMe`), waits up to 120s for your first
 private message to the bot, prints the sender's name and id, and asks you to
 confirm it is you (`--owner TELEGRAM_USER_ID` skips the question). On `y` it
-writes the channel and a workspace profile into the runtime directory (default
-`~/.tamoz`, or `--runtime-dir PATH` on both commands). Running it again on an
-existing runtime repairs it: an unpinned channel is adopted and a missing
-profile is written.
+writes the channel, which serves the runtime's one chat profile (`start` defaults
+to `~/.tamoz`; pass `--runtime-dir PATH` to keep it elsewhere). Running it again
+changes nothing; on a half-finished runtime it repairs: an unpinned channel is
+adopted and a missing profile is written. An existing profile is never rewritten.
 
 `start` verifies the token, then tries each configured provider with one real
 call and uses the first that answers (DeepSeek, then OpenRouter; force one with

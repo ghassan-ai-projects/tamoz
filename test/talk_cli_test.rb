@@ -3,7 +3,7 @@
 require_relative 'test_helper'
 require 'tmpdir'
 
-# `tamoz talk setup|start` with scripted models; nothing is spawned.
+# `tamoz talk start` with scripted models; nothing is spawned.
 # rubocop:disable Minitest/MultipleAssertions
 class TalkCliTest < Minitest::Test
   SPEECH = { 'TAMOZ_TRANSCRIPTION_PROVIDER' => 'openrouter', 'TAMOZ_TRANSCRIPTION_MODEL' => 'openai/gpt-4o-mini-transcribe',
@@ -42,10 +42,11 @@ class TalkCliTest < Minitest::Test
     end
   end
 
-  def setup_talk(runtime, workspace, *extra, port: free_port)
+  def add_talk_channel(runtime, workspace, *extra, port: free_port)
     instance, out, err = cli
     extra = ['--port', port.to_s, *extra] if port && !extra.include?('--port')
-    status = instance.run(['--runtime-dir', runtime, 'talk', 'setup', '--workspace', workspace, *extra])
+    instance.run(['--runtime-dir', runtime, 'setup', '--workspace', workspace]) unless File.exist?(runtime)
+    status = instance.run(['--runtime-dir', runtime, 'channel', 'add', 'talk', *extra])
     [status, out.string, err.string]
   end
 
@@ -65,41 +66,9 @@ class TalkCliTest < Minitest::Test
     [status, out.string, err.string, spawned]
   end
 
-  def test_setup_writes_the_channel_profile_and_a_private_token
-    with_runtime do |runtime, workspace|
-      status, out, = setup_talk(runtime, workspace, '--allow-host', 'Mac.tail.ts.net', port: nil)
-      config = Psych.safe_load_file(File.join(runtime, 'config.yaml'))
-      channel = config.dig('channels', 'talk')
-      token = File.join(runtime, 'talk', 'token')
-
-      assert_equal 0, status
-      assert_equal ['talk', 1, 8787, ['mac.tail.ts.net'], ['talk:user:1'], 'deny_only'],
-                   [channel['kind'], channel['revision'], channel.dig('talk', 'port'), channel.dig('talk', 'allow_hosts'),
-                    channel.dig('admission', 'correspondents'), channel.dig('approvals', 'mode')]
-      assert_equal 0o600, File.stat(token).mode & 0o777
-      assert_path_exists File.join(runtime, 'profiles', 'talk.yaml')
-      refute_includes out, File.read(token).strip, 'setup never prints the token'
-    end
-  end
-
-  def test_a_second_setup_bumps_the_revision_keeps_the_token_and_rotation_replaces_it
-    with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace, port: nil)
-      first = File.read(File.join(runtime, 'talk', 'token'))
-      setup_talk(runtime, workspace, '--port', '8790')
-      kept = File.read(File.join(runtime, 'talk', 'token'))
-      setup_talk(runtime, workspace, '--rotate-token', port: nil)
-      channel = Psych.safe_load_file(File.join(runtime, 'config.yaml')).dig('channels', 'talk')
-
-      assert_equal first, kept
-      refute_equal first, File.read(File.join(runtime, 'talk', 'token'))
-      assert_equal [3, 8790], [channel['revision'], channel.dig('talk', 'port')]
-    end
-  end
-
   def test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       status, out, _err, spawned = start(runtime)
       token = File.read(File.join(runtime, 'talk', 'token')).strip
 
@@ -122,7 +91,7 @@ class TalkCliTest < Minitest::Test
 
   def test_start_refuses_the_chat_key_as_the_voice_key_by_name_or_by_value
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       [SPEECH.merge('TAMOZ_VOICE_CREDENTIAL' => 'DEEPSEEK_API_KEY'),
        SPEECH.merge('TAMOZ_VOICE_CREDENTIAL' => 'MY_COPY_API_KEY', 'MY_COPY_API_KEY' => 'chat-key')].each do |env|
         status, _out, err, spawned = start(runtime, env:)
@@ -136,7 +105,7 @@ class TalkCliTest < Minitest::Test
 
   def test_start_refuses_a_damaged_token_and_a_taken_port_before_printing_the_link
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       taken = TCPServer.new('127.0.0.1', talk_port(runtime))
       status, out, err, spawned = start(runtime)
 
@@ -157,7 +126,7 @@ class TalkCliTest < Minitest::Test
 
   def test_start_names_a_missing_or_failing_speech_role
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       _, _, missing, = start(runtime, env: SPEECH.except('TAMOZ_TRANSCRIPTION_PROVIDER'), roles: ->(_role) {})
       failing = lambda do |role|
         Object.new.tap do |model|
@@ -181,12 +150,12 @@ class TalkCliTest < Minitest::Test
 
   def test_a_network_address_needs_an_allowed_host_and_warns
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       status, _, err, = start(runtime, args: %w[--host 0.0.0.0])
 
       assert_equal 1, status
       assert_includes err, '--allow-host'
-      setup_talk(runtime, workspace, '--allow-host', 'mac.tail.ts.net')
+      add_talk_channel(runtime, workspace, '--allow-host', 'mac.tail.ts.net')
       status, out, err, = start(runtime, args: %w[--host 0.0.0.0])
 
       assert_equal 0, status
@@ -197,7 +166,7 @@ class TalkCliTest < Minitest::Test
 
   def test_a_second_start_is_refused_while_a_gateway_holds_the_channel
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       hold_poller(runtime, owner: "gateway:#{Process.pid}")
       status, _, err, spawned = start(runtime)
 
@@ -210,7 +179,7 @@ class TalkCliTest < Minitest::Test
   def test_a_taken_port_is_named_by_serve_and_by_doctor
     with_runtime do |runtime, workspace|
       port = free_port
-      setup_talk(runtime, workspace, '--port', port.to_s)
+      add_talk_channel(runtime, workspace, '--port', port.to_s)
       taken = TCPServer.new('127.0.0.1', port)
       env = SPEECH.merge('TAMOZ_TALK_TOKEN' => 'a' * 43)
       instance, _out, err = cli(env:)
@@ -236,19 +205,9 @@ class TalkCliTest < Minitest::Test
     end
   end
 
-  def test_a_workspace_holding_the_runtime_is_refused_so_the_agent_cannot_read_the_token
-    Dir.mktmpdir('tamoz-talk-cli') do |root|
-      status, _out, err = setup_talk(File.join(root, '.tamoz'), root)
-
-      assert_equal 1, status
-      assert_includes err, 'could read the talk token'
-      refute_path_exists File.join(root, '.tamoz', 'talk', 'token')
-    end
-  end
-
   def test_start_checks_a_speech_role_the_runtime_config_names
     with_runtime do |runtime, workspace|
-      setup_talk(runtime, workspace)
+      add_talk_channel(runtime, workspace)
       config = File.join(runtime, 'config.yaml')
       transcription = { 'provider' => 'openai', 'model' => 'whisper-1', 'api_base' => 'http://127.0.0.1:9/v1' }
       File.write(config,
@@ -265,7 +224,7 @@ class TalkCliTest < Minitest::Test
       status, _, err, = start(runtime)
 
       assert_equal 1, status
-      assert_includes err, 'tamoz talk setup'
+      assert_includes err, 'tamoz channel add talk'
     end
   end
 end

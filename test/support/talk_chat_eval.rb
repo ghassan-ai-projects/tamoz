@@ -10,8 +10,8 @@ require 'rbconfig'
 require 'socket'
 require 'tmpdir'
 
-# Runs the real `tamoz talk setup|start` and talks to the page's HTTP API as the browser does; with
-# TalkFakeProvider it is plumbing, with real keys the eval's server-side layer.
+# Runs the real `tamoz setup`, `channel add talk` and `talk start` and talks to the page's HTTP API as the browser
+# does; with TalkFakeProvider it is plumbing, with real keys the eval's server-side layer.
 class TalkChatEval
   ROOT = File.expand_path('../..', __dir__)
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
@@ -41,11 +41,15 @@ class TalkChatEval
     @mutex = Mutex.new
   end
 
+  def tamoz!(*args)
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, *args)
+    raise "tamoz #{args.first} failed: #{out}" unless status.success?
+  end
+
   def start(timeout: 60, args: [])
     @port = free_port
-    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'talk', 'setup',
-                                  '--workspace', @workspace, '--port', @port.to_s)
-    raise "talk setup failed: #{out}" unless status.success?
+    tamoz!('setup', '--workspace', @workspace)
+    tamoz!('channel', 'add', 'talk', '--port', @port.to_s)
 
     tighten_approvals if @approval_profile
     @token = File.read(File.join(@runtime, 'talk', 'token')).strip

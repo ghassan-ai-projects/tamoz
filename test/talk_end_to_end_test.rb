@@ -5,8 +5,8 @@ require_relative 'support/talk_fake_provider'
 require_relative 'support/talk_chat_eval'
 require_relative 'support/talk_fixtures'
 
-# The real `tamoz talk setup|start`, gateway and worker processes against a fake provider: plumbing, not
-# intelligence.
+# The real `tamoz setup`, `channel add talk` and `talk start`, gateway and worker processes against a fake provider:
+# plumbing, not intelligence.
 # rubocop:disable Minitest/MultipleAssertions
 class TalkEndToEndTest < Minitest::Test
   include TalkFixtures

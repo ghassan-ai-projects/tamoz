@@ -28,14 +28,15 @@ TAMOZ_VOICE_CREDENTIAL=OPENROUTER_SPEECH_API_KEY
 Then:
 
 ```bash
-rbenv exec bundle exec tamoz talk setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add talk
 rbenv exec bundle exec tamoz talk start --env-file .env
 ```
 
 `start` checks the chat model, the speech-to-text model and the voice with one real call each, then prints
 a link such as `http://127.0.0.1:8787/#token=…`. Open it, tap **Start**, allow the microphone, and talk.
 **Whoever holds the link can talk to Tamoz and approve its changes**; replace it with
-`tamoz talk setup --rotate-token`.
+`tamoz --runtime-dir ~/.tamoz channel add talk --rotate-token`.
 
 `TAMOZ_*_CREDENTIAL` names the variable that holds a role's key (never the key itself). Without it a role
 uses its provider's usual variable (`OPENROUTER_API_KEY`). `start` refuses a voice key that is the chat
@@ -47,7 +48,7 @@ Browsers allow the microphone only over HTTPS (or on the computer itself). With 
 
 ```bash
 tailscale serve --bg https / http://127.0.0.1:8787
-rbenv exec bundle exec tamoz talk setup --allow-host <machine>.<tailnet>.ts.net
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add talk --allow-host <machine>.<tailnet>.ts.net
 ```
 
 `start` then also prints `https://<machine>.<tailnet>.ts.net/#token=…`. The page refuses any other host
@@ -88,7 +89,7 @@ messages and any card still waiting for your tap.
 | "voice unavailable" on a reply | The voice model failed or is not set | Check `TAMOZ_VOICE_*`; the text is complete |
 | "Didn't catch that." | The sound was too short or too quiet | Speak again, or use push to talk |
 | "paused: the microphone stops when the screen locks" | iOS stops capture when the screen locks | Unlock; the page resumes |
-| `start` says the talk page cannot listen on the port | Another program (or another Tamoz) uses it | Stop it, or `tamoz talk setup --port N` |
+| `start` says the talk page cannot listen on the port | Another program (or another Tamoz) uses it | Stop it, or `tamoz channel add talk --port N` |
 | `start` says Tamoz is already running for this channel | An earlier `start` is still running | Ctrl-C it there, then start again |
 | `start` says the voice key must not be the chat model's key | Speech would spend the chat credit, and the gateway would hold the chat key | Give speech its own key (`OPENROUTER_SPEECH_API_KEY`) |
 
