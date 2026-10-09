@@ -36,7 +36,7 @@ class CommsServeSupervisionTest < Minitest::Test
       @stopped = true
     end
 
-    def serve_loop(drain: true)
+    def serve_loop(drain: true, interval_s: 1.0)
       sleep(0.01) until @stopped
       :stopped
     end
@@ -44,7 +44,7 @@ class CommsServeSupervisionTest < Minitest::Test
 
   def test_a_storage_failure_stops_the_loops_names_the_class_and_exits_non_zero
     err = StringIO.new
-    supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands)
+    supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands, Tamoz::Agent::CLITalkCommands)
     supervisor.instance_variable_set(:@err, err)
     gateway = QuietGateway.new
     drainer = Tamoz::Comms::DeliveryDrainer.new(
@@ -61,7 +61,7 @@ class CommsServeSupervisionTest < Minitest::Test
     assert_equal 1, status, 'a storage failure exits non-zero'
     assert_includes err.string, 'StorageExploded', 'stderr names the exception class'
     assert_includes err.string, 'stopped accepting writes', 'stderr carries the failure detail'
-    assert gateway.stopped?, 'the surviving sibling loop was asked to stop'
+    assert_predicate gateway, :stopped?, 'the surviving sibling loop was asked to stop'
   end
 
   private

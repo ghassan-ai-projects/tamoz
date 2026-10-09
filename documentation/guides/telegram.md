@@ -59,7 +59,7 @@ piece by hand.
 | A stranger gets no reply at all | By design: only paired correspondents reach the model. Add their `telegram:user:<id>` to `correspondents` (§3–4). |
 | Nothing happens after you tap **Approve** | Make sure `start` (or a worker) is still running; the decision is durable and the turn resumes on the worker's next pass. |
 | `comms doctor` reports a poller conflict | Another gateway or a webhook is reading the same bot. Stop it; one bot token, one gateway. |
-| `start` says Tamoz is already running for this bot | An earlier `start` is still running (maybe in another terminal). Stop it with Ctrl-C there, then start again. After a crash, `start` waits the few seconds until Telegram lets go. |
+| `start` says Tamoz is already running for this channel | An earlier `start` is still running (maybe in another terminal). Stop it with Ctrl-C there, then start again. After a crash, `start` waits the few seconds until Telegram lets go. |
 | The bot says "My settings changed since we last talked…" | Expected once after re-running `setup` or editing the profile: the conversation continues on a fresh thread bound to the new settings. |
 | The worker log says an MCP server could not be started | A configured MCP server (`sources.mcp`) is unreachable. Chat keeps working without that server's tools; fix or remove the server and restart. |
 

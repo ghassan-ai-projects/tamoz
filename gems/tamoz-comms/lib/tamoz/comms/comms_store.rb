@@ -88,6 +88,12 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # The latest delivered rows, plus every delivered approval card whose prompt is still active, oldest first.
+      # @return [Array<Hash>] outbox rows carrying their receipt
+      def delivered_messages(surface_id:, limit:)
+        raise NotImplementedError
+      end
+
       # Terminal projection is durable; `settle_kind` records what the
       # correspondent was told (answer/failed/stopped/blocked) and releases
       # the request's reserved slots.

@@ -38,6 +38,7 @@ gem "tamoz-comms-gateway", path: "gems/tamoz-comms-gateway"
 gem "tamoz-observability", path: "gems/tamoz-observability"
 gem "tamoz-otel", path: "gems/tamoz-otel"
 gem "tamoz-telegram", path: "gems/tamoz-telegram"
+gem "tamoz-talk", path: "gems/tamoz-talk"
 gem "zeitwerk", "~> 2.6"
 
 # Development/test-only quality tooling (Q0 of the quality program).

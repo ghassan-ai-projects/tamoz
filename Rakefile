@@ -46,6 +46,7 @@ SLOW_TESTS = %w[
   test/thermal_tournament_test.rb
   test/thermal_tournament_controls_test.rb
   test/sqlite_raw_oracle_test.rb
+  test/talk_end_to_end_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb

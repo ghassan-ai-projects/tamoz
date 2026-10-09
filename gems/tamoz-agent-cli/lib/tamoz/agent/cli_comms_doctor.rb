@@ -2,6 +2,7 @@
 
 require 'json'
 require 'optparse'
+require 'socket'
 
 module Tamoz
   module Agent
@@ -42,7 +43,7 @@ module Tamoz
             checks << ['runtime permissions', true]
             selected_surfaces(directory, nil).each do |surface_id|
               descriptor = build_descriptor(surface_id, directory.channels.fetch(surface_id), directory)
-              checks.concat(doctor_surface(store, descriptor))
+              checks.concat(doctor_surface(store, descriptor, directory))
             end
           end
         rescue RuntimeDirectory::Error => e
@@ -57,7 +58,9 @@ module Tamoz
       # One surface's doctor checks. The token check runs BEFORE getMe so a
       # missing credential is named without a network call; the adapter check
       # runs before the client is built.
-      def doctor_surface(store, descriptor)
+      def doctor_surface(store, descriptor, directory)
+        return doctor_talk(store, descriptor, directory) if descriptor.kind == 'talk'
+
         token_check = ["token #{credential_name(descriptor)}", credential_present?(descriptor)]
         checks = [token_check]
         return checks unless token_check.last == true
@@ -80,6 +83,24 @@ module Tamoz
         checks << ['webhook', webhook_ok?(client)]
         checks << ['poller', poller_ok?(store, descriptor)]
         checks
+      end
+
+      # The talk token lives in the runtime directory, not the environment; `talk start` hands it to the gateway.
+      def doctor_talk(store, descriptor, directory)
+        token = File.join(directory.path, 'talk', 'token')
+        present = File.exist?(token) && File.read(token).strip.length >= 32
+        poller = poller_ok?(store, descriptor)
+        port = descriptor.transport.fetch(:port)
+        [['token', present || 'no talk token; run `tamoz talk setup`'],
+         ["port #{port}", poller == true ? port_free?(@env.to_h.fetch('TAMOZ_TALK_HOST', '127.0.0.1'), port) : true],
+         ['poller', poller]]
+      end
+
+      def port_free?(host, port)
+        TCPServer.new(host, port).close
+        true
+      rescue SystemCallError => e
+        "the talk page cannot listen on #{host}:#{port} (#{e.class.name.split('::').last})"
       end
 
       # The [value, error] pair keeps the failure NAMED without a

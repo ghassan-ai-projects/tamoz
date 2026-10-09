@@ -44,13 +44,13 @@ clause or has a dedicated test yet.
 | [039](./adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md) | Tamoz is supervisory; certified safety and real-time control stay external | F | `tamoz-stream` | 51 | `documentation_surface_test.rb` |
 | [040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) | One monorepo, multiple independently publishable gems | C | — | — | — |
 | [041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) | Communication channels are a contract gem plus per-transport adapter gems | C | `tamoz-comms`, `tamoz-core`, `tamoz-telegram` | — | `dependency_isolation_test.rb`<br>`documentation_surface_test.rb` |
-| [042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) | The channel gateway is a separate process in the connector zone | F | `tamoz-comms-gateway` | 56, 57 | `comms_evidence_gated_approval_test.rb`<br>`comms_gateway_test.rb`<br>`documentation_surface_test.rb` |
+| [042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) | The channel gateway is a separate process in the connector zone | F | `tamoz-agent`, `tamoz-comms-gateway` | 56, 57 | `comms_evidence_gated_approval_test.rb`<br>`documentation_surface_test.rb` |
 | [044](./adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md) | Observability is a contract gem plus per-exporter adapter gems | C | `tamoz-core`, `tamoz-observability`, `tamoz-otel` | — | `documentation_surface_test.rb` |
 | [045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md) | The observability gems add no durable table and no second source of truth | C | `tamoz-observability`, `tamoz-sqlite` | 61 | `documentation_surface_test.rb` |
 | [046](./adr-046-content-capture-is-off-by-default-per-class-and-refused-for-restricted.md) | Content capture is off by default, per class, and refused for restricted classes | F | `tamoz-observability` | 60 | `documentation_surface_test.rb` |
 | [047](./adr-047-telemetry-is-never-sampled-at-record-time-and-safety-bearing-signals-have-a-reserved-lane.md) | Telemetry is never sampled at record time, and safety-bearing signals have a reserved lane | F | `tamoz-observability` | 59, 61 | `documentation_surface_test.rb` |
 | [048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md) | Tamoz owns the model boundary: one digest-bound OpenAI-compatible transport | F | `tamoz-agent-kernel`, `tamoz-graph` | 11, 21 | — |
-| [049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) | Chat approval is evidence-gated and bound to one exact prompt | F | `tamoz-approval`, `tamoz-comms`, `tamoz-comms-gateway`, `tamoz-sqlite` | 58 | `agent_outbox_delivery_sink_test.rb`<br>`callback_ack_crash_test.rb`<br>`child_environments_test.rb`<br>`comms_adr049_consistency_test.rb`<br>`comms_authority_evidence_test.rb`<br>`comms_decision_record_test.rb`<br>`comms_evidence_gated_approval_test.rb`<br>`memory_store_test.rb`<br>`sqlite_comms_store_test.rb` |
+| [049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) | Chat approval is evidence-gated and bound to one exact prompt | F | `tamoz-approval`, `tamoz-comms`, `tamoz-comms-gateway`, `tamoz-sqlite` | 58 | `agent_outbox_delivery_sink_test.rb`<br>`callback_ack_crash_test.rb`<br>`comms_adr049_consistency_test.rb`<br>`comms_evidence_gated_approval_test.rb`<br>`sqlite_comms_store_test.rb` |
 | [050](./adr-050-automated-response-durable-evidence.md) | Automated responses act only on durable evidence, under the subsystem that owns the effect | F | `tamoz-observability` | 61, 62 | — |
 | [052](./adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md) | A gem owns one dependency boundary and is reached only through its facade | C | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-core`, `tamoz-evals-runner` | — | — |
 | [053](./adr-053-approval-gem.md) | Approval policy is data, decided by one gem, `tamoz-approval` | F | `tamoz-approval`, `tamoz-core` | 40 | — |
@@ -60,13 +60,14 @@ clause or has a dedicated test yet.
 | [057](./adr-057-a-user-stop-ends-the-turn-it-never-aborts-the-graph.md) | A user's stop ends the turn; it never aborts the graph | F | `tamoz-agent`, `tamoz-agent-session`, `tamoz-cancellation` | 14, 15, 53 | — |
 | [058](./adr-058-domain-knowledge-is-digest-pinned-data-never-code.md) | Domain knowledge is digest-pinned data, never code | C | — | — | — |
 | [059](./adr-059-no-backward-compatibility-before-1-0.md) | No backward compatibility before 1.0 | C | `tamoz-sqlite` | — | — |
-| [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | `tamoz-agent-cli`, `tamoz-observability`, `tamoz-sqlite` | 59, 60, 61 | — |
+| [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-observability`, `tamoz-sqlite` | 59, 60, 61 | — |
+| [061](./adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md) | The talk channel is a browser surface; its voice is presentation, its record is text | F | `tamoz-agent-session`, `tamoz-comms`, `tamoz-talk` | 56, 57 | — |
 
 ## Coverage snapshot
 
-- In-force ADRs: **51**
+- In-force ADRs: **52**
 - With at least one referencing test: **14**
-- With a named invariant clause: **34**
+- With a named invariant clause: **35**
 
 ## Next reads
 

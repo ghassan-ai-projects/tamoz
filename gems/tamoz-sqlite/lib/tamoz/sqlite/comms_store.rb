@@ -174,11 +174,11 @@ module Tamoz
           )
           @checkpoints.enqueue_request_in_transaction!(
             txn, thread:, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
-            operation_text: 'resume', delivery_text: REQUEST_DELIVERY,
-            payload_bytes:, payload_digest:, input_digest:
+                 operation_text: 'resume', delivery_text: REQUEST_DELIVERY,
+                 payload_bytes:, payload_digest:, input_digest:
           )
           insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'ignored',
-                          reason: 'clarification_answer', now:, request_id:)
+                                              reason: 'clarification_answer', now:, request_id:)
           :enqueued
         end
       end
@@ -245,7 +245,7 @@ module Tamoz
       # later turn stay durable. This normalizes what the model sees, never what
       # the correspondent already received.
       def flatten_context_text(text)
-        String(text).gsub(CONTROL_CHARACTERS, " ").strip
+        String(text).gsub(CONTROL_CHARACTERS, ' ').strip
       end
 
       # ===== poll state =====
@@ -568,7 +568,11 @@ module Tamoz
           facts['observed_age_ms'] = clock - observed
         end
         facts['terminal'] = cancellation_outcome(observed:, settled: row.fetch(0))
-        facts['state'] = facts['terminal'] ? 'terminal' : (observed ? 'observed' : 'requested')
+        facts['state'] = if facts['terminal']
+                           'terminal'
+                         else
+                           (observed ? 'observed' : 'requested')
+                         end
         facts
       end
 
@@ -593,7 +597,7 @@ module Tamoz
         {
           'request_ref' => request_ref(request_id),
           'queue_position' => queue_position(txn, surface_id, conversation_id, request_id),
-          'queue_age_ms' => oldest && backend_now_ms(txn, now) - oldest
+          'queue_age_ms' => oldest && (backend_now_ms(txn, now) - oldest)
         }.compact
       end
 
@@ -604,11 +608,12 @@ module Tamoz
         return 0 unless row
 
         peer_at = row.fetch(0)
-        txn.scalar('comms.conversation.status.queue_position', <<~SQL, [surface_id, conversation_id, peer_at, peer_at, request_id]).to_i
-          SELECT COUNT(*) FROM tamoz_comms_requests
-          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
-            AND (created_at_ms < ? OR (created_at_ms = ? AND request_id < ?))
-        SQL
+        txn.scalar('comms.conversation.status.queue_position',
+                   <<~SQL, [surface_id, conversation_id, peer_at, peer_at, request_id]).to_i
+                     SELECT COUNT(*) FROM tamoz_comms_requests
+                     WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+                       AND (created_at_ms < ? OR (created_at_ms = ? AND request_id < ?))
+                   SQL
       end
 
       def oldest_open_created_at_ms(txn, surface_id, conversation_id)
@@ -691,7 +696,6 @@ module Tamoz
         end
       end
 
-
       # The durable /new generation of one bound conversation (plan 02,
       # work item 4): monotonic, part of the thread identity
       # `Admission.thread_id` folds into its digest.
@@ -711,7 +715,10 @@ module Tamoz
             UPDATE tamoz_comms_conversations SET generation = generation + 1
             WHERE surface_id = ? AND conversation_id = ?
           SQL
-          raise KeyError, "conversation #{conversation_id} is not bound on surface #{surface_id}" unless txn.changes == 1
+          unless txn.changes == 1
+            raise KeyError,
+                  "conversation #{conversation_id} is not bound on surface #{surface_id}"
+          end
 
           generation_row!(txn, surface_id, conversation_id)
         end
@@ -902,6 +909,10 @@ module Tamoz
 
       def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
         @outbox.outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
+      end
+
+      def delivered_messages(surface_id:, limit:)
+        @outbox.delivered_messages(surface_id:, limit:)
       end
 
       # Fenced result recording (invariant 4): only the current claim's

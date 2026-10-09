@@ -30,6 +30,7 @@ module Tamoz
       include CLICommsDoctor
       include CLICommsOps
       include CLITelegramCommands
+      include CLITalkCommands
       include CLISelfObservationCommands
 
       # Every subcommand dispatches to exactly one same-shaped cmd_* method
@@ -61,6 +62,7 @@ module Tamoz
         "profile" => :cmd_profile,
         "comms" => :cmd_comms,
         "telegram" => :cmd_telegram,
+        "talk" => :cmd_talk,
         "config" => :cmd_config,
         "init" => :cmd_init,
         "queue" => :cmd_queue,

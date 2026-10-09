@@ -29,6 +29,7 @@ class PublicAPITest < Minitest::Test
     Tamoz::Mcp::Websearch::VERSION,
     Tamoz::Comms::VERSION,
     Tamoz::Telegram::VERSION,
+    Tamoz::Talk::VERSION,
     Tamoz::Observability::VERSION,
     Tamoz::OTel::VERSION
   ].freeze

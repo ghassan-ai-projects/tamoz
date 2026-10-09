@@ -289,7 +289,8 @@ true}})` feeds an `AudioWorklet`, which downsamples to 16 kHz mono and posts 20 
 
 - Speech starts after 3 frames above `floor × 3`. It ends after **1.2 s** below `floor × 2`; the user can
   set this from 0.8 to 2 s. 300 ms of pre-roll is kept.
-- A segment is sent only when it lasts at least 400 ms, at least 30% of its frames are voiced, and its peak
+- A segment is sent only when its voiced span lasts at least 180 ms (so "yes" and "stop" are sent), at
+  least 30% of its frames are voiced, and its peak
   is at least `floor × 6`. This stops coughs, taps and fan noise from becoming requests, and stops the
   transcription model hallucinating "Thank you." from silence.
 - A segment is cut at 30 s.

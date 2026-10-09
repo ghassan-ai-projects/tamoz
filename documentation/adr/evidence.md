@@ -373,6 +373,23 @@ Checked 2026-10-01 (source inspection).
 | The gateway authenticates its transport before polling | `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb` | `test/comms_gateway_test.rb` — `test_start_authenticates_the_transport_before_polling` | — |
 | A replayed update creates no second request | gateway + store | `test/comms_gateway_test.rb` — `test_a_replayed_update_does_not_create_a_second_request` | — |
 | The packaged gateway runs with an injected transport and store | packaging | `test/packaging_test.rb` — `test_packaged_comms_gateway_runs_with_injected_transport_and_store` | "Never loads a model credential" is source inspection, not a test |
+| A talk gateway gets the token and the VOICE key only, never the chat key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/talk_cli_test.rb` — `test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only`, `test_start_refuses_the_chat_key_as_the_voice_key` | — |
+
+## ADR-061
+
+Checked 2026-10-09 (tests run).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| Telegram is byte-identical after the second kind | `gems/tamoz-comms/lib/tamoz/comms/parties.rb` | `test/comms_parties_test.rb` — `test_telegram_bytes_are_unchanged_from_head` | — |
+| A party of another kind is refused | `gems/tamoz-comms/lib/tamoz/comms/admission.rb` | `test/comms_parties_test.rb` — `test_a_party_must_belong_to_its_surfaces_kind` | — |
+| An update is confirmed only by an offset the inbox handed out | `gems/tamoz-talk/lib/tamoz/talk/inbox.rb` | `test/talk_inbox_test.rb` — `test_only_returned_entries_are_confirmed_and_only_by_an_offset_this_inbox_handed_out`, `test/talk_gateway_test.rb` — `test_a_restart_after_admission_before_confirmation_admits_the_resend_once` | — |
+| Only the token holder reaches the API, before any body is read | `gems/tamoz-talk/lib/tamoz/talk/server.rb` | `test/talk_server_test.rb` — `test_every_api_route_refuses_a_missing_or_wrong_token_without_reading_the_body` | — |
+| Hostile HTTP input is refused within deadlines | `gems/tamoz-talk/lib/tamoz/talk/http.rb` | `test/talk_http_test.rb` — `test_a_dripped_request_hits_its_deadline_and_cannot_extend_it`, `test_malformed_heads_are_refused_before_any_body_is_read` | — |
+| A typed or spoken approve decides nothing | admission + callbacks | `test/talk_gateway_test.rb` — `test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing` | The real-model case is EVAL `approval_by_voice` |
+| Tamoz's own voice is framed as an echo | `gems/tamoz-agent-session/lib/tamoz/agent/work_attachment.rb` | `test/chat_attachment_test.rb` — `test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo` | — |
+| Speech is only a delivered spoken message | `gems/tamoz-talk/lib/tamoz/talk/hub.rb` | `test/talk_hub_test.rb` — `test_only_the_first_part_of_a_spoken_kind_is_spoken` | — |
+| The whole loop runs through real processes | `tamoz talk start` | `test/talk_end_to_end_test.rb` — `test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` | Fake provider: plumbing, not intelligence |
 
 ## ADR-044
 

@@ -35,6 +35,7 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-comms-gateway` | Long-running gateway and delivery drainer over injected Comms transport/store seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: digest-pinned YAML documents, ask/park/deny ladder, scoped grants, durable decision log | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
+| `tamoz-talk` | Browser talk channel: hardened stdlib HTTP server, confirm-by-next-poll inbox, the talk page | `tamoz-comms`, `tamoz-core` |
 | `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
 | `tamoz-agent-kernel` | The deliberation substrate: episode records and receipts, the plan/review/execute/verify engine, the effect seam, catalogs, error taxonomy, request routes and projections | `tamoz-core`, `tamoz-tools` |
@@ -157,7 +158,7 @@ from its index:
 - **Guides** — [coding with `tamoz code`](documentation/guides/coding.md),
   [investigating with probes](documentation/guides/investigation.md),
   [operator runbook](documentation/guides/agent-operator.md),
-  [Telegram](documentation/guides/telegram.md),
+  [Telegram](documentation/guides/telegram.md), [talk by voice](documentation/guides/talk.md),
   [evaluation](documentation/guides/evaluation.md)
 - **Operations** — [runbook](documentation/operations/operations.md),
   [observability](documentation/operations/observability-ops.md)
@@ -234,6 +235,23 @@ approval and recovery operations are in
 [`documentation/operations/operations.md`](documentation/operations/operations.md).
 Both long-running processes exit cleanly on `SIGINT`/`SIGTERM` and restart
 safely at any point; add `--once` to either for a single supervised pass.
+
+## Talking to it by voice
+
+A browser page you speak to, on your phone or desktop: Tamoz shows what it heard, answers in text, and
+speaks a short form of the answer. It is a channel like Telegram — same memory, same `/status` and
+`/cancel`, and changes still wait for a tap on **Approve** (a spoken "yes" never approves).
+
+```bash
+rbenv exec bundle exec tamoz talk setup --workspace ~/my-project
+rbenv exec bundle exec tamoz talk start --env-file .env        # prints the link to open
+```
+
+Speech-to-text and the voice are OpenRouter models named by `TAMOZ_TRANSCRIPTION_*` and `TAMOZ_VOICE_*`;
+audio is never stored. Setup, phones (HTTPS through `tailscale serve`) and troubleshooting:
+[`documentation/guides/talk.md`](documentation/guides/talk.md). Design and evidence:
+[ADR-061](documentation/adr/adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md),
+[`docs/talk-voice-2026-10-09/`](docs/talk-voice-2026-10-09/PLAN.md).
 
 ## Evidence
 

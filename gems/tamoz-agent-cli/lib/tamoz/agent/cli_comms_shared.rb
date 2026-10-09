@@ -132,6 +132,8 @@ module Tamoz
       # transport is optional). A missing adapter is a typed error, never a
       # boot failure.
       def build_transport(descriptor, token)
+        return @talk_hubs.fetch(descriptor.surface_id).transport if descriptor.kind == 'talk'
+
         client = comms_client_factory(descriptor).call(token)
         require 'tamoz/telegram'
         normalizer = Tamoz::Telegram::Normalizer.new(
