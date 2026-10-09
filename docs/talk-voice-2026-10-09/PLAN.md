@@ -517,7 +517,7 @@ make it feel live are recorded in `EVAL.md`. They become gates once the first re
 | Resource exhaustion | Head and body caps; 16 connections; inbox of 256 updates / 8 MB; resends deduped; event log of 500 with `working` kept outside it | `test_the_connection_cap_holds`, `talk_inbox_test#test_resends_are_deduped` |
 | A model answer containing HTML or script | `textContent` only; a CSP with no inline script | `render.test.mjs`; `test_assets_carry_the_csp` |
 | The token leaks | Carried in the fragment only, which `replaceState` removes; never logged by the server; printed once to the operator's terminal with a warning that it carries approval authority; `--rotate-token` replaces it | `test_the_token_is_never_logged` (captures the server log) |
-| A provider key reaches the browser or the wrong process | I5; the VOICE credential is never the chat credential | `talk_cli_test#test_start_refuses_the_chat_key_as_the_voice_key` |
+| A provider key reaches the browser or the wrong process | I5; the VOICE credential is never the chat credential | `talk_cli_test#test_start_refuses_the_chat_key_as_the_voice_key_by_name_or_by_value` |
 | Retention | I3; the event log and speech cache live only in memory and are bounded | I3 |
 | Approval spoofing or replay | The existing binding check and single-use CAS; message ids are never reused | I1 |
 | Spoken prompt injection | The transcript is ordinary model input under the profile's policy; any change needs the button | Eval `injection_by_voice` |

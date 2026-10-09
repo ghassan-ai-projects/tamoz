@@ -373,7 +373,7 @@ Checked 2026-10-01 (source inspection).
 | The gateway authenticates its transport before polling | `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb` | `test/comms_gateway_test.rb` — `test_start_authenticates_the_transport_before_polling` | — |
 | A replayed update creates no second request | gateway + store | `test/comms_gateway_test.rb` — `test_a_replayed_update_does_not_create_a_second_request` | — |
 | The packaged gateway runs with an injected transport and store | packaging | `test/packaging_test.rb` — `test_packaged_comms_gateway_runs_with_injected_transport_and_store` | "Never loads a model credential" is source inspection, not a test |
-| A talk gateway gets the token and the VOICE key only, never the chat key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/talk_cli_test.rb` — `test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only`, `test_start_refuses_the_chat_key_as_the_voice_key` | — |
+| A talk gateway gets the token and the VOICE key only, never the chat key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/talk_cli_test.rb` — `test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only`, `test_start_refuses_the_chat_key_as_the_voice_key_by_name_or_by_value` | — |
 
 ## ADR-061
 
