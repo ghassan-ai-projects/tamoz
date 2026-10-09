@@ -53,6 +53,8 @@ module Tamoz
             seen[key] = true
             [key, entry]
           end
+          return pairs.sort_by(&:first) if pairs.all? { |(key, _)| key.ascii_only? }
+
           pairs.sort_by { |(key, _)| key.encode('UTF-16BE').b }
         end
 
