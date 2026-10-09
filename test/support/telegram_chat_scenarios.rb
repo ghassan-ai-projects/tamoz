@@ -291,7 +291,8 @@ module TelegramChatScenarios
       written: spec['forbidden_file'] && !eval.workspace_text(spec['forbidden_file']).empty?,
       handoffs_left: eval.handoffs, downloaded: eval.fake.downloads.length > downloads,
       file_text: File.read(File.join(ATTACHMENTS, spec.fetch('file')), mode: 'rb').force_encoding('UTF-8').scrub,
-      read_by_configured_model: read_by_configured_model(eval, spec, turn)
+      read_by_configured_model: read_by_configured_model(eval, spec, turn),
+      known_text: eval.workspace_files_text
     )
     TelegramAttachmentChecks.grade(spec, seen).each { |check, pass, detail| eval.check(name, check, pass, detail) }
     eval.hygiene(name, [turn])

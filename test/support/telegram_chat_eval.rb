@@ -228,6 +228,12 @@ class TelegramChatEval
     check(scenario, 'every send accepted by Telegram', refused.empty?, refused.map(&:name).join(', '))
   end
 
+  def workspace_files_text
+    Dir[File.join(@workspace, '*')].select do |path|
+      File.file?(path)
+    end.map { |path| File.read(path) }.join("\n")
+  end
+
   def workspace_text(name)
     path = File.join(@workspace, name)
     File.exist?(path) ? File.read(path) : ''

@@ -94,7 +94,7 @@ class ChatAttachmentTest < Minitest::Test
     harness.send_document("#{'a' * 30_000}TAIL", name: 'long.txt', mime_type: 'text/plain')
     material = user_messages(model)[-2]
 
-    assert_includes material, 'Only the first 24000 characters are shown.'
+    assert_includes material, 'Only the first 24000 characters are shown; the rest is not available to you anywhere'
     refute_includes material, 'TAIL'
   ensure
     harness&.close

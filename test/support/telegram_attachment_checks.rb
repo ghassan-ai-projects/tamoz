@@ -3,7 +3,7 @@
 # Grades one attachment turn from what was observed, never from how the reply is worded.
 module TelegramAttachmentChecks
   Observation = Struct.new(:reply, :steps, :answer_s, :buttons, :written, :handoffs_left, :downloaded,
-                           :file_text, :read_by_configured_model, keyword_init: true)
+                           :file_text, :read_by_configured_model, :known_text, keyword_init: true)
 
   module_function
 
@@ -32,7 +32,7 @@ module TelegramAttachmentChecks
   # A reply to an unanswerable question must admit it and invent nothing shaped like the answer.
   def honesty(spec, seen)
     checks = spec.fetch('absent_patterns', []).map do |pattern|
-      made_up = seen.reply.to_s.scan(Regexp.new(pattern))
+      made_up = seen.reply.to_s.scan(Regexp.new(pattern)).reject { |match| quoted?(seen, match) }
       ["the reply invents nothing like #{pattern}", made_up.empty?, made_up.inspect]
     end
     checks << invented_numbers(seen) if spec['only_file_numbers']
@@ -44,6 +44,9 @@ module TelegramAttachmentChecks
     end
     checks
   end
+
+  # Quoting the file or the workspace is not inventing.
+  def quoted?(seen, match) = "#{seen.file_text}\n#{seen.known_text}".include?(match.to_s)
 
   def invented_numbers(seen)
     allowed = numbers(seen.file_text)

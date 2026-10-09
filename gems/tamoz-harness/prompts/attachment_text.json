@@ -5,7 +5,7 @@
   "voice": "The user sent a voice message. Their next message is its label and caption, then what they said, transcribed; answer it as if they had typed it, in the language they spoke.",
   "pages": " It has %{pages} pages.",
   "pages_cut": " The first %{pages} pages were read; any later pages were not.",
-  "truncated": " Only the first %{shown} characters are shown.",
+  "truncated": " Only the first %{shown} characters are shown; the rest is not available to you anywhere, so do not look for it in the workspace.",
   "what": {
     "document": "a file",
     "pdf": "a PDF",
