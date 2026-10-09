@@ -2,13 +2,13 @@
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
   "generated_at": "2026-10-05T08:48:01Z",
-  "manifest_requirements": 582,
-  "named_cases_run": 307,
+  "manifest_requirements": 583,
+  "named_cases_run": 308,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 3,
     "missing": 14,
-    "pass": 554
+    "pass": 555
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -8838,6 +8838,23 @@
       "supporting_tests": [
         "test/memory_spec_test.rb#test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
         "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-24",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_24",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle",
+      "supporting_tests": [
+        "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"
       ],
       "classification": "direct",
       "rationale": null,

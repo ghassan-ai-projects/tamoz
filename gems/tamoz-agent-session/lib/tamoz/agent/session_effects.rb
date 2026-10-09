@@ -96,8 +96,9 @@ module Tamoz
 
       # One tool-calling conversation turn. A model call changes nothing outside,
       # so an unanswered one is safely retried (:idempotent).
-      def converse(context, stage:, messages:, tools:, iteration:, tool_choice: 'auto', attempt: 0)
-        model = conversation_model
+      # `model` is the conversation model unless a stage has its own, such as the image reader.
+      def converse(context, stage:, messages:, tools:, iteration:, tool_choice: 'auto', attempt: 0,
+                   model: conversation_model)
         request = conversation_request(model, stage, messages, tools, tool_choice)
         operation = "model.converse.#{stage}"
         outcome = EffectDispatcher.run(
@@ -109,6 +110,22 @@ module Tamoz
           ConversationProjection.from_response(response, request_digest: request.fetch('request_digest'))
         end
         outcome.status == :succeeded ? outcome.with(value: ConversationProjection.validate!(outcome.value)) : outcome
+      end
+
+      def transcribe(context, audio:, filename:, media_type:)
+        model = @configuration.transcriber
+        request = { 'stage' => 'transcribe',
+                    'request_digest' => model.transcription_digest(Digest::SHA256.hexdigest(audio)),
+                    'provider_configuration_digest' => model.provider_configuration_digest }
+        EffectDispatcher.run(
+          context:, operation: 'model.transcribe', safety: :idempotent, call_index: 0, request:,
+          actor: 'tamoz.agent.session',
+          logical_identity: logical_identity(context:, operation: 'model.transcribe', capability_id: 'model:transcribe',
+                                             arguments: request, iteration: 0, sub_operation: 0)
+        ) do
+          transcript = until_cancelled(context) { model.transcribe(audio:, filename:, media_type:) }
+          transcript.to_h.transform_keys(&:to_s)
+        end
       end
 
       # A stop from the user abandons the call in flight and records it as a failed attempt.
@@ -284,7 +301,8 @@ module Tamoz
           'stage' => stage.to_s,
           'request_digest' => model.request_digest(bytes),
           'message_count' => messages.length,
-          'provider_configuration_digest' => model_configuration_digest
+          'provider_configuration_digest' => (model.provider_configuration_digest if
+                                                model.respond_to?(:provider_configuration_digest))
         }.compact
       end
 

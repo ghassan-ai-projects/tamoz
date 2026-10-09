@@ -42,22 +42,27 @@ module Tamoz
       end
 
       # rubocop:disable Metrics/ParameterLists -- routing and its harness settings travel together
-      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {})
+      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {},
+                    transcriber: nil, image_reader: nil)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
         # the storage or channel packages at require time.
         require "tamoz/sqlite"
         require "tamoz/comms"
         require "tamoz/approval"
-        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:, routing:, harness:)
+        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:, routing:, harness:, transcriber:,
+                                 image_reader:)
         runtime.install_channel_delivery_sink unless delivery_sink
         runtime
       end
       # rubocop:enable Metrics/ParameterLists
 
       # rubocop:disable Metrics/ParameterLists -- routing and its harness settings travel together
-      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {})
+      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {},
+                     transcriber: nil, image_reader: nil)
         @directory = directory
         @model_factory = model_factory
+        @transcriber = transcriber
+        @image_reader = image_reader
         @routing = normalize_routing(routing)
         @harness = harness.transform_keys(&:to_sym)
         @harness[:subagents] ||= directory.subagents
@@ -1108,6 +1113,9 @@ module Tamoz
             tenant: "profile:#{profile_id || 'default'}"
           ),
           artifact_tenant: "profile:#{profile_id || 'default'}",
+          transcriber: @transcriber,
+          image_reader: @image_reader,
+          attachment_spool: @directory.attachment_spool,
           child_task_runtime: self,
           mcp:,
           routing: @routing,

@@ -962,7 +962,8 @@
         "Decision",
         "Consequences",
         "Invariants",
-        "Threat model"
+        "Threat model",
+        "History"
       ]
     },
     {

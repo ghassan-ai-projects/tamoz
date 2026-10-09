@@ -20,15 +20,20 @@ module Tamoz
       DEFAULT_OPEN_TIMEOUT = 10.0
       DEFAULT_READ_TIMEOUT = 65.0
       DEFAULT_MAX_RESPONSE_BYTES = 10_000_000
+      DOWNLOAD_DEADLINE_S = 40.0
+      DOWNLOAD_READ_TIMEOUT_S = 15.0
+      FILE_PATH = %r{\A(?!/)(?!.*(?:\A|/)\.\.(?:/|\z))[A-Za-z0-9_.\-/]{1,256}\z}
 
       attr_reader :token, :origin, :max_response_bytes
 
       def initialize(token, origin: DEFAULT_ORIGIN, open_timeout: DEFAULT_OPEN_TIMEOUT,
-                     read_timeout: DEFAULT_READ_TIMEOUT, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES)
+                     read_timeout: DEFAULT_READ_TIMEOUT, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
+                     download_deadline: DOWNLOAD_DEADLINE_S)
         @token = token
         @origin = origin
         @open_timeout = open_timeout
         @read_timeout = read_timeout
+        @download_deadline = download_deadline
         # An undeclared cap IS the declared default: the client's own limit is
         # the one source of truth for it.
         @max_response_bytes = max_response_bytes || DEFAULT_MAX_RESPONSE_BYTES
@@ -38,8 +43,8 @@ module Tamoz
       # One bounded API call. `idempotent` distinguishes reads (safe to
       # retry) from sends (a timeout must never be retried blindly).
       # @return [Hash] the parsed `ok` payload.
-      def call(method, params, idempotent: false)
-        response, body = post(method, params)
+      def call(method, params, idempotent: false, read_timeout: @read_timeout)
+        response, body = post(method, params, read_timeout)
         interpret(response, body, method:, idempotent:)
       rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT, JSON::ParserError => e
         # A read observed nothing and changed nothing, so it is typed transient
@@ -51,10 +56,34 @@ module Tamoz
         raise transport_failure(idempotent, "#{method} did not return a valid response (#{e.class})")
       end
 
+      # A download observes and changes nothing, so a failure is transient.
+      def download(file_path, max_bytes:)
+        raise Comms::ValidationError, 'file path is not a Telegram file path' unless FILE_PATH.match?(file_path.to_s)
+
+        response = nil
+        body = (+'').b
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @download_deadline
+        http = build_http
+        http.read_timeout = DOWNLOAD_READ_TIMEOUT_S
+        http.request(Net::HTTP::Get.new("/file/bot#{@token}/#{file_path}")) do |partial|
+          response = partial
+          read_bounded(partial, body, max_bytes, deadline:)
+        end
+        raise Comms::TransientTransportError, "file download failed (#{response.code})" unless
+          response.is_a?(Net::HTTPSuccess)
+
+        body
+      rescue Comms::CommsError
+        raise
+      rescue StandardError => e
+        raise Comms::TransientTransportError, "file download did not complete (#{e.class})"
+      end
+
       private
 
-      def post(method, params)
+      def post(method, params, read_timeout)
         http = build_http
+        http.read_timeout = read_timeout
         request = build_request(method, params)
         response = nil
         body = +''
@@ -65,10 +94,12 @@ module Tamoz
         [response, body]
       end
 
-      def read_bounded(partial, body)
+      def read_bounded(partial, body, limit = @max_response_bytes, deadline: nil)
         partial.read_body do |chunk|
           body << chunk
-          raise Comms::ResponseTooLargeError if body.bytesize > @max_response_bytes
+          raise Comms::ResponseTooLargeError if body.bytesize > limit
+          raise Comms::TransientTransportError, 'file download exceeded its deadline' if
+            deadline && Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
         end
       end
 
@@ -78,8 +109,24 @@ module Tamoz
         when Net::HTTPTooManyRequests then raise throttled(body)
         when Net::HTTPUnauthorized then raise Comms::AuthenticationError, 'bot token refused'
         when Net::HTTPConflict then raise conflict_failure(idempotent, body)
-        else raise transport_failure(idempotent, "telegram api error #{response.code}")
+        else raise refused(idempotent, body, response.code)
         end
+      end
+
+      # Telegram's 400 "file is too big" is final, not a transient read.
+      def refused(idempotent, body, code)
+        description = idempotent ? described(body) : ''
+        return Comms::ResponseTooLargeError.new(description) if description.match?(/too big/i)
+
+        transport_failure(idempotent, "telegram api error #{code}")
+      end
+
+      # :reek:UtilityFunction -- a pure parse of an error payload.
+      def described(body)
+        parsed = JSON.parse(body, create_additions: false)
+        parsed.is_a?(Hash) ? parsed['description'].to_s : ''
+      rescue JSON::ParserError
+        ''
       end
 
       def throttled(body)

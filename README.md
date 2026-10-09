@@ -203,7 +203,11 @@ error before anything starts.
 
 Message the bot like a person. It answers in one plain reply with a typing
 indicator, remembers the conversation (across restarts too) and replies in your
-language. Questions about the workspace are answered from its files; a change is
+language. It also reads what you send: text files and PDFs (PDFs need poppler's
+`pdftotext` on the worker's machine), photos and images (read by the model,
+text first), and voice notes (transcribed by a speech-to-text model you name,
+then answered as your words). Files are not kept: each is a temporary handoff, deleted once read — see
+the [guide](documentation/guides/telegram.md). Questions about the workspace are answered from its files; a change is
 shown to you first — the file and its content, the diff, or the command — with
 **Approve** and **Deny** buttons.
 

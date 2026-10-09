@@ -79,8 +79,9 @@ module Tamoz
       end
 
       # `carried`: the memory brief and the thread checkpoint, pinned after project guidance.
-      def opening(task:, transcript:, previous_answer:, updates:, carried: {})
-        transcript = transcript[0...-1] if transcript.last == { 'role' => 'user', 'text' => task }
+      def opening(task:, transcript:, previous_answer:, updates:, carried: {}, asked: task)
+        transcript = transcript[0...-1] if transcript.last == { 'role' => 'user', 'text' => asked }
+        material = carried[:material]
         entries = method_pinned(append([], 'runtime', runtime_text, pinned: true))
         entries = append(entries, 'guidance', scrub(guidance.text), pinned: true, source: guidance.sources.join(' ')) if
           guidance
@@ -92,10 +93,11 @@ module Tamoz
         end
         entries = append(entries, 'user', scrub(transcript_text(transcript)), pinned: true) unless transcript.empty?
         if previous_answer
-          carried = format(Harness::PromptPack.fetch('previous_turn'), answer: previous_answer)
-          entries = append(entries, 'user', scrub(carried), pinned: true)
+          previous = format(Harness::PromptPack.fetch('previous_turn'), answer: previous_answer)
+          entries = append(entries, 'user', scrub(previous), pinned: true)
         end
         entries = updates.reduce(entries) { |opened, update| append(opened, 'system_update', update, pinned: true) }
+        entries = append(entries, 'user', material, pinned: true) if material
         append(entries, 'user', scrub(task), pinned: true)
       end
 

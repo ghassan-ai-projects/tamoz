@@ -25,6 +25,8 @@ module Tamoz
     # request and envelope handling stay together so the digests bind exactly what was sent.
     class EpisodeModelTransport
       OPENAI_COMPLETIONS_PATH = "/chat/completions"
+      TRANSCRIPTION_PATH = "/audio/transcriptions"
+      MAX_TRANSCRIPT_CHARACTERS = 100_000
       # The frozen request settings (P1 contract). The settings digest the
       # gateway signs and the receipt carries is computed over THIS document.
       SETTINGS = {
@@ -48,6 +50,8 @@ module Tamoz
         :content, :tool_calls, :finish_reason, :usage, :request_digest, :response_digest,
         :settings_digest, :provider_configuration_digest
       )
+
+      Transcript = Data.define(:text, :request_digest, :response_digest, :provider_configuration_digest)
 
       attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window
 
@@ -111,6 +115,28 @@ module Tamoz
           request["tool_choice"] = tool_choice
         end
         Tamoz::Core.jcs(request)
+      end
+
+      # The boundary comes from the audio's digest, so the same audio is the same request bytes.
+      def transcribe(audio:, filename:, media_type:)
+        raise ConfigurationError, "transcription does not run through the witness gateway" if @gateway
+
+        audio_digest = Digest::SHA256.hexdigest(audio)
+        boundary = "tamoz-#{audio_digest[0, 32]}"
+        headers = {"Content-Type" => "multipart/form-data; boundary=#{boundary}"}
+        headers["Authorization"] = "Bearer #{@api_key}" unless @api_key.to_s.empty?
+        response = post_request(TRANSCRIPTION_PATH, transcription_body(audio, filename, media_type, boundary), headers:)
+        body = response.body.to_s
+        raise http_error(response, body) unless response.is_a?(Net::HTTPSuccess)
+
+        Transcript.new(text: transcript_text(body), request_digest: transcription_digest(audio_digest),
+                       response_digest: "sha256:#{Digest::SHA256.hexdigest(body)}", provider_configuration_digest:)
+      rescue URI::InvalidURIError => e
+        raise model_error("transport_failure", body_bytes: e.message.to_s.bytesize)
+      end
+
+      def transcription_digest(audio_digest)
+        Tamoz::Core.digest("tamoz.agent.transcription.v1\n", {"model" => @model, "audio" => "sha256:#{audio_digest}"})
       end
 
       def conversation_settings_digest
@@ -224,8 +250,10 @@ module Tamoz
         envelope_bytes
       end
 
-      def post_completion_request(body, headers:)
-        uri = URI.parse("#{@endpoint}#{OPENAI_COMPLETIONS_PATH}")
+      def post_completion_request(body, headers:) = post_request(OPENAI_COMPLETIONS_PATH, body, headers:)
+
+      def post_request(path, body, headers:)
+        uri = URI.parse("#{@endpoint}#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.read_timeout = @timeout_seconds
         http.open_timeout = @timeout_seconds
@@ -235,6 +263,25 @@ module Tamoz
         rescue Timeout::Error, IOError, SystemCallError, SocketError, Net::ProtocolError
           raise EffectUnknownError, "model call outcome is unknown"
         end
+      end
+
+      def transcription_body(audio, filename, media_type, boundary)
+        name = filename.to_s.gsub(/[^A-Za-z0-9._-]/, "_")
+        media_type = "application/octet-stream" unless media_type.to_s.match?(%r{\A[\w.+-]+/[\w.+-]+\z})
+        head = "--#{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n#{@model}\r\n" \
+               "--#{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"#{name}\"\r\n" \
+               "Content-Type: #{media_type}\r\n\r\n"
+        head.b + audio.b + "\r\n--#{boundary}--\r\n".b
+      end
+
+      def transcript_text(body)
+        parsed = Tamoz::Core.parse_json_strict(body)
+        text = parsed.is_a?(Hash) && parsed["text"]
+        raise model_error("invalid_response", body:) unless text.is_a?(String)
+
+        text[0, MAX_TRANSCRIPT_CHARACTERS]
+      rescue Tamoz::Core::ProtocolError, Tamoz::Core::JCS::Error, JSON::ParserError
+        raise model_error("invalid_response", body:)
       end
 
       def build_model_response(envelope_bytes, request_bytes:)

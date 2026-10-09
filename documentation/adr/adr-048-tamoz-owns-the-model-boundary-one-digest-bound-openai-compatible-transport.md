@@ -26,7 +26,10 @@ provider's native protocol would multiply that by the number of providers.
   resolver. It reads the credential named by the trusted profile, with no generic fallback, and
   builds the `EpisodeModelTransport`.
 - Every model call uses one canonical request/response projection over the OpenAI-compatible
-  protocol. Providers that need a native protocol (Anthropic, Gemini) are reached through
+  protocol. The same transport also speaks its speech-to-text endpoint (`/audio/transcriptions`) for
+  the transcription model an operator names; that call's identity is the model plus the audio's
+  digest, and it is journaled like any model call. An image reaches the configured model as an
+  `image_url` content part of an ordinary conversation call. Providers that need a native protocol (Anthropic, Gemini) are reached through
   `openrouter` with a provider-qualified model id; native protocols fail closed.
 - The provider configuration digest binds provider, model, endpoint, protocol, settings, profile
   digest, and safety posture — never credential values. The model receipt's identity is the request
@@ -67,3 +70,5 @@ operator makes in the profile.
 
 - 2026-08-26 — Accepted as the transport decision; `RubyLLMModel` retired.
 - 2026-10-01 — Absorbed ADR-051 (no `ruby_llm` anywhere; native message/tool types).
+- 2026-10-09 — The transport gained the OpenAI-compatible transcription endpoint for Telegram voice
+  notes (owner request); built by the same factory, same credential rules.

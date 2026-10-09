@@ -59,10 +59,12 @@ module Tamoz
                                       parameters: with_roles(tool.fetch('parameters'), roles))
       end
 
-      def report_labels
-        @report_labels ||= Tamoz::Core.deep_freeze(
-          JSON.parse(File.read(File.join(DIRECTORY, 'report_labels.json'), encoding: Encoding::UTF_8))
-        )
+      def report_labels = (@report_labels ||= data('report_labels.json'))
+
+      def attachment_text = (@attachment_text ||= data('attachment_text.json'))
+
+      def data(file)
+        Tamoz::Core.deep_freeze(JSON.parse(File.read(File.join(DIRECTORY, file), encoding: Encoding::UTF_8)))
       end
 
       # Offered only when the operator enabled memory.
@@ -96,7 +98,7 @@ module Tamoz
         role = properties.fetch('role').merge(offered)
         parameters.merge('properties' => properties.merge('role' => role, 'briefs' => briefs))
       end
-      private_class_method :surface_entry, :section, :with_roles
+      private_class_method :surface_entry, :section, :with_roles, :data
     end
   end
 end

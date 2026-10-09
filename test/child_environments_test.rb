@@ -38,6 +38,28 @@ class ChildEnvironmentsTest < Minitest::Test
            'the worker resolves the ALMS endpoint from the MCP config, not the environment'
   end
 
+  def test_the_worker_gets_the_transcription_model_only_when_one_is_configured
+    configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
+                            'OPENAI_API_KEY' => 'stt-secret')
+    env = ChildEnvironments.worker_env(configured, runtime_dir: '/srv/runtime')
+
+    assert_equal %w[openai whisper-1 stt-secret],
+                 env.values_at('TAMOZ_TRANSCRIPTION_PROVIDER', 'TAMOZ_TRANSCRIPTION_MODEL', 'OPENAI_API_KEY')
+    refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN')
+    refute ChildEnvironments.worker_env(BASE.merge('OPENAI_API_KEY' => 'x'), runtime_dir: 'r').key?('OPENAI_API_KEY'),
+           'no transcription model, no second key'
+  end
+
+  def test_the_image_model_and_its_key_reach_only_the_worker
+    configured = BASE.merge('TAMOZ_VISION_PROVIDER' => 'openai', 'TAMOZ_VISION_MODEL' => 'gpt-4o-mini',
+                            'OPENAI_API_KEY' => 'vision-secret', 'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot')
+
+    assert_equal %w[openai gpt-4o-mini vision-secret],
+                 ChildEnvironments.worker_env(configured, runtime_dir: 'r')
+                                  .values_at('TAMOZ_VISION_PROVIDER', 'TAMOZ_VISION_MODEL', 'OPENAI_API_KEY')
+    refute ChildEnvironments.gateway_env(configured, runtime_dir: 'r', surface: 's').key?('OPENAI_API_KEY')
+  end
+
   def test_queue_and_status_see_neither_credential
     env = ChildEnvironments.queue_status_env(BASE, runtime_dir: '/srv/runtime')
 

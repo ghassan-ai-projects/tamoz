@@ -57,9 +57,16 @@ end
 directory = File.expand_path("../tmp/telegram-eval/#{Time.now.strftime('%Y%m%d-%H%M%S')}", __dir__)
 evaluation.write_report(directory)
 results = evaluation.results
-results.reject { |result| result[:pass] }.each do |result|
+results.select { |result| result[:pass].nil? }.each do |result|
+  puts "  BLOCKED #{result[:scenario]}: #{result[:detail]}"
+end
+results.select { |result| result[:pass] == false }.each do |result|
   puts "  FAIL #{result[:scenario]}: #{result[:check]} — #{result[:detail].to_s[0, 110]}"
 end
 passed = results.count { |result| result[:pass] }
-puts "\n#{passed}/#{results.length} checks pass — #{directory}/report.md"
-exit(passed == results.length ? 0 : 1)
+graded = results.reject { |result| result[:pass].nil? }
+puts "\n#{passed}/#{graded.length} checks pass, #{results.length - graded.length} blocked — #{directory}/report.md"
+exit(if passed != graded.length then 1
+     elsif graded.length < results.length || graded.empty? then 2
+     else 0
+     end)

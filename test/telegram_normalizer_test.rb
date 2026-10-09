@@ -163,4 +163,103 @@ class TelegramNormalizerTest < Minitest::Test
 
     assert_equal [5007, 2002], [callback.fetch('update_id'), callback.fetch('callback_message_id')]
   end
+
+  def test_a_text_update_digest_is_unchanged_from_parser_version_one
+    update = message_update(update_id: 5001, message_id: 42, reply_to: 7)
+
+    assert_equal '41fa3431c144f74f319a3024fb14acbceaf9c8ffa1eb1759dd7281eada999f7b',
+                 normalizer.normalize(update).wire.fetch('raw_payload_hash')
+  end
+
+  def attachment_update(fields = {}, caption: nil, **inline)
+    message = message_update(update_id: 6001, message_id: 60).fetch('message').except('text')
+                                                             .merge(fields, inline)
+    message['caption'] = caption if caption
+    { 'update_id' => 6001, 'message' => message }
+  end
+
+  def test_a_document_becomes_an_attachment_whose_caption_is_the_text
+    wire = normalizer.normalize(attachment_update(
+                                  { 'document' => { 'file_id' => 'D1', 'file_unique_id' => 'u-d1',
+                                                    'file_name' => 'report.pdf', 'mime_type' => 'application/pdf',
+                                                    'file_size' => 2048 } }, caption: 'summarize this'
+                                )).wire
+
+    assert_equal 'attachment', wire.fetch('kind')
+    assert_equal 'summarize this', wire.fetch('text')
+    assert_equal({ 'kind' => 'document', 'file_id' => 'D1', 'file_unique_id' => 'u-d1',
+                   'media_type' => 'application/pdf', 'name' => 'report.pdf', 'size_bytes' => 2048,
+                   'duration_s' => nil }, wire.fetch('attachment'))
+    assert_equal 2, wire.fetch('parser_version')
+  end
+
+  def test_a_photo_picks_its_largest_size_and_an_image_document_is_an_image
+    photo = normalizer.normalize(attachment_update(
+                                   'photo' => [{ 'file_id' => 'small', 'file_unique_id' => 'u-s', 'width' => 90,
+                                                 'height' => 60, 'file_size' => 900 },
+                                               { 'file_id' => 'big', 'file_unique_id' => 'u-b', 'width' => 1280,
+                                                 'height' => 960, 'file_size' => 90_000 }]
+                                 )).wire.fetch('attachment')
+    image_file = normalizer.normalize(attachment_update(
+                                        'document' => { 'file_id' => 'P', 'file_unique_id' => 'u-p',
+                                                        'mime_type' => 'image/png' }
+                                      )).wire.fetch('attachment')
+
+    assert_equal %w[image big image/jpeg], photo.values_at('kind', 'file_id', 'media_type')
+    assert_equal %w[image P], image_file.values_at('kind', 'file_id')
+  end
+
+  def test_voice_and_audio_are_voice_attachments_with_a_duration
+    voice = normalizer.normalize(attachment_update(
+                                   'voice' => { 'file_id' => 'V', 'file_unique_id' => 'u-v', 'duration' => 12,
+                                                'mime_type' => 'audio/ogg' }
+                                 )).wire.fetch('attachment')
+    audio = normalizer.normalize(attachment_update(
+                                   'audio' => { 'file_id' => 'A', 'file_unique_id' => 'u-a', 'duration' => 200,
+                                                'file_name' => 'memo.mp3', 'mime_type' => 'audio/mpeg' }
+                                 )).wire.fetch('attachment')
+
+    forwarded = normalizer.normalize(attachment_update(
+                                       'voice' => { 'file_id' => 'F', 'file_unique_id' => 'u-f', 'duration' => 9 },
+                                       'forward_origin' => { 'type' => 'user', 'date' => 1 }
+                                     )).wire.fetch('attachment')
+
+    assert_equal ['voice', 12, 'audio/ogg'], voice.values_at('kind', 'duration_s', 'media_type')
+    assert_equal ['audio', 200, 'memo.mp3'], audio.values_at('kind', 'duration_s', 'name'),
+                 'an audio file is someone else\'s speech'
+    assert_equal 'audio', forwarded.fetch('kind'), 'a forwarded voice note is not the user\'s own words'
+  end
+
+  def test_a_sticker_video_or_animation_stays_unsupported_from_its_real_sender
+    file = { 'file_id' => 'X', 'file_unique_id' => 'u-x' }
+    [{ 'sticker' => file }, { 'video' => file }, { 'video_note' => file },
+     { 'animation' => file, 'document' => file.merge('mime_type' => 'video/mp4') }].each do |fields|
+      wire = normalizer.normalize(attachment_update(fields)).wire
+
+      assert_equal 'unsupported', wire.fetch('kind'), fields.keys.inspect
+      assert_equal 'telegram:user:11111111', wire.fetch('correspondent_id')
+    end
+  end
+
+  def test_a_long_file_name_is_cut_never_refused
+    name = "#{'ملف' * 50}.pdf"
+    wire = normalizer.normalize(attachment_update('document' => { 'file_id' => 'D', 'file_unique_id' => 'u',
+                                                                  'file_name' => name, 'mime_type' => 'x' * 300 })).wire
+    attachment = wire.fetch('attachment')
+
+    assert_operator attachment.fetch('name').bytesize, :<=, 255
+    assert_predicate attachment.fetch('name'), :valid_encoding?
+    assert_equal 255, attachment.fetch('media_type').bytesize
+    assert_equal wire, Tamoz::Comms::InboundEnvelope.from_wire(wire).wire
+  end
+
+  def test_the_attachment_identity_and_caption_are_in_the_digest
+    document = lambda { |unique, caption|
+      attachment_update({ 'document' => { 'file_id' => 'D', 'file_unique_id' => unique } }, caption:)
+    }
+    base = normalizer.normalize(document.call('u-1', 'a')).wire.fetch('raw_payload_hash')
+
+    refute_equal base, normalizer.normalize(document.call('u-2', 'a')).wire.fetch('raw_payload_hash')
+    refute_equal base, normalizer.normalize(document.call('u-1', 'b')).wire.fetch('raw_payload_hash')
+  end
 end

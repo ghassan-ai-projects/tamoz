@@ -13,9 +13,13 @@ The Telegram transport adapter for Tamoz (ADR-041): one gem implementing the
   timeout on a send becomes `AmbiguousDeliveryError` (genuinely irreconcilable,
   design §10) and is never retried blindly
 - `signal` — `answerCallbackQuery` (ephemeral, unjournaled)
+- `fetch_attachment` — `getFile`, then the bytes from `/file/bot<token>/<file_path>`: the path is
+  validated, the body bounded by the caller's `max_bytes` and a download deadline, and Telegram's
+  "file is too big" read as `ResponseTooLargeError`. The normalizer turns a document, photo, voice note
+  or audio file into a bounded `attachment` envelope (a forwarded voice note is `audio`)
 
 ## Conformance
 
-The test suite drives all four methods against an in-memory fixture server
+The test suite drives every method against an in-memory fixture server
 (`test/support/telegram_fixture_server.rb`) that can duplicate, reorder,
 throttle, lose, and time out — the `tamoz-comms` conformance conditions.

@@ -1,0 +1,7 @@
+Supplier order 7
+
+Seeds: 240.00 dollars
+Tools: 1,044.60 dollars
+Delivery: 35.40 dollars
+
+Payment due in 30 days.

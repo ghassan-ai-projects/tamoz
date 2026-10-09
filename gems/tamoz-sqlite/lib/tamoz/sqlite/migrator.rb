@@ -11,7 +11,7 @@ module Tamoz
       # monotonic-ordering assertions in test/sqlite_approval_stores_test.rb,
       # test/cancellation_visibility_test.rb, and test/memory_store_test.rb.
       # Each migration's own history is documented beside its constant.
-      CURRENT_VERSION = 23
+      CURRENT_VERSION = 24
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1345,6 +1345,42 @@ module Tamoz
 
       MIGRATION_23_CHECKSUM = migration_checksum(MIGRATION_23)
 
+      # Telegram attachments: 23 -> 24 through MIGRATION_24. The inbound kind CHECK admits
+      # 'attachment'; pre-1.0 the anchors are dropped, not carried (ADR-059).
+      MIGRATION_24 = [
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_inbound
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_inbound (
+            surface_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            bot_id INTEGER NOT NULL CHECK (bot_id >= 0),
+            update_id INTEGER NOT NULL CHECK (update_id >= 0),
+            raw_payload_hash TEXT NOT NULL,
+            parser_version INTEGER NOT NULL CHECK (parser_version > 0),
+            kind TEXT NOT NULL CHECK (
+              kind IN ('text', 'command', 'callback', 'membership', 'attachment', 'unsupported')
+            ),
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            disposition TEXT NOT NULL CHECK (
+              disposition IN ('request', 'decision', 'ignored', 'rejected', 'quarantined')
+            ),
+            reason TEXT NOT NULL,
+            request_id TEXT,
+            decision_id TEXT,
+            observed_at_ms INTEGER NOT NULL,
+            ingested_at_ms INTEGER NOT NULL,
+            conflict_count INTEGER NOT NULL DEFAULT 0,
+            last_conflict_digest TEXT,
+            PRIMARY KEY (surface_id, bot_id, update_id, raw_payload_hash)
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_24_CHECKSUM = migration_checksum(MIGRATION_24)
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1370,7 +1406,8 @@ module Tamoz
         20 => [MIGRATION_20, MIGRATION_20_CHECKSUM],
         21 => [MIGRATION_21, MIGRATION_21_CHECKSUM],
         22 => [MIGRATION_22, MIGRATION_22_CHECKSUM],
-        23 => [MIGRATION_23, MIGRATION_23_CHECKSUM]
+        23 => [MIGRATION_23, MIGRATION_23_CHECKSUM],
+        24 => [MIGRATION_24, MIGRATION_24_CHECKSUM]
       }.freeze
 
       def self.verify_connection!(connection)

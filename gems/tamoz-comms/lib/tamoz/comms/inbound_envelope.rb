@@ -19,7 +19,10 @@ module Tamoz
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:FeatureEnvy
     # :reek:NilCheck, :reek:DataClump
     class InboundEnvelope
-      KINDS = %w[text command callback membership unsupported].freeze
+      KINDS = %w[text command callback membership attachment unsupported].freeze
+      ATTACHMENT_KINDS = %w[document image voice audio].freeze
+      ATTACHMENT_KEYS = %w[kind file_id file_unique_id media_type name size_bytes duration_s].freeze
+      MAX_ATTACHMENT_LABEL_BYTES = 255
       MAX_ID_BYTES = 256
       MAX_ID_VALUE = 9_999_999_999_999_999
       MAX_TEXT_BYTES = 8192
@@ -28,20 +31,21 @@ module Tamoz
       attr_reader :surface_id, :surface_revision, :update_id, :raw_payload_hash,
                   :parser_version, :kind, :correspondent_id, :conversation_id,
                   :message_id, :reply_to, :callback_message_id, :callback_query_id,
-                  :text, :command, :arguments,
+                  :text, :command, :arguments, :attachment,
                   :platform_time, :observed_time, :ingestion_time
 
       def initialize(
         surface_id:, surface_revision:, update_id:, raw_payload_hash:,
         parser_version:, kind:, correspondent_id:, conversation_id:,
         message_id: nil, reply_to: nil, callback_message_id: nil, callback_query_id: nil,
-        text: nil, command: nil, arguments: nil,
+        text: nil, command: nil, arguments: nil, attachment: nil,
         platform_time: nil, observed_time: nil, ingestion_time: nil
       )
         fields = {
           surface_id:, surface_revision:, update_id:, raw_payload_hash:, parser_version:, kind:,
           correspondent_id:, conversation_id:, message_id:, reply_to:, callback_message_id:,
-          callback_query_id:, text:, command:, arguments:, platform_time:, observed_time:, ingestion_time:
+          callback_query_id:, text:, command:, arguments:, attachment: attachment && Tamoz::Core.deep_freeze(attachment.dup), platform_time:,
+          observed_time:, ingestion_time:
         }
         validate!(fields)
         fields.each { |name, value| instance_variable_set(:"@#{name}", value) }
@@ -67,6 +71,7 @@ module Tamoz
           'text' => @text,
           'command' => @command,
           'arguments' => @arguments,
+          'attachment' => @attachment,
           'platform_time' => @platform_time&.iso8601(6),
           'observed_time' => @observed_time&.iso8601(6),
           'ingestion_time' => @ingestion_time&.iso8601(6)
@@ -90,6 +95,7 @@ module Tamoz
           text: wire['text'],
           command: wire['command'],
           arguments: wire['arguments'],
+          attachment: wire['attachment'],
           platform_time: wire_time(wire, 'platform_time'),
           observed_time: wire_time(wire, 'observed_time'),
           ingestion_time: wire_time(wire, 'ingestion_time')
@@ -105,6 +111,8 @@ module Tamoz
 
       def text? = kind == 'text'
 
+      def attachment? = kind == 'attachment'
+
       private
 
       def validate!(fields)
@@ -112,6 +120,7 @@ module Tamoz
         validate_parties!(fields.fetch(:correspondent_id), fields.fetch(:conversation_id))
         validate_message_refs!(fields)
         validate_command_fields!(command: fields.fetch(:command), arguments: fields.fetch(:arguments))
+        validate_attachment!(fields.fetch(:kind), fields.fetch(:attachment))
         validate_times!(fields.values_at(:platform_time, :observed_time, :ingestion_time))
       end
 
@@ -182,6 +191,24 @@ module Tamoz
         return if arguments.nil? || Shapes.bounded_string?(arguments, max_bytes: MAX_TEXT_BYTES)
 
         raise ValidationError, 'arguments must be a bounded string'
+      end
+
+      def validate_attachment!(kind, attachment)
+        return if attachment.nil? && kind != 'attachment'
+        raise ValidationError, 'an attachment requires kind attachment and the reverse' unless
+          kind == 'attachment' && attachment.is_a?(Hash) && attachment.keys.sort == ATTACHMENT_KEYS.sort
+
+        Shapes.require_member!(attachment.fetch('kind'), ATTACHMENT_KINDS, 'attachment kind')
+        %w[file_id file_unique_id].each do |key|
+          Shapes.require_string!(attachment.fetch(key), "attachment #{key}", max_bytes: MAX_ID_BYTES)
+        end
+        %w[media_type name].each do |key|
+          value = attachment.fetch(key)
+          next if value.nil?
+
+          Shapes.require_string!(value, "attachment #{key}", max_bytes: MAX_ATTACHMENT_LABEL_BYTES)
+        end
+        %w[size_bytes duration_s].each { |key| optional_integer!(attachment.fetch(key), "attachment #{key}") }
       end
 
       def validate_times!(times)

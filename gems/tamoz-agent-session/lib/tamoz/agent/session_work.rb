@@ -16,6 +16,7 @@ module Tamoz
         @memory = WorkMemory.new(configuration: services.configuration,
                                  transcript: ->(context) { services.planning_context.conversation_transcript(context) })
         @lanes = { nil => build_lane(nil), lead: build_lane(:lead) }.freeze
+        @attachment = WorkAttachment.new(configuration: services.configuration, effects: services.effects)
       end
 
       # Each turn is a fresh execution: it opens a new surface seeded from the conversation transcript (or the
@@ -26,24 +27,26 @@ module Tamoz
         research = WorkResearchState.opened(state[:research])
         return WorkResearchState.unavailable(base) if research&.fetch('mode') == 'lead' && !research_available?
 
-        opened(base.merge(research:), context)
+        opened(base.merge(research:), context, state[:attachment])
       end
 
       # :reek:DuplicateMethodCall
-      def opened(base, context)
+      def opened(base, context, attachment)
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
-        brief = @memory.brief(base.fetch(:task))
-        entries = opening(base, context, previous, brief)
-        base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
+        reading = @attachment.read(attachment, window: work(base).window, context:) if attachment
+        brief = @memory.brief(told(base, reading))
+        entries = opening(base, context, previous, brief, reading)
+        base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
                    work_execution_id: context.execution_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
                    work_checkpoint: previous[:work_checkpoint],
-                   work_trace: [brief.event].compact + work(base).opening_trace)
+                   work_trace: [brief.event, reading&.event, reading&.request].compact + work(base).opening_trace)
       end
 
       def step(state, context)
+        @attachment.discard(state[:attachment]) if state[:attachment] && state.fetch(:work_step_count).zero?
         return CANCELLED if stopped?(context)
 
         exhausted = state[:work_exhausted] || budget_reason(state)
@@ -83,12 +86,15 @@ module Tamoz
 
       def research_available? = @services.configuration.subagent_apps.key?('research')
 
-      def opening(base, context, previous, brief)
+      def opening(base, context, previous, brief, reading)
         transcript = @services.planning_context.conversation_transcript(context)
-        work(base).opening(task: base.fetch(:task), transcript:, previous_answer: previous_answer(previous, transcript),
-                           updates: directive_updates(previous),
-                           carried: { memory: brief.text, checkpoint: previous[:work_checkpoint] })
+        work(base).opening(task: told(base, reading), asked: base.fetch(:task), transcript:,
+                           previous_answer: previous_answer(previous, transcript), updates: directive_updates(previous),
+                           carried: { memory: brief.text, checkpoint: previous[:work_checkpoint],
+                                      material: reading&.material })
       end
+
+      def told(base, reading) = reading&.task ? "#{base.fetch(:task)}\n#{reading.task}" : base.fetch(:task)
 
       def stopped?(context) = Tamoz::Cancellation::Stops.requested?(context.thread_id)
 

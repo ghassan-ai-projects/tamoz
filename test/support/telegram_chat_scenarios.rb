@@ -3,6 +3,9 @@
 # One scenario per expectation in docs/telegram-chat/GOAL.md; checks read observations, never wording.
 # rubocop:disable Metrics/ModuleLength -- one scenario per bar row; splitting the
 #   module would hide the row-to-check mapping this file exists to make visible.
+require 'json'
+require_relative 'telegram_attachment_checks'
+
 module TelegramChatScenarios
   module_function
 
@@ -15,7 +18,7 @@ module TelegramChatScenarios
 
   def all
     %w[setup returning_owner greet memory reset arabic formatting workspace_read create_file deny long help
-       status_cancel burst photo stranger long_conversation restart provider_down]
+       status_cancel burst unsupported] + attachments + %w[stranger long_conversation restart provider_down]
   end
 
   # S1: the one documented command wrote a runnable runtime; every later scenario
@@ -243,10 +246,66 @@ module TelegramChatScenarios
     eval.hygiene('burst', [turn])
   end
 
-  def photo(eval)
-    turn = eval.turn(eval.fresh_user, photo: true, timeout: 20)
-    eval.check('photo', 'non-text gets a reply', !turn.reply.strip.empty?, turn.reply)
-    eval.hygiene('photo', [turn])
+  def unsupported(eval)
+    user = eval.fresh_user
+    turn = eval.turn(user, '(sticker)', timeout: 20) { |fake| fake.send_sticker(user) }
+    eval.check('unsupported', 'says what the bot can read', turn.reply == Tamoz::Comms::Admission::UNSUPPORTED_REPLY,
+               turn.reply)
+    eval.check('unsupported', 'no request admitted', eval.settles(user).empty?, eval.settles(user).inspect)
+    eval.hygiene('unsupported', [turn])
+  end
+
+  ATTACHMENTS = File.expand_path('../fixtures/telegram_attachments', __dir__)
+
+  def attachment_spec
+    @attachment_spec ||= JSON.parse(File.read(File.join(ATTACHMENTS, 'scenarios.json'), encoding: Encoding::UTF_8))
+  end
+
+  def attachments = attachment_spec.fetch('scenarios').keys
+
+  def send_attachment(eval, user, spec, timeout:)
+    bytes = File.binread(File.join(ATTACHMENTS, spec.fetch('file')))
+    eval.turn(user, "(#{spec.fetch('file')}) #{spec['caption']}", timeout:) do |fake|
+      if spec['voice']
+        fake.send_voice(user, bytes, duration: spec.fetch('duration'), forwarded: spec['forwarded'])
+      elsif spec['photo']
+        fake.send_photo(user, bytes, caption: spec['caption'])
+      else
+        fake.send_document(user, bytes, name: spec.fetch('file'), mime_type: spec.fetch('mime_type'),
+                                        caption: spec['caption'], announced: spec.fetch('announced', bytes.bytesize))
+      end
+    end
+  end
+
+  # One attachment scenario from the spec; a capability the machine lacks is BLOCKED, never graded.
+  def attachment(eval, name)
+    spec = attachment_spec.fetch('scenarios').fetch(name)
+    missing = eval.capability_gap(spec.fetch('needs'))
+    return eval.blocked(name, missing) if missing
+
+    downloads = eval.fake.downloads.length
+    turn = send_attachment(eval, eval.fresh_user, spec, timeout: [spec.fetch('budget_s') * 3, 180].max)
+    seen = TelegramAttachmentChecks::Observation.new(
+      reply: turn.reply, steps: turn.steps, answer_s: turn.answer_s,
+      buttons: !(turn.button('approve:') || turn.button('deny:')).nil?,
+      written: spec['forbidden_file'] && !eval.workspace_text(spec['forbidden_file']).empty?,
+      handoffs_left: eval.handoffs, downloaded: eval.fake.downloads.length > downloads,
+      file_text: File.read(File.join(ATTACHMENTS, spec.fetch('file')), mode: 'rb').force_encoding('UTF-8').scrub,
+      read_by_configured_model: read_by_configured_model(eval, spec, turn),
+      known_text: eval.workspace_files_text
+    )
+    TelegramAttachmentChecks.grade(spec, seen).each { |check, pass, detail| eval.check(name, check, pass, detail) }
+    eval.hygiene(name, [turn])
+  end
+
+  def read_by_configured_model(eval, spec, turn)
+    digest = spec.fetch('needs') == 'vision' && eval.vision_digest
+    digest ? eval.read_by?(turn.user, turn.sent_at, digest) : nil
+  end
+
+  attachment_spec.fetch('scenarios').each_key do |name|
+    define_method(name) { |eval| attachment(eval, name) }
+    module_function name
   end
 
   def stranger(eval)

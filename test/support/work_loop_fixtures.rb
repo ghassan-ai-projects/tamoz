@@ -98,6 +98,36 @@ module WorkLoopFixtures
     end
   end
 
+  PNG = "\x89PNG\r\n\x1A\n#{'pixels' * 10}".b
+
+  class ScriptedTranscriber
+    attr_reader :calls
+
+    def initialize(answer)
+      @answer = answer
+      @calls = []
+    end
+
+    def provider_configuration_digest = "sha256:#{'c' * 64}"
+    def transcription_digest(audio_digest) = "sha256:#{audio_digest}"
+
+    def transcribe(audio:, filename:, media_type:)
+      @calls << [audio, filename, media_type]
+      raise @answer if @answer.is_a?(Exception)
+
+      Tamoz::Agent::EpisodeModelTransport::Transcript.new(
+        text: @answer, request_digest: transcription_digest(Digest::SHA256.hexdigest(audio)),
+        response_digest: "sha256:#{'d' * 64}", provider_configuration_digest:
+      )
+    end
+  end
+
+  def attachment_payload(task, kind:, bytes:, media_type:, spool:)
+    { 'task' => task,
+      'attachment' => { 'kind' => kind, 'handoff' => 'f' * 64, 'digest' => spool.put('f' * 64, bytes),
+                        'media_type' => media_type, 'name' => nil, 'duration_s' => nil, 'size_bytes' => bytes.bytesize } }
+  end
+
   # effect_attempt_ttl: real seconds between preparing an effect and starting it; only a crash test wants it short.
   def with_work_workspace(files: {}, effect_attempt_ttl: 5.0)
     Dir.mktmpdir('tamoz-work') do |directory|
@@ -116,12 +146,12 @@ module WorkLoopFixtures
   end
 
   def work_session(model:, root:, adapter:, profile: 'auto', checks: { 'test' => ['true'] }, harness: {},
-                   skills: Tamoz::Skills.empty)
+                   skills: Tamoz::Skills.empty, transcriber: nil, attachment_spool: nil)
     Tamoz::Agent::Session.new(
       model:, toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks:, skills:), checkpointer: adapter,
       routing: :work, approval_engine: Tamoz::Agent.build_approval_engine(profile_name: profile),
       approval_session_id: 'work-test', artifact_store: adapter.bind_artifact_store(tenant: 'work-test'),
-      artifact_tenant: 'work-test', harness:
+      artifact_tenant: 'work-test', harness:, transcriber:, attachment_spool:
     )
   end
 

@@ -191,8 +191,9 @@ module Tamoz
                                     verify: VERIFY_OK }.freeze
 
         def initialize(model_factory: self.class.model_factory(**DEFAULT_MODEL_RESPONSES),
-                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy)
+                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil)
           @now = Time.now.utc
+          @transcriber = transcriber
           @directory = Dir.mktmpdir('tamoz-comms-b0')
           @model_factory = model_factory
           @routing = routing
@@ -248,7 +249,7 @@ module Tamoz
           Tamoz::Comms::Admission.thread_id(
             SURFACE_ID, conversation_id,
             generation: @store.conversation_generation(surface_id: SURFACE_ID,
-                                                      conversation_id: conversation_id)
+                                                       conversation_id: conversation_id)
           )
         end
 
@@ -367,7 +368,7 @@ module Tamoz
           resolved = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_dir, env: {})
           @runtime = Tamoz::Agent::WorkerRuntime.open(
             resolved, model_factory: @model_factory, routing: @routing,
-            harness: @routing == :work ? { surface: :chat } : {}
+                      harness: @routing == :work ? { surface: :chat } : {}, transcriber: @transcriber
           )
           @store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
           @store.deploy_surface(descriptor(admission_mode).wire, now: @now)
@@ -575,8 +576,8 @@ module Tamoz
       # benchmark package receives this protocol; only test support knows the
       # concrete fixture and scripted responses.
       class OpenclawCommsAdapter
-        def build(**options)
-          OpenclawCommsFixture.new(**options)
+        def build(**)
+          OpenclawCommsFixture.new(**)
         end
 
         def model_factory(scenario)

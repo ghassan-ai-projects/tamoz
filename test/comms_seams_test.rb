@@ -49,6 +49,7 @@ class CommsSeamsTest < Minitest::Test
     assert_raises(NotImplementedError) { transport.poll(next_offset: nil, limit: 1, timeout_s: 1) }
     assert_raises(NotImplementedError) { transport.deliver(nil) }
     assert_raises(NotImplementedError) { transport.signal(:typing) }
+    assert_raises(NotImplementedError) { transport.fetch_attachment('f', max_bytes: 1) }
   end
 
   def test_null_sink_discards_events_without_raising
@@ -62,7 +63,8 @@ class CommsSeamsTest < Minitest::Test
   def test_comms_store_contract_is_structural_and_versioned
     store = Object.new.extend(Comms::CommsStore)
 
-    assert_equal 2, Comms::CommsStore::CONTRACT_VERSION
+    assert_equal 3, Comms::CommsStore::CONTRACT_VERSION
+    assert_raises(NotImplementedError) { store.inbound_observed?({}, bot_id: 1) }
     assert_raises(NotImplementedError) do
       store.persist_next_offset(surface_id: 's', bot_id: 1, next_offset: 2, now: Time.now)
     end

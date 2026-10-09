@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 582 | 307 | 14 | **no** |
+| 583 | 308 | 14 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 554 |
+| pass | 555 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -581,6 +581,7 @@ generating run.
 | `MIG-21` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows` |
 | `MIG-22` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22` |
 | `MIG-23` | migration | yes | pass | `test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head` |
+| `MIG-24` | migration | yes | pass | `test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |

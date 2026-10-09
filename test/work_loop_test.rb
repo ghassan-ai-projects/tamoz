@@ -465,3 +465,93 @@ class WorkLoopReviewFindingsTest < Minitest::Test
   end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/ParameterLists
+
+class WorkLoopAttachmentCrashTest < Minitest::Test
+  include WorkLoopFixtures
+
+  # Loses the worker inside intake, after the attachment read and before the opened turn commits.
+  module LoseWorkerOnceAfterTheRead
+    def brief(task)
+      armed = LoseWorkerOnceAfterTheRead.armed
+      return super unless armed
+
+      LoseWorkerOnceAfterTheRead.armed = nil
+      armed << task
+      raise WorkLoopFixtures::ScriptedConversationModel::Crash, 'simulated worker loss inside intake'
+    end
+
+    class << self
+      attr_accessor :armed
+    end
+  end
+  Tamoz::Agent::WorkMemory.prepend(LoseWorkerOnceAfterTheRead)
+
+  def spool(root) = Tamoz::Core::AttachmentSpool.new(File.join(File.dirname(root), 'attachments'))
+
+  def deliver(model, root, adapter, payload, transcriber: nil)
+    work_session(model:, root:, adapter:, transcriber:, attachment_spool: spool(root))
+      .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
+  end
+
+  def test_a_crash_after_the_image_was_read_never_reads_it_again
+    with_work_workspace do |root, adapter|
+      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
+                                                                 spool: spool(root))
+      first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }], crash_at: 3)
+      assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
+      second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
+      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
+                                                                                                    request_id: 'work-1')
+
+      assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
+      assert_includes second.requests.first, 'TOTAL 93.50'
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+    end
+  end
+
+  def test_a_crash_inside_intake_after_the_read_replays_the_journaled_image_receipt
+    with_work_workspace do |root, adapter|
+      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
+                                                                 spool: spool(root))
+      first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }])
+      LoseWorkerOnceAfterTheRead.armed = []
+      assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
+      second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
+      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
+                                                                                                    request_id: 'work-1')
+      stages = outcome.state.fetch(:work_trace).filter_map { |entry| entry['stage'] if entry['event'] == 'request' }
+
+      assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
+      assert_includes second.requests.first, 'TOTAL 93.50'
+      assert_equal %w[attachment_image], stages, 'turn usage counts the image call'
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+    ensure
+      LoseWorkerOnceAfterTheRead.armed = nil
+    end
+  end
+
+  def test_a_crash_inside_intake_after_the_transcription_replays_its_receipt
+    with_work_workspace do |root, adapter|
+      ogg = "OggS\x00voice".b
+      payload = attachment_payload('[voice message]', kind: 'voice', bytes: ogg, media_type: 'audio/ogg',
+                                                      spool: spool(root))
+      first = ScriptedTranscriber.new('my locker code is four seven one nine')
+      seen = LoseWorkerOnceAfterTheRead.armed = []
+      assert_raises(ScriptedConversationModel::Crash) do
+        deliver(ScriptedConversationModel.new(turns: []), root, adapter, payload, transcriber: first)
+      end
+      second = ScriptedTranscriber.new('never asked')
+      model = ScriptedConversationModel.new(turns: [{ content: 'Noted.' }])
+      outcome = work_session(model:, root:, adapter:, transcriber: second, attachment_spool: spool(root)).recover(
+        thread: 'work', request_id: 'work-1'
+      )
+
+      assert_equal [1, 0], [first.calls.length, second.calls.length]
+      assert_equal "[voice message]\nmy locker code is four seven one nine", outcome.state.fetch(:task)
+      assert_equal [outcome.state.fetch(:task)], seen, 'memory recall sees the words'
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+    ensure
+      LoseWorkerOnceAfterTheRead.armed = nil
+    end
+  end
+end

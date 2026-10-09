@@ -167,6 +167,36 @@ class CommsAdmissionTest < Minitest::Test
     end
   end
 
+  def attachment_envelope(conversation: 'telegram:chat:22222222', correspondent: 'telegram:user:11111111')
+    Comms::InboundEnvelope.new(
+      surface_id: 'telegram-ops', surface_revision: 1, update_id: 2, raw_payload_hash: 'b' * 64,
+      parser_version: 2, kind: 'attachment', correspondent_id: correspondent, conversation_id: conversation,
+      attachment: { 'kind' => 'document', 'file_id' => 'D', 'file_unique_id' => 'u', 'media_type' => nil,
+                    'name' => nil, 'size_bytes' => nil, 'duration_s' => nil }
+    ).wire
+  end
+
+  def test_an_attachment_from_an_admitted_correspondent_is_a_request
+    decision = Comms::Admission.decide(attachment_envelope, surface: surface, binding: active_binding)
+
+    assert_equal :request, decision.disposition
+  end
+
+  def test_an_attachment_from_a_stranger_or_a_group_never_becomes_a_request
+    stranger = Comms::Admission.decide(attachment_envelope(correspondent: 'telegram:user:99'), surface: surface)
+    group = Comms::Admission.decide(attachment_envelope(conversation: 'telegram:group:5'), surface: surface,
+                                                                                           binding: active_binding)
+
+    assert_equal %i[ignored rejected], [stranger.disposition, group.disposition]
+  end
+
+  def test_an_unsupported_message_from_an_admitted_correspondent_says_what_works
+    decision = Comms::Admission.decide(envelope(kind: 'unsupported', text: nil), surface: surface,
+                                                                                 binding: active_binding)
+
+    assert_equal Comms::Admission::UNSUPPORTED_REPLY, decision.control_reply
+  end
+
   def test_pairing_mode_waits_for_a_consumed_challenge
     pairing = surface(direct: 'pairing')
     decision = Comms::Admission.decide(envelope, surface: pairing, binding: nil)

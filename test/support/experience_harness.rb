@@ -34,6 +34,15 @@ module Tamoz
 
       def enqueue(update) = (@queue << update)
 
+      def files = (@files ||= {})
+
+      def fetch_attachment(file_id, max_bytes:)
+        bytes = files.fetch(file_id) { raise Tamoz::Comms::TransientTransportError, 'no such file' }
+        raise Tamoz::Comms::ResponseTooLargeError, 'file is too big' if bytes.bytesize > max_bytes
+
+        bytes
+      end
+
       def poll(next_offset:, limit:, timeout_s: nil) # rubocop:disable Lint/UnusedMethodArgument
         pending = @queue.select { |u| next_offset.nil? || u.fetch('update_id') >= next_offset }
         served = pending.first(limit || 50)
@@ -65,7 +74,7 @@ module Tamoz
       # explicit model_factory (e.g. the fixture's scripted one) ONLY for a
       # deterministic plumbing test — such a run is never intelligence evidence.
       def initialize(provider: nil, model: nil, model_factory: nil,
-                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy)
+                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil)
         @provider = provider || ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
         @model = model || ENV.fetch('TAMOZ_MODEL', 'deepseek-chat')
         @update_seq = 1_000
@@ -74,7 +83,7 @@ module Tamoz
         @last_bot_message_id = nil
         super(model_factory: model_factory || real_model_factory,
               admission_mode: admission_mode, approval_ask: approval_ask,
-              routing:)
+              routing:, transcriber:)
         bind_thread(Fixture::CONVERSATION_A) if admission_mode == :allowlist
       end
 
@@ -99,6 +108,65 @@ module Tamoz
         enqueue_message(text, reply_to: nil)
         serve
         new_outbound
+      end
+
+      attr_reader :transport
+
+      def handoff_folder = File.join(@runtime.path, 'attachments')
+
+      def handoffs = Dir.exist?(handoff_folder) ? Dir.children(handoff_folder) : []
+
+      def forget_handoffs = handoffs.each { |name| File.delete(File.join(handoff_folder, name)) }
+
+      def admit_document(bytes, mime_type:)
+        file_id = "doc-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        enqueue_update('message' => { 'message_id' => next_message_id, 'chat' => chat_hash,
+                                      'from' => { 'id' => Fixture::USER_BOUND }, 'date' => Time.now.to_i,
+                                      'document' => { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}",
+                                                      'mime_type' => mime_type } })
+        serve
+      end
+
+      def send_document(bytes, name:, mime_type:, caption: nil)
+        file_id = "doc-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        document = { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'file_name' => name,
+                     'mime_type' => mime_type, 'file_size' => bytes.bytesize }
+        message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },
+                    'date' => Time.now.to_i, 'document' => document, 'caption' => caption }.compact
+        enqueue_update('message' => message)
+        serve
+        work_off
+      end
+
+      def send_photo(bytes, caption: nil, run: true)
+        file_id = "photo-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        sizes = [{ 'file_id' => "#{file_id}-thumb", 'file_unique_id' => "u-#{file_id}-t", 'width' => 90, 'height' => 60 },
+                 { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'width' => 1280, 'height' => 960,
+                   'file_size' => bytes.bytesize }]
+        message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },
+                    'date' => Time.now.to_i, 'photo' => sizes, 'caption' => caption }.compact
+        enqueue_update('message' => message)
+        serve
+        run ? work_off : new_outbound
+      end
+
+      def send_voice(bytes, duration: 4, forwarded: false)
+        file_id = "voice-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },
+                    'date' => Time.now.to_i,
+                    'voice' => { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'duration' => duration,
+                                 'mime_type' => 'audio/ogg', 'file_size' => bytes.bytesize } }
+        if forwarded
+          message['forward_origin'] =
+            { 'type' => 'hidden_user', 'sender_user_name' => 'someone', 'date' => 1 }
+        end
+        enqueue_update('message' => message)
+        serve
+        work_off
       end
 
       # Run one worker pass and drain; returns new cards.
@@ -176,7 +244,8 @@ module Tamoz
             store: @store, transport: @transport, descriptor: surface,
             owner: 'sim:gateway:drainer', batch_size: 50, sleeper: ->(_) {}
           ),
-          controls: ->(thread_id) { @runtime.session_for(thread_id) }
+          controls: ->(thread_id) { @runtime.session_for(thread_id) },
+          attachments: Tamoz::Core::AttachmentSpool.new(handoff_folder)
         )
         sink = Tamoz::Comms::OutboxDeliverySink.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints

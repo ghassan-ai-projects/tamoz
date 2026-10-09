@@ -28,6 +28,8 @@ require_relative "subagent_apps"
 require_relative "work_compaction"
 require_relative "work_nudge"
 require_relative "work_gate"
+require_relative "attachment_text"
+require_relative "work_attachment"
 require_relative "session_work"
 
 module Tamoz
@@ -59,6 +61,9 @@ module Tamoz
         :artifact_store,
         :artifact_tenant,
         :child_task_runtime,
+        :transcriber,
+        :image_reader,
+        :attachment_spool,
         :capabilities,
         :approval_engine,
         :approval_session_id,
@@ -105,6 +110,9 @@ module Tamoz
         artifact_store: nil,
         artifact_tenant: nil,
         child_task_runtime: nil,
+        transcriber: nil,
+        image_reader: nil,
+        attachment_spool: nil,
         transcript_reader: nil,
         graph_version: GraphVersions::GRAPH_VERSION,
         harness: {},
@@ -141,6 +149,9 @@ module Tamoz
           artifact_store:,
           artifact_tenant:,
           child_task_runtime:,
+          transcriber:,
+          image_reader:,
+          attachment_spool:,
           capabilities: @capabilities,
           graph_version:,
           harness:,

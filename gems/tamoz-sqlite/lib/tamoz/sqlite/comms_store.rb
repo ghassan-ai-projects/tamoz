@@ -41,7 +41,7 @@ module Tamoz
     class CommsStore
       include CommsStoreRows
 
-      CONTRACT_VERSION = 2
+      CONTRACT_VERSION = 3
       REQUEST_OPERATION = 'turn'
       REQUEST_DELIVERY = 'queue'
       CANCEL_OPERATION = 'redirect'
@@ -121,7 +121,7 @@ module Tamoz
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
       def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
-                            history: [], research: nil)
+                            history: [], research: nil, attachment: nil)
         transaction('comms.admit.enqueue') do |txn|
           anchor = inbound_anchor(txn, envelope_wire, bot_id)
           if anchor
@@ -146,7 +146,7 @@ module Tamoz
           payload_bytes, payload_digest, input_digest = encode_request(
             REQUEST_OPERATION, REQUEST_DELIVERY,
             turn_payload(envelope_wire.fetch('text'), history, thread:, request_id:)
-              .merge(research ? { 'research' => research } : {})
+              .merge({ 'research' => research, 'attachment' => attachment }.compact)
           )
           @checkpoints.enqueue_request_in_transaction!(
             txn, thread:, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
@@ -181,6 +181,10 @@ module Tamoz
                           reason: 'clarification_answer', now:, request_id:)
           :enqueued
         end
+      end
+
+      def inbound_observed?(envelope_wire, bot_id:)
+        read('comms.admit.inbound.observed') { |txn| !inbound_anchor(txn, envelope_wire, bot_id).nil? }
       end
 
       # Record a non-request disposition (ignored/rejected/quarantined)

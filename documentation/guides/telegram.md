@@ -235,8 +235,35 @@ until you send `/new`. Replies come in the language you write in.
   automatic check covered this change, so give it a quick look." A turn that
   failed, gave up, or lost its provider says so in one sentence. Long answers
   arrive whole, split across messages at Telegram's 4096-character limit.
-- **Other messages.** Photos, stickers and other non-text messages get "I can
-  only read text messages for now."
+- **Files.** Send a text file (txt, md, csv, json, code) or a PDF, with your
+  question as the caption; the bot reads it and answers from it. Its content is
+  shown to the model as material, never as instructions, so a document cannot
+  tell the bot what to do. PDFs are read with poppler's `pdftotext`, which must
+  be installed on the worker's machine (`brew install poppler`); without it the
+  bot says PDF reading is not set up. Up to 20 MB; the first 24,000 characters
+  are read. Files are not kept: the gateway hands each one to the worker as a
+  temporary file in the runtime's `attachments/` folder, deleted as soon as the
+  turn has read it; only what was read from it stays in the conversation. A scanned PDF has no text layer — send its pages as photos.
+- **Photos and images.** A photo, or a PNG/JPEG/WebP/GIF sent as a file (up to
+  5 MB), is read in one extra model call: every piece of text in it verbatim,
+  then two sentences on what it shows; the answer is built from that. Name an
+  image-reading model with `TAMOZ_VISION_PROVIDER`, `TAMOZ_VISION_MODEL` (and
+  optionally `TAMOZ_VISION_API_BASE`); without one, the chat model reads images,
+  so it must accept image input. If the model refuses, the bot says it could
+  not read the image.
+- **Voice messages.** A voice note is transcribed and answered as if you had
+  typed it, in the language you spoke. A forwarded voice note or an audio file is
+  someone else's speech: its transcript is shown to the model as material, not as
+  your request. Transcription needs an OpenAI-compatible speech-to-text model the
+  operator names in the env file the worker reads, for example:
+  `TAMOZ_TRANSCRIPTION_PROVIDER=openai`, `TAMOZ_TRANSCRIPTION_MODEL=whisper-1` and
+  `OPENAI_API_KEY`, or a local whisper server with
+  `TAMOZ_TRANSCRIPTION_PROVIDER=ollama` (no key is sent) and
+  `TAMOZ_TRANSCRIPTION_API_BASE` pointing at it. The audio is sent as Telegram delivered it
+  (OGG/Opus), so the endpoint must accept that format. Without a transcription
+  model the bot says voice is not set up. Up to 10 minutes per message.
+- **Other messages.** Stickers, videos and formats the bot cannot read yet get
+  one line saying what it can read.
 
 ### Checking the experience yourself
 
