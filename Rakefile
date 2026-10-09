@@ -15,7 +15,12 @@ RUBY_SOURCES = TestSuite.sources.freeze
 AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 MANUAL_TESTS = ["test/stream_episode_real_model_test.rb"].freeze
 
-# The slow set: every file measured at >= 5 seconds, plus everything in
+# The everyday cap: every file outside SLOW_TESTS and SERIAL_TESTS must finish inside it on the
+# machine running `rake ci` (the CI runner is about twice as slow as a developer machine), or the
+# gate fails naming it. Make the file faster first; it joins SLOW_TESTS only when it cannot be.
+TEST_FILE_CAP_SECONDS = 5.0
+
+# The slow set: every file over TEST_FILE_CAP_SECONDS on CI, plus everything in
 # SERIAL_TESTS. They are slow for real reasons — spawning MCP server
 # subprocesses, SIGKILLing children at each durable seam, building all nine
 # gems, verifying SQLite against a raw oracle — so there is nothing to trim, only
@@ -102,8 +107,9 @@ LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
 def test_command(files, warnings: false)
   options = warnings ? ["-w"] : []
   [RbConfig.ruby, *options, "-Itest", *LIB_FLAGS, '-r', File.join(TestSuite::ROOT, 'test/support/test_suite'),
-   "-e", "ARGV.shift(Integer(ARGV.shift)).each { |file| require File.expand_path(file) }; " \
-         "TestSuite.validate_runnable_methods! if defined?(Minitest::Runnable)",
+   '-r', File.join(TestSuite::ROOT, 'test/support/file_clock'),
+   "-e", "TestSuite::FileClock.require_files(ARGV.shift(Integer(ARGV.shift))); " \
+         "TestSuite.validate_runnable_methods!",
    files.length.to_s, *files, *Shellwords.split(ENV.fetch("TESTOPTS", ""))]
 end
 
@@ -239,7 +245,8 @@ task :test_parallel, [:mode] => :test_inventory do |_task, args|
       # One process per shard, requiring every file in it — `ruby a.rb b.rb`
       # would run only the first and treat the rest as ARGV.
       output, status = Open3.capture2e(
-        { "SIMPLE_COV_COMMAND_NAME" => "tests:shard:#{files.first}" }, *test_command(files)
+        { "SIMPLE_COV_COMMAND_NAME" => "tests:shard:#{files.first}",
+          "TEST_FILE_CAP_SECONDS" => (TEST_FILE_CAP_SECONDS.to_s unless include_slow) }, *test_command(files)
       )
       failures << [files, output] unless status.success?
     end
@@ -263,6 +270,7 @@ task :test_parallel, [:mode] => :test_inventory do |_task, args|
 
         warn lines[index, 4].join
       end
+      warn lines.grep(/^TEST FILE OVER CAP:/).join
       warn output unless lines.any? { |line| line =~ /^\s*\d+\) (Failure|Error):/ }
       warn lines.grep(/runs,/).last.to_s
     end

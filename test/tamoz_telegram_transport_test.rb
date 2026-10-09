@@ -7,9 +7,9 @@ require_relative 'support/telegram_fixture_server'
 class TamozTelegramTransportTest < Minitest::Test
   Comms = Tamoz::Comms
 
-  def with_transport(max_response_bytes: Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES)
+  def with_transport(max_response_bytes: Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES, read_timeout: 1.0)
     server = TelegramFixtureServer.new
-    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout: 1.0,
+    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout:,
                                                        max_response_bytes:)
     normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
     transport = Tamoz::Telegram::Transport.new(client:, normalizer:)
@@ -212,7 +212,7 @@ class TamozTelegramTransportTest < Minitest::Test
   end
 
   def test_a_send_timeout_is_ambiguous_never_retried
-    with_transport do |transport, server|
+    with_transport(read_timeout: 0.05) do |transport, server|
       server.script('sendMessage', body: { 'ok' => true, 'result' => { 'message_id' => 1, 'date' => 1 } },
                                    times: 1, delay_s: 2.0)
       delivery = Comms::Delivery.build(
@@ -289,7 +289,7 @@ class TamozTelegramTransportTest < Minitest::Test
   # Typing it as ambiguous would say an effect may already have happened, and
   # a gateway that cannot tell the two apart either stalls or duplicates.
   def test_a_poll_timeout_is_transient_not_ambiguous
-    with_transport do |transport, server|
+    with_transport(read_timeout: 0.05) do |transport, server|
       server.script('getUpdates', body: { 'ok' => true, 'result' => [] }, times: 1, delay_s: 2.0)
 
       error = assert_raises(Comms::TransientTransportError) do

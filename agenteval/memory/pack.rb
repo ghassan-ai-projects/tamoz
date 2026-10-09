@@ -78,15 +78,18 @@ module Agenteval
     end
 
     # Runs every control through the real judge; returns the disagreements (empty = proven).
-    def prove
+    def prove(verdicts = CONTROLS.keys.to_h { |name| [name, control_verdicts(name)] })
       problems = validate
-      CONTROLS.each_key do |name|
-        verdicts = SCENARIOS.map { |scenario| SessionChain.trial(scenario, arm: "control:#{name}", &control_agent(name, scenario)) }
-        solved = verdicts.select(&:solved).map(&:scenario)
+      verdicts.each do |name, trials|
+        solved = trials.select(&:solved).map(&:scenario)
         expected = EXPECTED.fetch(name)
         problems << "#{name} solved #{solved.inspect}, expected #{expected.inspect}" unless solved == expected
       end
       problems
+    end
+
+    def control_verdicts(name)
+      SCENARIOS.map { |scenario| SessionChain.trial(scenario, arm: "control:#{name}", &control_agent(name, scenario)) }
     end
 
     def tamoz_agent(scenario, arm, budget:)
