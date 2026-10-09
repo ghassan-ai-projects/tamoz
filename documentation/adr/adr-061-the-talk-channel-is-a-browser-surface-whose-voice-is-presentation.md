@@ -3,8 +3,8 @@
 **Status:** Accepted 2026-10-09
 **Date:** 2026-10-09
 **Tier:** F
-**Implementation:** Complete
-**Relates to:** [ADR-041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) (a second transport gem), [ADR-042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) (the process it runs in, and the speech credential it may hold), [ADR-016](./adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md) (speech output is presentation, not an effect), [ADR-049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) (approval stays a bound button)
+**Implementation:** Partial — built and plumbing-tested; the real-model eval (`docs/talk-voice-2026-10-09/EVAL.md`) has trial runs only, not its gated runs
+**Relates to:** [ADR-041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) (a second transport gem), [ADR-042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) (the process it runs in, and the speech credential it may hold), [ADR-016](./adr-016-every-external-effect-is-journaled-and-ambiguity-stops-as-unknown.md) (speech output is presentation, not an effect), [ADR-049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) (approval stays a bound button), [ADR-048](./adr-048-tamoz-owns-the-model-boundary-one-digest-bound-openai-compatible-transport.md) (the speech endpoint and a role's own key)
 
 The operator talks to Tamoz from a browser page. To Tamoz the page is a channel like Telegram: a
 `talk` surface whose transport is a small HTTP server inside the gateway process. Speech is
@@ -66,9 +66,18 @@ speaker.
 | Tamoz obeys its own voice | Half-duplex by default; the echo guard frames its own reply as material |
 | Markup in a reply runs in the page | Text is set through `textContent` only; CSP forbids inline script |
 | Audio kept | Memory until confirmed, then the spool until read; speech output in a bounded memory cache |
+| The agent reads the token | `talk setup` and `start` refuse a workspace that holds the runtime folder |
 
-**Residual risk:** whoever holds the link can approve changes; the link is printed once to the
-operator's terminal and can be rotated (`tamoz talk setup --rotate-token`).
+**Residual risk:**
+
+- Whoever holds the link can approve changes. Each `talk start` prints it to the operator's terminal;
+  `tamoz talk setup --rotate-token` replaces it, and a running Tamoz accepts the old link until restarted.
+- The echo guard compares only with the last spoken answer and needs 8 words; a shorter or older echo, or
+  one with the "headphones" box left on over speakers, reaches the model as the user's words. Anything
+  said near the microphone in hands-free mode is the user's words too (push-to-talk avoids it).
+- Up to 400 characters of each spoken reply go to the voice provider.
+- Off loopback, a peer that can reach the port can hold all 16 connections with slow requests, so the page
+  stops answering until it goes away (`FUTURE_PLAN.md` F11).
 
 ## History
 

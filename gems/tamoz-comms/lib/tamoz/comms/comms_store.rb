@@ -89,7 +89,8 @@ module Tamoz
       end
 
       # The latest delivered rows, plus every delivered approval card whose prompt is still active, oldest first.
-      # @return [Array<Hash>] outbox rows carrying their receipt
+      # @return [Array<Hash>] outbox rows in their wire shape: `Delivery#wire` keys, `receipt` the transport's receipt
+      #   as a JSON string (nil when none was recorded), `journaled` as 0 or 1
       def delivered_messages(surface_id:, limit:)
         raise NotImplementedError
       end

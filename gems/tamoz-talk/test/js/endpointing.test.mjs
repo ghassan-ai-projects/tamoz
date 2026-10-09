@@ -6,10 +6,12 @@ import { silence, speech, join, run, cough, clicks, hum, mix, random, pink } fro
 
 const segments = (vad, signal) => run(vad, signal).filter((e) => e.type === 'end').length;
 
+// Pauses are room tone at a level that varies per seed, so the floor, the thresholds and the hang-over all matter.
 function sentence(seed, pauseMs) {
   const rng = random(seed);
-  return join(silence(800, 0.001, rng), speech(600 + seed % 5 * 100, rng), silence(pauseMs, 0.001, rng),
-    speech(500 + seed % 7 * 100, rng), silence(1600, 0.001, rng));
+  const room = 0.002 + (seed % 7) * 0.001;
+  return join(pink(800, room, rng), speech(600 + seed % 5 * 100, rng), pink(pauseMs, room, rng),
+    speech(500 + seed % 7 * 100, rng), pink(1600, room, rng));
 }
 
 test('premature cuts at the 0.8 s setting with 0.5–0.7 s pauses are at most 5%', () => {
@@ -48,7 +50,6 @@ test('reported: end-of-turn delay and echo at -25 dB (full-duplex)', () => {
     if (segments(new Vad(), echo) > 0) echoTriggers += 1;
   }
   console.log(`C9 report: false barge-in from -25 dB echo ${echoTriggers}/50 (report only; real AEC not modeled)`);
-  assert.ok(Number.isInteger(echoTriggers));
 });
 
 test('controls: a naive 300 ms cutter fails the cut grader and an ungated VAD fails the noise grader', () => {
@@ -86,7 +87,7 @@ test('control: a frozen floor fails the room-tone grader', () => {
   let stuck = 0;
   for (let seed = 1; seed <= 20; seed += 1) {
     const rng = random(seed * 17);
-    const vad = new Vad({ floorFall: 0, floorRise: 0 });
+    const vad = new Vad({ floorFall: 0, floorRise: 0, calibrationFrames: 0 });
     vad.floor = 0.002;
     const events = run(vad, join(pink(2500, 0.008, rng), silence(500, 0.001, rng)));
     if (events.some((e) => e.type === 'start')) stuck += 1;

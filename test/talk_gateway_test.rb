@@ -45,7 +45,7 @@ class TalkGatewayTest < Minitest::Test
   def hub(floor: 0, **) = Tamoz::Talk::Hub.new(descriptor: talk_descriptor, token: TOKEN, floor:, port: 0, **)
 
   def send_async(hub, wire, audio: nil)
-    Thread.new { hub.inbox.submit(wire, audio:, timeout_s: 10) }.tap { sleep 0.01 until hub.inbox.size.positive? }
+    Thread.new { hub.inbox.submit(wire, audio:, timeout_s: 10) }.tap { eventually { hub.inbox.size.positive? } }
   end
 
   def rows(store, sql)
@@ -68,7 +68,7 @@ class TalkGatewayTest < Minitest::Test
       senders << send_async(talk, talk.normalizer.utterance(update_id: 2, audio: wav(1), duration_s: 1.0),
                             audio: wav(1))
       senders << send_async(talk, talk.normalizer.text(update_id: 3, text: 'approve:abc'))
-      sleep 0.01 until talk.inbox.size == 3
+      eventually { talk.inbox.size == 3 }
       gateway = gateway_for.call(talk)
       gateway.start(now: NOW)
 
@@ -148,7 +148,7 @@ class TalkGatewayTest < Minitest::Test
                                                            message_id: 4242))]
       senders << send_async(talk, talk.normalizer.decision(update_id: 8, action: 'approve', reference:,
                                                            message_id: 4243))
-      sleep 0.01 until talk.inbox.size == 2
+      eventually { talk.inbox.size == 2 }
       gateway = gateway_for.call(talk)
       gateway.start(now: NOW)
       pass(gateway)
@@ -210,7 +210,7 @@ class TalkGatewayTest < Minitest::Test
     with_runtime do |gateway_for, store|
       talk = hub
       senders = [1, 2].map { |id| send_async(talk, talk.normalizer.text(update_id: id, text: "question #{id}")) }
-      sleep 0.01 until talk.inbox.size == 2
+      eventually { talk.inbox.size == 2 }
       gateway = gateway_for.call(talk)
       gateway.start(now: NOW)
       pass(gateway)

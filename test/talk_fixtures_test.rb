@@ -7,7 +7,7 @@ require 'digest'
 # The talk eval's corpus is data: pinned, split by script, and every slot findable in its own script.
 # rubocop:disable Minitest/MultipleAssertions
 class TalkFixturesTest < Minitest::Test
-  SPEC_DIGEST = 'c5357408d056e45d92454259911016513882770a84dca4d7ce32e1fa6dcc78d5'
+  SPEC_DIGEST = '20d74c9955714d6adac40a6e49a34f8c2d46c9d4ba0b9c5c1d6bf4bf6dffdf5b'
   WAV_DIR = File.expand_path('fixtures/talk/wav', __dir__)
 
   def spec = TalkChecks.spec

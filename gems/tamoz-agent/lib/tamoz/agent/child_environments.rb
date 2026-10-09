@@ -4,8 +4,9 @@ module Tamoz
   module Agent
     # C7 (PLAN_ADR049 Phase 6): exact per-command child environments. Every
     # child gets the standard runtime allowlist plus only the credentials its
-    # command may hold: the gateway gets the bot token but never the model
-    # key, the worker gets the model key but never the bot token, queue/status
+    # command may hold: the gateway gets its channel token (and, for talk, the
+    # VOICE key) but never the chat model key, the worker gets the model key
+    # but never a channel token, queue/status
     # get neither, and the harness gets only sanitized pointers. A value that
     # is not in the map never reaches the child — there is no shared-env path.
     #

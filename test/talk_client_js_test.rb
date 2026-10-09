@@ -12,7 +12,7 @@ class TalkClientJsTest < Minitest::Test
                                                             .find { |path| File.executable?(path) }
     skip 'BLOCKED: node is not installed, so the client modules were not tested' unless node
 
-    output, status = Open3.capture2e(node, '--test', TESTS)
+    output, status = Open3.capture2e(node, '--test', *Dir[File.join(TESTS, '*.test.mjs')].sort)
     output = output.dup.force_encoding(Encoding::UTF_8)
 
     assert_predicate status, :success?, output

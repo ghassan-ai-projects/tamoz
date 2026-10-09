@@ -1194,7 +1194,7 @@
       "state": "accepted",
       "date": "2026-08-26",
       "tier": "C",
-      "implementation": "Partial — boundary tests guard memory, skills, research, approval, profile, and core file facades; other gems have no leak test yet. The \"when a gem\" criterion is proposed (owner decision D6); until confirmed, the 2026-08-26 rule stands",
+      "implementation": "Partial — boundary tests guard memory, skills, research, approval, profile, talk, and core file facades; other gems have no leak test yet. The \"when a gem\" criterion is proposed (owner decision D6); until confirmed, the 2026-08-26 rule stands",
       "file": "adr-052-a-gem-owns-one-dependency-boundary-and-is-reached-only-through-its-facade.md",
       "relates_to": [
         "040",
@@ -1431,12 +1431,13 @@
       "state": "accepted",
       "date": "2026-10-09",
       "tier": "F",
-      "implementation": "Complete",
+      "implementation": "Partial — built and plumbing-tested; the real-model eval (`docs/talk-voice-2026-10-09/EVAL.md`) has trial runs only, not its gated runs",
       "file": "adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md",
       "relates_to": [
         "016",
         "041",
         "042",
+        "048",
         "049"
       ],
       "supersedes": [],

@@ -105,3 +105,27 @@ because the shared attachment prompt (`gems/tamoz-harness/prompts/attachment_tex
 transcript as a Telegram-style voice note. Design: a `talk` variant of the `voice` label chosen by the surface kind
 (`Parties#speaks`), with the prompt-pack pin updated. Test: the talk turn's opening material uses the talk label;
 Telegram's is byte-identical. Open: whether one neutral wording ("what the user said") serves both surfaces.
+
+## F15. Pair Heard and replies to the utterance that caused them
+
+Found in review (2026-10-09): the page pairs a Heard notice and a final reply with the oldest open bubble.
+An utterance the gateway refuses after the inbox confirmed it (open-request limit, integrity conflict)
+gets only a control notice, so its bubble stays open and later Heards and answers shift by one. The
+conversation itself is right; only the page's labels are wrong. Design: carry the inbound message id
+through the request so its deliveries name it (`reply_to`), and pair by it. Test: a refused utterance
+between two admitted ones leaves both admitted bubbles with their own Heard and answer.
+
+## F16. A stronger echo guard
+
+Found in review: the guard compares the transcript only with the last spoken answer and needs 8 words.
+Design: the gateway records what it actually spoke (the last few projections, by message id) and the
+worker compares with all of them, with a lower word floor for near-exact matches; an echo turn's own
+reply is not spoken, so full-duplex cannot loop. Waits on: evidence of a missed echo in real use.
+
+## F17. The HTTP edge off loopback
+
+Found in review: a peer that can reach a non-loopback port can hold all 16 connections with slow
+requests, and an aborted long-poll keeps its slot until its 25 s wait ends. Design: a 1 s deadline until
+the request line, a per-peer cap, one slot reserved for authenticated requests, and a poll generation
+so a new poll ends the old one. Belongs with F11 (the edge in its own process).
+

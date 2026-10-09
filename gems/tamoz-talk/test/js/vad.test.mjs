@@ -85,8 +85,12 @@ test('a flat 120 ms burst is dropped as too short', () => {
   assert.deepEqual(events.filter((e) => e.type === 'drop').map((e) => e.reason), ['short']);
 });
 
-test('the first frame cannot set the floor, so loud speech from the first frame still opens a segment', () => {
-  const vad = new Vad();
-  const events = run(vad, join(speech(1000), silence(1500)));
-  assert.equal(ends(events).length, 1);
+test('the first 300 ms only measure the room, so a loud room the microphone opens into never starts a segment', () => {
+  const events = run(new Vad(), pink(800, 0.008, random(31)));
+  assert.deepEqual(events.filter((e) => e.type === 'start'), []);
+});
+
+test('speech the instant the microphone opens is not kept as the room: the floor falls back for the next sentence', () => {
+  const events = run(new Vad(), join(speech(1000), silence(1500), speech(1000), silence(1500)));
+  assert.ok(ends(events).length >= 1);
 });

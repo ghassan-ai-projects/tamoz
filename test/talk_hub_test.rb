@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/talk_fixtures'
 require 'json'
 
 # rubocop:disable Minitest/MultipleAssertions
 class TalkHubTest < Minitest::Test
+  include TalkFixtures
+
   Talk = Tamoz::Talk
   Comms = Tamoz::Comms
   TOKEN = 'a' * 32
@@ -122,7 +125,7 @@ class TalkHubTest < Minitest::Test
     })
     hub.log.since(after: 0, epoch: nil, timeout_s: 0, speech: true)
     receipt = hub.deliver(delivery('Pond 7 is fine.'))
-    sleep 0.01 until calls.size == 1
+    eventually { calls.size == 1 }
 
     assert_equal 'ID3Pond 7 is fine.', hub.speaker.speech(receipt.fetch('message_id'))
     assert_equal 1, calls.size

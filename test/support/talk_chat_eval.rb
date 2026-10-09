@@ -10,9 +10,8 @@ require 'rbconfig'
 require 'socket'
 require 'tmpdir'
 
-# Drives the real `tamoz talk setup` and `tamoz talk start` and talks to the page's HTTP API exactly as the
-# browser does (same routes, update ids, resend rule). With TalkFakeProvider it is plumbing; with real keys it
-# is the eval's server-side layer.
+# Runs the real `tamoz talk setup|start` and talks to the page's HTTP API as the browser does; with
+# TalkFakeProvider it is plumbing, with real keys the eval's server-side layer.
 class TalkChatEval
   ROOT = File.expand_path('../..', __dir__)
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
@@ -20,7 +19,7 @@ class TalkChatEval
   Event = Struct.new(:at, :data)
   FINAL = %w[answer failed stopped blocked].freeze
   # What one turn showed: its Heard notice, its final reply or approval card, and when each arrived.
-  Turn = Struct.new(:sent_at, :voice, :admitted, :heard, :final, :card, :events, keyword_init: true) do
+  Turn = Struct.new(:sent_at, :admitted_at, :voice, :admitted, :heard, :final, :card, :events, keyword_init: true) do
     def answer = final && final.data['kind'] == 'answer' ? final.data['text'] : nil
   end
 
@@ -122,6 +121,7 @@ class TalkChatEval
   def turn(text: nil, wav: nil, timeout: Float(ENV.fetch('TAMOZ_TALK_AWAIT_S', 180)))
     sent_at = now
     status = wav ? say_audio(wav) : say_text(text)
+    admitted_at = now
     return Turn.new(sent_at:, voice: !wav.nil?, admitted: false, events: []) unless status == 200
 
     settled = begin
@@ -130,7 +130,7 @@ class TalkChatEval
       nil
     end
     seen = messages(since: sent_at)
-    Turn.new(sent_at:, voice: !wav.nil?, admitted: true, events: seen,
+    Turn.new(sent_at:, admitted_at:, voice: !wav.nil?, admitted: true, events: seen,
              heard: seen.find { |event| event.data['text'].to_s.start_with?('Heard:') },
              final: settled && FINAL.include?(settled.data['kind']) ? settled : nil,
              card: settled && settled.data['reference'] ? settled : nil).tap { |turn| @turns << turn }
@@ -149,12 +149,12 @@ class TalkChatEval
     since = now
     say_text('/new')
     await(timeout: 30, since:) { |event| event['kind'] == 'control' }
-  rescue RuntimeError
-    nil
   end
 
   def query(sql)
-    out, = Open3.capture2('sqlite3', '-readonly', File.join(@runtime, 'runtime.sqlite3'), sql)
+    out, err, status = Open3.capture3('sqlite3', '-readonly', File.join(@runtime, 'runtime.sqlite3'), sql)
+    raise "store query failed: #{err.strip}" unless status.success? && err.empty?
+
     out.split("\n")
   end
 

@@ -19,6 +19,7 @@ export const DEFAULTS = Object.freeze({
   steadyVariation: 0.2,
   floorFall: 0.1,
   floorRise: 0.02,
+  calibrationFrames: 15,
   minFloor: 0.002,
 });
 
@@ -32,6 +33,7 @@ export class Vad {
   constructor(options = {}) {
     this.options = { ...DEFAULTS, ...options };
     this.floor = null;
+    this.listened = 0;
     this.reset();
   }
 
@@ -52,7 +54,16 @@ export class Vad {
   push(frame) {
     const level = rms(frame);
     if (this.floor === null) this.floor = this.options.minFloor;
+    this.listened += 1;
+    if (this.listened <= this.options.calibrationFrames) return this.calibrate(level);
     return this.speaking ? this.inSpeech(frame, level) : this.inSilence(frame, level);
+  }
+
+  // The first 300 ms after the microphone opens only measure the room, so a loud room is never taken for speech.
+  calibrate(level) {
+    this.levelsSum = (this.levelsSum || 0) + level;
+    this.floor = Math.max(this.options.minFloor, this.levelsSum / this.listened);
+    return null;
   }
 
   voiced(level) {

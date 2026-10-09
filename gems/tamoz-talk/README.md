@@ -7,7 +7,7 @@ never loads a model client; `tamoz talk start` builds it from the VOICE role.
 
 ## Facade
 
-- `Tamoz::Talk::Hub.new(descriptor:, token:, synthesize: nil, floor: 0, host: '127.0.0.1')` — one talk
+- `Tamoz::Talk::Hub.new(descriptor:, token:, floor:, synthesize: nil, host: '127.0.0.1', trace: false)` — one talk
   surface in one process. `#start` binds the server, `#transport` returns a `Comms::Transport` handle
   (the gateway poller and the delivery drainer each take one), `#seed(rows)` restores delivered messages
   from `CommsStore#delivered_messages`, `#stop` releases waiting requests with 503.

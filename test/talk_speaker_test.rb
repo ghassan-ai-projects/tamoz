@@ -1,8 +1,11 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/talk_fixtures'
 
 class TalkSpeakerTest < Minitest::Test
+  include TalkFixtures
+
   Speaker = Tamoz::Talk::Speaker
 
   def test_speech_is_only_a_registered_spoken_message
@@ -63,7 +66,7 @@ class TalkSpeakerTest < Minitest::Test
     })
     speaker.register(1, 'once')
     waiters = Array.new(3) { Thread.new { speaker.speech(1) } }
-    sleep 0.01 until calls.size == 1 && waiters.count { |thread| thread.status == 'sleep' } == 3
+    eventually { calls.size == 1 && waiters.count { |thread| thread.status == 'sleep' } == 3 }
     capture_io do
       gate << :go
 

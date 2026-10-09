@@ -51,7 +51,7 @@ class TalkServerTest < Minitest::Test
   def test_a_message_is_admitted_once_the_gateway_confirms_it
     hub = start_hub(submit_timeout_s: 5)
     client = Thread.new { http(hub, 'POST', '/v1/messages', body: JSON.generate('update_id' => 7, 'text' => 'hello')) }
-    sleep 0.01 until hub.inbox.size == 1
+    eventually { hub.inbox.size == 1 }
     updates = confirm_all(hub)
     response = client.value
 

@@ -120,6 +120,7 @@ Checked 2026-10-01 (source inspection).
 | Succeeded is immutable | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb` | `test/sqlite_effect_journal_test.rb` — `test_prepare_start_complete_is_idempotent_and_succeeded_is_immutable` | — |
 | Unsafe ambiguous attempts become `:unknown` | effect journal + dispatcher | `test/sqlite_effect_journal_test.rb` — `test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth` | — |
 | Human resolution is audited and fenced | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb` | `test/sqlite_effect_journal_test.rb` — `test_human_resolution_refuses_a_foreign_writer_row_scope` | — |
+| Speech of delivered text is presentation, outside any node; only the injected synthesizer speaks | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_talk_commands.rb` | `test/talk_boundary_test.rb` — `test_speech_synthesis_has_one_caller_the_injected_synthesizer` | Checked 2026-10-09 (tests run) |
 
 ## ADR-017
 
@@ -366,7 +367,7 @@ Checked 2026-10-01 (source inspection).
 
 ## ADR-042
 
-Checked 2026-10-01 (source inspection).
+Checked 2026-10-01 (source inspection); the talk rows 2026-10-09 (tests run).
 
 | Claim | Enforced by | Evidence | Limit |
 |---|---|---|---|
@@ -444,6 +445,8 @@ Checked 2026-10-01 (source inspection).
 | Receipt identity changes with request and provider configuration | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb` | `test/agent_model_receipt_test.rb` — `test_logical_key_changes_with_provider_configuration` | — |
 | No retry of a received failure | `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb` | `test/model_transport_parity_test.rb` — `test_transport_does_not_retry_a_received_failure` | — |
 | The graph loads no model, eval, or HTTP package | `tamoz-graph` | `test/dependency_isolation_test.rb` — `test_graph_loads_no_model_eval_or_adapter_package` | — |
+| Speech goes through the same transport, bounded and mp3-checked | `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb` | `test/model_speech_test.rb` — `test_a_body_past_the_bound_is_refused_not_truncated`, `test_a_body_that_is_not_mp3_is_refused` | Checked 2026-10-09 (tests run) |
+| A role names the `*_API_KEY` variable it reads, never the key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/child_environments_test.rb` — `test_a_role_reads_its_key_from_the_variable_it_names`, `test_a_role_may_not_name_a_channel_secret_or_a_runtime_variable` | Checked 2026-10-09 (tests run) |
 
 ## ADR-049
 

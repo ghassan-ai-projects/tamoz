@@ -29,6 +29,15 @@ module TalkFixtures
 
   def stop_hubs = Array(@hubs).each(&:stop)
 
+  def eventually(seconds = 5)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+    until yield
+      raise 'the condition never held' if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+      sleep 0.01
+    end
+  end
+
   Response = Struct.new(:status, :headers, :body)
 
   def raw(hub, bytes, read: true)

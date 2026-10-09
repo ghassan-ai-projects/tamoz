@@ -104,7 +104,7 @@ heard = {}
 transcribe_all = lambda do |name, variants|
   rows = Queue.new
   jobs = Queue.new
-  spec.fetch('scripts').select { |script| script['id'].start_with?('h') }.each do |script|
+  TalkScenarios.heard_scripts.each do |script|
     variants.each { |variant| suite.fetch('voices').each { |voice| jobs << [script['id'], voice, variant] } }
   end
   workers = Array.new(4) do
@@ -130,20 +130,23 @@ if blocked.empty?
   transcribe_all.call('heard_noisy', suite.fetch('variants').keys) if options[:noisy] && selected.call('heard_noisy')
 end
 
-needed = lambda do |name|
+inputs = lambda do |name|
   rules = spec.dig('scenarios', name)
-  inputs = case name
-           when 'heard_end_to_end' then rules.fetch('scripts').length
-           when 'ask_followup' then rules.fetch('dialogues').length
-           when 'silence_and_noise' then rules.fetch('clips').length
-           else rules.fetch('turns', [1]).length
-           end
-  runs = rules['safety'] ? options[:runs] : [rules.fetch('runs', 1), options[:runs]].min
-  inputs * runs
+  case name
+  when 'heard_end_to_end' then rules.fetch('scripts').length
+  when 'ask_followup' then rules.fetch('dialogues').length
+  when 'silence_and_noise' then rules.fetch('clips').length
+  else rules.fetch('turns', [1]).length
+  end
 end
+stated_runs = lambda { |name|
+  spec.dig('scenarios', name, 'safety') ? suite.fetch('safety_runs') : spec.dig('scenarios', name).fetch('runs', 1)
+}
+stated = ->(name) { inputs.call(name) * stated_runs.call(name) }
+needed = ->(name) { inputs.call(name) * [stated_runs.call(name), options[:runs]].min }
 results = Hash.new { |hash, name| hash[name] = [] }
 attempts = Hash.new(0)
-latency = { heard: [], answer_voice: [], answer_text: [], speech: [] }
+latency = { admitted: [], heard: [], answer_voice: [], answer_text: [], speech: [] }
 pending = TURN_SCENARIOS.select { |name| selected.call(name) }
 max_runs = options[:runs] * suite.fetch('max_rerun_factor')
 keys = env.select { |name, _| name.match?(/(_API_KEY|_TOKEN)\z/) }.values.reject(&:empty?)
@@ -185,6 +188,7 @@ while blocked.empty? && run < max_runs
     end
     TalkScenarios.run_checks(talk, keys).each { |entry| results[entry.scenario] << entry }
     talk.turns.each do |turn|
+      latency[:admitted] << (turn.admitted_at - turn.sent_at) if turn.admitted_at
       latency[:heard] << (turn.heard.at - turn.sent_at) if turn.heard
       latency[turn.voice ? :answer_voice : :answer_text] << (turn.final.at - turn.sent_at) if turn.final
     end
@@ -198,10 +202,17 @@ while blocked.empty? && run < max_runs
   end
 end
 
-CANARY = { 'ask' => 'q01', 'approval' => 'a01', 'barge_in' => 'q04' }.freeze
+CANARY = suite.fetch('canary')
 canary = Hash.new { |hash, name| hash[name] = [] }
+canary_missing = []
+canary_missing << 'node' unless system('which', 'node', out: File::NULL)
+canary_missing << 'Google Chrome' unless File.exist?('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
 if blocked.empty? && options[:canary]
   CANARY.each do |scenario, id|
+    unless canary_missing.empty?
+      canary[scenario] << { 'outcome' => 'blocked', 'detail' => "missing #{canary_missing.join(', ')}" }
+      next
+    end
     3.times do |index|
       talk = TalkChatEval.new(env:, workspace_files: spec.fetch('workspace'), approval_profile: 'unattended')
       begin
@@ -210,6 +221,9 @@ if blocked.empty? && options[:canary]
         line, = Open3.capture2('node', File.join(ROOT, 'script/talk/canary.mjs'), '--url', talk.page_url, '--wav', clip,
                                '--scenario', scenario, '--timeout', '180')
         found = JSON.parse(line.lines.last.to_s)
+        if scenario == 'approval' && found['outcome'] == 'pass' && !File.exist?(File.join(talk.workspace, 'todo.txt'))
+          found = found.merge('outcome' => 'fail', 'detail' => 'Approve was clicked but todo.txt never landed')
+        end
       rescue StandardError => e
         found = { 'outcome' => 'invalid', 'detail' => "#{e.class}: #{e.message[0, 200]}" }
       ensure
@@ -234,16 +248,18 @@ rows = (TURN_SCENARIOS + %w[nothing_kept no_key_in_responses]).select { |name| r
   valid = entries.select { |entry| %i[pass fail].include?(entry.outcome) }
   passed = valid.count { |entry| entry.outcome == :pass }
   invalid = entries.select { |entry| entry.outcome == :invalid }
-  needs = name.start_with?('nothing_kept', 'no_key') ? [options[:runs], run].min : needed.call(name)
+  every_run = name.start_with?('nothing_kept', 'no_key')
+  needs = every_run ? suite.fetch('safety_runs') : stated.call(name)
   rate = valid.empty? ? nil : passed.fdiv(valid.length)
   lower, upper = TalkChecks.wilson(passed, valid.length)
   verdict = if name == 'silence_and_noise' then 'REPORT'
-            elsif valid.empty? then 'BLOCKED'
-            elsif rate < threshold.call(name) then 'FAIL'
-            elsif valid.length < needs then 'SHORT'
-            else 'PASS'
+            else
+              TalkScenarios.verdict(entries.map(&:outcome), needs:, threshold: threshold.call(name),
+                                                            max_invalid_share: suite.fetch('max_invalid_share'))
             end
-  { name:, safety: spec.dig('scenarios', name, 'safety') ? true : false, valid: valid.length, needed: needs, passed:,
+  safety = spec.dig('scenarios', name, 'safety') ? true : false
+  { name:, safety:, inputs: every_run ? nil : inputs.call(name), valid: valid.length, needed: needs, passed:,
+    failure_bound: safety && passed == valid.length && valid.length.positive? ? (3.0 / valid.length).round(3) : nil,
     rate: rate&.round(3), wilson: [lower.round(3), upper.round(3)], threshold: threshold.call(name), verdict:,
     invalid: invalid.map(&:detail).tally, failures: valid.reject { |entry| entry.outcome == :pass }
                                                          .map { |entry| "#{entry.input}: #{entry.detail}" }.first(5),
@@ -258,64 +274,90 @@ percentile = ->(values, p) { values.empty? ? nil : values.sort[((values.length -
 timing = latency.to_h do |stage, values|
   [stage, { n: values.length, p50: percentile.call(values, 0.5), p90: percentile.call(values, 0.9) }]
 end
+voice_overhead = if timing.dig(:answer_voice, :p50) && timing.dig(:answer_text, :p50)
+                   (timing.dig(:answer_voice,
+                               :p50) + timing.dig(:speech, :p50).to_f - timing.dig(:answer_text, :p50)).round(2)
+                 end
+canary_verdict = lambda do |runs|
+  outcomes = runs.map { |r| r['outcome'] }
+  if outcomes.all?('blocked') then 'BLOCKED'
+  elsif outcomes.include?('fail') then 'FAIL'
+  elsif outcomes.count('pass') >= 3 then 'PASS'
+  else 'SHORT'
+  end
+end
 credit_after = speech_key.empty? ? {} : credit.call
 spent = credit_before['usage'] && credit_after['usage'] ? (credit_after['usage'] - credit_before['usage']).round(4) : nil
 spoken_turns = latency[:answer_voice].length
+direct = heard.values.sum { |summary| summary[:rows].length }
+reduced = options[:runs] < suite.fetch('safety_runs') || options[:only] || !options[:noisy]
 report = { stamp:, commit: `git -C #{ROOT} rev-parse --short HEAD`.strip, chat: "#{options[:provider]}/#{options[:model]}",
            transcription: env['TAMOZ_TRANSCRIPTION_MODEL'], voice: "#{env['TAMOZ_VOICE_MODEL']} (#{env['TAMOZ_VOICE_NAME']})",
-           versions: TalkAudio.versions, blocked:, runs: run, credit_before: credit_before['limit_remaining'],
-           speech_spent_usd: spent, speech_cost_per_spoken_turn: spent && spoken_turns.positive? ? (spent / spoken_turns).round(5) : nil,
+           versions: TalkAudio.versions, blocked:, runs: run, reduced: reduced ? true : false, options: options.except(:provider, :model),
+           credit_before: credit_before['limit_remaining'], speech_spent_usd: spent, direct_transcriptions: direct,
            heard: heard.transform_values { |summary| summary.except(:rows) }, scenarios: rows, latency_s: timing,
-           canary: canary.transform_values { |runs| runs.map { |r| r.except('trace') } } }
-File.write(File.join(out, 'report.json'), JSON.pretty_generate(report.merge(heard_rows: heard.transform_values do |s|
-  s[:rows]
-end)))
+           voice_overhead_s: voice_overhead, canary: canary.transform_values do |runs|
+                                               runs.map do |r|
+                                                 r.except('trace')
+                                               end
+                                             end }
+File.write(File.join(out, 'report.json'),
+           JSON.pretty_generate(report.merge(heard_rows: heard.transform_values { |summary| summary[:rows] })))
 
+verdicts = rows.to_h { |row| [row[:name], row[:verdict]] }
+               .merge(heard.transform_values { |summary| summary[:verdict] })
+               .merge(canary.to_h { |name, runs| ["canary #{name}", canary_verdict.call(runs)] })
 lines = ["# Talk eval — #{stamp}", '',
          '**Corpus limit:** spoken inputs are synthetic (macOS `say`, four voices) with simulated noise. They bound ' \
-         'accuracy from above and stand for no real speaker, accent, room or microphone. Echo cancellation is not measured.',
+         'accuracy from above and stand for no real speaker, accent, room or microphone. Echo cancellation is not ' \
+         'measured. The retention scan reads raw bytes; base64-encoded audio is out of its scope.',
          '', "Commit #{report[:commit]} · chat #{report[:chat]} · speech-to-text #{report[:transcription]} · voice " \
              "#{report[:voice]} · runs #{run} · #{report[:versions].values.join(' · ')}", '']
-lines << "**BLOCKED:** #{blocked.join(', ')}" << '' unless blocked.empty?
-lines += ['## Heard (direct transcription)', '', '| set | renderings | median WER | ≤ 0.15 | slots | slot rate | verdict |',
-          '|---|---|---|---|---|---|---|']
-heard.each do |name, s|
-  lines << "| #{name} | #{s[:renderings]} | #{s[:median_wer]} | #{s[:share_within]} | #{s[:slots]} | #{s[:slot_rate]} | **#{s[:verdict]}** |"
+if reduced
+  lines << "**Reduced run** (#{options.except(:provider, :model).compact.map { |k, v| "#{k}=#{v}" }.join(', ')}): " \
+           'anything short of the stated runs is SHORT, never PASS.' << ''
 end
-lines += ['', '## Scenarios', '', '| scenario | safety | valid / needed | passed | rate | Wilson 95% | threshold | verdict | invalid | failures |',
-          '|---|---|---|---|---|---|---|---|---|---|']
+lines << "**BLOCKED:** #{blocked.join(', ')}" << '' unless blocked.empty?
+%w[FAIL SHORT BLOCKED].each do |verdict|
+  names = verdicts.select { |_name, v| v == verdict }.keys
+  lines << "**#{verdict}:** #{names.join(', ')}" unless names.empty?
+end
+lines += ['', '## Heard (direct transcription)', '',
+          '| set | renderings | median WER | ≤ 0.15 | slots | slot rate | verdict |', '|---|---|---|---|---|---|---|']
+heard.each do |name, s|
+  lines << "| #{name} | #{s[:renderings]} | #{s[:median_wer]} | #{s[:share_within]} | #{s[:slots]} | #{s[:slot_rate]} | " \
+           "**#{s[:verdict]}** |"
+end
+lines += ['', '## Scenarios', '',
+          '| scenario | safety | inputs | valid / stated | passed | rate | Wilson 95% | failure ≤ (rule of 3) | threshold | ' \
+          'verdict | invalid | failures |', '|---|---|---|---|---|---|---|---|---|---|---|---|']
 rows.each do |row|
-  lines << "| #{row[:name]} | #{'yes' if row[:safety]} | #{row[:valid]} / #{row[:needed]} | #{row[:passed]} | #{row[:rate] || '—'} | " \
-           "#{row[:wilson].join('–')} | #{row[:threshold]} | **#{row[:verdict]}** | " \
-           "#{row[:invalid].map do |reason, n|
-             "#{reason} ×#{n}"
-           end.join('; ')} | #{(row[:failures] || []).join('; ').tr('|', '/')}" \
-           "#{row[:report]&.map { |what, n| "#{what} ×#{n}" }&.join('; ')} |"
+  invalid = row[:invalid].map { |reason, n| "#{reason} ×#{n}" }.join('; ')
+  detail = [*(row[:failures] || []), *(row[:report] || {}).map { |what, n| "#{what} ×#{n}" }].join('; ').tr('|', '/')
+  lines << "| #{row[:name]} | #{'yes' if row[:safety]} | #{row[:inputs] || 'every run'} | #{row[:valid]} / #{row[:needed]} | " \
+           "#{row[:passed]} | #{row[:rate] || '—'} | #{row[:wilson].join('–')} | #{row[:failure_bound] || '—'} | " \
+           "#{row[:threshold]} | **#{row[:verdict]}** | #{invalid} | #{detail} |"
 end
 unless canary.empty?
-  lines += ['', '## Browser canary (headless Chrome, fake microphone)', '', '| scenario | runs | pass | invalid | barge-in ms | detail |',
-            '|---|---|---|---|---|---|']
+  lines += ['', '## Browser canary (headless Chrome; the WAV is fed to the page as its capture stream)', '',
+            '| scenario | runs | pass | invalid | verdict | barge-in ms | detail |', '|---|---|---|---|---|---|---|']
   canary.each do |name, runs|
+    details = runs.filter_map { |r| r['detail'] || (r['missing'] unless r['missing'].to_a.empty?) }.uniq.join('; ')
     lines << "| #{name} | #{runs.length} | #{runs.count { |r| r['outcome'] == 'pass' }} | " \
-             "#{runs.count { |r| r['outcome'] == 'invalid' }} | #{runs.filter_map do |r|
-               r['barge_in_ms']
-             end.join(', ')} | " \
-             "#{runs.filter_map do |r|
-               r['detail'] || (r['missing'] unless r['missing'].to_a.empty?)
-             end.uniq.join('; ')} |"
+             "#{runs.count { |r| r['outcome'] == 'invalid' }} | **#{canary_verdict.call(runs)}** | " \
+             "#{runs.filter_map { |r| r['barge_in_ms'] }.join(', ')} | #{details} |"
   end
 end
 lines += ['', '## Latency (seconds, client clock)', '', '| stage | n | p50 | p90 |', '|---|---|---|---|']
 timing.each { |stage, t| lines << "| #{stage} | #{t[:n]} | #{t[:p50] || '—'} | #{t[:p90] || '—'} |" }
-lines += ['', "Speech spend: #{spent ? "$#{spent}" : 'missing'} over #{spoken_turns} spoken turns " \
-              "(#{report[:speech_cost_per_spoken_turn] ? "$#{report[:speech_cost_per_spoken_turn]} each" : 'per turn missing'}); " \
-              'the chat model is on a flat plan.']
+lines << '' << 'Voice overhead (median spoken answer + median speech fetch − median typed answer): ' \
+               "#{voice_overhead ? "#{voice_overhead} s" : 'missing'}."
+lines += ['', "Speech spend (OpenRouter account delta): #{spent ? "$#{spent}" : 'missing'}, covering #{direct} direct " \
+              "transcriptions and #{spoken_turns} spoken turns with their speech; the chat model is on a flat plan."]
 File.write(File.join(out, 'report.md'), "#{lines.join("\n")}\n")
 puts "\n#{lines.join("\n")}\n\n#{out}/report.md"
-verdicts = rows.map { |row| row[:verdict] } + heard.values.map { |s| s[:verdict] } +
-           canary.values.map { |runs| runs.all? { |r| r['outcome'] == 'pass' } ? 'PASS' : 'FAIL' }
 exit(if !blocked.empty? then 3
-     elsif verdicts.include?('FAIL') then 1
-     elsif (verdicts - %w[PASS REPORT]).any? then 2
+     elsif verdicts.value?('FAIL') then 1
+     elsif (verdicts.values - %w[PASS REPORT]).any? || reduced then 2
      else 0
      end)
