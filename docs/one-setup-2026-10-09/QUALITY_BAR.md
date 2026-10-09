@@ -38,7 +38,7 @@ about setup (`PLAN.md` §7).
 
 | # | Property | Check (mutation) | Status |
 |---|---|---|---|
-| A1 | A config `credential` is an `*_API_KEY` variable name; a key-shaped value is refused and never echoed; one rule serves the config and the children | config test (drop the shape check; echo the value in the error) | OPEN |
+| A1 | A config `credential` is an `*_API_KEY` variable name; a key-shaped value is refused and never echoed; one rule serves the config and the children | config test (drop the shape check; echo the value in the error) | PASS — 2026-10-10 (P1): one predicate `ModelClientFactory.role_credential?` (`*_API_KEY`, not `TAMOZ_*`) serves `RuntimeModels`, `ChildEnvironments` and the factory; a key in `credential`, a key used as a field or role name, `false`, `TAMOZ_*`, lowercase and non-`_API_KEY` names are refused and never echoed (`runtime_models_test`); mutations killed (drop the predicate; echo the key; skip a `false` credential) |
 | A2 | Each child gets exactly its keys: the worker the chat key, endpoints, role credentials and every enabled source's `credential_refs`/`env_allowlist`, never a channel token or the voice key; the telegram gateway only its token; the talk gateway its token and the voice key, never the chat key (by name or value) | golden child environments from a config with web search and talk (forward the full `.env`) | OPEN |
 | A3 | A thread bound before the change still validates its profile pin after `setup`, `channel add` and the migration; no command rewrites an existing profile | fixture of the owner's shape with a bound thread (rewrite the profile) | OPEN |
 | A4 | No code reads `TAMOZ_PROVIDER`, `TAMOZ_MODEL` or `TAMOZ_<ROLE>_*` | source scan over the files named in `PLAN.md` §3 plus the CLI, scripts, agenteval and test support; allowlist: the CLI flags (re-add one reader) | OPEN |
@@ -50,9 +50,9 @@ about setup (`PLAN.md` §7).
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| B1 | `models` validated and exposed; absent `models.chat` stops `start`, not `setup` | `runtime_directory` tests | OPEN |
+| B1 | `models` validated and exposed; absent `models.chat` stops `start`, not `setup` | `runtime_directory` tests | PARTIAL — 2026-10-10 (P1): validated at load and exposed (`RuntimeDirectory#models`; voice deferred to P4, where talk is wired); the `start` refusal comes with P4 |
 | B2 | `setup` writes `models` after a backup; every other key semantically equal; old code ignores the key | config tests | OPEN |
-| B3 | Worker, `start` probes, CLI and `memory consolidate` build the chat model and roles from the config with the stated precedence (CLI flag > `models.chat` > profile `primary`) | model builder tests | OPEN |
+| B3 | Worker, `start` probes, CLI and `memory consolidate` build the chat model and roles from the config with the stated precedence (CLI flag > `models.chat` > profile `primary`) | model builder tests | PASS — 2026-10-10 (P1): `ModelBuilder` resolves the runtime itself (`--runtime-dir` / `TAMOZ_RUNTIME_DIR`, read once per process, only when needed); flag or env name a provider and model together, else `models.chat`, else the profile's `primary`; a half-named override over a runtime model is refused; recorded roles equal the built model; a profile's key is kept on its own provider and dropped on another; `attachment_model` reads `models.transcription`/`vision` (env still wins until P4); the talk preflight reads them too (`cli_runtime_models_test`, `agent_profile_machinery_test`, `talk_cli_test`; 18 mutations killed across three rounds) |
 | B4 | `setup` creates a runtime and updates `models`; writes the chat profile only when none exists; refuses `--workspace` on a runtime that has one; re-run unchanged is a no-op; a missing key is reported, not refused | `setup` tests | OPEN |
 | B5 | `channel add telegram` pairs as today and names the runtime's profile; twice is a no-op | channel tests (moved from the Telegram setup tests) | OPEN |
 | B6 | `channel add talk` writes the channel and token as today and names the runtime's profile; `--rotate-token` says to re-run `service install` | channel tests (moved from the talk setup tests) | OPEN |
@@ -115,6 +115,9 @@ about setup (`PLAN.md` §7).
 |---|---|---|---|---|---|
 | Plan rev 1 | Sonnet 5.5, fresh | architecture fit, seams | 0 / 4 / 5 / 5 | Revision 2: work in a worktree (the live service runs the checkout); `ChildEnvironments` forwards sources' keys (web search was lost); env readers removed in the same phase as the old starts; CLI scope narrowed (owner, OD1); one gateway per channel (owner, OD5); no schema bump and no `abilities` key; precedence stated; `memory consolidate` and every env reader listed; `channel list/remove` deferred | plan rev 2 |
 | Plan rev 1 | Sonnet 5.5, fresh | operator, live migration, testability | 0 / 3 / 8 / 6 | Revision 2: `start` refuses a runtime the service serves; a runbook with stop, consistent copy, rehearsal, verify and a tested rollback (B11); a plist writer for what `ChildEnvironments` does not hold, compared with the owner's plists; `.env` mode, atomic 0600 plists, no secret in output; idempotence and error rows; source-scan scope; launchctl fake on Linux; slow-lane rule; live checks split (C1–C7) | plan rev 2 |
+| P1 (round 1) | Sonnet 5.5, fresh ×2 | correctness/safety; code quality | 0 / 0 / 5 / 6 and 0 / 0 / 5 / 9 | Redesigned: the builder resolves the runtime itself (call sites unchanged); provider and model as a pair; one credential predicate; renames; one test per refusal | P1 commit |
+| P1 (round 2) | Sonnet 5.5, fresh ×2 | correctness/safety; code quality | 0 / 2 / 2 / 4 and 0 / 0 / 3 / 9 | Runtime read only when needed and once per process; same-provider overrides keep the profile's key; `worker_env` forwards configured role keys; voice role deferred; narrow `validate_models!`; lint leftovers fixed by Haiku 5.5 | P1 commit |
+| P1 (round 3) | Sonnet 5.5, fresh ×2 | correctness/safety; code quality | 0 / 0 / 2 / 5 and 0 / 0 / 2 / 7 | Talk preflight reads config roles; a model named alone tolerates an unreadable runtime; cache keyed on the real path; live script passes models; comments trimmed; tests split; complexity fix by Haiku 5.5 | P1 commit |
 
 ## Loop log
 
@@ -122,3 +125,4 @@ about setup (`PLAN.md` §7).
 |---|---|---|---|---|---|
 | 0 | 2026-10-09 | Plan and bar set before code | 1.4 PASS | all others | P0 reviews |
 | 1 | 2026-10-10 | Two plan reviews; revision 2; owner decisions OD1 narrowed, OD5 added; work moved to a worktree | 1.3 PASS | all A–F rows | owner OK, then P1 |
+| 2 | 2026-10-10 | P1: `models:` in the runtime config, built from by every model-building command; three review rounds | A1, B3 PASS; B1 PARTIAL | the rest | P2 `tamoz setup` |

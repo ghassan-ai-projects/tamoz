@@ -45,7 +45,7 @@ module Tamoz
 
       # The worker alone validates provider credential selection; the
       # credential is named from the provider, never passed as a free string.
-      def self.worker_env(base, runtime_dir:, profile_role: nil)
+      def self.worker_env(base, runtime_dir:, profile_role: nil, models: RuntimeModels::NONE)
         provider = base.fetch('TAMOZ_PROVIDER')
         standard_env(base).merge(
           'TAMOZ_RUNTIME_DIR' => runtime_dir,
@@ -54,6 +54,12 @@ module Tamoz
         ).merge(
           ModelClientFactory.worker_environment(provider:, profile_role:, environment: base)
         ).merge(attachment_model_env(base, 'TRANSCRIPTION')).merge(attachment_model_env(base, 'VISION'))
+                          .merge(configured_role_keys(base, models))
+      end
+
+      def self.configured_role_keys(base, models)
+        names = %w[transcription vision].filter_map { |role| models[role]&.credential }
+        base.slice(*names)
       end
 
       def self.attachment_model_env(base, role)
@@ -70,12 +76,10 @@ module Tamoz
       def self.role_credential(base, role)
         name = base["TAMOZ_#{role}_CREDENTIAL"]
         return nil if name.to_s.empty?
-        if STANDARD.include?(name) || name.start_with?('TAMOZ_') || !name.end_with?('_API_KEY')
-          raise ArgumentError,
-                "TAMOZ_#{role}_CREDENTIAL must name an *_API_KEY variable, never a runtime or channel one"
-        end
 
-        name
+        return name if ModelClientFactory.role_credential?(name)
+
+        raise ArgumentError, "TAMOZ_#{role}_CREDENTIAL must name an *_API_KEY variable, never a runtime or channel one"
       end
 
       def self.queue_status_env(base, runtime_dir:)

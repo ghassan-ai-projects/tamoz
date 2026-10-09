@@ -141,7 +141,7 @@ existing workspace-mismatch refusal for MCP stays. Tools, approvals and history 
 | Phase | Builds | Leaves working |
 |---|---|---|
 | P0 | This plan and its bar; two reviews; owner OK | — |
-| P1 | `models` in `RuntimeDirectory` (validation, exposure, one credential rule); `ModelBuilder`, `attachment_model` and `memory consolidate` read it with the stated precedence; the env readers stay for now | both old starts (they still set env) |
+| P1 | `models` (chat, transcription, vision) in `RuntimeDirectory`; one credential rule; `ModelBuilder` resolves the runtime itself, so every command that builds a model reads it; `attachment_model` and the talk preflight read the roles; `worker_env` forwards the keys they name; the env readers stay and win for now | both old starts (they still set env, so `models.chat` is ignored there until P4); `models.voice` comes with P4, where talk is wired |
 | P2 | `tamoz setup` (replaces `init`); the one-profile rule in `RuntimeDirectory` | old starts |
 | P3 | `tamoz channel add telegram`, `channel add talk` (replace the two setups) | old starts |
 | P4 | `tamoz start` (replaces both starts); `ChildEnvironments` composes from the config (worker sources, endpoints); **the env model variables and the old commands are removed here**, with every reader in §3's last row updated in the same phase | new start |

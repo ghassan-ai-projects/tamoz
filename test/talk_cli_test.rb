@@ -246,6 +246,20 @@ class TalkCliTest < Minitest::Test
     end
   end
 
+  def test_start_checks_a_speech_role_the_runtime_config_names
+    with_runtime do |runtime, workspace|
+      setup_talk(runtime, workspace)
+      config = File.join(runtime, 'config.yaml')
+      transcription = { 'provider' => 'openai', 'model' => 'whisper-1', 'api_base' => 'http://127.0.0.1:9/v1' }
+      File.write(config,
+                 Psych.dump(Psych.safe_load_file(config).merge('models' => { 'transcription' => transcription })))
+      env = SPEECH.except('TAMOZ_TRANSCRIPTION_PROVIDER').merge('OPENAI_API_KEY' => 'k')
+      _status, _out, err, = start(runtime, env:, roles: ->(_role) {})
+
+      assert_includes err, 'the speech-to-text model did not answer'
+    end
+  end
+
   def test_start_before_setup_says_to_run_setup
     with_runtime do |runtime, _workspace|
       status, _, err, = start(runtime)

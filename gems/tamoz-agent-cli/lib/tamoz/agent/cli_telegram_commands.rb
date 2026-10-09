@@ -375,7 +375,7 @@ module Tamoz
             ['--runtime-dir', runtime_dir, 'comms', 'serve', '--surface', surface], logs
           )
           children[:worker] = spawn_child(
-            ChildEnvironments.worker_env(base, runtime_dir:),
+            ChildEnvironments.worker_env(base, runtime_dir:, models: directory.models),
             ['--runtime-dir', runtime_dir, '--provider', base.fetch('TAMOZ_PROVIDER'),
              '--model', base.fetch('TAMOZ_MODEL'), '--work-routing', 'worker', '--json'], logs
           )

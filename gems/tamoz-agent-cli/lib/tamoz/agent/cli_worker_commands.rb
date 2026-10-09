@@ -682,18 +682,25 @@ module Tamoz
           research_dir: File.join(runtime_dir_path(options), 'research') }
       end
 
-      # TAMOZ_<ROLE>_PROVIDER / _MODEL / _API_BASE name a model for one attachment role; unset means none.
-      def attachment_model(role)
+      def attachment_model(role, runtime: nil)
+        configured = model_from_environment(role) || (runtime && runtime.models[role.downcase])
+        return nil unless configured
+
+        ModelClientFactory.build(provider: configured.provider, model: configured.model, profile_role: nil,
+                                 environment: @env, explicit_api_base: configured.api_base, safety: :idempotent,
+                                 credential_name: configured.credential,
+                                 timeout_seconds: role == 'VOICE' ? VOICE_TIMEOUT_S : nil)
+      end
+
+      def model_from_environment(role)
         provider = @env["TAMOZ_#{role}_PROVIDER"]
         return nil if provider.to_s.empty?
 
         model = @env["TAMOZ_#{role}_MODEL"]
         raise ConfigurationError, "TAMOZ_#{role}_PROVIDER is set without TAMOZ_#{role}_MODEL" if model.to_s.empty?
 
-        ModelClientFactory.build(provider:, model:, profile_role: nil, environment: @env,
-                                 explicit_api_base: @env["TAMOZ_#{role}_API_BASE"], safety: :idempotent,
-                                 credential_name: ChildEnvironments.role_credential(@env, role),
-                                 timeout_seconds: role == 'VOICE' ? VOICE_TIMEOUT_S : nil)
+        RuntimeModels::ConfiguredModel.new(provider:, model:, credential: ChildEnvironments.role_credential(@env, role),
+                                           api_base: @env["TAMOZ_#{role}_API_BASE"])
       end
 
       def with_worker_runtime(options)
@@ -704,8 +711,8 @@ module Tamoz
           lease_ttl: @sessions.lease_ttl,
           routing: worker_routing(options),
           harness: worker_harness(options),
-          transcriber: attachment_model('TRANSCRIPTION'),
-          image_reader: attachment_model('VISION')
+          transcriber: attachment_model('TRANSCRIPTION', runtime: directory),
+          image_reader: attachment_model('VISION', runtime: directory)
         )
         begin
           yield runtime

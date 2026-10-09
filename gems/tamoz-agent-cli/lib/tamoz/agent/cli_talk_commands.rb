@@ -178,7 +178,7 @@ module Tamoz
         provider, model = working_provider(options, base)
         return 1 unless provider
 
-        problem = speech_problem(base, provider)
+        problem = speech_problem(base, provider, runtime: directory)
         return talk_fail(problem) if problem
 
         unless LOOPBACK.include?(host)
@@ -192,7 +192,7 @@ module Tamoz
       # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       # One real call per speech role, so a dead key is named now and not as a silent page.
-      def speech_problem(base, chat_provider)
+      def speech_problem(base, chat_provider, runtime:)
         voice_key = ChildEnvironments.role_credential(base, 'VOICE') ||
                     (base['TAMOZ_VOICE_PROVIDER'] && Providers::ENV_KEYS[base['TAMOZ_VOICE_PROVIDER'].to_sym])
         chat_key = Providers::ENV_KEYS.fetch(chat_provider.to_sym)
@@ -200,14 +200,17 @@ module Tamoz
           return "the voice key (#{voice_key}) must not be the chat model's key (#{chat_key}); give speech its own key"
         end
 
-        transcription_problem(base) || voice_problem(base)
+        transcription_problem(base, runtime) || voice_problem(base, runtime)
       rescue ArgumentError, Tamoz::ConfigurationError => e
         e.message
       end
 
-      def transcription_problem(base)
-        model = role_model(base, 'TRANSCRIPTION')
-        return 'set TAMOZ_TRANSCRIPTION_PROVIDER and TAMOZ_TRANSCRIPTION_MODEL so Tamoz can hear you' unless model
+      def transcription_problem(base, runtime)
+        model = role_model(base, 'TRANSCRIPTION', runtime)
+        unless model
+          return 'set models.transcription in the runtime config (or TAMOZ_TRANSCRIPTION_PROVIDER and ' \
+                 'TAMOZ_TRANSCRIPTION_MODEL) so Tamoz can hear you'
+        end
 
         model.transcribe(audio: silent_wav, filename: 'probe.wav', media_type: 'audio/wav')
         nil
@@ -215,8 +218,8 @@ module Tamoz
         "the speech-to-text model did not answer (#{e.class.name.split('::').last}); check its key and credit"
       end
 
-      def voice_problem(base)
-        model = role_model(base, 'VOICE')
+      def voice_problem(base, runtime)
+        model = role_model(base, 'VOICE', runtime)
         return nil unless model
 
         name = base['TAMOZ_VOICE_NAME'].to_s
@@ -228,8 +231,8 @@ module Tamoz
         "the voice model did not answer (#{e.class.name.split('::').last}); check TAMOZ_VOICE_* and its key"
       end
 
-      def role_model(base, role)
-        @talk_role_factory&.call(role) || with_env(base) { attachment_model(role) }
+      def role_model(base, role, runtime)
+        @talk_role_factory&.call(role) || with_env(base) { attachment_model(role, runtime:) }
       end
 
       def with_env(base)
@@ -285,7 +288,7 @@ module Tamoz
             ['--runtime-dir', runtime_dir, 'comms', 'serve', '--surface', SURFACE], logs
           )
           children[:worker] = spawn_named(
-            'worker', ChildEnvironments.worker_env(base, runtime_dir:),
+            'worker', ChildEnvironments.worker_env(base, runtime_dir:, models: directory.models),
             ['--runtime-dir', runtime_dir, '--provider', base.fetch('TAMOZ_PROVIDER'),
              '--model', base.fetch('TAMOZ_MODEL'), '--work-routing', 'worker', '--json'], logs
           )

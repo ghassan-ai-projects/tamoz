@@ -3,6 +3,7 @@
 require "psych"
 
 require "tamoz/comms"
+require_relative "runtime_models"
 
 module Tamoz
   module Agent
@@ -43,7 +44,7 @@ module Tamoz
       # Tamoz ships, and nothing else. There is no plugin path by construction.
       KNOWN_SOURCES = %w[skills memory mcp websearch probes].freeze
 
-      attr_reader :path, :config
+      attr_reader :path, :config, :models
 
       def self.resolve(path: nil, env: ENV)
         candidate = path || env["TAMOZ_RUNTIME_DIR"]
@@ -55,6 +56,7 @@ module Tamoz
       def initialize(path)
         @path = path
         @config = load_config
+        @models = RuntimeModels.parse(@config['models'])
       end
 
       # `tamoz worker` and friends refuse to run against a directory anyone else
@@ -166,6 +168,7 @@ module Tamoz
         validate_workspace_root!(document)
         validate_channels!(document["channels"])
         validate_subagents!(document['harness'])
+        validate_models!(document['models'])
       end
 
       # Strict per-entry validation (COMMS_DESIGN §14): the kind comes from the
@@ -299,6 +302,12 @@ module Tamoz
         end
 
         def subagent_roles_list?(roles) = roles.is_a?(Array) && roles.all?(String) && roles.uniq == roles
+
+        def validate_models!(raw)
+          RuntimeModels.parse(raw)
+        rescue ArgumentError => error
+          raise Error, error.message
+        end
       end
 
       private

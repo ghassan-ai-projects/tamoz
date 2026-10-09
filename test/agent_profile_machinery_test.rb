@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "support/runtime_models_fixture"
 require_relative 'support/scripted_generation'
 require_relative 'support/profile_session_fixture'
 require_relative "support/session_plan"
 
 class AgentProfileMachineryTest < Minitest::Test
+  include RuntimeModelsFixture
   include ProfileSessionFixture
   include SessionPlan
 
@@ -98,6 +100,36 @@ class AgentProfileMachineryTest < Minitest::Test
     # The model that was actually constructed matches the recorded tuples for
     # every cell.
     assert_equal 7, capture.length
+  end
+
+  def test_the_runtime_chat_model_is_recorded_as_the_primary_it_builds
+    runtime = runtime_with_models(@dir, "chat" => {"provider" => "zai", "model" => "glm-5.3-flash"})
+    capture = []
+    stub_model_factory(capture) do
+      models = model_builder(env: {})
+      resolved = models.resolve_profile_roles(keyed_profile, {runtime_dir: runtime}).fetch("primary")
+      built = models.build({runtime_dir: runtime}, profile: keyed_profile)
+
+      assert_equal({"provider" => "zai", "model" => "glm-5.3-flash"}, resolved)
+      assert_equal %w[glm-5.3-flash zai], [built.model, built.provider.to_s]
+    end
+  end
+
+  def test_the_profile_s_key_never_follows_another_provider
+    runtime = runtime_with_models(@dir, "chat" => {"provider" => "zai", "model" => "glm-5.3-flash"})
+    capture = []
+    stub_model_factory(capture) { model_builder(env: {}).build({runtime_dir: runtime}, profile: keyed_profile) }
+
+    assert_nil capture.last.fetch(:profile_role).credential_ref
+  end
+
+  def test_a_model_override_on_the_profile_s_own_provider_keeps_its_key
+    capture = []
+    stub_model_factory(capture) do
+      model_builder(env: {}).build({model: "openai/gpt-4o-mini"}, profile: keyed_profile)
+    end
+
+    assert_equal "TAMOZ_OPENROUTER_API_KEY", capture.last.fetch(:profile_role).credential_ref.fetch("name")
   end
 
   def test_session_record_records_post_override_roles_and_budgets
@@ -939,6 +971,13 @@ class AgentProfileMachineryTest < Minitest::Test
       tool_catalog_digest: "sha256:#{"0" * 64}", created_at_ms: 0
     }.merge(extra)
     Tamoz::Agent::SessionRecords.build("session", **fields)
+  end
+
+  def keyed_profile
+    @keyed_profile ||= load_profile(
+      "primary" => {"provider" => "openrouter", "model" => "openai/gpt-4o",
+                    "credential_ref" => {"kind" => "env", "name" => "TAMOZ_OPENROUTER_API_KEY"}}
+    )
   end
 
   def load_profile(model_roles = nil)

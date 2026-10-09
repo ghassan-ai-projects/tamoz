@@ -62,6 +62,18 @@ class ChildEnvironmentsTest < Minitest::Test
     refute env.key?('OPENROUTER_API_KEY'), 'a role naming its key gets that key, not the provider default'
   end
 
+  def test_a_role_the_runtime_config_names_finds_its_key_in_the_worker
+    models = Tamoz::Agent::RuntimeModels.parse(
+      'transcription' => { 'provider' => 'openrouter', 'model' => 'openai/gpt-4o-mini-transcribe',
+                           'credential' => 'OPENROUTER_SPEECH_API_KEY' }
+    )
+    env = ChildEnvironments.worker_env(BASE.merge('OPENROUTER_SPEECH_API_KEY' => 'speech', 'OTHER_API_KEY' => 'x'),
+                                       runtime_dir: 'r', models:)
+
+    assert_equal 'speech', env['OPENROUTER_SPEECH_API_KEY']
+    refute env.key?('OTHER_API_KEY'), 'only the keys the config names'
+  end
+
   def test_a_role_may_not_name_a_channel_secret_or_a_runtime_variable
     %w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_ENV_FILE PATH TAMOZ_TALK_TOKEN AWS_SECRET_ACCESS_KEY GITHUB_TOKEN].each do |name|
       configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',

@@ -197,8 +197,8 @@ class LiveAlmsTelegram
     Tamoz::Agent::ModelClientFactory.credential_reference(
       provider:, profile_role: nil, environment: @env
     )
-  rescue Tamoz::Agent::ModelCallError => error
-    raise ArgumentError, "model configuration unavailable: #{error.code}"
+  rescue Tamoz::Agent::ModelCallError => e
+    raise ArgumentError, "model configuration unavailable: #{e.code}"
   end
 
   def validate_mcp_catalog
@@ -345,7 +345,8 @@ class LiveAlmsTelegram
     builders = Tamoz::Agent::ChildEnvironments
     case args.first
     when 'worker'
-      builders.worker_env(@env, runtime_dir: @runtime_dir)
+      builders.worker_env(@env, runtime_dir: @runtime_dir,
+                                models: Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env).models)
     when 'comms'
       builders.gateway_env(@env, runtime_dir: @runtime_dir,
                                  surface: @options.fetch(:surface))
