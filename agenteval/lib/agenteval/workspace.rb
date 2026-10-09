@@ -118,8 +118,10 @@ module Agenteval
     def run(command, chdir:, timeout: 120)
       out = +""
       status = nil
-      env = {"LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8"}
-      Open3.popen2e(env, *command, chdir:, pgroup: true) do |stdin, stream, waiter|
+      # The workspace is the agent's project: its checks run without the harness's own bundle.
+      env = (defined?(Bundler) ? Bundler.unbundled_env : ENV.to_h)
+            .merge("LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8")
+      Open3.popen2e(env, *command, chdir:, pgroup: true, unsetenv_others: true) do |stdin, stream, waiter|
         stdin.close
         reader = Thread.new { read_bounded(stream, out) }
         unless waiter.join(timeout)
