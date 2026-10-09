@@ -123,3 +123,17 @@ class Minitest::Test
   include ArtifactHelpers
   include AtomicWrites
 end
+
+if defined?(Tamoz::Mcp::Supervisor)
+  Tamoz::Mcp::Supervisor.prepend(Module.new do
+    %i[close start].each do |name|
+      define_method(name) do |*args, **kwargs, &block|
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        super(*args, **kwargs, &block)
+      ensure
+        elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+        $stdout.puts(format("MCP_TIMING %s %.3f %s", name, elapsed, caller_locations(1, 8).map(&:to_s).grep(/_test\.rb/).first)) if elapsed > 0.3
+      end
+    end
+  end)
+end
