@@ -18,7 +18,7 @@ MANUAL_TESTS = ["test/stream_episode_real_model_test.rb"].freeze
 # The everyday cap: every file outside SLOW_TESTS and SERIAL_TESTS must finish inside it on the
 # machine running `rake ci` (the CI runner is about twice as slow as a developer machine), or the
 # gate fails naming it. Make the file faster first; it joins SLOW_TESTS only when it cannot be.
-TEST_FILE_CAP_SECONDS = 5.0
+TEST_FILE_CAP_SECONDS = 0.0
 
 # The slow set: every file over TEST_FILE_CAP_SECONDS on CI, plus everything in
 # SERIAL_TESTS. They are slow for real reasons — spawning MCP server
