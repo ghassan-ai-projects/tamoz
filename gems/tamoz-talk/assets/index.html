@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Talk with Tamoz</title>
+  <link rel="stylesheet" href="/talk.css">
+  <script type="module" src="/talk.js"></script>
+</head>
+<body>
+  <div id="start" class="overlay">
+    <div class="panel" role="dialog" aria-modal="true" aria-labelledby="start-title">
+      <h1 id="start-title">Talk with Tamoz</h1>
+      <p id="start-note">Tap Start to use your microphone and hear replies.</p>
+      <button id="start-button" class="primary big" type="button">Start</button>
+      <button id="text-only" class="link" type="button">Type instead</button>
+    </div>
+  </div>
+
+  <header id="header">
+    <span class="title">Tamoz</span>
+    <span id="connection" class="dot" title="Connecting" aria-label="Connecting"></span>
+    <button id="settings-button" class="icon" type="button" aria-expanded="false" aria-controls="settings">Settings</button>
+  </header>
+
+  <section id="settings" hidden>
+    <label>Mode
+      <select id="mode">
+        <option value="hands-free">Hands-free</option>
+        <option value="push-to-talk">Push to talk</option>
+        <option value="muted">Muted</option>
+      </select>
+    </label>
+    <label>Wait after I stop talking
+      <select id="hangover">
+        <option value="800">0.8 s</option>
+        <option value="1200" selected>1.2 s</option>
+        <option value="1600">1.6 s</option>
+        <option value="2000">2 s</option>
+      </select>
+    </label>
+    <label class="check"><input id="speech" type="checkbox" checked> Speak replies</label>
+    <label class="check" id="headphones-row"><input id="headphones" type="checkbox"> I'm using headphones (talk over replies)</label>
+  </section>
+
+  <main id="conversation" aria-live="polite" aria-relevant="additions"></main>
+
+  <footer id="footer">
+    <div id="state" class="state" role="status" aria-live="polite"><span id="state-label">Not started</span><span id="state-detail" aria-hidden="true"></span></div>
+    <div id="hint" class="hint" role="status" aria-live="polite" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="sending" class="sending" hidden>
+      <span>Sending…</span>
+      <button id="send-now" type="button">Send now</button>
+      <button id="discard" type="button">Discard</button>
+    </div>
+    <div class="controls">
+      <button id="talk" class="primary talk" type="button" aria-pressed="false">Hold to talk</button>
+      <button id="stop" class="danger" type="button">Stop</button>
+      <button id="status" type="button">Status</button>
+    </div>
+    <form id="compose" autocomplete="off">
+      <label class="visually-hidden" for="text">Message</label>
+      <textarea id="text" rows="1" placeholder="Type a message" maxlength="2000"></textarea>
+      <button type="submit">Send</button>
+    </form>
+  </footer>
+  <audio id="player" preload="none"></audio>
+</body>
+</html>

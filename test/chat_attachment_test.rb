@@ -280,4 +280,78 @@ class ChatAttachmentTest < Minitest::Test
   ensure
     harness&.close
   end
+
+  def capture_notices(harness)
+    runtime = harness.instance_variable_get(:@runtime)
+    sink = runtime.instance_variable_get(:@delivery_sink)
+    notices = []
+    sink.singleton_class.define_method(:push) do |event|
+      notices << event[:text] if event[:kind] == 'request.notice'
+      super(event)
+    end
+    notices
+  end
+
+  def test_an_own_voice_note_is_echoed_as_heard_and_telegram_shows_nothing_new
+    transcriber = ScriptedTranscriber.new('check pond seven')
+    model = ScriptedConversationModel.new(turns: [{ content: 'Pond 7 is fine.' }])
+    harness = voice_harness(model, transcriber)
+    notices = capture_notices(harness)
+
+    cards = harness.send_voice(OGG)
+
+    assert_equal ['Heard: «check pond seven»'], notices
+    refute(cards.any? { |card| card[:text].to_s.start_with?('Heard:') }, 'the notice is talk-only')
+  ensure
+    harness&.close
+  end
+
+  def with_speaking_surface(kind = 'telegram')
+    parties = Tamoz::Comms::Parties
+    original = parties::KINDS
+    parties.send(:remove_const, :KINDS)
+    parties.const_set(:KINDS, original.merge(kind => original.fetch(kind).with(speaks: true)).freeze)
+    yield
+  ensure
+    parties.send(:remove_const, :KINDS)
+    parties.const_set(:KINDS, original)
+  end
+
+  def last_turn(model)
+    JSON.parse(model.requests.last).fetch('messages').select { |message| message['role'] == 'user' }
+                                                     .map { |message| message['content'] }.last(2)
+  end
+
+  def test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo
+    reply = 'Pond 7 oxygen fell from 6.1 to 4.3 since six this morning.'
+    transcriber = ScriptedTranscriber.new('pond 7 oxygen fell from 6.1 to 4.3 since six')
+    model = ScriptedConversationModel.new(turns: [{ content: reply }, { content: 'I heard myself.' }])
+    with_speaking_surface do
+      harness = voice_harness(model, transcriber)
+      notices = capture_notices(harness)
+      harness.say('how is pond 7?')
+      harness.send_voice(OGG)
+      material, task = last_turn(model)
+
+      assert_equal '[voice message]', task
+      assert_includes material, 'The microphone picked up your own previous reply'
+      assert_includes material, "<<<heard\npond 7 oxygen fell from 6.1 to 4.3 since six\nheard>>>"
+      assert_empty notices, 'an echo is not heard as the user'
+    ensure
+      harness&.close
+    end
+  end
+
+  def test_a_surface_that_never_speaks_takes_a_repeat_as_the_users_words
+    reply = 'Pond 7 oxygen fell from 6.1 to 4.3 since six this morning.'
+    transcriber = ScriptedTranscriber.new('pond 7 oxygen fell from 6.1 to 4.3 since six')
+    model = ScriptedConversationModel.new(turns: [{ content: reply }, { content: 'Yes, that is right.' }])
+    harness = voice_harness(model, transcriber)
+    harness.say('how is pond 7?')
+    harness.send_voice(OGG)
+
+    assert_equal "[voice message]\npond 7 oxygen fell from 6.1 to 4.3 since six", last_turn(model).last
+  ensure
+    harness&.close
+  end
 end

@@ -255,6 +255,13 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-talk
+  specs:
+    tamoz-talk (0.1.0.alpha.1)
+      tamoz-comms (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-telegram
   specs:
     tamoz-telegram (0.1.0.alpha.1)
@@ -458,6 +465,7 @@ DEPENDENCIES
   tamoz-skills!
   tamoz-sqlite!
   tamoz-stream!
+  tamoz-talk!
   tamoz-telegram!
   tamoz-tools!
   zeitwerk (~> 2.6)
@@ -550,6 +558,7 @@ CHECKSUMS
   tamoz-skills (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
   tamoz-stream (0.1.0.alpha.1)
+  tamoz-talk (0.1.0.alpha.1)
   tamoz-telegram (0.1.0.alpha.1)
   tamoz-tools (0.1.0.alpha.1)
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42

@@ -57,7 +57,11 @@ module Tamoz
             return 1
           end
 
+          return 1 unless talk_once_allowed(descriptors, once)
+
           descriptors.each { |descriptor| store.deploy_surface(descriptor.wire, now: Time.now.utc) }
+          descriptors.select { |descriptor| descriptor.kind == 'talk' }.each { |d| talk_hub(d, store).start }
+
           controls_source = comms_controls_source(directory, adapter, options)
           with_delivery_drainers(directory, descriptors) do |drainers|
             gateways = descriptors.zip(drainers).map do |descriptor, drainer|
@@ -81,15 +85,21 @@ module Tamoz
               @out.puts JSON.generate(outcomes) if options[:json]
               outcomes.any? { |outcome| %i[auth_failed poller_busy poller_lost].include?(outcome) } ? 1 : 0
             else
-              run_gateway_loops(gateways, drainers)
+              run_gateway_loops(gateways, drainers, intervals: descriptors.map(&method(:poll_interval)))
             end
           end
+        ensure
+          talk_hubs.each(&:stop)
         end
       # A competing poller is a correctness problem, not a retry: it is named
       # and the gateway exits, rather than dying as an unhandled backtrace or
       # looping against a stream it does not own.
       rescue Comms::PollerConflictError => e
         @err.puts "tamoz: poller conflict: #{e.message}"
+        1
+      rescue Errno::EADDRINUSE, Errno::EACCES, Errno::EADDRNOTAVAIL => e
+        @err.puts "tamoz: the talk page could not listen (#{e.class.name.split('::').last}); is another Tamoz " \
+                  'running, or is the port taken?'
         1
       end
 
@@ -120,6 +130,15 @@ module Tamoz
 
       private
 
+      def talk_once_allowed(descriptors, once)
+        return true unless once && descriptors.any? { |descriptor| descriptor.kind == 'talk' }
+
+        @err.puts 'tamoz: a talk surface keeps its page in memory; run `tamoz comms serve` without --once'
+        false
+      end
+
+      def poll_interval(descriptor) = descriptor.kind == 'talk' ? 0.1 : 1.0
+
       # A fenced gateway loop per surface, supervised like `tamoz worker`:
       # INT/TERM ask every loop to stop, and the previous handlers are
       # restored so an in-process test never leaks traps. A drainer that
@@ -127,7 +146,7 @@ module Tamoz
       # unexpected storage failure is captured, named on stderr with its
       # type, and turns into a non-zero exit — never a quiet spin beside a
       # dead sibling thread.
-      def run_gateway_loops(gateways, drainers)
+      def run_gateway_loops(gateways, drainers, intervals: [])
         # Trap.install hands each stop request to a thread for us: `stop`
         # releases the poller lease with a database write, whose mutex raises
         # ThreadError in a trap context. Doing it inline turns a supervisor's
@@ -135,9 +154,9 @@ module Tamoz
         stop = ->(_reason) { stop_loops(gateways, drainers) }
         Cancellation::Trap.install(int: stop, term: stop) do
           failures = []
-          threads = gateways.map do |gateway|
+          threads = gateways.each_with_index.map do |gateway, index|
             Thread.new do
-              outcome = gateway.serve_loop(drain: false)
+              outcome = gateway.serve_loop(drain: false, interval_s: intervals[index] || 1.0)
               stop_loops(gateways, drainers) if %i[auth_failed poller_conflict].include?(outcome)
               outcome
             rescue StandardError => e
@@ -188,6 +207,7 @@ module Tamoz
       def stop_loops(gateways, drainers)
         gateways.each(&:stop)
         drainers.each(&:stop)
+        talk_hubs.each(&:stop)
       end
 
       def with_delivery_drainers(directory, descriptors)

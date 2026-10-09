@@ -1116,6 +1116,10 @@ module Tamoz
           transcriber: @transcriber,
           image_reader: @image_reader,
           attachment_spool: @directory.attachment_spool,
+          notice: lambda { |context, text|
+            @delivery_sink.push(thread_id: context.thread_id, kind: 'request.notice', text:,
+                                request_id: context.request_id)
+          },
           child_task_runtime: self,
           mcp:,
           routing: @routing,

@@ -117,6 +117,7 @@ Two edges deserve emphasis:
 | `tamoz-observability` | Closed versioned signal catalog, correlation identity, immutable signals, bounded recorders, local journal, content/secret policy, metrics and trace projection. `SCHEMA_VERSION = 1` | `tamoz-core` |
 | `tamoz-otel` | Bounded OTLP/HTTP exporter for observability signals | `tamoz-observability` |
 | `tamoz-telegram` | Telegram Bot API transport implementing the `Tamoz::Comms::Transport` seam; stdlib-only HTTP | `tamoz-comms` |
+| `tamoz-talk` | Browser talk transport implementing the `Tamoz::Comms::Transport` seam: hardened stdlib HTTP server, in-memory inbox confirmed by the next poll, the talk page | `tamoz-comms`, `tamoz-core` |
 | `tamoz-agent-kernel` | The deliberation substrate: episode records/receipts, reasoning documents, the plan/review/execute/verify engine, `EffectDispatcher`, witness gateway/verifier, catalogs, the agent error taxonomy, and the provider/env-key catalog | `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-capabilities` | Sealed capability catalog over toolbox, skills, MCP, browser, and database sources | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |
 | `tamoz-agent-memory` | Durable memory: `Memory::Engine` assembling admission, retrieval, lifecycle (deletion with receipts), consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |

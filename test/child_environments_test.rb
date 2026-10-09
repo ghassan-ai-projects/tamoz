@@ -50,6 +50,27 @@ class ChildEnvironmentsTest < Minitest::Test
            'no transcription model, no second key'
   end
 
+  def test_a_role_reads_its_key_from_the_variable_it_names
+    configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openrouter',
+                            'TAMOZ_TRANSCRIPTION_MODEL' => 'openai/gpt-4o-mini-transcribe',
+                            'TAMOZ_TRANSCRIPTION_CREDENTIAL' => 'OPENROUTER_SPEECH_API_KEY',
+                            'OPENROUTER_SPEECH_API_KEY' => 'speech-secret', 'OPENROUTER_API_KEY' => 'chat-secret')
+    env = ChildEnvironments.worker_env(configured, runtime_dir: 'r')
+
+    assert_equal %w[OPENROUTER_SPEECH_API_KEY speech-secret],
+                 env.values_at('TAMOZ_TRANSCRIPTION_CREDENTIAL', 'OPENROUTER_SPEECH_API_KEY')
+    refute env.key?('OPENROUTER_API_KEY'), 'a role naming its key gets that key, not the provider default'
+  end
+
+  def test_a_role_may_not_name_a_channel_secret_or_a_runtime_variable
+    %w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_ENV_FILE PATH TAMOZ_TALK_TOKEN AWS_SECRET_ACCESS_KEY GITHUB_TOKEN].each do |name|
+      configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
+                              'TAMOZ_TRANSCRIPTION_CREDENTIAL' => name)
+
+      assert_raises(ArgumentError, name) { ChildEnvironments.worker_env(configured, runtime_dir: 'r') }
+    end
+  end
+
   def test_the_image_model_and_its_key_reach_only_the_worker
     configured = BASE.merge('TAMOZ_VISION_PROVIDER' => 'openai', 'TAMOZ_VISION_MODEL' => 'gpt-4o-mini',
                             'OPENAI_API_KEY' => 'vision-secret', 'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot')

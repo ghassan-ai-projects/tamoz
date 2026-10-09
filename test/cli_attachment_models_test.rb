@@ -33,4 +33,24 @@ class CLIAttachmentModelsTest < Minitest::Test
 
     assert_equal %w[openai gpt-4o-mini], [built.provider, built.model]
   end
+
+  def test_a_role_reads_its_key_from_the_variable_it_names
+    env = { 'TAMOZ_TRANSCRIPTION_PROVIDER' => 'openrouter', 'TAMOZ_TRANSCRIPTION_MODEL' => 'openai/gpt-4o-mini-transcribe',
+            'OPENROUTER_SPEECH_API_KEY' => 'speech-key' }
+    error = assert_raises(Tamoz::Agent::ModelCallError) { transcriber(env) }
+
+    assert_equal 'credential_unavailable', error.code
+    built = transcriber(env.merge('TAMOZ_TRANSCRIPTION_CREDENTIAL' => 'OPENROUTER_SPEECH_API_KEY'))
+
+    assert_equal %w[openrouter openai/gpt-4o-mini-transcribe], [built.provider, built.model]
+  end
+
+  def test_the_voice_role_builds_a_speaking_transport
+    built = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new,
+                                  env: { 'TAMOZ_VOICE_PROVIDER' => 'openrouter', 'TAMOZ_VOICE_MODEL' => 'hexgrad/kokoro-82m',
+                                         'TAMOZ_VOICE_CREDENTIAL' => 'OPENROUTER_SPEECH_API_KEY',
+                                         'OPENROUTER_SPEECH_API_KEY' => 'k' }).send(:attachment_model, 'VOICE')
+
+    assert_equal ['openrouter', 'hexgrad/kokoro-82m', 10], [built.provider, built.model, built.timeout_seconds]
+  end
 end

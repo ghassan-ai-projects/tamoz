@@ -12,6 +12,9 @@
 - A deadline the child's own startup must fit inside is a race, not a test — Ruby boot can
   be the whole budget. Size it for the boot, or drop the case; don't widen the sleep.
 - `rake test_profile` after adding gates; refresh `TEST_WEIGHTS`.
+- **No everyday test file takes more than 5 s on the pipeline** (owner, 2026-10-09). The CI runner is about
+  2× slower than a developer Mac, so a file over 2.5 s locally needs work: make it faster first; a file that
+  cannot be made faster goes to `SLOW_TESTS`, where `rake ci_full` still runs it.
 - **A file this session creates is mode 600; `gem build` then refuses it.** `packaging_test` is the
   only gate that notices, and it reports it as 15 errors in gem *building*, not as a permission
   problem: `Gem::InvalidSpecificationException: specification has warnings`. `chmod 644` every new
@@ -69,7 +72,9 @@
   expires after a short sleep, but several gave the *recovering* runtime the same 0.1–0.2 s lease (and the
   work-loop fixture gave every effect 0.2 s to go from prepared to started). On a loaded CI runner the
   recovery outlived its own lease and failed with `LeaseLostError`, on `main` as well as on branches. Give the
-  recovering owner, and any test that does not wait for expiry, a normal lease (5 s).
+  recovering owner, and any test that does not wait for expiry, a normal lease (5 s). The crashing owner needs
+  room too: a 0.2 s lease let it lose its claim before it reached the crash under a reshuffled CI shard. Give it
+  about 1 s and have the recovery retry until the claim expires, with a deadline.
 - **A digest over file text must read it with an explicit encoding.** `PromptPack.digests` used a bare `File.read`, so
   the first non-ASCII prompt (`research_replies.json`) hashed differently under `LANG=C` and a UTF-8 locale: pins made
   in one shell failed in `rake`'s UTF-8 run and passed alone. Read with `encoding: Encoding::UTF_8`, and generate pins

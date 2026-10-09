@@ -63,6 +63,7 @@ named example task in a clean subprocess.
 | `tamoz-comms-gateway` | Long-running gateway and delivery drainer over injected Comms seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Approval/permission policy owner: decisions, grants, policy-as-data | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
+| `tamoz-talk` | Browser talk channel transport (voice and text) | `tamoz-comms`, `tamoz-core` |
 | `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core`, `tamoz-concurrency` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability`, `tamoz-concurrency` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
@@ -196,6 +197,7 @@ request inboxes and the checkpoints.
 | `postmortem` | Write a Markdown + JSON postmortem of a window, optionally with a model analysis |
 | `mcp` | Serve Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for probes |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
+| `talk` | Set up and run the browser talk channel: `setup` writes it once, `start` checks the models, runs the gateway and worker, and prints the link |
 | `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
 | `config` | Explicit configuration migration (`migrate`) |
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |

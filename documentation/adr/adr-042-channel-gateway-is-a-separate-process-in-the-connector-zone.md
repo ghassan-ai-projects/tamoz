@@ -26,8 +26,11 @@ would be a diagram, not a boundary.
   deletes the file once the turn holds what was read from it; a refused request's file is deleted at
   once, and anything no turn read is swept within a day. Attachments are not kept. A file it cannot
   fetch is refused on its own update and never stalls the poll.
-- It never constructs a `Session`, loads a model credential, opens a toolbox, or reads workspace
-  files.
+- It never constructs a `Session`, opens a toolbox, or reads workspace files, and it never loads a
+  credential for a model that reasons or acts. One exception (owner decision, 2026-10-09): a talk
+  gateway (ADR-061) holds the VOICE role's credential to synthesize speech of text it has already
+  delivered; `tamoz talk start` refuses that credential when it is the chat model's, by name or by value.
+  Only `talk start` checks: a hand-run `tamoz comms serve` gets the environment it is given.
 - It and the worker share one SQLite runtime database, so admission and request enqueue are one
   transaction and a replayed update creates no second request.
 
@@ -53,6 +56,8 @@ side). **Adversary:** a remote chat sender, or code execution in one of the two 
 | Compromised worker sends arbitrary channel messages | The worker has no transport credential — but appending outbox rows makes the gateway send any text to any bound conversation |
 | A replayed update runs twice | Admission dedups in the same transaction as enqueue |
 | A sent file makes the worker reach the channel | The gateway fetches it; the request carries a temporary file's name and digest, never a file handle or URL |
+| A network peer reaches the talk page's HTTP parser in the process that can write approvals | The token is checked before any body is read; the parser has deadlines and caps; loopback by default, and a non-loopback bind needs an allowed host name (ADR-061) |
+| A compromised talk gateway spends speech credit | It holds only the VOICE key, never the chat key; a separate speech key is the operator's spending limit |
 
 **Residual risk:** both processes can write the shared SQLite file. A compromised gateway can write
 any runtime table — including approval decisions and requests — directly, bypassing every check in
@@ -66,3 +71,6 @@ starts each process with only its own variable set.
   images and voice) and hands each to the worker as a temporary file that is deleted once read; owner
   decision the same day: attachments are never stored, and never in the database. The credential
   split is unchanged.
+- 2026-10-09 — a talk gateway may hold one presentation credential, the VOICE role's, to speak text it
+  already delivered (owner decision OD6, ADR-061); it runs a network-reachable HTTP parser, recorded in
+  the threat model above.

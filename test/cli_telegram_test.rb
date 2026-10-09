@@ -207,7 +207,7 @@ class CliTelegramTest < Minitest::Test
       status, _out, err = cli(runtime, %w[telegram start], bot: Bot.new([]))
 
       assert_equal 1, status
-      assert_includes err, "already running for this bot (pid #{Process.pid})"
+      assert_includes err, "already running for this channel (pid #{Process.pid})"
     end
   end
 

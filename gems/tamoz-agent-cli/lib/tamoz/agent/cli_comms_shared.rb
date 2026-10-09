@@ -73,6 +73,7 @@ module Tamoz
       def build_descriptor(surface_id, entry, directory)
         Tamoz::Comms::SurfaceDescriptor.build(
           surface_id:,
+          kind: entry.fetch('kind', 'telegram'),
           revision: entry.fetch('revision'),
           transport: symbolize({
             mode: 'long_poll',
@@ -80,7 +81,7 @@ module Tamoz
             poll_timeout_s: entry.dig('transport', 'poll_timeout_s') || 30,
             batch: entry.dig('transport', 'batch') || 50,
             max_response_bytes: entry.dig('transport', 'max_response_bytes')
-          }),
+          }.merge(entry['kind'] == 'talk' ? entry.fetch('talk', {}) : {})),
           identity: symbolize({ expected_bot_id: entry.fetch('expected_bot_id'),
                                 bot_username: entry['bot_username'] }.compact),
           admission: symbolize({ 'direct' => 'disabled' }.merge(entry.fetch('admission', {}))),
@@ -131,6 +132,8 @@ module Tamoz
       # transport is optional). A missing adapter is a typed error, never a
       # boot failure.
       def build_transport(descriptor, token)
+        return @talk_hubs.fetch(descriptor.surface_id).transport if descriptor.kind == 'talk'
+
         client = comms_client_factory(descriptor).call(token)
         require 'tamoz/telegram'
         normalizer = Tamoz::Telegram::Normalizer.new(

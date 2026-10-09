@@ -75,7 +75,7 @@ module Tamoz
         return 1 unless owner
 
         # The profile first: a failure here leaves no channel that points at a missing profile.
-        write_telegram_profile(directory)
+        write_chat_profile(directory, PROFILE)
         surface = write_telegram_channel(directory, bot:, owner:)
         @out.puts "Paired with Telegram user #{owner}. Start it with:"
         @out.puts "  tamoz --runtime-dir #{directory.path} telegram start"
@@ -188,14 +188,14 @@ module Tamoz
           [SURFACE, nil]
       end
 
-      def write_telegram_profile(directory)
-        path = File.join(directory.profiles_path, "#{PROFILE}.yaml")
+      def write_chat_profile(directory, profile_id)
+        path = File.join(directory.profiles_path, "#{profile_id}.yaml")
         root = directory.workspace_root
         skills = chat_skills(directory, root)
         tools = skills.empty? ? TOOLS : TOOLS + SKILL_TOOLS
         digest = Toolbox.new(root:, allow_changes: true, checks: {}, allowed_tools: tools, skills:).catalog_digest
         write_private(path, Psych.dump(
-                              'profile' => { 'schema_version' => 1, 'profile_id' => PROFILE,
+                              'profile' => { 'schema_version' => 1, 'profile_id' => profile_id,
                                              'profile_version' => '1.0', 'canonical_root' => root },
                               'roots' => { 'workspace' => root },
                               'tools' => { 'allowed' => tools },
@@ -267,7 +267,9 @@ module Tamoz
           pid = state['poller_owner_id'].to_s[/\A#{CLICommsShared::GATEWAY_POLLER_PREFIX}:(\d+)\z/o, 1]&.to_i
           next unless remaining.positive? && pid
 
-          next "Tamoz is already running for this bot (pid #{pid}); stop it first (Ctrl-C where it runs)" if alive?(pid)
+          if alive?(pid)
+            next "Tamoz is already running for this channel (pid #{pid}); stop it first (Ctrl-C where it runs)"
+          end
 
           @out.puts "Waiting #{remaining.ceil}s for the previous run's hold on Telegram to expire..."
           sleep(remaining)
@@ -394,7 +396,7 @@ module Tamoz
       end
 
       # Both processes run until Ctrl-C; if one dies the other is stopped and its log tail is shown.
-      def supervise(children, logs)
+      def supervise(children, logs, hint: 're-check the token with `tamoz telegram setup`.')
         stopping = false
         stop = ->(_reason) { stopping = true }
         Cancellation::Trap.install(int: stop, term: stop) do
@@ -404,7 +406,7 @@ module Tamoz
               children.delete(name)
               @err.puts "tamoz: the #{name} stopped; last lines of #{File.join(logs, "#{name}.log")}:\n" \
                         "#{File.readlines(File.join(logs, "#{name}.log")).last(8).join}\n" \
-                        'Full logs are in the runtime logs directory; re-check the token with `tamoz telegram setup`.'
+                        "Full logs are in the runtime logs directory; #{hint}"
               break
             end
             sleep 0.5

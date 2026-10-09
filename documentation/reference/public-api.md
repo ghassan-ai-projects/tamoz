@@ -44,6 +44,7 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-comms` | Channel values, admission and decisions: `Canonical`, `Binding`, `Conversation`, `Delivery`, `InboundEnvelope`, `DecisionRecord`, `DecisionStore`, `CommsStore`, `SurfaceDescriptor`, and the channel error taxonomy |
 | `tamoz-comms-gateway` | The long-running `Gateway` and `DeliveryDrainer` process boundary over injected Comms transport, store, checkpoint, controls, and effect-binding seams |
 | `tamoz-telegram` | The Telegram Bot API adapter: `Client`, `Transport`, `Normalizer` |
+| `tamoz-talk` | The browser talk adapter: `Hub` (one surface: `start`, `transport`, `seed`, `stop`) |
 | `tamoz-observability` | The closed signal catalog: `SignalCatalog`, `Signal`, `Correlation`, `ContentPolicy`, the `Recorder` implementations, `Metrics`, `ModelCall`, `Cost`, `PricingTable`, `Trace`, and the schema-version/evolution errors |
 | `tamoz-otel` | The optional governed exporter: `HTTPExporter`, `AsyncExporter`, `EgressPolicy` |
 | `tamoz-agent-kernel` | The deliberation substrate: `Deliberation`, `EffectDispatcher`, `Plan`, `Step`, `Event`, `Providers`, `Error`, `GraphVersions` |

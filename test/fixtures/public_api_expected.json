@@ -461,6 +461,11 @@
     "Tamoz::Stream::VerificationStore": {},
     "Tamoz::Stream::WorkerServer": {}
   },
+  "tamoz-talk": {
+    "Tamoz::Talk::Hub": {},
+    "Tamoz::Talk::Transport": {},
+    "Tamoz::Talk::VERSION": {}
+  },
   "tamoz-telegram": {
     "Tamoz::Telegram::Client": {},
     "Tamoz::Telegram::Normalizer": {},

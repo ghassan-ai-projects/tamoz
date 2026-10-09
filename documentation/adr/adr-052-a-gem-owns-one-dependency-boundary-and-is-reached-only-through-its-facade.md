@@ -3,7 +3,7 @@
 **Status:** Accepted 2026-08-26
 **Date:** 2026-08-26
 **Tier:** C
-**Implementation:** Partial — boundary tests guard memory, skills, research, approval, profile, and core file facades; other gems have no leak test yet. The "when a gem" criterion is proposed (owner decision D6); until confirmed, the 2026-08-26 rule stands
+**Implementation:** Partial — boundary tests guard memory, skills, research, approval, profile, talk, and core file facades; other gems have no leak test yet. The "when a gem" criterion is proposed (owner decision D6); until confirmed, the 2026-08-26 rule stands
 **Supersedes:** [ADR-002](./retired/adr-002-four-v0-1-runtime-gems.md)
 **Relates to:** [ADR-040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) (the monorepo), [ADR-056](./adr-056-skills-gem.md) (an application of this rule)
 

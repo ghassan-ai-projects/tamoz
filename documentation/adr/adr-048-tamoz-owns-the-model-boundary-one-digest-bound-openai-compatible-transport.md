@@ -28,7 +28,11 @@ provider's native protocol would multiply that by the number of providers.
 - Every model call uses one canonical request/response projection over the OpenAI-compatible
   protocol. The same transport also speaks its speech-to-text endpoint (`/audio/transcriptions`) for
   the transcription model an operator names; that call's identity is the model plus the audio's
-  digest, and it is journaled like any model call. An image reaches the configured model as an
+  digest, and it is journaled like any model call. It also speaks the text-to-speech endpoint
+  (`/audio/speech`, mp3 read through a 2 MB bound) for the voice model an operator names; that call
+  renders text already delivered, so its identity is the model, voice and text. A role without a
+  profile (transcription, vision, voice) may name the variable holding its key with
+  `TAMOZ_<ROLE>_CREDENTIAL`; the name is validated and never a channel secret. An image reaches the configured model as an
   `image_url` content part of an ordinary conversation call. Providers that need a native protocol (Anthropic, Gemini) are reached through
   `openrouter` with a provider-qualified model id; native protocols fail closed.
 - The provider configuration digest binds provider, model, endpoint, protocol, settings, profile
@@ -60,6 +64,7 @@ hostile profile, endpoint, or provider response.
 | Credential leaks into a digest, receipt, or error | Digest binds configuration, never credential values; failures are redacted |
 | A profile points a role at an unexpected provider | Factory rejects a model or provider that does not match the profile role |
 | A generic env var supplies the wrong key | No generic fallback; only the profile-named credential |
+| A role names a channel secret or runtime variable as its key | `ChildEnvironments.role_credential` refuses gateway-only, forbidden, standard and `TAMOZ_*` names; the factory refuses a malformed name or the provider's `_API_BASE` |
 | A received failure is retried and double-billed | The transport does not retry a received failure |
 | A malformed response becomes a fake success | Typed failed model call |
 
@@ -72,3 +77,6 @@ operator makes in the profile.
 - 2026-10-01 — Absorbed ADR-051 (no `ruby_llm` anywhere; native message/tool types).
 - 2026-10-09 — The transport gained the OpenAI-compatible transcription endpoint for Telegram voice
   notes (owner request); built by the same factory, same credential rules.
+- 2026-10-09 — The transport gained the text-to-speech endpoint for the talk channel, and roles without a
+  profile may name their key variable (`TAMOZ_<ROLE>_CREDENTIAL`) so speech can use its own funded key
+  (owner request, docs/talk-voice-2026-10-09).

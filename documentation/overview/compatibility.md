@@ -41,6 +41,7 @@ All twenty-nine gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required
 | `tamoz-observability` | `tamoz-core` |
 | `tamoz-otel` | `tamoz-observability` |
 | `tamoz-telegram` | `tamoz-comms` |
+| `tamoz-talk` | `tamoz-comms`, `tamoz-core` |
 | `tamoz-agent` | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability` |
 | `tamoz-agent-kernel` | `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-capabilities` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |

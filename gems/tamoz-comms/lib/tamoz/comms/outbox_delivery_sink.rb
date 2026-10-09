@@ -33,7 +33,8 @@ module Tamoz
         'request.blocked' => 'blocked',
         'request.approval_request' => 'approval_request',
         'request.clarification_request' => 'clarification_request',
-        'healing.escalated' => 'control'
+        'healing.escalated' => 'control',
+        'request.notice' => 'notice'
       }.freeze
 
       # Kinds whose rows the admission reservation covers (design §12): the
@@ -62,6 +63,7 @@ module Tamoz
         return nil unless surface
 
         return push_clarification_question(event, route, surface) if kind == 'clarification_request'
+        return push_notice(event, route, surface) if kind == 'notice'
 
         return push_approval_request(event, route, surface) if kind == 'approval_request'
 
@@ -73,6 +75,16 @@ module Tamoz
       end
 
       private
+
+      # A notice is shown on surfaces that ask for it, never settles the request, and is keyed by it.
+      def push_notice(event, route, surface)
+        return nil unless Parties::KINDS.fetch(surface.fetch('kind')).speaks
+
+        part = render_parts(event, surface).first
+        @store.append_delivery(rendered_delivery(event, route, part, 'control').wire,
+                               surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
+                               reserved_request_id: nil, now: Time.now.utc)
+      end
 
       def push_approval_request(event, route, surface)
         return push_approval_prompt(event, route, surface) if surface.fetch('approvals').fetch('mode') == 'deny_only'

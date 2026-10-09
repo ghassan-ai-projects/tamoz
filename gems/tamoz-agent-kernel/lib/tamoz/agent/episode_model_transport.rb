@@ -26,7 +26,9 @@ module Tamoz
     class EpisodeModelTransport
       OPENAI_COMPLETIONS_PATH = "/chat/completions"
       TRANSCRIPTION_PATH = "/audio/transcriptions"
+      SPEECH_PATH = "/audio/speech"
       MAX_TRANSCRIPT_CHARACTERS = 100_000
+      MAX_SPEECH_BYTES = 2_000_000
       # The frozen request settings (P1 contract). The settings digest the
       # gateway signs and the receipt carries is computed over THIS document.
       SETTINGS = {
@@ -52,8 +54,9 @@ module Tamoz
       )
 
       Transcript = Data.define(:text, :request_digest, :response_digest, :provider_configuration_digest)
+      Speech = Data.define(:audio, :media_type, :request_digest)
 
-      attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window
+      attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window, :timeout_seconds
 
       def initialize(endpoint:, model:, provider: "episode_model_transport", api_key: nil,
                      timeout_seconds: 120, gateway: nil, safety: :unsafe,
@@ -137,6 +140,28 @@ module Tamoz
 
       def transcription_digest(audio_digest)
         Tamoz::Core.digest("tamoz.agent.transcription.v1\n", {"model" => @model, "audio" => "sha256:#{audio_digest}"})
+      end
+
+      def speak(text:, voice:)
+        raise ConfigurationError, "speech does not run through the witness gateway" if @gateway
+        raise ConfigurationError, "speech needs a voice" if voice.to_s.empty?
+
+        request = Tamoz::Core.jcs("model" => @model, "input" => String(text), "voice" => String(voice),
+                                  "response_format" => "mp3")
+        headers = {"Content-Type" => "application/json"}
+        headers["Authorization"] = "Bearer #{@api_key}" unless @api_key.to_s.empty?
+        status, type, audio = post_bounded(SPEECH_PATH, request, headers:, max_bytes: MAX_SPEECH_BYTES)
+        raise model_error("http_failure", status:, body: audio) unless status.start_with?("2")
+        raise model_error("invalid_response", body: audio) unless type.start_with?("audio/mpeg") && mp3?(audio)
+
+        Speech.new(audio:, media_type: "audio/mpeg", request_digest: speech_digest(text, voice))
+      rescue URI::InvalidURIError => e
+        raise model_error("transport_failure", body_bytes: e.message.to_s.bytesize)
+      end
+
+      def speech_digest(text, voice)
+        Tamoz::Core.digest("tamoz.agent.speech.v1\n",
+                           {"model" => @model, "voice" => String(voice), "text" => String(text)})
       end
 
       def conversation_settings_digest
@@ -252,17 +277,36 @@ module Tamoz
 
       def post_completion_request(body, headers:) = post_request(OPENAI_COMPLETIONS_PATH, body, headers:)
 
-      def post_request(path, body, headers:)
+      def post_request(path, body, headers:, &)
         uri = URI.parse("#{@endpoint}#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.read_timeout = @timeout_seconds
         http.open_timeout = @timeout_seconds
         http.use_ssl = uri.scheme == "https"
         begin
-          http.request(Net::HTTP::Post.new(uri, headers), body)
+          http.request(Net::HTTP::Post.new(uri, headers), body, &)
         rescue Timeout::Error, IOError, SystemCallError, SocketError, Net::ProtocolError
           raise EffectUnknownError, "model call outcome is unknown"
         end
+      end
+
+      def post_bounded(path, body, headers:, max_bytes:)
+        post_request(path, body, headers:) do |response|
+          bytes = +"".b
+          response.read_body do |chunk|
+            bytes << chunk
+            next if bytes.bytesize <= max_bytes
+
+            raise model_error("response_too_large", status: response.code, body_bytes: bytes.bytesize)
+          end
+          return [response.code.to_s, response["Content-Type"].to_s, bytes]
+        end
+      end
+
+      def mp3?(audio)
+        return true if audio.start_with?("ID3".b)
+
+        audio.bytesize > 1 && audio.getbyte(0) == 0xFF && audio.getbyte(1).allbits?(0xE0)
       end
 
       def transcription_body(audio, filename, media_type, boundary)

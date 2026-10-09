@@ -22,6 +22,12 @@ and a blind retry after a timeout can duplicate an irreversible action.
 - Every non-deterministic or external call inside a node goes through `EffectDispatcher.run`
   (session model calls via `SessionEffects#model_call`, the one-shot runtime via
   `Runtime#model_generate`, tools via the work gate). Calling one raw from a node is a defect.
+  Speech synthesis of a message already delivered (the talk channel, ADR-061) is presentation outside
+  any node: it feeds no turn and changes no record, so it is not journaled (owner decision, 2026-10-09).
+  The same holds for `tamoz talk start`'s one probe call per speech role, made before any turn exists, as
+  `telegram start` already probes the chat model. The talk channel's "Heard" notice is a control delivery
+  like a command's reply: keyed by its request, so a replayed turn adds none, and sent unjournaled as every
+  control delivery is.
 - An effect's logical identity is a digest of the request — request id, operation, capability,
   canonical arguments, authority and catalog revisions, iteration, sub-operation — never of the
   answer. The execution id is deliberately not part of it; a fork differs because it is a new request. Each effect declares a safety class: `read_only`,
@@ -59,3 +65,8 @@ owner waking up.
 | A human resolution from the wrong writer | Resolution is fenced to the row scope and audited |
 
 **Residual risk:** an `:unknown` unsafe effect may in fact have happened; a human decides.
+
+## History
+
+- 2026-10-09 — speech output of delivered text is presentation, not an effect (owner decision OD6,
+  ADR-061).
