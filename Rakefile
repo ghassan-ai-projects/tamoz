@@ -15,7 +15,12 @@ RUBY_SOURCES = TestSuite.sources.freeze
 AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 MANUAL_TESTS = ["test/stream_episode_real_model_test.rb"].freeze
 
-# The slow set: every file measured at >= 5 seconds, plus everything in
+# Per-file cap for the everyday lane, as a median over CI runs; one run varies about ±30% per file, so a
+# single `rake ci` fails a file only above cap × noise.
+TEST_FILE_CAP_SECONDS = 5.0
+TEST_FILE_RUN_NOISE = 1.3
+
+# The slow set: every file over TEST_FILE_CAP_SECONDS on CI, plus everything in
 # SERIAL_TESTS. They are slow for real reasons — spawning MCP server
 # subprocesses, SIGKILLing children at each durable seam, building all nine
 # gems, verifying SQLite against a raw oracle — so there is nothing to trim, only
@@ -39,6 +44,8 @@ MANUAL_TESTS = ["test/stream_episode_real_model_test.rb"].freeze
 # skips them and `ci_full` still runs every one.
 # work_loop / subagent_spec / research_spec are the three slowest everyday files (13.2s / 10.3s /
 # 7.4s); the owner moved them here on 2026-10-09 to keep `rake ci` inside its budget.
+# subagent_topology .. experience_harness below stay over the cap: real durable sessions re-encode the whole
+# state every graph step (docs/test-quality/STATE_REENCODE_PLAN.md); websearch_invocation spawns MCP servers.
 SLOW_TESTS = %w[
   test/investigation_eval_controls_test.rb
   test/benchmark_comms_b0_test.rb
@@ -53,6 +60,13 @@ SLOW_TESTS = %w[
   test/work_loop_test.rb
   test/subagent_spec_test.rb
   test/research_spec_test.rb
+  test/subagent_topology_test.rb
+  test/memory_work_route_test.rb
+  test/agent_session_operations_test.rb
+  test/agent_cli_test.rb
+  test/agent_worker_test.rb
+  test/experience_harness_test.rb
+  test/websearch_invocation_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
@@ -102,8 +116,9 @@ LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
 def test_command(files, warnings: false)
   options = warnings ? ["-w"] : []
   [RbConfig.ruby, *options, "-Itest", *LIB_FLAGS, '-r', File.join(TestSuite::ROOT, 'test/support/test_suite'),
-   "-e", "ARGV.shift(Integer(ARGV.shift)).each { |file| require File.expand_path(file) }; " \
-         "TestSuite.validate_runnable_methods! if defined?(Minitest::Runnable)",
+   '-r', File.join(TestSuite::ROOT, 'test/support/file_clock'),
+   "-e", "TestSuite::FileClock.require_files(ARGV.shift(Integer(ARGV.shift))); " \
+         "TestSuite.validate_runnable_methods!",
    files.length.to_s, *files, *Shellwords.split(ENV.fetch("TESTOPTS", ""))]
 end
 
@@ -150,55 +165,55 @@ end
 # almost nothing, whereas being wrong about a slow one costs the whole run, so
 # only the slow tail needs to be accurate.
 #
-# Numbers re-measured 2026-10-09 on an idle machine (`rake test_profile`); the top 45 files, the rest
+# Numbers re-measured 2026-10-10 (`rake test_profile`'s per-file runs); the top 45 files, the rest
 # take DEFAULT_WEIGHT.
 DEFAULT_WEIGHT = 0.7
 TEST_WEIGHTS = {
-  "test/agenteval_subagent_pack_test.rb"               => 63.9,
-  "test/agenteval_topology_pack_test.rb"               => 60.1,
-  "test/graph_surface_audit_test.rb"                   => 59.8,
-  "test/packaging_test.rb"                             => 56.8,
-  "test/investigation_eval_controls_test.rb"           => 43.3,
-  "test/agent_scorecard_test.rb"                       => 37.4,
-  "test/agent_session_kill_matrix_test.rb"             => 32.8,
-  "test/sqlite_raw_oracle_test.rb"                     => 29.4,
-  "test/mcp_invocation_test.rb"                        => 28.7,
-  "test/sqlite_convergence_probe_test.rb"              => 22.3,
-  "test/benchmark_comms_b0_test.rb"                    => 17.7,
-  "agenteval/test/grader_test.rb"                      => 17.1,
-  "test/benchmark_comms_controls_test.rb"              => 14.7,
-  "test/m2_evidence_test.rb"                           => 13.8,
-  "test/work_loop_test.rb"                             => 13.2,
-  "test/memory_treatment_profile_test.rb"              => 13.0,
-  "test/mcp_supervisor_test.rb"                        => 11.8,
-  "test/sqlite_scenario_driver_test.rb"                => 10.9,
-  "test/subagent_spec_test.rb"                         => 10.3,
-  "test/research_spec_test.rb"                         => 7.4,
+  "test/packaging_test.rb"                             => 72.0,
+  "test/graph_surface_audit_test.rb"                   => 57.9,
+  "test/investigation_eval_controls_test.rb"           => 48.8,
+  "test/agent_scorecard_test.rb"                       => 42.5,
+  "test/agent_session_kill_matrix_test.rb"             => 39.1,
+  "test/sqlite_raw_oracle_test.rb"                     => 37.0,
+  "test/sqlite_convergence_probe_test.rb"              => 27.9,
+  "test/mcp_invocation_test.rb"                        => 27.0,
+  "test/agenteval_subagent_pack_test.rb"               => 26.1,
+  "test/agenteval_topology_pack_test.rb"               => 22.4,
+  "test/sqlite_scenario_driver_test.rb"                => 15.9,
+  "test/work_loop_test.rb"                             => 15.9,
+  "test/benchmark_comms_b0_test.rb"                    => 15.2,
+  "test/memory_treatment_profile_test.rb"              => 14.2,
+  "test/m2_evidence_test.rb"                           => 13.6,
+  "test/benchmark_comms_controls_test.rb"              => 13.4,
+  "test/mcp_supervisor_test.rb"                        => 12.1,
+  "test/subagent_spec_test.rb"                         => 11.8,
+  "test/talk_end_to_end_test.rb"                       => 10.0,
+  "agenteval/test/grader_test.rb"                      => 7.6,
   "test/thermal_manifest_test.rb"                      => 6.8,
-  "test/agenteval_memory_pack_test.rb"                 => 6.6,
-  "test/websearch_invocation_test.rb"                  => 5.4,
-  "test/subagent_topology_test.rb"                     => 5.1,
-  "test/memory_work_route_test.rb"                     => 4.9,
-  "test/tamoz_telegram_transport_test.rb"              => 4.7,
+  "test/stream_worker_server_test.rb"                  => 6.6,
+  "test/research_spec_test.rb"                         => 6.5,
+  "test/websearch_invocation_test.rb"                  => 6.3,
+  "test/subagent_topology_test.rb"                     => 6.1,
+  "test/agent_cli_test.rb"                             => 5.1,
+  "test/talk_endpointing_eval_test.rb"                 => 5.0,
+  "test/agent_unattended_policy_test.rb"               => 5.0,
   "test/thermal_tournament_test.rb"                    => 4.6,
-  "test/agent_cli_test.rb"                             => 4.2,
+  "test/subagent_kill_test.rb"                         => 4.5,
   "test/agent_session_operations_test.rb"              => 4.1,
+  "test/dependency_isolation_test.rb"                  => 4.0,
+  "test/memory_work_route_test.rb"                     => 4.0,
+  "test/self_diagnosis_scale_test.rb"                  => 3.9,
   "test/thermal_tournament_controls_test.rb"           => 3.9,
-  "test/chat_attachment_test.rb"                       => 3.8,
   "test/research_durability_test.rb"                   => 3.7,
-  "test/dependency_isolation_test.rb"                  => 3.6,
+  "test/benchmark_holdout_test.rb"                     => 3.6,
   "test/agent_mcp_adversarial_test.rb"                 => 3.6,
-  "test/agent_worker_test.rb"                          => 3.4,
-  "test/self_diagnosis_scale_test.rb"                  => 3.4,
-  "test/stream_worker_server_test.rb"                  => 3.4,
-  "test/agent_cli_research_test.rb"                    => 3.3,
-  "test/benchmark_holdout_test.rb"                     => 3.3,
-  "test/agent_mcp_capability_source_test.rb"           => 3.2,
-  "test/agent_profile_machinery_test.rb"               => 3.1,
-  "test/experience_harness_test.rb"                    => 3.0,
-  "test/agent_unattended_policy_test.rb"               => 2.8,
-  "test/graph_execution_test.rb"                       => 2.7,
-  "test/sqlite_crash_recovery_test.rb"                 => 2.7
+  "test/work_web_chat_test.rb"                         => 3.5,
+  "test/talk_gateway_test.rb"                          => 3.5,
+  "test/agent_mcp_capability_source_test.rb"           => 3.4,
+  "test/agent_toolbox_test.rb"                         => 3.4,
+  "test/agent_profile_machinery_test.rb"               => 3.3,
+  "test/test_suite_test.rb"                            => 3.2,
+  "test/work_loop_observation_test.rb"                 => 3.1
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the
@@ -234,12 +249,14 @@ task :test_parallel, [:mode] => :test_inventory do |_task, args|
   end
 
   failures = Queue.new
+  file_cap = (TEST_FILE_CAP_SECONDS * TEST_FILE_RUN_NOISE).to_s unless include_slow
   shards.reject(&:empty?).map do |files|
     Thread.new do
       # One process per shard, requiring every file in it — `ruby a.rb b.rb`
       # would run only the first and treat the rest as ARGV.
       output, status = Open3.capture2e(
-        { "SIMPLE_COV_COMMAND_NAME" => "tests:shard:#{files.first}" }, *test_command(files)
+        { "SIMPLE_COV_COMMAND_NAME" => "tests:shard:#{files.first}",
+          "TEST_FILE_CAP_SECONDS" => file_cap }, *test_command(files)
       )
       failures << [files, output] unless status.success?
     end
@@ -263,7 +280,11 @@ task :test_parallel, [:mode] => :test_inventory do |_task, args|
 
         warn lines[index, 4].join
       end
-      warn output unless lines.any? { |line| line =~ /^\s*\d+\) (Failure|Error):/ }
+      if lines.any? { |line| line =~ /^\s*\d+\) (Failure|Error):/ }
+        lines.grep(/^TEST FILE OVER CAP:/).each { |line| warn line }
+      else
+        warn output
+      end
       warn lines.grep(/runs,/).last.to_s
     end
     abort("test_parallel failed")

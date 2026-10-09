@@ -206,7 +206,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
 
   CANONICALITY_SITES = {
     "tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb" => 1,
-    "tamoz-graph/lib/tamoz/graph/checkpoint_values.rb" => 2,
+    "tamoz-graph/lib/tamoz/graph/checkpoint_values.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/effect_record_reader.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_wire.rb" => 2,

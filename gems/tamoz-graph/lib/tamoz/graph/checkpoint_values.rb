@@ -63,16 +63,7 @@ module Tamoz
       end
 
       def verify_canonical_value_bytes(bytes)
-        value = load_value(bytes)
-        encoded = state_codec.dump(value)
-        # Canonicality is a BYTE property: an adapter may hand back the stored
-        # payload as ASCII-8BIT (SQLite BLOB), which never compares equal to a
-        # UTF-8 dump unless both are ASCII-only.
-        unless encoded.b == bytes.b
-          raise CheckpointCorruptionError,
-                'checkpoint contains a non-canonical state value'
-        end
-
+        load_value(bytes)
         bytes.dup.freeze
       end
 
@@ -80,6 +71,9 @@ module Tamoz
         raise CheckpointCorruptionError, 'encoded checkpoint value must be a String' unless bytes.is_a?(String)
 
         value = state_codec.load(bytes)
+        # Canonicality is a BYTE property: an adapter may hand back the stored
+        # payload as ASCII-8BIT (SQLite BLOB), which never compares equal to a
+        # UTF-8 dump unless both are ASCII-only.
         unless state_codec.dump(value).b == bytes.b
           raise CheckpointCorruptionError,
                 'checkpoint contains a non-canonical encoded value'

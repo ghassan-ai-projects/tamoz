@@ -8,6 +8,7 @@ module Tamoz
         STRING_ESCAPES = {
           0x22 => '\\"', 0x5C => '\\\\', 0x08 => '\\b', 0x09 => '\\t', 0x0A => '\\n', 0x0C => '\\f', 0x0D => '\\r'
         }.freeze
+        ESCAPED = /["\\\x00-\x1f]/
 
         module_function
 
@@ -52,6 +53,8 @@ module Tamoz
             seen[key] = true
             [key, entry]
           end
+          return pairs.sort_by(&:first) if pairs.all? { |(key, _)| key.ascii_only? }
+
           pairs.sort_by { |(key, _)| key.encode('UTF-16BE').b }
         end
 
@@ -66,7 +69,11 @@ module Tamoz
 
         def emit_string(value, out)
           out << '"'
-          value.each_codepoint { |code| out << escape_codepoint(code) }
+          if value.ascii_only? || (value.encoding == Encoding::UTF_8 && value.valid_encoding?)
+            out << value.gsub(ESCAPED) { |char| escape_codepoint(char.ord) }
+          else
+            value.each_codepoint { |code| out << escape_codepoint(code) }
+          end
           out << '"'
         rescue ArgumentError, Encoding::InvalidByteSequenceError, Encoding::UndefinedConversionError
           raise Error, 'string is not valid UTF-8'
