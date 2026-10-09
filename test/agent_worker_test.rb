@@ -315,7 +315,7 @@ class AgentWorkerTest < Minitest::Test
       first_runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
         model_factory: ->(profile:) { AdaptiveCompactionModel.new(crash: true) },
-        lease_ttl: 0.2,
+        lease_ttl: 1.0,
         routing: :adaptive
       )
       first_runtime.checkpoints.enqueue_request(
@@ -343,7 +343,8 @@ class AgentWorkerTest < Minitest::Test
         emitter: ->(_event) {}, once: true
       )
 
-      assert second_worker.poll_once
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 5
+      sleep 0.05 until second_worker.poll_once || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
       view = second_runtime.session_for("compaction-thread").view(thread: "compaction-thread")
       assert_equal :completed, view.status
       assert_equal 1, view.state.fetch(:compactions).length

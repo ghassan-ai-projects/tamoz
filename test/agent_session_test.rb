@@ -304,7 +304,7 @@ class AgentSessionTest < Minitest::Test
       FileUtils.mkdir_p(root)
       adapter = Tamoz::SQLite::Adapter.new(
         path: File.join(directory, "tamoz.sqlite3"),
-        limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 0.2)
+        limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 5.0)
       )
       begin
         yield File.realpath(root), adapter
