@@ -48,9 +48,21 @@ module Tamoz
         provider = base["TAMOZ_#{role}_PROVIDER"]
         return {} if provider.to_s.empty?
 
-        %w[PROVIDER MODEL API_BASE].filter_map { |part| ["TAMOZ_#{role}_#{part}", base["TAMOZ_#{role}_#{part}"]] }
-                                   .select(&:last).to_h
-                                   .merge(ModelClientFactory.worker_environment(provider:, environment: base))
+        credential_name = role_credential(base, role)
+        %w[PROVIDER MODEL API_BASE CREDENTIAL]
+          .filter_map { |part| ["TAMOZ_#{role}_#{part}", base["TAMOZ_#{role}_#{part}"]] }
+          .select(&:last).to_h
+          .merge(ModelClientFactory.worker_environment(provider:, environment: base, credential_name:))
+      end
+
+      def self.role_credential(base, role)
+        name = base["TAMOZ_#{role}_CREDENTIAL"]
+        return nil if name.to_s.empty?
+        if STANDARD.include?(name) || name.start_with?('TAMOZ_')
+          raise ArgumentError, "TAMOZ_#{role}_CREDENTIAL may not name a runtime or channel variable"
+        end
+
+        name
       end
 
       def self.queue_status_env(base, runtime_dir:)

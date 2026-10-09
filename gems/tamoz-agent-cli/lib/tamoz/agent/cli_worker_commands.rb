@@ -15,6 +15,7 @@ module Tamoz
     # that `ask` drives, through the same request inbox.
     module CLIWorkerCommands
       EXIT_WORKER_STOPPED = 0
+      VOICE_TIMEOUT_S = 10
 
       # `tamoz init --workspace PATH` — create the operator runtime directory.
       def cmd_init(options, argv)
@@ -690,7 +691,9 @@ module Tamoz
         raise ConfigurationError, "TAMOZ_#{role}_PROVIDER is set without TAMOZ_#{role}_MODEL" if model.to_s.empty?
 
         ModelClientFactory.build(provider:, model:, profile_role: nil, environment: @env,
-                                 explicit_api_base: @env["TAMOZ_#{role}_API_BASE"], safety: :idempotent)
+                                 explicit_api_base: @env["TAMOZ_#{role}_API_BASE"], safety: :idempotent,
+                                 credential_name: ChildEnvironments.role_credential(@env, role),
+                                 timeout_seconds: role == 'VOICE' ? VOICE_TIMEOUT_S : nil)
       end
 
       def with_worker_runtime(options)
