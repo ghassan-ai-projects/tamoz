@@ -242,6 +242,11 @@ until you send `/new`. Replies come in the language you write in.
   be installed on the worker's machine (`brew install poppler`); without it the
   bot says PDF reading is not set up. Up to 20 MB; the first 24,000 characters
   are read. A scanned PDF has no text layer — send its pages as photos.
+- **Photos and images.** A photo, or a PNG/JPEG/WebP/GIF sent as a file (up to
+  5 MB), is read by the configured model in one extra call: every piece of text
+  in it verbatim, then two sentences on what it shows; the answer is built from
+  that. The model must accept image input (the Z.ai coding-plan `glm-5.3-flash`
+  does); if it refuses, the bot says it could not read the image.
 - **Other messages.** Stickers, videos and formats the bot cannot read yet get
   one line saying what it can read.
 

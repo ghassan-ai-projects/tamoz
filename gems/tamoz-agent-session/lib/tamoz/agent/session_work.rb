@@ -16,7 +16,7 @@ module Tamoz
         @memory = WorkMemory.new(configuration: services.configuration,
                                  transcript: ->(context) { services.planning_context.conversation_transcript(context) })
         @lanes = { nil => build_lane(nil), lead: build_lane(:lead) }.freeze
-        @attachment = WorkAttachment.new(configuration: services.configuration)
+        @attachment = WorkAttachment.new(configuration: services.configuration, effects: services.effects)
       end
 
       # Each turn is a fresh execution: it opens a new surface seeded from the conversation transcript (or the
@@ -34,7 +34,7 @@ module Tamoz
       def opened(base, context, attachment = nil)
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
-        reading = attachment && @attachment.read(attachment, window: work(base).window)
+        reading = @attachment.read(attachment, window: work(base).window, context:) if attachment
         brief = @memory.brief(base.fetch(:task))
         entries = opening(base, context, previous, brief, reading)
         base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
@@ -42,7 +42,7 @@ module Tamoz
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
                    work_checkpoint: previous[:work_checkpoint],
-                   work_trace: [brief.event, reading&.event].compact + work(base).opening_trace)
+                   work_trace: [brief.event, reading&.event, reading&.request].compact + work(base).opening_trace)
       end
 
       def step(state, context)

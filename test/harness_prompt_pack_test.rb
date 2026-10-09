@@ -10,7 +10,7 @@ class HarnessPromptPackTest < Minitest::Test
 
   # A prompt change is a deliberate, reviewed edit: update the digest here with it.
   PINNED = {
-    'attachment_text.json' => 'sha256:3cd3ee248015d4b0e6c2130ea212eefc5b3087fad93a1d364dfc5eba23f9f6ec',
+    'attachment_text.json' => 'sha256:6582e7d84b2e5850e047433afd5bc116077a9e36c7ef354527860927f09a0b33',
     'cut_off.md' => 'sha256:550e3cb327aab548b06d99e59df304255e23621200ebbd33f3778b36ea71a3d8',
     'delegate.json' => 'sha256:11389242eecfc43519818d5b04890bfd5dd61babdbcbd5345ca9161ccf2ed13f',
     'delegate_nudge.md' => 'sha256:2d6185a234510de66e9fc4a7cfeae31059dfd66b5496e6e4b7d19d90829023a6',

@@ -147,4 +147,70 @@ class ChatAttachmentTest < Minitest::Test
   ensure
     ENV['PATH'] = original
   end
+
+  PNG = "\x89PNG\r\n\x1A\n#{'pixels' * 10}".b
+
+  def test_an_image_is_read_by_one_journaled_vision_call_before_the_turn
+    model = ScriptedConversationModel.new(turns: [{ content: 'INVOICE 4471 TOTAL 93.50' }, { content: 'Total 93.50.' }])
+    harness = harness_with(model)
+
+    cards = harness.send_photo(PNG, caption: 'what is the total?')
+    vision = JSON.parse(model.requests.first).fetch('messages').last.fetch('content')
+    material, question = JSON.parse(model.requests.last).fetch('messages').select { |m| m['role'] == 'user' }
+                                                                          .map { |m| m['content'] }.last(2)
+
+    assert_equal %i[attachment_image work_step], model.stages
+    assert_equal(%w[text image_url], vision.map { |part| part['type'] })
+    assert vision.last.dig('image_url', 'url').start_with?("data:image/png;base64,#{[PNG].pack('m0')[0, 20]}")
+    assert_includes material, "<<<attachment\nINVOICE 4471 TOTAL 93.50\nattachment>>>"
+    assert_equal '[image] what is the total?', question
+    assert_includes cards.map { |card| card[:text] }.join, '93.50'
+  ensure
+    harness&.close
+  end
+
+  def test_a_vision_refusal_is_explained_not_invented
+    refusal = ->(_) { raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: 400) }
+    model = ScriptedConversationModel.new(turns: [refusal, { content: 'I could not read it.' }])
+    harness = harness_with(model)
+
+    harness.send_photo(PNG)
+    material = JSON.parse(model.requests.last).fetch('messages').select { |m| m['role'] == 'user' }[-2]['content']
+
+    assert_includes material, 'could not be read: the image could not be read'
+  ensure
+    harness&.close
+  end
+
+  def test_an_image_format_outside_the_allow_list_is_never_sent_to_the_model
+    model = ScriptedConversationModel.new(turns: [{ content: 'Cannot read that.' }])
+    harness = harness_with(model)
+
+    harness.send_document("\x00\x00\x00\x18ftypheic".b, name: 'p.heic', mime_type: 'image/heic')
+
+    assert_equal %i[work_step], model.stages
+    assert_includes user_messages(model)[-2], 'this image format cannot be read'
+  ensure
+    harness&.close
+  end
+
+  # A /cancel while the image is being read: the call is abandoned and the turn ends "Stopped.".
+  def test_cancel_during_the_image_read_stops_the_turn
+    harness = nil
+    cancel_while_reading = lambda do |_messages|
+      harness.admit('/cancel')
+      sleep Tamoz::Agent::Worker::STOP_POLL_SECONDS * 2
+      { content: 'INVOICE 4471' }
+    end
+    model = ScriptedConversationModel.new(turns: [cancel_while_reading, { content: 'the final answer' }])
+    harness = harness_with(model)
+    harness.send_photo(PNG)
+    harness.work_off
+    texts = harness.instance_variable_get(:@transport).outbound.map { |card| card[:text] }
+
+    assert_equal ['Stopping…', 'Stopped.'], texts
+    assert_equal %i[attachment_image], model.stages
+  ensure
+    harness&.close
+  end
 end
