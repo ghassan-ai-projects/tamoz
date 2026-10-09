@@ -69,11 +69,10 @@ module Tamoz
               "send may or may not have happened (response exceeded the configured limit: #{e.class})"
       end
 
-      # The bytes of one inbound attachment: getFile, then the bounded download. An announced
-      # size over the limit is refused before any byte is read.
-      # @return [String] binary bytes.
+      # An announced size over the limit is refused before any byte is read.
       def fetch_attachment(file_id, max_bytes:)
-        file = @client.call('getFile', { 'file_id' => file_id }, idempotent: true)
+        file = @client.call('getFile', { 'file_id' => file_id }, idempotent: true,
+                                                                 read_timeout: Client::DOWNLOAD_READ_TIMEOUT_S)
         raise Comms::ResponseTooLargeError, 'the file exceeds the attachment limit' if
           file['file_size'].to_i > max_bytes
 

@@ -6,7 +6,10 @@ module Tamoz
   module Agent
     # The text of a received document: UTF-8 text as sent, a PDF's text layer through poppler's `pdftotext`.
     module AttachmentText
-      Result = Data.define(:outcome, :text, :pages)
+      Result = Data.define(:outcome, :text, :pages) do
+        def self.failed(outcome) = new(outcome, nil, nil)
+        def self.read(text, pages = nil) = new(:read, text, pages)
+      end
 
       PDF_MAGIC = '%PDF-'.b
       PDF_PAGES = 200
@@ -21,9 +24,10 @@ module Tamoz
         return pdf(bytes, pdftotext, seconds) if bytes.b.start_with?(PDF_MAGIC)
 
         text = bytes.dup.force_encoding(Encoding::UTF_8)
-        return Result.new(:unsupported_format, nil, nil) unless text.valid_encoding? && !text.include?("\0")
+        return Result.failed(:unsupported_format) unless text.valid_encoding? && !text.include?("\0")
 
-        Result.new(:read, text[0, KEPT_CHARACTERS].unicode_normalize(:nfc), nil)
+        text = text.delete_prefix("\uFEFF")[0, KEPT_CHARACTERS].unicode_normalize(:nfc)
+        text.strip.empty? ? Result.failed(:empty) : Result.read(text)
       end
 
       def pdf(bytes, command, seconds)
@@ -31,23 +35,22 @@ module Tamoz
           path = File.join(directory, 'attachment.pdf')
           File.binwrite(path, bytes)
           outcome, output = extract(command, path, seconds)
-          next Result.new(outcome, nil, nil) unless outcome == :read
+          next Result.failed(outcome) unless outcome == :read
 
           text = output.force_encoding(Encoding::UTF_8).scrub('').unicode_normalize(:nfkc)
-          next Result.new(:no_text_layer, nil, nil) if text.delete("\f").strip.empty?
+          next Result.failed(:no_text_layer) if text.delete("\f").strip.empty?
 
-          Result.new(:read, text.delete_suffix("\f"), text.count("\f"))
+          Result.read(text.delete_suffix("\f"), text.count("\f"))
         end
       end
 
-      # The PDF is read in its own process group with only PATH and a locale, CPU-limited and killed at the wall
-      # clock, so a hostile file costs at most `seconds` and never the worker (or its credentials).
+      # Bounded in time, CPU and output, but it runs as the worker's user: a reader exploit is not sandboxed.
       def extract(command, path, seconds)
         reader, writer = IO.pipe
         deadline = clock + seconds
         pid = Process.spawn({ 'PATH' => ENV.fetch('PATH', ''), 'LANG' => 'C.UTF-8' }, command, '-q', '-enc', 'UTF-8',
                             '-l', PDF_PAGES.to_s, path, '-', unsetenv_others: true, in: File::NULL, out: writer,
-                                                             err: File::NULL, pgroup: true, rlimit_cpu: seconds.ceil)
+                                                             err: File::NULL, pgroup: true, rlimit_cpu: seconds.ceil, rlimit_core: 0)
         writer.close
         output, finished = drained(reader, deadline)
         stop(pid) unless finished == :eof
@@ -80,7 +83,6 @@ module Tamoz
         end
       end
 
-      # A reader that closed its output and kept running is killed at the same deadline.
       def reaped(pid, deadline)
         loop do
           _pid, status = Process.wait2(pid, Process::WNOHANG)

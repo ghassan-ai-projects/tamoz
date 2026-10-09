@@ -136,7 +136,6 @@ class TelegramChatEval
   end
 
   # A tap on Approve resumes work whose answer follows the ack; a Deny only closes the request.
-  # A block sends something other than text (a file, a sticker) through the fake; `text` labels it.
   def turn(user, text = nil, tap: nil, timeout: 180, &send)
     resumes = tap&.last.to_s.start_with?('approve:')
     sent_at = Time.now.to_f

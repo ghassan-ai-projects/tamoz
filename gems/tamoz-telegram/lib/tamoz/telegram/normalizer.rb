@@ -121,8 +121,7 @@ module Tamoz
         attachment ? fields + [attachment.fetch('file_unique_id'), message['caption']] : fields
       end
 
-      # Telegram sets `document` on a GIF too, so an animation is caught first and stays unsupported.
-      # A forwarded voice note is someone else's speech: it is `audio`, never the user's own words.
+      # A GIF also carries `document`; a forwarded voice note is someone else's speech, so it is `audio`.
       def attachment(message)
         return nil if message['animation']
 
@@ -145,12 +144,10 @@ module Tamoz
           'duration_s' => file['duration'] }
       end
 
-      # A sender's file name or type is cut to the envelope's bound on a character boundary, never refused: one
-      # refused update would stop the whole poll.
+      # Cut, never refused: one refused update would stop the whole poll.
       def label(value)
-        value && value.byteslice(0, Comms::InboundEnvelope::MAX_ATTACHMENT_LABEL_BYTES).scrub('').then do |cut|
-          cut.empty? ? nil : cut
-        end
+        cut = value.to_s.byteslice(0, Comms::InboundEnvelope::MAX_ATTACHMENT_LABEL_BYTES).scrub('')
+        cut.empty? ? nil : cut
       end
 
       def largest_photo(sizes) = sizes.max_by { |size| size['width'].to_i * size['height'].to_i }

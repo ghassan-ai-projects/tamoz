@@ -111,8 +111,6 @@ module Tamoz
         outcome.status == :succeeded ? outcome.with(value: ConversationProjection.validate!(outcome.value)) : outcome
       end
 
-      # One speech-to-text call through the operator's transcription model. Reading changes nothing outside, so an
-      # unanswered call is safely retried (:idempotent); a replay returns the recorded transcript.
       def transcribe(context, audio:, filename:, media_type:)
         model = @configuration.transcriber
         request = { 'stage' => 'transcribe',

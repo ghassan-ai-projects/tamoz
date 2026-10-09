@@ -74,7 +74,7 @@ module Tamoz
       # explicit model_factory (e.g. the fixture's scripted one) ONLY for a
       # deterministic plumbing test — such a run is never intelligence evidence.
       def initialize(provider: nil, model: nil, model_factory: nil,
-                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy)
+                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil)
         @provider = provider || ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
         @model = model || ENV.fetch('TAMOZ_MODEL', 'deepseek-chat')
         @update_seq = 1_000
@@ -83,7 +83,7 @@ module Tamoz
         @last_bot_message_id = nil
         super(model_factory: model_factory || real_model_factory,
               admission_mode: admission_mode, approval_ask: approval_ask,
-              routing:)
+              routing:, transcriber:)
         bind_thread(Fixture::CONVERSATION_A) if admission_mode == :allowlist
       end
 
@@ -110,7 +110,24 @@ module Tamoz
         new_outbound
       end
 
-      # Send a file with an optional caption, the way Telegram delivers a document.
+      attr_reader :transport
+
+      def forget_artifact(digest)
+        @runtime.adapter.__send__(:transaction, operation: 'test.forget') do |tx|
+          tx.execute('test.forget', 'DELETE FROM tamoz_artifacts WHERE digest = ?', [digest])
+        end
+      end
+
+      def admit_document(bytes, mime_type:)
+        file_id = "doc-#{next_update_id}"
+        @transport.files[file_id] = bytes
+        enqueue_update('message' => { 'message_id' => next_message_id, 'chat' => chat_hash,
+                                      'from' => { 'id' => Fixture::USER_BOUND }, 'date' => Time.now.to_i,
+                                      'document' => { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}",
+                                                      'mime_type' => mime_type } })
+        serve
+      end
+
       def send_document(bytes, name:, mime_type:, caption: nil)
         file_id = "doc-#{next_update_id}"
         @transport.files[file_id] = bytes
@@ -123,7 +140,6 @@ module Tamoz
         work_off
       end
 
-      # Send a photo the way Telegram does: several sizes of one picture, the largest last.
       def send_photo(bytes, caption: nil, run: true)
         file_id = "photo-#{next_update_id}"
         @transport.files[file_id] = bytes
@@ -137,7 +153,6 @@ module Tamoz
         run ? work_off : new_outbound
       end
 
-      # A voice note (or, forwarded, someone else's) the way Telegram sends one.
       def send_voice(bytes, duration: 4, forwarded: false)
         file_id = "voice-#{next_update_id}"
         @transport.files[file_id] = bytes

@@ -25,7 +25,6 @@ class TelegramFixtureServer
   # @param body [Hash] the JSON body
   # @param times [Integer] how many requests this script answers; 0 = always
   # @param delay_s [Float] sleep before responding (for timeout tests)
-  # `raw` answers with these bytes instead of a JSON body (a file download).
   def script(method, status: 200, body: nil, times: 0, delay_s: 0.0, raw: nil)
     @lock.synchronize do
       (@script[method] ||= []) << { status:, body:, remaining: times, delay_s:, raw: }

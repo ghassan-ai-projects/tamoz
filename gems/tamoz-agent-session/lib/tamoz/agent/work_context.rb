@@ -79,9 +79,8 @@ module Tamoz
       end
 
       # `carried`: the memory brief and the thread checkpoint, pinned after project guidance.
-      def opening(task:, transcript:, previous_answer:, updates:, carried: {})
-        transcript = transcript[0...-1] if transcript.last == { 'role' => 'user',
-                                                                'text' => carried.fetch(:asked, task) }
+      def opening(task:, transcript:, previous_answer:, updates:, carried: {}, asked: task)
+        transcript = transcript[0...-1] if transcript.last == { 'role' => 'user', 'text' => asked }
         material = carried[:material]
         entries = method_pinned(append([], 'runtime', runtime_text, pinned: true))
         entries = append(entries, 'guidance', scrub(guidance.text), pinned: true, source: guidance.sources.join(' ')) if
@@ -112,7 +111,7 @@ module Tamoz
         return entries unless settings.skill
 
         append(entries, 'guidance', toolbox.execute('load_skill', { 'skill' => settings.skill }), pinned: true,
-                                                                                                  source: 'skill')
+                                                                                         source: 'skill')
       end
 
       def skills? = header.tool_names.include?('load_skill')

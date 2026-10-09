@@ -46,7 +46,6 @@ module Tamoz
 
       TRANSCRIPTION = %w[TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE].freeze
 
-      # The transcription model's settings and its provider's key, when the operator configured one.
       def self.transcription_env(base)
         provider = base['TAMOZ_TRANSCRIPTION_PROVIDER']
         return {} if provider.to_s.empty?

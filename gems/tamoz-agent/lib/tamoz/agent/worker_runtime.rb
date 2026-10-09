@@ -42,7 +42,6 @@ module Tamoz
       end
 
       # rubocop:disable Metrics/ParameterLists -- routing and its harness settings travel together
-      # `transcriber` is the operator's speech-to-text model for voice attachments, or nil.
       def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy, harness: {},
                     transcriber: nil)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load

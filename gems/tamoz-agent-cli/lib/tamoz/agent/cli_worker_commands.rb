@@ -681,8 +681,6 @@ module Tamoz
           research_dir: File.join(runtime_dir_path(options), 'research') }
       end
 
-      # Voice attachments need a speech-to-text model the operator names; without one a voice note is answered with
-      # one line saying voice is not set up.
       def worker_transcriber
         provider = @env['TAMOZ_TRANSCRIPTION_PROVIDER']
         return nil if provider.to_s.empty?

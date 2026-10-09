@@ -22,6 +22,11 @@ class AttachmentTextTest < Minitest::Test
     assert_equal :unsupported_format, Text.read("text\x00with nul".b).outcome
   end
 
+  def test_a_byte_order_mark_is_dropped_and_a_blank_file_is_empty
+    assert_equal 'notes', Text.read("\xEF\xBB\xBFnotes".b).text
+    assert_equal :empty, Text.read(" \n\t".b).outcome
+  end
+
   def test_a_pdf_text_layer_is_read_with_its_page_count
     with_pdftotext(%(printf 'first page\\fsecond page\\f')) do |command|
       result = Text.read(PDF, pdftotext: command)
@@ -92,11 +97,12 @@ class AttachmentTextTest < Minitest::Test
 
   def test_the_reader_never_sees_the_workers_credentials
     with_pdftotext('printf "%s\\f" "${ZAI_API_KEY:-none}"') do |command|
+      original = ENV.fetch('ZAI_API_KEY', nil)
       ENV['ZAI_API_KEY'] = 'secret-key'
 
       assert_equal 'none', Text.read(PDF, pdftotext: command).text
     ensure
-      ENV.delete('ZAI_API_KEY')
+      ENV['ZAI_API_KEY'] = original
     end
   end
 

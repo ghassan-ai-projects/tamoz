@@ -165,11 +165,16 @@ class CommsGatewayTest < Minitest::Test
     cases = {
       'announced too large' => [document_update(1, size: 20_000_001), 'too large', []],
       'download failed' => [document_update(1, file_id: 'gone'), "couldn't download", %w[gone]],
-      'voice too long' => [voice_update(1, 601), 'too long', []]
+      'voice too long' => [voice_update(1, 601), 'too long', []],
+      'announced empty' => [document_update(1, size: 0), 'empty', []],
+      'empty when fetched' => [document_update(1, file_id: 'blank', size: nil), 'empty', %w[blank]],
+      'recording too large' => [voice_update(1, 30).tap { |u| u['message']['voice']['file_size'] = 10_000_001 },
+                                'limit is 10 MB', []]
     }
     cases.each do |name, (incoming, reply, fetched)|
       with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
         seed_binding(store)
+        transport.files = { 'blank' => '' }
         transport.batch([incoming])
 
         capture_io { gateway.serve_once(drain: false) }
@@ -182,7 +187,6 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
-  # One attachment that cannot be fetched or stored must never stall the pass or kill the gateway.
   def test_every_fetch_or_store_failure_is_isolated_to_its_own_update
     failures = [Comms::TransientTransportError.new('timeout'), Comms::ValidationError.new('bad path'),
                 SocketError.new('dns'), Errno::ENOSPC.new, Tamoz::SQLite::ArtifactStore::ArtifactStoreError.new('x')]

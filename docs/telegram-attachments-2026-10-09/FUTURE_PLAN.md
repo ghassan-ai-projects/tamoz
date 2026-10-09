@@ -62,3 +62,11 @@ request carrying several attachments. Needs a hold state in the gateway.
 - **A per-pass download budget.** With one owner bot a burst of large files is unlikely; if one appears,
   cap downloads per poll pass and admit the rest on the next pass.
 - **Albums** are §7.
+- **A sandbox for the PDF reader.** `pdftotext` runs bounded in time, CPU and output with a clean
+  environment, but as the worker's user; a poppler exploit could read the runtime directory. Wrap it
+  (`bwrap` on Linux, `sandbox-exec` on macOS) when PDFs come from people other than the owner.
+- **Files fetched for a refused request.** A download happens before `admit_and_enqueue` checks open
+  requests and capacity, so a refused request leaves its bytes in the artifact store. §3's retention
+  removes unreferenced bytes; until then this needs an admitted user sending files into a full channel.
+- **Forwarded captions.** A forwarded document's caption becomes the turn's task, exactly as forwarded
+  text does today. Framing every forwarded message as material is one change for both.

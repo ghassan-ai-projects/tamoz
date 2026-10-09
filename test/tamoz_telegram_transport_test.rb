@@ -390,25 +390,34 @@ class TamozTelegramTransportTest < Minitest::Test
   end
 
   def test_a_download_past_its_deadline_is_abandoned
-    with_transport do |transport, server|
-      server.script('getFile', body: { 'ok' => true, 'result' => { 'file_id' => 'D1',
-                                                                   'file_path' => 'documents/slow.bin' } }, times: 1)
-      server.script('slow.bin', raw: 'x' * 10, times: 1)
+    server = TelegramFixtureServer.new
+    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout: 1.0, download_deadline: -1.0)
+    transport = Tamoz::Telegram::Transport.new(
+      client:, normalizer: Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
+    )
+    server.script('getFile', body: { 'ok' => true, 'result' => { 'file_id' => 'D1',
+                                                                 'file_path' => 'documents/slow.bin' } }, times: 1)
+    server.script('slow.bin', raw: 'x' * 10, times: 1)
 
-      stub_const(Tamoz::Telegram::Client, :DOWNLOAD_DEADLINE_S, -1.0) do
-        assert_raises(Comms::TransientTransportError) { transport.fetch_attachment('D1', max_bytes: 100) }
-      end
-    end
+    assert_raises(Comms::TransientTransportError) { transport.fetch_attachment('D1', max_bytes: 100) }
+  ensure
+    server&.stop
   end
 
-  def stub_const(owner, name, value)
-    original = owner.const_get(name)
-    owner.send(:remove_const, name)
-    owner.const_set(name, value)
-    yield
-  ensure
-    owner.send(:remove_const, name)
-    owner.const_set(name, original)
+  def test_getfile_waits_no_longer_than_a_download_read
+    calls = []
+    client = Object.new
+    client.define_singleton_method(:call) do |method, _params, **options|
+      calls << [method, options]
+      { 'file_path' => 'documents/a.txt' }
+    end
+    client.define_singleton_method(:download) { |*, **| 'ok' }
+    normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
+
+    Tamoz::Telegram::Transport.new(client:, normalizer:).fetch_attachment('D1', max_bytes: 10)
+
+    assert_equal [['getFile', { idempotent: true, read_timeout: Tamoz::Telegram::Client::DOWNLOAD_READ_TIMEOUT_S }]],
+                 calls
   end
 
   def test_a_failed_download_is_transient

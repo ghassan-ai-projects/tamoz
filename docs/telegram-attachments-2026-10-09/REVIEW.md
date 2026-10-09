@@ -48,3 +48,38 @@ Confirmed by the correctness reviewer: attachment fields in the digest only when
 digests byte-identical; `parser_version` is not part of dedup; an empty task raises in `TurnContext`, so
 the label keeps the task non-empty; payload channels are fresh per execution, so an attachment cannot
 leak into the next turn.
+
+## PR #70 review — three lenses (Sonnet), 2026-10-09
+
+Security 0/0/5/4 · correctness 0/0/5/7 · design and tests 0/3/8/5 (critical/high/medium/low).
+
+**Fixed**
+- Design: comments trimmed to class one-liners, contract docs and single-line safety reasons; unrelated
+  autocorrect churn in `sqlite/comms_store.rb` and `work_context.rb` reverted; `held!` → `assert_poller_held`;
+  `WorkAttachment` reorganized (`Result.failed/read`, one journaled-outcome helper); the voice label passed as
+  an explicit `asked:` instead of through `carried`, and the six-parameter `opening` is back to five; reply
+  texts built from the limit constants; `Normalizer#label` simplified; the envelope deep-freezes a copy of its
+  attachment; tests use a real `transcriber:` keyword on the fixture and harness helpers instead of private
+  state, shared `PNG`/`ScriptedTranscriber`/`attachment_payload` in `WorkLoopFixtures`, no real-time sleep in
+  the cancel test, `ENV` restored, `Client` takes `download_deadline:` instead of a constant stub, and the
+  intake-crash hook is inert outside its own tests.
+- Security: the file name is allow-listed (letters, digits, space, `._-`, 60 characters); voice and audio
+  files are capped at 10 MB; transcripts are clipped to 100,000 characters before journaling; the PDF
+  reader gets `rlimit_core: 0` and an honest comment (bounded, not sandboxed).
+- Correctness: an empty file (announced or fetched) gets its own reply; the audio file name always comes from
+  its type; `getFile` uses the 15 s download read timeout; the refusal log carries the error message; a
+  byte-order mark is dropped and a blank text file is "empty"; the 200-page note no longer claims more pages.
+
+**Declined, with reasons**
+- A fixed attachment tenant shared by both processes: it needs new plumbing in two gems; the end-to-end
+  `chat_attachment_test` already fails if the gateway's and worker's tenants drift.
+- Re-raising store errors to the pass: a store error escaping the gateway ends its loop, so per-update
+  isolation stays.
+- Checking capacity before downloading, a per-pass download budget, framing forwarded captions, and a PDF
+  sandbox: recorded in `FUTURE_PLAN.md` §8.
+- Legacy `forward_from*` fields: removed from the Bot API (7.0); only `forward_origin` exists.
+- Failing soft on a misconfigured transcription model: a named error at start is the project's pattern.
+- An attachment sent as a reply to a clarification prompt becomes a new turn, as a non-reply message does;
+  a file caption `/start CODE` pairs exactly as the same text would.
+- UTF-16 text, empty `photo` arrays, `stop` checks mid-batch (which would need partial offsets): rare cases.
+- Migration 24 drops the inbound dedup anchors: noted in the PR description (ADR-059 allows it).

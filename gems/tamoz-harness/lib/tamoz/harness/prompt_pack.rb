@@ -61,7 +61,6 @@ module Tamoz
 
       def report_labels = (@report_labels ||= data('report_labels.json'))
 
-      # How a turn shows the file it arrived with, or why the file could not be read.
       def attachment_text = (@attachment_text ||= data('attachment_text.json'))
 
       def data(file)

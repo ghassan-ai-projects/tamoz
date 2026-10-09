@@ -2,7 +2,6 @@
 
 require_relative 'test_helper'
 
-# The worker's speech-to-text model comes only from the operator's TAMOZ_TRANSCRIPTION_* settings.
 class CLITranscriberTest < Minitest::Test
   def transcriber(env)
     Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env:).send(:worker_transcriber)

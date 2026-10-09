@@ -51,7 +51,6 @@ class TelegramBotApiFake
     push('message' => user_message(user_id, 'sticker' => { 'file_id' => 'st1', 'file_unique_id' => 'u-st1' }))
   end
 
-  # A file the bot can fetch with getFile; `announced` is the size Telegram reports, which may differ from the bytes.
   def send_document(user_id, bytes, name:, mime_type:, caption: nil, announced: bytes.bytesize)
     file = add_file(bytes, "documents/#{name}", announced)
     push('message' => user_message(user_id, { 'document' => file.merge('file_name' => name, 'mime_type' => mime_type),
@@ -116,7 +115,6 @@ class TelegramBotApiFake
   def add_file(bytes, path, announced)
     @lock.synchronize do
       id = "file#{@files.length + 1}"
-      # Telegram names the stored file itself (documents/file_12.pdf); the user's file name never reaches the path.
       folder = path.split('/').first
       extension = File.extname(path)[/\A\.[A-Za-z0-9]{1,8}\z/]
       @files[id] = { bytes:, path: "#{folder}/#{id}#{extension}", size: announced }
@@ -152,7 +150,6 @@ class TelegramBotApiFake
     socket.close
   end
 
-  # Telegram serves a file at /file/bot<token>/<file_path>, the path getFile returned.
   def serve_file(socket, path)
     read_body(socket)
     file_path = path.split('/', 4).last

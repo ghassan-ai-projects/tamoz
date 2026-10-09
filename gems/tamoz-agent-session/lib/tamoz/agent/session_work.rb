@@ -31,15 +31,13 @@ module Tamoz
       end
 
       # :reek:DuplicateMethodCall
-      def opened(base, context, attachment = nil)
+      def opened(base, context, attachment)
         previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
                                                                       execution_id: context.execution_id) || {}
         reading = @attachment.read(attachment, window: work(base).window, context:) if attachment
-        asked = base.fetch(:task)
-        base = base.merge(task: "#{asked}\n#{reading.task}") if reading&.task
-        brief = @memory.brief(base.fetch(:task))
-        entries = opening(base, context, previous, brief, reading, asked)
-        base.merge(phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
+        brief = @memory.brief(told(base, reading))
+        entries = opening(base, context, previous, brief, reading)
+        base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
                    work_execution_id: context.execution_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
@@ -87,16 +85,15 @@ module Tamoz
 
       def research_available? = @services.configuration.subagent_apps.key?('research')
 
-      # `asked` is the message as admitted; a voice note's turn answers its transcript but its history line is the label.
-      # rubocop:disable Metrics/ParameterLists
-      def opening(base, context, previous, brief, reading, asked)
+      def opening(base, context, previous, brief, reading)
         transcript = @services.planning_context.conversation_transcript(context)
-        work(base).opening(task: base.fetch(:task), transcript:, previous_answer: previous_answer(previous, transcript),
-                           updates: directive_updates(previous),
+        work(base).opening(task: told(base, reading), asked: base.fetch(:task), transcript:,
+                           previous_answer: previous_answer(previous, transcript), updates: directive_updates(previous),
                            carried: { memory: brief.text, checkpoint: previous[:work_checkpoint],
-                                      material: reading&.material, asked: })
+                                      material: reading&.material })
       end
-      # rubocop:enable Metrics/ParameterLists
+
+      def told(base, reading) = reading&.task ? "#{base.fetch(:task)}\n#{reading.task}" : base.fetch(:task)
 
       def stopped?(context) = Tamoz::Cancellation::Stops.requested?(context.thread_id)
 

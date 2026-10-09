@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/work_loop_fixtures'
 
-# Plumbing only: how an image read's journal outcome becomes the turn's material, its reason, or a lease loss.
 class WorkAttachmentTest < Minitest::Test
-  PNG = "\x89PNG\r\n\x1A\n#{'pixels' * 10}".b
+  PNG = WorkLoopFixtures::PNG
   Outcome = Struct.new(:status, :value, :effect_key, keyword_init: true)
   Store = Struct.new(:bytes) do
     def resolve(_digest) = { 'bytes' => bytes }

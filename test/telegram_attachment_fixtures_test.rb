@@ -3,7 +3,6 @@
 require_relative 'test_helper'
 require_relative 'support/telegram_bot_api_fake'
 
-# The real-model attachment scenarios read these files and facts; a change to either is a reviewed update.
 class TelegramAttachmentFixturesTest < Minitest::Test
   DIRECTORY = File.expand_path('fixtures/telegram_attachments', __dir__)
   PINNED = {
@@ -32,7 +31,6 @@ class TelegramAttachmentFixturesTest < Minitest::Test
     cases.each_value { |spec| assert_path_exists File.join(DIRECTORY, spec.fetch('file')), spec.inspect }
   end
 
-  # The stand-in serves files the way Telegram does, so the real transport reads them through it.
   def test_the_fake_bot_api_serves_files_to_the_real_transport
     fake = TelegramBotApiFake.new
     client = Tamoz::Telegram::Client.new('123:eval', origin: fake.origin, read_timeout: 2.0)

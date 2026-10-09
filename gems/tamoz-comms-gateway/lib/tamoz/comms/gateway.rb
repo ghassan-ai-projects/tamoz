@@ -106,9 +106,15 @@ module Tamoz
         open_request_limit: ['rejected', 'This channel has too much open work right now; try again later.'],
         inbound_too_large: ['rejected', "That message exceeds this channel's size limit."],
         capacity_refused: ['rejected', 'The channel is at capacity; try again later.'],
-        attachment_too_large: ['rejected', 'That file is too large for me; the limit is 20 MB.'],
-        image_too_large: ['rejected', 'That image is too large for me; the limit is 5 MB.'],
-        voice_too_long: ['rejected', 'That voice message is too long for me; the limit is 10 minutes.'],
+        attachment_too_large: ['rejected',
+                               "That file is too large for me; the limit is #{Attachments::MAX_ATTACHMENT_BYTES / 1_000_000} MB."],
+        image_too_large: ['rejected',
+                          "That image is too large for me; the limit is #{Attachments::MAX_IMAGE_BYTES / 1_000_000} MB."],
+        audio_too_large: ['rejected',
+                          "That recording is too large for me; the limit is #{Attachments::MAX_AUDIO_BYTES / 1_000_000} MB."],
+        voice_too_long: ['rejected',
+                         "That voice message is too long for me; the limit is #{Attachments::MAX_VOICE_SECONDS / 60} minutes."],
+        attachment_empty: ['rejected', 'That file is empty.'],
         attachment_unavailable: ['rejected', "I couldn't download that file. Please send it again."]
       }.freeze
 

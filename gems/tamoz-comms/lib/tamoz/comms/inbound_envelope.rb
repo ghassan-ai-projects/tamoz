@@ -44,7 +44,7 @@ module Tamoz
         fields = {
           surface_id:, surface_revision:, update_id:, raw_payload_hash:, parser_version:, kind:,
           correspondent_id:, conversation_id:, message_id:, reply_to:, callback_message_id:,
-          callback_query_id:, text:, command:, arguments:, attachment: attachment&.freeze, platform_time:,
+          callback_query_id:, text:, command:, arguments:, attachment: attachment && Tamoz::Core.deep_freeze(attachment.dup), platform_time:,
           observed_time:, ingestion_time:
         }
         validate!(fields)

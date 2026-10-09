@@ -3,7 +3,6 @@
 require_relative 'test_helper'
 require 'socket'
 
-# Plumbing only: the wire shape of one OpenAI-compatible transcription call against a local stand-in.
 class ModelTranscriptionTest < Minitest::Test
   AUDIO = "OggS\x00\x02voice-bytes\xFF".b
 

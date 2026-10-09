@@ -26,6 +26,7 @@ module Tamoz
     class EpisodeModelTransport
       OPENAI_COMPLETIONS_PATH = "/chat/completions"
       TRANSCRIPTION_PATH = "/audio/transcriptions"
+      MAX_TRANSCRIPT_CHARACTERS = 100_000
       # The frozen request settings (P1 contract). The settings digest the
       # gateway signs and the receipt carries is computed over THIS document.
       SETTINGS = {
@@ -50,7 +51,6 @@ module Tamoz
         :settings_digest, :provider_configuration_digest
       )
 
-      # One speech-to-text answer as received, with the digests binding it.
       Transcript = Data.define(:text, :request_digest, :response_digest, :provider_configuration_digest)
 
       attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window
@@ -117,8 +117,7 @@ module Tamoz
         Tamoz::Core.jcs(request)
       end
 
-      # An OpenAI-compatible speech-to-text call with the audio as received. The multipart boundary comes from the
-      # audio's digest, so the same audio is the same request bytes.
+      # The boundary comes from the audio's digest, so the same audio is the same request bytes.
       def transcribe(audio:, filename:, media_type:)
         raise ConfigurationError, "transcription does not run through the witness gateway" if @gateway
 
@@ -280,7 +279,7 @@ module Tamoz
         text = parsed.is_a?(Hash) && parsed["text"]
         raise model_error("invalid_response", body:) unless text.is_a?(String)
 
-        text
+        text[0, MAX_TRANSCRIPT_CHARACTERS]
       rescue Tamoz::Core::ProtocolError, Tamoz::Core::JCS::Error, JSON::ParserError
         raise model_error("invalid_response", body:)
       end

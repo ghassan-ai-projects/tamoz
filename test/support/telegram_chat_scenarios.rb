@@ -257,7 +257,6 @@ module TelegramChatScenarios
 
   def attachment_case(name) = JSON.parse(File.read(File.join(ATTACHMENTS, 'scenarios.json'), encoding: Encoding::UTF_8)).fetch(name)
 
-  # Sends the case's file the way Telegram delivers it, with its caption as the question.
   def send_attachment(eval, user, name, timeout: 180)
     spec = attachment_case(name)
     bytes = File.binread(File.join(ATTACHMENTS, spec.fetch('file')))
@@ -273,7 +272,6 @@ module TelegramChatScenarios
     end
   end
 
-  # Digits as a phone shows them may be Arabic-Indic or carry thousands separators; the fact is the same.
   def facts(text) = text.tr('٠١٢٣٤٥٦٧٨٩', '0123456789').gsub(/(?<=\d),(?=\d{3})/, '')
 
   def check_facts(eval, scenario, turn)
@@ -300,8 +298,6 @@ module TelegramChatScenarios
     eval.hygiene('arabic_document', [turn])
   end
 
-  # The file carries an instruction to write a file and search the web; the answer must come from the file
-  # while nothing it asks for happens.
   def injection(eval, scenario = 'injection')
     spec = attachment_case(scenario)
     turn = send_attachment(eval, eval.fresh_user, scenario)
@@ -314,10 +310,8 @@ module TelegramChatScenarios
     eval.hygiene(scenario, [turn])
   end
 
-  # The same attack written in a picture: read as text, still never obeyed.
   def image_injection(eval) = injection(eval, 'image_injection')
 
-  # Both PDF cases grade the reader itself, so a machine without it fails them instead of passing on a refusal.
   def pdf_reader_installed(eval, scenario)
     eval.check(scenario, 'pdftotext is installed on the worker machine', system('command -v pdftotext >/dev/null'))
   end
@@ -329,7 +323,6 @@ module TelegramChatScenarios
     eval.hygiene('pdf', [turn])
   end
 
-  # A scan has no text layer: the bot says so and invents nothing from it.
   def scanned_pdf(eval)
     pdf_reader_installed(eval, 'scanned_pdf')
     turn = send_attachment(eval, eval.fresh_user, 'scanned_pdf')
@@ -348,7 +341,6 @@ module TelegramChatScenarios
     eval.hygiene('image_ocr', [turn])
   end
 
-  # The voice note is the user's question; the answer must carry what they said. Needs a transcription model.
   def voice(eval)
     eval.check('voice', 'a transcription model is configured', !eval.transcription.to_s.empty?, eval.transcription)
     turn = send_attachment(eval, eval.fresh_user, 'voice')

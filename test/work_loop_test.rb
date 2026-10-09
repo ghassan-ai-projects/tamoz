@@ -469,121 +469,88 @@ end
 class WorkLoopAttachmentCrashTest < Minitest::Test
   include WorkLoopFixtures
 
-  PNG = "\x89PNG\r\n\x1A\n#{'pixels' * 10}".b
-
-  # The image read is journaled before the turn opens: a worker lost afterwards resumes from the opened turn and never
-  # pays for the image again.
-  def test_a_crash_after_the_image_was_read_never_reads_it_again
-    with_work_workspace do |root, adapter|
-      digest = "sha256:#{Digest::SHA256.hexdigest(PNG)}"
-      adapter.bind_artifact_store(tenant: 'work-test').retain(digest:, bytes: PNG, media_type: 'image/png')
-      payload = { 'task' => '[image] what is the total?',
-                  'attachment' => { 'kind' => 'image', 'digest' => digest, 'media_type' => 'image/png', 'name' => nil,
-                                    'duration_s' => nil, 'size_bytes' => PNG.bytesize } }
-      first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }], crash_at: 3)
-      assert_raises(ScriptedConversationModel::Crash) do
-        work_session(model: first, root:, adapter:).send(:deliver_turn, payload, thread: 'work', request_id: 'work-1',
-                                                                                 owner_id: nil, emitter: nil, context: nil)
-      end
-      second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:).recover(thread: 'work', request_id: 'work-1')
-
-      assert_equal %i[attachment_image], first.stages, 'lost while building the first work step'
-      assert_equal %i[work_step], second.stages
-      assert_includes second.requests.first, 'TOTAL 93.50'
-      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
-    end
-  end
-
-  # Lost after the image receipt is journaled but before the opened turn commits: intake runs again and the
-  # journal answers the image read without a second call.
+  # Loses the worker inside intake, after the attachment read and before the opened turn commits.
   module LoseWorkerOnceAfterTheRead
     def brief(task)
-      LoseWorkerOnceAfterTheRead.seen << task
-      if LoseWorkerOnceAfterTheRead.armed
-        LoseWorkerOnceAfterTheRead.armed = false
-        raise WorkLoopFixtures::ScriptedConversationModel::Crash, 'simulated worker loss inside intake'
-      end
-      super
+      armed = LoseWorkerOnceAfterTheRead.armed
+      return super unless armed
+
+      LoseWorkerOnceAfterTheRead.armed = nil
+      armed << task
+      raise WorkLoopFixtures::ScriptedConversationModel::Crash, 'simulated worker loss inside intake'
     end
 
     class << self
       attr_accessor :armed
-
-      def seen = (@seen ||= [])
     end
   end
   Tamoz::Agent::WorkMemory.prepend(LoseWorkerOnceAfterTheRead)
 
-  def test_a_crash_inside_intake_after_the_read_replays_the_journaled_image_receipt
+  def deliver(model, root, adapter, payload, transcriber: nil)
+    work_session(model:, root:, adapter:, transcriber:)
+      .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
+  end
+
+  def store(adapter, bytes, media_type)
+    digest = "sha256:#{Digest::SHA256.hexdigest(bytes)}"
+    adapter.bind_artifact_store(tenant: 'work-test').retain(digest:, bytes:, media_type:)
+  end
+
+  def test_a_crash_after_the_image_was_read_never_reads_it_again
     with_work_workspace do |root, adapter|
-      digest = "sha256:#{Digest::SHA256.hexdigest(PNG)}"
-      adapter.bind_artifact_store(tenant: 'work-test').retain(digest:, bytes: PNG, media_type: 'image/png')
-      payload = { 'task' => '[image] what is the total?',
-                  'attachment' => { 'kind' => 'image', 'digest' => digest, 'media_type' => 'image/png', 'name' => nil,
-                                    'duration_s' => nil, 'size_bytes' => PNG.bytesize } }
-      first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }])
-      LoseWorkerOnceAfterTheRead.armed = true
-      assert_raises(ScriptedConversationModel::Crash) do
-        work_session(model: first, root:, adapter:).send(:deliver_turn, payload, thread: 'work', request_id: 'work-1',
-                                                                                 owner_id: nil, emitter: nil, context: nil)
-      end
+      store(adapter, PNG, 'image/png')
+      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png')
+      first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }], crash_at: 3)
+      assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
       second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
       outcome = work_session(model: second, root:, adapter:).recover(thread: 'work', request_id: 'work-1')
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
       assert_includes second.requests.first, 'TOTAL 93.50'
-      requests = outcome.state.fetch(:work_trace).select { |entry| entry['event'] == 'request' }
-
-      assert_equal %w[attachment_image], requests.filter_map { |entry|
-        entry['stage']
-      }, 'turn usage counts the image call'
       assert_equal 'answered', outcome.state.fetch(:terminal_reason)
-    ensure
-      LoseWorkerOnceAfterTheRead.armed = false
     end
   end
 
-  class CountingTranscriber
-    attr_reader :calls
+  def test_a_crash_inside_intake_after_the_read_replays_the_journaled_image_receipt
+    with_work_workspace do |root, adapter|
+      store(adapter, PNG, 'image/png')
+      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png')
+      first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }])
+      LoseWorkerOnceAfterTheRead.armed = []
+      assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
+      second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
+      outcome = work_session(model: second, root:, adapter:).recover(thread: 'work', request_id: 'work-1')
+      stages = outcome.state.fetch(:work_trace).filter_map { |entry| entry['stage'] if entry['event'] == 'request' }
 
-    def initialize = (@calls = 0)
-    def provider_configuration_digest = "sha256:#{'c' * 64}"
-    def transcription_digest(audio_digest) = "sha256:#{audio_digest}"
-
-    def transcribe(audio:, **)
-      @calls += 1
-      Tamoz::Agent::EpisodeModelTransport::Transcript.new(
-        text: 'my locker code is four seven one nine', request_digest: transcription_digest(Digest::SHA256.hexdigest(audio)),
-        response_digest: "sha256:#{'d' * 64}", provider_configuration_digest:
-      )
+      assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
+      assert_includes second.requests.first, 'TOTAL 93.50'
+      assert_equal %w[attachment_image], stages, 'turn usage counts the image call'
+      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+    ensure
+      LoseWorkerOnceAfterTheRead.armed = nil
     end
   end
 
   def test_a_crash_inside_intake_after_the_transcription_replays_its_receipt
     with_work_workspace do |root, adapter|
       ogg = "OggS\x00voice".b
-      digest = "sha256:#{Digest::SHA256.hexdigest(ogg)}"
-      adapter.bind_artifact_store(tenant: 'work-test').retain(digest:, bytes: ogg, media_type: 'audio/ogg')
-      payload = { 'task' => '[voice message]',
-                  'attachment' => { 'kind' => 'voice', 'digest' => digest, 'media_type' => 'audio/ogg', 'name' => nil,
-                                    'duration_s' => 3, 'size_bytes' => ogg.bytesize } }
-      first = CountingTranscriber.new
-      LoseWorkerOnceAfterTheRead.armed = true
+      store(adapter, ogg, 'audio/ogg')
+      payload = attachment_payload('[voice message]', kind: 'voice', bytes: ogg, media_type: 'audio/ogg')
+      first = ScriptedTranscriber.new('my locker code is four seven one nine')
+      seen = LoseWorkerOnceAfterTheRead.armed = []
       assert_raises(ScriptedConversationModel::Crash) do
-        work_session(model: ScriptedConversationModel.new(turns: []), root:, adapter:, transcriber: first)
-          .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
+        deliver(ScriptedConversationModel.new(turns: []), root, adapter, payload, transcriber: first)
       end
-      second = CountingTranscriber.new
+      second = ScriptedTranscriber.new('never asked')
       model = ScriptedConversationModel.new(turns: [{ content: 'Noted.' }])
       outcome = work_session(model:, root:, adapter:, transcriber: second).recover(thread: 'work', request_id: 'work-1')
 
-      assert_equal [1, 0], [first.calls, second.calls]
+      assert_equal [1, 0], [first.calls.length, second.calls.length]
       assert_equal "[voice message]\nmy locker code is four seven one nine", outcome.state.fetch(:task)
-      assert_equal outcome.state.fetch(:task), LoseWorkerOnceAfterTheRead.seen.last, 'memory recall sees the words'
+      assert_equal [outcome.state.fetch(:task)], seen, 'memory recall sees the words'
       assert_equal 'answered', outcome.state.fetch(:terminal_reason)
     ensure
-      LoseWorkerOnceAfterTheRead.armed = false
+      LoseWorkerOnceAfterTheRead.armed = nil
     end
   end
 end
