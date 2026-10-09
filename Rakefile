@@ -37,6 +37,8 @@ MANUAL_TESTS = ["test/stream_episode_real_model_test.rb"].freeze
 # corpus end to end (the C8/B0 pair re-runs the whole catalog twice to prove
 # byte-identical output) rather than probing behaviour, so the everyday lane
 # skips them and `ci_full` still runs every one.
+# work_loop / subagent_spec / research_spec are the three slowest everyday files (13.2s / 10.3s /
+# 7.4s); the owner moved them here on 2026-10-09 to keep `rake ci` inside its budget.
 SLOW_TESTS = %w[
   test/investigation_eval_controls_test.rb
   test/benchmark_comms_b0_test.rb
@@ -48,6 +50,9 @@ SLOW_TESTS = %w[
   test/sqlite_raw_oracle_test.rb
   test/talk_end_to_end_test.rb
   test/talk_endpointing_eval_test.rb
+  test/work_loop_test.rb
+  test/subagent_spec_test.rb
+  test/research_spec_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb

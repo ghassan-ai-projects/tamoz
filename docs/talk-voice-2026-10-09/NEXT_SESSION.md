@@ -31,9 +31,9 @@ for every channel (§3).
 - The endpointing eval (now `talk_endpointing_eval_test`, about 2 s of CPU) moved to the slow lane; `rake ci_full`
   still runs it. Owner rule: mark only the slowest files as slow, and only when they cannot be made faster.
 - Locally `rake test_fast` is 37 s on both `main` and the branch. If CI still exceeds 180 s, the next lever is
-  `rake test_profile` on the runner shape (3 workers) and refreshing `TEST_WEIGHTS`; the owner allows marking the
-  top 3 slowest everyday files as slow (`work_loop_test` 13.2 s, `subagent_spec_test` 10.3 s, `research_spec_test`
-  7.4 s) if they cannot be made faster.
+  `rake test_profile` on the runner shape (3 workers) and refreshing `TEST_WEIGHTS`. The owner also moved the three slowest
+  everyday files to the slow lane (`work_loop_test` 13.2 s, `subagent_spec_test` 10.3 s, `research_spec_test`
+  7.4 s); making them faster and bringing them back is a candidate task.
 
 ## 2. Findings from the owner's live sessions (Chrome, real models)
 
