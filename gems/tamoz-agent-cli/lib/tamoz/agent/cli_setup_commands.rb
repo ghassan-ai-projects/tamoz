@@ -8,8 +8,8 @@ module Tamoz
   module Agent
     # `tamoz setup`: one runtime's workspace, models and the chat profile every channel uses.
     module CLISetupCommands
-      MODEL_ROLES = %w[chat transcription vision].freeze
-      KEYED_ROLES = %w[transcription vision].freeze
+      MODEL_ROLES = %w[chat transcription voice vision].freeze
+      KEYED_ROLES = %w[transcription voice vision].freeze
       TOOLS = %w[read_file list_directory search_text glob apply_patch create_file].freeze
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
 
@@ -58,12 +58,16 @@ module Tamoz
       def setup_parser(options, request)
         OptionParser.new do |parser|
           parser.banner = 'Usage: tamoz setup [--workspace PATH] [--chat PROVIDER/MODEL] ' \
-                          '[--transcription PROVIDER/MODEL] [--vision PROVIDER/MODEL]'
+                          '[--transcription PROVIDER/MODEL] [--voice PROVIDER/MODEL --voice-name NAME] ' \
+                          '[--vision PROVIDER/MODEL]'
           parser.on('--workspace PATH', 'The folder the agent works in (a new runtime defaults to --root)') do |path|
             request[:workspace] = File.expand_path(path)
           end
           MODEL_ROLES.each { |role| model_option(parser, request[:models], role) }
           KEYED_ROLES.each { |role| key_options(parser, request[:models], role) }
+          parser.on('--voice-name NAME', 'The voice the voice model speaks in') do |name|
+            (request[:models]['voice'] ||= {})['voice'] = name
+          end
           accept_json(parser, options)
         end
       end

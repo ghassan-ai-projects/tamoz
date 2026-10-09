@@ -85,7 +85,7 @@ module Tamoz
         checks
       end
 
-      # The talk token lives in the runtime directory, not the environment; `talk start` hands it to the gateway.
+      # The talk token lives in the runtime directory, not the environment; `start` hands it to the gateway.
       def doctor_talk(store, descriptor, directory)
         token = File.join(directory.path, 'talk', 'token')
         present = File.exist?(token) && File.read(token).strip.length >= CLITalkCommands::TOKEN_MIN

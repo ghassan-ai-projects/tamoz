@@ -13,7 +13,7 @@ require 'tamoz/agent_cli'
 require 'tamoz/telegram'
 require_relative 'telegram_bot_api_fake'
 
-# Drives the real `tamoz setup`, `channel add telegram` and `telegram start` against a stand-in Bot API, on a real
+# Drives the real `tamoz setup`, `channel add telegram` and `start` against a stand-in Bot API, on a real
 # model provider, from a fresh runtime or a copy of a lived-in one; see docs/telegram-chat/GOAL.md.
 # rubocop:disable Metrics/ClassLength -- one collaborator per concern (processes, the
 #   fake, DB observations, settlement, reporting); splitting it would scatter the settle
@@ -65,12 +65,12 @@ class TelegramChatEval
     end
   end
 
-  attr_reader :fake, :results, :transcript, :setup, :owner
+  attr_reader :fake, :results, :transcript, :setup, :owner, :model
 
   # runtime_from: a runtime directory (e.g. ~/.tamoz) to copy and run on, as its owner would.
   def initialize(provider: nil, model: nil, runtime_from: nil)
-    @provider = provider
-    @model = model
+    @provider = provider || 'openrouter'
+    @model = model || 'deepseek/deepseek-v4.1-flash'
     @runtime_from = runtime_from
     @root = Dir.mktmpdir('tamoz-telegram-eval')
     @workspace = File.join(@root, 'workspace')
@@ -84,19 +84,17 @@ class TelegramChatEval
   end
 
   def label
-    chosen = log_tail(:start, 50)[/starting as \S+ with (\S+)\./, 1] || [@provider, @model].compact.join('/')
     where = @runtime_from ? "copy of #{@runtime_from}" : 'fresh runtime'
-    "#{chosen.empty? ? 'first provider that answers' : chosen} · #{where}"
+    "#{@provider}/#{@model} · #{where}"
   end
 
   def fresh_user = @users.shift
 
-  def model = @model || 'deepseek/deepseek-v4.1-flash'
+  def chat_key = Tamoz::Agent::Providers::ENV_KEYS.fetch(@provider.to_sym)
 
   # The one command the operator runs: gateway and worker together, supervised by `start`.
   def start
-    spawn_child(:start, [EXE, '--runtime-dir', @runtime, 'telegram', 'start', '--env-file', env_file,
-                         *(['--provider', @provider, '--model', @model] if @provider)])
+    spawn_child(:start, [EXE, '--runtime-dir', @runtime, 'start', '--env-file', env_file])
     started = Time.now.to_f
     wait_until('worker started', timeout: 90) { log_tail(:worker, 200).include?('worker.started') }
     wait_until('gateway polling') { @fake.polled_since?(started) }
@@ -107,19 +105,18 @@ class TelegramChatEval
   # `start` against a key the provider refuses: it must name the problem, not run.
   def start_with_refused_key
     file = File.join(@root, 'refused.env')
-    File.write(file, "TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}\nOPENROUTER_API_KEY=sk-invalid\n")
+    File.write(file, "TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}\n#{chat_key}=sk-invalid\n")
     started = Time.now
-    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'telegram', 'start',
-                                  '--env-file', file, '--provider', 'openrouter', '--model', model, chdir: ROOT)
+    out, status = Open3.capture2e(child_env.except(chat_key), RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'start',
+                                  '--env-file', file, chdir: ROOT)
     { out:, status: status.exitstatus, seconds: Time.now - started }
   end
 
   # A worker whose key stopped working mid-run (revoked, out of credit): the chat must say so.
   def run_with_revoked_key
     spawn_child(:gateway, [EXE, '--runtime-dir', @runtime, 'comms', 'serve'])
-    spawn_child(:worker, [EXE, '--runtime-dir', @runtime, '--provider', 'openrouter', '--model',
-                          model, '--work-routing', 'worker', '--json'],
-                'OPENROUTER_API_KEY' => 'sk-invalid')
+    spawn_child(:worker, [EXE, '--runtime-dir', @runtime, '--work-routing', 'worker', '--json'],
+                chat_key => 'sk-invalid')
     wait_until('worker started') { log_tail(:worker, 200).include?('worker.started') }
   end
 
@@ -335,7 +332,8 @@ class TelegramChatEval
   end
 
   def run_setup
-    @runtime_from ? point_copy_at_workspace : set_up_runtime
+    point_copy_at_workspace if @runtime_from
+    set_up_runtime
     @fake.say(@owner, '/start')
     out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'channel', 'add',
                                   'telegram', '--env-file', env_file, stdin_data: "y\n", chdir: ROOT)
@@ -346,7 +344,8 @@ class TelegramChatEval
 
   def set_up_runtime
     out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'setup',
-                                  '--workspace', @workspace, chdir: ROOT)
+                                  '--workspace', @workspace, '--chat', "#{@provider}/#{@model}", *role_flags,
+                                  chdir: ROOT)
     raise "tamoz setup failed: #{out}" unless status.success?
   end
 
@@ -390,15 +389,26 @@ class TelegramChatEval
 
   def chat(user) = "telegram:chat:#{user}"
 
-  # Every role's provider key and base, so a model the owner adds later reaches the worker.
+  # Every role's key, so a model the owner adds later reaches the worker.
   def role_keys
     %w[VISION TRANSCRIPTION].flat_map do |role|
       provider = secret("TAMOZ_#{role}_PROVIDER")
       next [] unless provider
 
-      names = Tamoz::Agent::ModelClientFactory.environment_names(provider:) +
-              %w[PROVIDER MODEL API_BASE].map { |part| "TAMOZ_#{role}_#{part}" }
-      names.filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
+      names = Tamoz::Agent::ModelClientFactory.environment_names(provider:) + [secret("TAMOZ_#{role}_CREDENTIAL")]
+      names.compact.filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
+    end
+  end
+
+  # The roles the owner's .env names become the runtime's models, as `tamoz setup` writes them.
+  def role_flags
+    %w[vision transcription].flat_map do |role|
+      part = ->(name) { secret("TAMOZ_#{role.upcase}_#{name}") }
+      next [] unless part.call('PROVIDER')
+
+      ["--#{role}", "#{part.call('PROVIDER')}/#{part.call('MODEL')}",
+       *(["--#{role}-api-base", part.call('API_BASE')] if part.call('API_BASE')),
+       *(["--#{role}-credential", part.call('CREDENTIAL')] if part.call('CREDENTIAL'))]
     end
   end
 

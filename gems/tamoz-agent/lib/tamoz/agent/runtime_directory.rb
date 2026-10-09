@@ -118,6 +118,7 @@ module Tamoz
       def attachment_spool = Tamoz::Core::AttachmentSpool.new(File.join(path, 'attachments'))
       def workspace_root = @config.dig("workspace", "root")
       def workspace?(path) = canonical(path) == canonical(workspace_root)
+      def inside_workspace? = "#{canonical(path)}/".start_with?("#{canonical(workspace_root)}/")
       def chat_profile_id = channels.values.first&.fetch('profile') || CHAT_PROFILE
       def chat_profile? = File.exist?(File.join(profiles_path, "#{chat_profile_id}.yaml"))
 
@@ -157,6 +158,13 @@ module Tamoz
       end
 
       def subagents = Array(@config.dig('harness', 'subagents'))
+
+      # The variables the enabled sources' servers read: their credential_refs and env_allowlist.
+      def source_variables
+        servers = enabled_sources.include?('mcp') ? Array(source_settings('mcp')['servers']) : []
+        servers += [source_settings('websearch')] if enabled_sources.include?('websearch')
+        servers.grep(Hash).flat_map { |server| Array(server['credential_refs']) + Array(server['env_allowlist']) }.uniq
+      end
 
       # The deployed channel surfaces (COMMS_DESIGN §14): surface_id -> entry,
       # validated strictly at load against the closed kind list and the

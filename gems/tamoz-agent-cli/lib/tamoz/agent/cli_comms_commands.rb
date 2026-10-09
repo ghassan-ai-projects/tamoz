@@ -60,7 +60,7 @@ module Tamoz
           return 1 unless talk_once_allowed(descriptors, once)
 
           descriptors.each { |descriptor| store.deploy_surface(descriptor.wire, now: Time.now.utc) }
-          descriptors.select { |descriptor| descriptor.kind == 'talk' }.each { |d| talk_hub(d, store).start }
+          descriptors.select { |descriptor| descriptor.kind == 'talk' }.each { |d| talk_hub(d, store, directory).start }
 
           controls_source = comms_controls_source(directory, adapter, options)
           with_delivery_drainers(directory, descriptors) do |drainers|

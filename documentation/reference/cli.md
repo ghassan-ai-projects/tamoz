@@ -98,6 +98,7 @@ Work an operator runs against the runtime directory.
 |---|---|---|
 | `setup` | Create or update the runtime: its workspace, models and chat profile | `--workspace PATH`, `--chat`, `--transcription`, `--vision PROVIDER/MODEL`, `--<role>-credential NAME`, `--<role>-api-base URL` |
 | `channel add telegram` | Pair a Telegram bot with you; the channel serves the runtime's chat profile | `--owner TELEGRAM_USER_ID`, `--env-file PATH` |
+| `start` | Check every channel and model with one real call, then run one gateway per channel and one worker together; print the talk link | `--env-file PATH`, `--host ADDRESS` |
 | `channel add talk` | Add the talk page and its private access token; the channel serves the runtime's chat profile | `--port N`, `--allow-host NAME` (repeatable), `--rotate-token` |
 | `queue` | Submit a task durably, or list pending work | verbs below |
 | `worker` | Run the foreground worker that executes queued and scheduled work | `--once`, `--concurrency N`, `--poll-interval SECONDS` |
@@ -111,21 +112,7 @@ Work an operator runs against the runtime directory.
 | `postmortem` | Write `postmortem-<ms>.md` and `.json` for a window | `--title TEXT`, `--out DIR`, `--since`, `--analysis FILE`, `--json` |
 | `mcp` | Run Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for investigation probes | |
 | `comms` | The channel surface | verbs below |
-| `telegram` | Run the Telegram bot (`start`) | verbs below |
-| `talk` | Run the browser talk channel (`start`) | verbs below |
 | `config` | Explicit configuration migration | `migrate` |
-
-### Telegram verbs
-
-| Verb | Purpose | Options |
-|---|---|---|
-| `telegram start` | Verify the token and provider, then run the gateway and worker together | `--env-file PATH`, `--provider NAME`, `--model NAME`, `--runtime-dir PATH` |
-
-### Talk verbs
-
-| Verb | Purpose | Options |
-|---|---|---|
-| `talk start` | Check the chat, speech-to-text and voice models with one real call each, run the gateway and worker, print the link | `--env-file PATH`, `--host ADDRESS`, `--provider NAME`, `--model NAME`, `--runtime-dir PATH` |
 
 ### Chat commands (sent in Telegram)
 

@@ -33,6 +33,11 @@ class RuntimeModelsTest < Minitest::Test
     refute_includes message, KEY
   end
 
+  def test_the_voice_role_names_its_voice
+    assert_match(/models\.voice\.voice is required/,
+                 refusal('voice' => { 'provider' => 'openrouter', 'model' => 'hexgrad/kokoro-82m' }))
+  end
+
   def test_an_unknown_role_is_refused
     assert_match(/models\.speech is not a model role/, refusal('speech' => SPEECH))
   end

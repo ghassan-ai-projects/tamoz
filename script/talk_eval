@@ -3,7 +3,7 @@
 
 # Talk eval (docs/talk-voice-2026-10-09/EVAL.md): every scenario in test/fixtures/talk/scenarios.json against the real
 # chat, speech-to-text and voice models, each run on a fresh runtime through the real `tamoz setup`, `channel add talk`
-# and `talk start`. A check whose precondition did not hold is INVALID and re-run (up to twice the stated runs); fewer
+# and `start`. A check whose precondition did not hold is INVALID and re-run (up to twice the stated runs); fewer
 # valid runs than stated is SHORT; a missing tool, key, credit or corpus is BLOCKED. None of those is a pass.
 #
 #   bundle exec ruby script/talk_eval [--runs N] [--only a,b] [--provider zai --model glm-5.3-flash] [--skip-noisy]
@@ -48,9 +48,18 @@ if File.exist?(File.join(ROOT, '.env'))
   end
 end
 ENV.each { |name, value| env[name] = value if name.match?(/\A(TAMOZ_|ZAI_|OPENROUTER_|DEEPSEEK_)/) }
-env['TAMOZ_PROVIDER'] = options[:provider]
-env['TAMOZ_MODEL'] = options[:model]
 env['ZAI_API_BASE'] ||= 'https://api.z.ai/api/coding/paas/v4' if options[:provider] == 'zai'
+
+models = ['--chat', "#{options[:provider]}/#{options[:model]}"]
+%w[transcription voice].each do |role|
+  name = ->(part) { env["TAMOZ_#{role.upcase}_#{part}"] }
+  next if name.call('PROVIDER').to_s.empty?
+
+  models += ["--#{role}", "#{name.call('PROVIDER')}/#{name.call('MODEL')}"]
+  models += ["--#{role}-credential", name.call('CREDENTIAL')] if name.call('CREDENTIAL')
+  models += ["--#{role}-api-base", name.call('API_BASE')] if name.call('API_BASE')
+end
+models += ['--voice-name', env['TAMOZ_VOICE_NAME']] if env['TAMOZ_VOICE_NAME']
 
 stamp = Time.now.strftime('%Y%m%d-%H%M%S')
 out = File.join(ROOT, 'tmp/talk-eval', stamp)
@@ -160,7 +169,7 @@ while blocked.empty? && run < max_runs
   break if todo.empty?
 
   run += 1
-  talk = TalkChatEval.new(env:, workspace_files: spec.fetch('workspace'), approval_profile: 'unattended')
+  talk = TalkChatEval.new(env:, models:, workspace_files: spec.fetch('workspace'), approval_profile: 'unattended')
   begin
     talk.start(timeout: 180)
     puts "run #{run}: #{todo.join(', ')}"
@@ -214,7 +223,7 @@ if blocked.empty? && options[:canary]
       next
     end
     3.times do |index|
-      talk = TalkChatEval.new(env:, workspace_files: spec.fetch('workspace'), approval_profile: 'unattended')
+      talk = TalkChatEval.new(env:, models:, workspace_files: spec.fetch('workspace'), approval_profile: 'unattended')
       begin
         talk.start(timeout: 180)
         clip = File.join(ROOT, 'test/fixtures/talk/wav', "#{id}-Samantha.wav")

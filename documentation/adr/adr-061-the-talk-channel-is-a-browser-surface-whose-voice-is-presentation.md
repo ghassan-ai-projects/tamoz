@@ -31,11 +31,11 @@ seconds. Tamoz already has a governed channel path — admission, dedup, one thr
   update with the same id; admission dedup makes that harmless. Audio is held in memory until
   confirmed, then handed to the worker through the attachment spool; it is never stored.
 - **Speech in is the user's words.** The worker transcribes the WAV as a journaled effect
-  (`TAMOZ_TRANSCRIPTION_*`), shows "Heard: «…»" on speaking surfaces, and treats a transcript that is
+  (the runtime's `models.transcription`), shows "Heard: «…»" on speaking surfaces, and treats a transcript that is
   most of its own last spoken reply as an echo — framed material, never a request.
 - **Speech out is presentation.** `Tamoz::Core::SpokenText` projects a delivered message of a spoken kind
   into words (no code, paths, digests or URLs; a sentence-bounded cut). The talk server synthesizes it
-  with the VOICE role (`TAMOZ_VOICE_*`) when the page asks, caches it in memory, and never stores it.
+  with the runtime's `models.voice` when the page asks, caches it in memory, and never stores it.
 - **Approval stays a button.** A spoken or typed "approve" is a request, never a decision; decisions
   are callbacks bound to the card's prompt and message id (ADR-049, `chat_bound`).
 
@@ -70,7 +70,7 @@ speaker.
 
 **Residual risk:**
 
-- Whoever holds the link can approve changes. Each `talk start` prints it to the operator's terminal;
+- Whoever holds the link can approve changes. Each `start` prints it to the operator's terminal;
   `tamoz channel add talk --rotate-token` replaces it, and a running Tamoz accepts the old link until restarted.
 - The echo guard compares only with the last spoken answer and needs 8 words; a shorter or older echo, or
   one with the "headphones" box left on over speakers, reaches the model as the user's words. Anything

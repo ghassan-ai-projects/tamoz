@@ -44,7 +44,7 @@ class CommsServeSupervisionTest < Minitest::Test
 
   def test_a_storage_failure_stops_the_loops_names_the_class_and_exits_non_zero
     err = StringIO.new
-    supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands, Tamoz::Agent::CLITalkCommands)
+    supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands, Tamoz::Agent::CLITalkGateway)
     supervisor.instance_variable_set(:@err, err)
     gateway = QuietGateway.new
     drainer = Tamoz::Comms::DeliveryDrainer.new(

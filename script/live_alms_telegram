@@ -345,10 +345,9 @@ class LiveAlmsTelegram
     builders = Tamoz::Agent::ChildEnvironments
     case args.first
     when 'worker'
-      builders.worker_env(@env, runtime_dir: @runtime_dir,
-                                models: Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env).models)
+      builders.worker_env(@env, directory: Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env))
     when 'comms'
-      builders.gateway_env(@env, runtime_dir: @runtime_dir,
+      builders.gateway_env(@env, directory: Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env),
                                  surface: @options.fetch(:surface))
     else
       builders.queue_status_env(@env, runtime_dir: @runtime_dir)

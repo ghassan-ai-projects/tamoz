@@ -238,6 +238,15 @@ class CliChannelTelegramTest < Minitest::Test
     end
   end
 
+  def test_a_missing_telegram_adapter_is_named
+    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {},
+                                comms_client_factory: lambda { |_token|
+                                  raise Tamoz::Agent::CLICommsShared::MissingAdapterError, 'no adapter'
+                                })
+
+    assert_equal 'no adapter', cli.send(:token_problem, { 'TAMOZ_TELEGRAM_BOT_TOKEN' => 'x' })
+  end
+
   private
 
   def write_unpinned_channel(runtime)

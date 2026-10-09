@@ -1,133 +1,112 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require 'tmpdir'
 
-# rubocop:disable Minitest/MultipleAssertions
+# Each child gets exactly its keys, composed from the runtime config and never from a shared environment.
 class ChildEnvironmentsTest < Minitest::Test
   ChildEnvironments = Tamoz::Agent::ChildEnvironments
+  RuntimeDirectory = Tamoz::Agent::RuntimeDirectory
 
-  BASE = {
-    'PATH' => '/usr/bin', 'HOME' => '/home/ops', 'LANG' => 'en_US.UTF-8',
-    'TMPDIR' => '/tmp', 'GEM_HOME' => '/gems', 'GEM_PATH' => '/gems',
-    'RUBYLIB' => '/lib', 'LC_ALL' => 'en_US.UTF-8',
-    'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot-secret',
-    'DEEPSEEK_API_KEY' => 'model-secret',
-    'TAMOZ_ALMS_MCP_ENDPOINT' => 'http://alms.internal',
-    'TAMOZ_PROVIDER' => 'deepseek', 'TAMOZ_MODEL' => 'deepseek-chat',
-    'TAMOZ_RUNTIME_DIR' => '/srv/runtime', 'TAMOZ_TELEGRAM_SURFACE' => 'telegram-ops',
+  ENV_FILE = {
+    'PATH' => '/usr/bin', 'HOME' => '/home/ops', 'LANG' => 'en_US.UTF-8', 'LC_ALL' => 'en_US.UTF-8',
+    'TMPDIR' => '/tmp', 'GEM_HOME' => '/gems', 'GEM_PATH' => '/gems', 'RUBYLIB' => '/lib',
+    'ZAI_API_KEY' => 'chat-secret', 'ZAI_API_BASE' => 'https://api.z.ai/api/coding/paas/v4',
+    'OPENROUTER_SPEECH_API_KEY' => 'speech-secret', 'OPENAI_API_KEY' => 'vision-secret',
+    'TAMOZ_BRAVE_API_KEY' => 'search-secret', 'TAMOZ_WEBSEARCH_REGION' => 'gb',
+    'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot-secret', 'TAMOZ_TALK_TOKEN' => 'talk-secret', 'TAMOZ_TALK_HOST' => '127.0.0.1',
     'TAMOZ_ENV_FILE' => '/srv/.env', 'AWS_SECRET_ACCESS_KEY' => 'unrelated-secret'
   }.freeze
+  SPEECH = { 'provider' => 'openrouter', 'credential' => 'OPENROUTER_SPEECH_API_KEY' }.freeze
+  MODELS = { 'chat' => { 'provider' => 'zai', 'model' => 'glm-5.3-flash' },
+             'transcription' => SPEECH.merge('model' => 'openai/gpt-4o-mini-transcribe'),
+             'voice' => SPEECH.merge('model' => 'hexgrad/kokoro-82m', 'voice' => 'af_heart'),
+             'vision' => { 'provider' => 'openai', 'model' => 'gpt-4o-mini' } }.freeze
+  SOURCES = { 'websearch' => { 'enabled' => true, 'command' => '/opt/websearch',
+                               'credential_refs' => %w[TAMOZ_BRAVE_API_KEY TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_ENV_FILE
+                                                       TAMOZ_RUNTIME_DIR],
+                               'env_allowlist' => %w[PATH TAMOZ_WEBSEARCH_REGION] } }.freeze
 
-  def test_the_gateway_gets_the_bot_token_and_no_model_key
-    env = ChildEnvironments.gateway_env(BASE, runtime_dir: '/srv/runtime', surface: 'telegram-ops')
+  TOKENS = { 'telegram' => 'TAMOZ_TELEGRAM_BOT_TOKEN', 'talk' => 'TAMOZ_TALK_TOKEN' }.freeze
 
-    assert_equal 'bot-secret', env.fetch('TAMOZ_TELEGRAM_BOT_TOKEN')
-    assert_equal 'telegram-ops', env.fetch('TAMOZ_TELEGRAM_SURFACE')
-    refute env.key?('DEEPSEEK_API_KEY'), 'the gateway must not carry the model credential'
-    refute env.key?('TAMOZ_ALMS_MCP_ENDPOINT'), 'the gateway must not carry the ALMS endpoint'
+  def channel(kind, bot_id, **extra)
+    { 'kind' => kind, 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'expected_bot_id' => bot_id,
+      'credential_ref' => { 'kind' => 'env', 'name' => TOKENS.fetch(kind) },
+      **extra }
   end
 
-  def test_the_worker_gets_the_model_key_and_no_bot_token
-    env = ChildEnvironments.worker_env(BASE, runtime_dir: '/srv/runtime')
-
-    assert_equal 'model-secret', env.fetch('DEEPSEEK_API_KEY')
-    assert_equal 'deepseek', env.fetch('TAMOZ_PROVIDER')
-    assert_equal 'deepseek-chat', env.fetch('TAMOZ_MODEL')
-    refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN'), 'the worker must not carry the bot token'
-    refute env.key?('TAMOZ_ALMS_MCP_ENDPOINT'),
-           'the worker resolves the ALMS endpoint from the MCP config, not the environment'
-  end
-
-  def test_the_worker_gets_the_transcription_model_only_when_one_is_configured
-    configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
-                            'OPENAI_API_KEY' => 'stt-secret')
-    env = ChildEnvironments.worker_env(configured, runtime_dir: '/srv/runtime')
-
-    assert_equal %w[openai whisper-1 stt-secret],
-                 env.values_at('TAMOZ_TRANSCRIPTION_PROVIDER', 'TAMOZ_TRANSCRIPTION_MODEL', 'OPENAI_API_KEY')
-    refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN')
-    refute ChildEnvironments.worker_env(BASE.merge('OPENAI_API_KEY' => 'x'), runtime_dir: 'r').key?('OPENAI_API_KEY'),
-           'no transcription model, no second key'
-  end
-
-  def test_a_role_reads_its_key_from_the_variable_it_names
-    configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openrouter',
-                            'TAMOZ_TRANSCRIPTION_MODEL' => 'openai/gpt-4o-mini-transcribe',
-                            'TAMOZ_TRANSCRIPTION_CREDENTIAL' => 'OPENROUTER_SPEECH_API_KEY',
-                            'OPENROUTER_SPEECH_API_KEY' => 'speech-secret', 'OPENROUTER_API_KEY' => 'chat-secret')
-    env = ChildEnvironments.worker_env(configured, runtime_dir: 'r')
-
-    assert_equal %w[OPENROUTER_SPEECH_API_KEY speech-secret],
-                 env.values_at('TAMOZ_TRANSCRIPTION_CREDENTIAL', 'OPENROUTER_SPEECH_API_KEY')
-    refute env.key?('OPENROUTER_API_KEY'), 'a role naming its key gets that key, not the provider default'
-  end
-
-  def test_a_role_the_runtime_config_names_finds_its_key_in_the_worker
-    models = Tamoz::Agent::RuntimeModels.parse(
-      'transcription' => { 'provider' => 'openrouter', 'model' => 'openai/gpt-4o-mini-transcribe',
-                           'credential' => 'OPENROUTER_SPEECH_API_KEY' }
-    )
-    env = ChildEnvironments.worker_env(BASE.merge('OPENROUTER_SPEECH_API_KEY' => 'speech', 'OTHER_API_KEY' => 'x'),
-                                       runtime_dir: 'r', models:)
-
-    assert_equal 'speech', env['OPENROUTER_SPEECH_API_KEY']
-    refute env.key?('OTHER_API_KEY'), 'only the keys the config names'
-  end
-
-  def test_a_role_may_not_name_a_channel_secret_or_a_runtime_variable
-    %w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_ENV_FILE PATH TAMOZ_TALK_TOKEN AWS_SECRET_ACCESS_KEY GITHUB_TOKEN].each do |name|
-      configured = BASE.merge('TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
-                              'TAMOZ_TRANSCRIPTION_CREDENTIAL' => name)
-
-      assert_raises(ArgumentError, name) { ChildEnvironments.worker_env(configured, runtime_dir: 'r') }
+  def with_directory(models: MODELS)
+    Dir.mktmpdir('tamoz-child-env') do |root|
+      FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
+      path = RuntimeDirectory.create!(File.join(root, 'runtime'), workspace:, models:).path
+      config = File.join(path, RuntimeDirectory::CONFIG_FILE)
+      channels = { 'telegram' => channel('telegram', 7_000_000_001),
+                   'talk' => channel('talk', 123_456_789_012, 'talk' => { 'port' => 8787 }) }
+      File.write(config, Psych.dump(Psych.safe_load_file(config).merge('sources' => SOURCES, 'channels' => channels)))
+      yield RuntimeDirectory.resolve(path:, env: {})
     end
   end
 
-  def test_the_image_model_and_its_key_reach_only_the_worker
-    configured = BASE.merge('TAMOZ_VISION_PROVIDER' => 'openai', 'TAMOZ_VISION_MODEL' => 'gpt-4o-mini',
-                            'OPENAI_API_KEY' => 'vision-secret', 'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot')
+  def own_keys(env) = (env.keys - ChildEnvironments::STANDARD).sort
 
-    assert_equal %w[openai gpt-4o-mini vision-secret],
-                 ChildEnvironments.worker_env(configured, runtime_dir: 'r')
-                                  .values_at('TAMOZ_VISION_PROVIDER', 'TAMOZ_VISION_MODEL', 'OPENAI_API_KEY')
-    refute ChildEnvironments.gateway_env(configured, runtime_dir: 'r', surface: 's').key?('OPENAI_API_KEY')
+  def test_the_worker_holds_its_models_and_sources_keys_and_nothing_else
+    with_directory do |directory|
+      env = ChildEnvironments.worker_env(ENV_FILE, directory:)
+
+      assert_equal %w[OPENAI_API_KEY OPENROUTER_SPEECH_API_KEY TAMOZ_BRAVE_API_KEY TAMOZ_RUNTIME_DIR
+                      TAMOZ_WEBSEARCH_REGION ZAI_API_BASE ZAI_API_KEY], own_keys(env)
+    end
   end
 
-  def test_queue_and_status_see_neither_credential
-    env = ChildEnvironments.queue_status_env(BASE, runtime_dir: '/srv/runtime')
+  def test_a_source_that_names_a_channel_token_does_not_get_it
+    with_directory do |directory|
+      refute ChildEnvironments.worker_env(ENV_FILE, directory:).key?('TAMOZ_TELEGRAM_BOT_TOKEN')
+    end
+  end
 
-    assert_equal '/srv/runtime', env.fetch('TAMOZ_RUNTIME_DIR')
-    refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN')
-    refute env.key?('DEEPSEEK_API_KEY')
+  def test_a_source_cannot_override_the_runtime_or_reach_the_env_file
+    with_directory do |directory|
+      env = ChildEnvironments.worker_env(ENV_FILE.merge('TAMOZ_RUNTIME_DIR' => '/elsewhere'), directory:)
+
+      assert_equal [directory.path, false], [env['TAMOZ_RUNTIME_DIR'], env.key?('TAMOZ_ENV_FILE')]
+    end
+  end
+
+  def test_the_telegram_gateway_holds_only_its_bot_token
+    with_directory do |directory|
+      env = ChildEnvironments.gateway_env(ENV_FILE, directory:, surface: 'telegram')
+
+      assert_equal %w[TAMOZ_RUNTIME_DIR TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_TELEGRAM_SURFACE], own_keys(env)
+    end
+  end
+
+  def test_the_talk_gateway_holds_its_token_and_the_voice_key_never_the_chat_key
+    with_directory do |directory|
+      env = ChildEnvironments.gateway_env(ENV_FILE, directory:, surface: 'talk')
+
+      assert_equal %w[OPENROUTER_SPEECH_API_KEY TAMOZ_RUNTIME_DIR TAMOZ_TALK_HOST TAMOZ_TALK_TOKEN], own_keys(env)
+    end
+  end
+
+  def test_a_role_without_its_own_key_uses_its_provider_variable
+    with_directory(models: MODELS.merge('transcription' => { 'provider' => 'openai', 'model' => 'whisper-1' })) do |dir|
+      assert_equal 'vision-secret', ChildEnvironments.worker_env(ENV_FILE, directory: dir).fetch('OPENAI_API_KEY')
+    end
+  end
+
+  def test_queue_and_status_see_no_credential
+    assert_equal %w[TAMOZ_RUNTIME_DIR], own_keys(ChildEnvironments.queue_status_env(ENV_FILE, runtime_dir: '/r'))
   end
 
   def test_the_harness_gets_only_sanitized_pointers
-    env = ChildEnvironments.harness_env(BASE, runtime_dir: '/srv/runtime',
-                                              database_path: '/srv/runtime/runtime.sqlite3')
+    env = ChildEnvironments.harness_env(ENV_FILE, runtime_dir: '/r', database_path: '/r/runtime.sqlite3')
 
-    assert_equal '/srv/runtime', env.fetch('TAMOZ_RUNTIME_DIR')
-    assert_equal '/srv/runtime/runtime.sqlite3', env.fetch('TAMOZ_DATABASE_PATH')
-    refute env.key?('TAMOZ_ENV_FILE'), 'the harness must not pass the env-file path'
-    refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN')
-    refute env.key?('DEEPSEEK_API_KEY')
-  end
-
-  def test_no_map_ever_leaks_unrelated_credentials
-    [ChildEnvironments.gateway_env(BASE, runtime_dir: 'r', surface: 's'),
-     ChildEnvironments.worker_env(BASE, runtime_dir: 'r'),
-     ChildEnvironments.queue_status_env(BASE, runtime_dir: 'r'),
-     ChildEnvironments.harness_env(BASE, runtime_dir: 'r')].each do |env|
-      refute env.key?('AWS_SECRET_ACCESS_KEY'),
-             'an unrelated credential must never reach any child'
-      refute env.key?('TAMOZ_ENV_FILE'), 'the env-file path must never reach any child'
-    end
+    assert_equal %w[TAMOZ_DATABASE_PATH TAMOZ_RUNTIME_DIR], own_keys(env)
   end
 
   def test_every_child_carries_the_standard_runtime_allowlist
-    env = ChildEnvironments.queue_status_env(BASE, runtime_dir: '/srv/runtime')
+    env = ChildEnvironments.queue_status_env(ENV_FILE, runtime_dir: '/r')
 
-    assert_equal %w[GEM_HOME GEM_PATH HOME LANG LC_ALL PATH RUBYLIB TMPDIR],
-                 env.keys.grep(/^(PATH|HOME|LANG|LC_ALL|TMPDIR|GEM_|RUBYLIB)/).sort
+    assert_equal ChildEnvironments::STANDARD.sort, (env.keys & ChildEnvironments::STANDARD).sort
   end
 end
-# rubocop:enable Minitest/MultipleAssertions

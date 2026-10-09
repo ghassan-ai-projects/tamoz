@@ -9,36 +9,30 @@ speaks a short form of the answer. It is a channel like Telegram — same conver
 ## 0. Quick start
 
 You need a chat model key and a speech key. Speech goes through OpenRouter's audio endpoints; give it its
-own key so it can never spend the chat model's credit. In `.env`:
+own key so it can never spend the chat model's credit. `.env` holds only keys:
 
 ```bash
-ZAI_API_KEY=<chat model key>                       # or any provider `tamoz telegram start` accepts
+ZAI_API_KEY=<chat model key>
 OPENROUTER_SPEECH_API_KEY=<OpenRouter key for speech>
-
-TAMOZ_TRANSCRIPTION_PROVIDER=openrouter            # speech to text
-TAMOZ_TRANSCRIPTION_MODEL=openai/gpt-4o-mini-transcribe
-TAMOZ_TRANSCRIPTION_CREDENTIAL=OPENROUTER_SPEECH_API_KEY
-
-TAMOZ_VOICE_PROVIDER=openrouter                    # text to speech
-TAMOZ_VOICE_MODEL=hexgrad/kokoro-82m
-TAMOZ_VOICE_NAME=af_heart
-TAMOZ_VOICE_CREDENTIAL=OPENROUTER_SPEECH_API_KEY
 ```
 
-Then:
+The runtime's config names the models:
 
 ```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project --chat zai/glm-5.3-flash \
+  --transcription openrouter/openai/gpt-4o-mini-transcribe --transcription-credential OPENROUTER_SPEECH_API_KEY \
+  --voice openrouter/hexgrad/kokoro-82m --voice-name af_heart --voice-credential OPENROUTER_SPEECH_API_KEY
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add talk
-rbenv exec bundle exec tamoz talk start --env-file .env
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz start --env-file .env
 ```
 
-`start` checks the chat model, the speech-to-text model and the voice with one real call each, then prints
+`start` checks the chat model, the speech-to-text model and the voice with one real call each (a voice that
+does not answer is named and replies are text only until it does), then prints
 a link such as `http://127.0.0.1:8787/#token=…`. Open it, tap **Start**, allow the microphone, and talk.
 **Whoever holds the link can talk to Tamoz and approve its changes**; replace it with
 `tamoz --runtime-dir ~/.tamoz channel add talk --rotate-token`.
 
-`TAMOZ_*_CREDENTIAL` names the variable that holds a role's key (never the key itself). Without it a role
+`--<role>-credential` names the variable that holds a role's key (never the key itself). Without it a role
 uses its provider's usual variable (`OPENROUTER_API_KEY`). `start` refuses a voice key that is the chat
 model's key.
 
@@ -84,9 +78,9 @@ messages and any card still waiting for your tap.
 
 | You see | Why | Do |
 |---|---|---|
-| "This link is not valid any more" | The token was rotated | Open the new link from `talk start` |
+| "This link is not valid any more" | The token was rotated | Open the new link from `start` |
 | "The microphone needs HTTPS" | Plain HTTP on another device | Use `tailscale serve` (section 1) |
-| "voice unavailable" on a reply | The voice model failed or is not set | Check `TAMOZ_VOICE_*`; the text is complete |
+| "voice unavailable" on a reply | The voice model failed or is not set | Check the voice model `setup --voice` names and its key; the text is complete |
 | "Didn't catch that." | The sound was too short or too quiet | Speak again, or use push to talk |
 | "paused: the microphone stops when the screen locks" | iOS stops capture when the screen locks | Unlock; the page resumes |
 | `start` says the talk page cannot listen on the port | Another program (or another Tamoz) uses it | Stop it, or `tamoz channel add talk --port N` |

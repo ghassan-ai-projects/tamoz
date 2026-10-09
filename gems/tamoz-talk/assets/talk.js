@@ -312,7 +312,7 @@ async function poll() {
         { signal: timer.signal });
       if (response.status === 401) {
         if (state.token !== token) continue;
-        stopDead('This link is not valid any more. Open the link printed by `tamoz talk start` on this device.');
+        stopDead('This link is not valid any more. Open the link printed by `tamoz start` on this device.');
         return;
       }
       if (!response.ok) throw new Error(String(response.status));
@@ -850,7 +850,7 @@ function requireToken() {
   $('text-only').disabled = !ready;
   $('start-note').textContent = ready
     ? 'Tap Start to use your microphone and hear replies.'
-    : 'Open the link printed by `tamoz talk start` on this device.';
+    : 'Open the link printed by `tamoz start` on this device.';
   return ready;
 }
 

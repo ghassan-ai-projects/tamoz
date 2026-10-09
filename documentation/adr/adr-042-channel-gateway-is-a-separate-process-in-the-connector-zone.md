@@ -29,8 +29,8 @@ would be a diagram, not a boundary.
 - It never constructs a `Session`, opens a toolbox, or reads workspace files, and it never loads a
   credential for a model that reasons or acts. One exception (owner decision, 2026-10-09): a talk
   gateway (ADR-061) holds the VOICE role's credential to synthesize speech of text it has already
-  delivered; `tamoz talk start` refuses that credential when it is the chat model's, by name or by value.
-  Only `talk start` checks: a hand-run `tamoz comms serve` gets the environment it is given.
+  delivered; `tamoz start` refuses that credential when it is the chat model's, by name or by value.
+  Only `start` checks: a hand-run `tamoz comms serve` gets the environment it is given.
 - It and the worker share one SQLite runtime database, so admission and request enqueue are one
   transaction and a replayed update creates no second request.
 

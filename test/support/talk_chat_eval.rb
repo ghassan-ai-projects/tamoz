@@ -10,7 +10,7 @@ require 'rbconfig'
 require 'socket'
 require 'tmpdir'
 
-# Runs the real `tamoz setup`, `channel add talk` and `talk start` and talks to the page's HTTP API as the browser
+# Runs the real `tamoz setup`, `channel add talk` and `start` and talks to the page's HTTP API as the browser
 # does; with TalkFakeProvider it is plumbing, with real keys the eval's server-side layer.
 class TalkChatEval
   ROOT = File.expand_path('../..', __dir__)
@@ -25,13 +25,15 @@ class TalkChatEval
 
   attr_reader :runtime, :workspace, :events, :base, :responses, :turns, :speech_times, :utterances
 
-  def initialize(env:, workspace_files: {}, approval_profile: nil)
+  # models: the `tamoz setup` flags that name the runtime's models, e.g. ['--chat', 'zai/glm-5.3-flash'].
+  def initialize(env:, models:, workspace_files: {}, approval_profile: nil)
     @root = Dir.mktmpdir('tamoz-talk-eval')
     @runtime = File.join(@root, 'runtime')
     @workspace = File.join(@root, 'workspace')
     FileUtils.mkdir_p(@workspace)
     workspace_files.each { |name, text| File.write(File.join(@workspace, name), text) }
     @env = env
+    @models = models
     @events = []
     @responses = []
     @turns = []
@@ -48,13 +50,13 @@ class TalkChatEval
 
   def start(timeout: 60, args: [])
     @port = free_port
-    tamoz!('setup', '--workspace', @workspace)
+    tamoz!('setup', '--workspace', @workspace, *@models)
     tamoz!('channel', 'add', 'talk', '--port', @port.to_s)
 
     tighten_approvals if @approval_profile
     @token = File.read(File.join(@runtime, 'talk', 'token')).strip
     @log = File.join(@root, 'start.log')
-    @pid = Process.spawn(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'talk', 'start', *args,
+    @pid = Process.spawn(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'start', *args,
                          out: @log, err: @log, pgroup: true)
     wait_until(timeout, 'the talk page answers') { up? }
     @poller = Thread.new { poll_events }

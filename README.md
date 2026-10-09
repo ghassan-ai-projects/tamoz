@@ -185,22 +185,21 @@ TAMOZ_TELEGRAM_BOT_TOKEN=<token from @BotFather>
 OPENROUTER_API_KEY=<your key>
 ```
 
-From a checkout, two commands:
+From a checkout, three commands:
 
 ```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project                      # once
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env               # pair, once
-rbenv exec bundle exec tamoz telegram start --env-file .env                                            # run the bot
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project \
+  --chat openrouter/deepseek/deepseek-v4.1-flash                                          # once
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env  # pair, once
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz start --env-file .env                 # run it
 ```
 
-`setup` writes the runtime directory and its chat profile. `channel add telegram`
-authenticates the token, waits for your first private message to the bot, asks
-you to confirm it is you, and writes the channel (`start` defaults to `~/.tamoz`;
-`--runtime-dir PATH` keeps it elsewhere). `start`
-checks the token, tries each configured provider with one real call and uses the
-first that answers, then runs the gateway and the worker together until Ctrl-C.
-A missing or refused token or key, or an empty provider account, is one named
-error before anything starts.
+`setup` writes the runtime directory, its models and its chat profile. `channel add
+telegram` authenticates the token, waits for your first private message to the bot,
+asks you to confirm it is you, and writes the channel. `start` checks the token and
+the chat model with one real call each, then runs one gateway per channel and the
+worker together until Ctrl-C. A missing or refused token or key, or an empty
+provider account, is one named error before anything starts.
 
 ### Using it
 
@@ -208,9 +207,9 @@ Message the bot like a person. It answers in one plain reply with a typing
 indicator, remembers the conversation (across restarts too) and replies in your
 language. It also reads what you send: text files and PDFs (PDFs need poppler's
 `pdftotext` on the worker's machine), photos and images (read by the chat model,
-or by the model `TAMOZ_VISION_*` names, text first), and voice notes (transcribed
-by the speech-to-text model `TAMOZ_TRANSCRIPTION_*` names, then answered as your
-words; with none set, the bot says voice is not set up). Text files, PDFs and
+or by the model `setup --vision` names, text first), and voice notes (transcribed
+by the model `setup --transcription` names, then answered as your words; with none
+set, the bot says voice is not set up). Text files, PDFs and
 images are checked end to end on a live bot. Files are not kept: each is a temporary
 handoff, deleted once read — see the [guide](documentation/guides/telegram.md).
 Questions about the workspace are answered from its files; a change is
@@ -245,13 +244,14 @@ speaks a short form of the answer. It is a channel like Telegram — same memory
 `/cancel`, and changes still wait for a tap on **Approve** (a spoken "yes" never approves).
 
 ```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup \
+  --transcription openrouter/openai/gpt-4o-mini-transcribe --transcription-credential OPENROUTER_SPEECH_API_KEY \
+  --voice openrouter/hexgrad/kokoro-82m --voice-name af_heart --voice-credential OPENROUTER_SPEECH_API_KEY
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add talk
-rbenv exec bundle exec tamoz talk start --env-file .env        # prints the link to open
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz start --env-file .env   # prints the link to open
 ```
 
-Speech-to-text and the voice are OpenRouter models named by `TAMOZ_TRANSCRIPTION_*` and `TAMOZ_VOICE_*`;
-audio is never stored. Setup, phones (HTTPS through `tailscale serve`) and troubleshooting:
+The same `start` serves Telegram and the page together when both channels are added. Audio is never stored. Setup, phones (HTTPS through `tailscale serve`) and troubleshooting:
 [`documentation/guides/talk.md`](documentation/guides/talk.md). Design and evidence:
 [ADR-061](documentation/adr/adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md),
 [`docs/talk-voice-2026-10-09/`](docs/talk-voice-2026-10-09/PLAN.md).

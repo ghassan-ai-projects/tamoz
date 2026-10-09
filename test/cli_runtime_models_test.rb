@@ -146,12 +146,12 @@ class CLIRuntimeModelsTest < Minitest::Test
     with_runtime('transcription' => SPEECH) { |path| assert_nil attachment_for('VISION', path) }
   end
 
-  def test_the_role_variables_win_over_the_runtime
-    with_runtime('transcription' => SPEECH) do |path|
-      built = attachment_for('TRANSCRIPTION', path, 'TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai',
-                                                    'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1', 'OPENAI_API_KEY' => 'k')
+  def test_the_voice_role_builds_a_speaking_transport_with_a_short_timeout
+    voice = SPEECH.merge('model' => 'hexgrad/kokoro-82m', 'voice' => 'af_heart')
+    with_runtime('voice' => voice) do |path|
+      built = attachment_for('VOICE', path, 'OPENROUTER_SPEECH_API_KEY' => 'k')
 
-      assert_equal %w[openai whisper-1], pair(built)
+      assert_equal ['hexgrad/kokoro-82m', 10], [built.model, built.timeout_seconds]
     end
   end
 end

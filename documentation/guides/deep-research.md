@@ -41,7 +41,7 @@ with `"page_reads": "public"`; the provider is `{"search":"brave","reader":"dire
 read-only: a research subagent cannot ask for approval. Without websearch, a research request on the work route
 answers that deep research is not available.
 
-Chat needs a worker on the work route (`tamoz telegram start` runs one); another route cannot run a research turn.
+Chat needs a worker on the work route (`tamoz start` runs one); another route cannot run a research turn.
 
 ## Budgets
 

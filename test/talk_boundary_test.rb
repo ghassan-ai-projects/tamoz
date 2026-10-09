@@ -21,12 +21,13 @@ class TalkBoundaryTest < Minitest::Test
     end)
   end
 
-  def test_speech_synthesis_has_one_caller_the_injected_synthesizer
+  def test_speech_is_synthesized_only_by_the_talk_gateway_and_the_start_probe
     callers = Dir[ROOT.join('gems/*/lib/**/*.rb')].select do |path|
       File.read(path, encoding: 'UTF-8').match?(/\.speak\(/)
     end
 
-    assert_equal(['gems/tamoz-agent-cli/lib/tamoz/agent/cli_talk_commands.rb'],
-                 callers.map { |path| Pathname(path).relative_path_from(ROOT).to_s })
+    assert_equal(%w[gems/tamoz-agent-cli/lib/tamoz/agent/cli_start_checks.rb
+                    gems/tamoz-agent-cli/lib/tamoz/agent/cli_talk_gateway.rb],
+                 callers.map { |path| Pathname(path).relative_path_from(ROOT).to_s }.sort)
   end
 end

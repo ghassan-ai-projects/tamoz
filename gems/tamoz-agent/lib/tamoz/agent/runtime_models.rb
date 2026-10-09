@@ -4,10 +4,13 @@ module Tamoz
   module Agent
     # The `models:` section of a runtime's config; a role names the variable that holds its key, never the key.
     class RuntimeModels
-      ConfiguredModel = Data.define(:provider, :model, :credential, :api_base)
+      ConfiguredModel = Data.define(:provider, :model, :credential, :api_base, :voice) do
+        def initialize(provider:, model:, credential: nil, api_base: nil, voice: nil) = super
+      end
 
       KEYED_FIELDS = %w[provider model credential api_base].freeze
-      ROLE_FIELDS = { 'chat' => %w[provider model], 'transcription' => KEYED_FIELDS, 'vision' => KEYED_FIELDS }.freeze
+      ROLE_FIELDS = { 'chat' => %w[provider model], 'transcription' => KEYED_FIELDS, 'vision' => KEYED_FIELDS,
+                      'voice' => [*KEYED_FIELDS, 'voice'] }.freeze
       REQUIRED_FIELDS = %w[provider model].freeze
       PRINTABLE_NAME = /\A[a-z_]{1,40}\z/
       PROVIDER = /\A[a-z][a-z0-9_-]{0,39}\z/
@@ -35,11 +38,13 @@ module Tamoz
       def self.configured_model(role, fields)
         ConfiguredModel.new(provider: provider!(role, fields['provider']), model: fields['model'],
                             credential: fields.key?('credential') ? credential!(role, fields['credential']) : nil,
-                            api_base: fields.key?('api_base') ? api_base!(role, fields['api_base']) : nil)
+                            api_base: fields.key?('api_base') ? api_base!(role, fields['api_base']) : nil,
+                            voice: fields['voice'])
       end
 
       def self.require_fields!(role, fields)
-        missing = REQUIRED_FIELDS.find { |field| !fields[field].is_a?(String) || fields[field].strip.empty? }
+        required = role == 'voice' ? [*REQUIRED_FIELDS, 'voice'] : REQUIRED_FIELDS
+        missing = required.find { |field| !fields[field].is_a?(String) || fields[field].strip.empty? }
         raise ArgumentError, "models.#{role}.#{missing} is required" if missing
       end
 

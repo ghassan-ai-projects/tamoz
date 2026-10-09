@@ -628,6 +628,10 @@ module Tamoz
       # falling through into a command that opens a database.
       def accept_json(parser, options)
         parser.on("--json", "Emit newline-delimited JSON") { options[:json] = true }
+        help_option(parser)
+      end
+
+      def help_option(parser)
         parser.on("-h", "--help", "Show this subcommand's options") do
           @out.puts parser
           throw :tamoz_subcommand_help, 0
@@ -658,25 +662,14 @@ module Tamoz
           research_dir: File.join(runtime_dir_path(options), 'research') }
       end
 
-      def attachment_model(role, runtime: nil)
-        configured = model_from_environment(role) || (runtime && runtime.models[role.downcase])
+      def attachment_model(role, runtime:, environment: @env)
+        configured = runtime.models[role.downcase]
         return nil unless configured
 
         ModelClientFactory.build(provider: configured.provider, model: configured.model, profile_role: nil,
-                                 environment: @env, explicit_api_base: configured.api_base, safety: :idempotent,
+                                 environment:, explicit_api_base: configured.api_base, safety: :idempotent,
                                  credential_name: configured.credential,
                                  timeout_seconds: role == 'VOICE' ? VOICE_TIMEOUT_S : nil)
-      end
-
-      def model_from_environment(role)
-        provider = @env["TAMOZ_#{role}_PROVIDER"]
-        return nil if provider.to_s.empty?
-
-        model = @env["TAMOZ_#{role}_MODEL"]
-        raise ConfigurationError, "TAMOZ_#{role}_PROVIDER is set without TAMOZ_#{role}_MODEL" if model.to_s.empty?
-
-        RuntimeModels::ConfiguredModel.new(provider:, model:, credential: ChildEnvironments.role_credential(@env, role),
-                                           api_base: @env["TAMOZ_#{role}_API_BASE"])
       end
 
       def with_worker_runtime(options)

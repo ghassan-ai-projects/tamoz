@@ -1,14 +1,15 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Telegram chat eval: the real `tamoz channel add telegram` and `tamoz telegram start`, a real model
+# Telegram chat eval: the real `tamoz setup`, `channel add telegram` and `start`, a real model
 # provider, and a stand-in Bot API for Telegram's servers. See test/support/telegram_chat_eval.rb.
 #
 #   bundle exec ruby script/telegram_chat_eval [--only greet,memory] [--runtime-from ~/.tamoz]
 #                                             [--provider NAME --model NAME]
 #
-# Keys come from the environment or .env; without --provider, `start` uses the first provider that
-# answers. --runtime-from copies a lived-in runtime (history, profiles, sources) and runs on the copy.
+# Keys come from the environment or .env; the chat model is --provider/--model (default
+# openrouter/deepseek/deepseek-v4.1-flash). --runtime-from copies a lived-in runtime (history,
+# profiles, sources) and runs on the copy.
 # Report: tmp/telegram-eval/<stamp>/.
 
 require 'bundler/setup'
@@ -33,7 +34,7 @@ begin
   begin
     evaluation.start
   rescue StandardError => e
-    evaluation.check('start', 'tamoz telegram start runs the bot', false, "#{e.class}: #{e.message}")
+    evaluation.check('start', 'tamoz start runs the bot', false, "#{e.class}: #{e.message}")
     options[:only] = []
   end
   puts "telegram chat eval — #{evaluation.label}"
