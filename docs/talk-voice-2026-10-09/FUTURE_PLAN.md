@@ -97,3 +97,11 @@ sketch, the tests that would prove it, and the decision it waits on. None is bui
 - **Design:** when more than one answer is pending, or one arrives more than 30 s after its question,
   prefix the projection with "About «first words of Heard»:".
 - **Waits on:** an owner trial showing that queued answers are confusing.
+
+## F14. Live speech is not a "voice message"
+
+Seen in the owner's first live session (2026-10-09): on the talk page Tamoz says "I got your voice message",
+because the shared attachment prompt (`gems/tamoz-harness/prompts/attachment_text.json`, `voice`) frames every
+transcript as a Telegram-style voice note. Design: a `talk` variant of the `voice` label chosen by the surface kind
+(`Parties#speaks`), with the prompt-pack pin updated. Test: the talk turn's opening material uses the talk label;
+Telegram's is byte-identical. Open: whether one neutral wording ("what the user said") serves both surfaces.

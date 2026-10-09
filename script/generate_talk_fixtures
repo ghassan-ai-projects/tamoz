@@ -1,0 +1,88 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Renders the talk eval's corpus from test/fixtures/talk/scenarios.json: every script in every voice (macOS `say`,
+# 16 kHz mono WAV with lead and trail silence), the noisy, band-limited and speed variants of the heard scripts,
+# and the noise-only clips. Output: tmp/talk-fixtures/ with a manifest of digests and tool versions.
+#
+#   bundle exec ruby script/generate_talk_fixtures [--out DIR] [--commit]
+#
+# --commit also rewrites the small committed set (test/fixtures/talk/wav/) and its pinned digests.
+
+require 'digest'
+require 'json'
+require 'optparse'
+require_relative '../test/support/talk_audio'
+require_relative '../test/support/talk_checks'
+
+root = File.expand_path('..', __dir__)
+out = File.join(root, 'tmp/talk-fixtures')
+commit = false
+OptionParser.new do |parser|
+  parser.on('--out DIR') { |dir| out = File.expand_path(dir) }
+  parser.on('--commit') { commit = true }
+end.parse!
+
+spec = TalkChecks.spec
+suite = spec.fetch('suite')
+missing = TalkAudio.missing_tools + TalkAudio.missing_voices(suite.fetch('voices'))
+abort("BLOCKED: missing #{missing.join(', ')}") unless missing.empty?
+
+files = {}
+write = lambda do |relative, bytes|
+  path = File.join(out, relative)
+  FileUtils.mkdir_p(File.dirname(path))
+  File.binwrite(path, bytes)
+  files[relative] = Digest::SHA256.hexdigest(bytes)
+end
+
+clean = {}
+spec.fetch('scripts').each do |script|
+  suite.fetch('voices').each do |voice|
+    bytes = TalkAudio.render(script.fetch('text'), voice:, lead_s: suite.fetch('lead_silence_s'),
+                                                   trail_s: suite.fetch('trail_silence_s'))
+    clean[[script.fetch('id'), voice]] = bytes
+    write.call("clean/#{voice}/#{script.fetch('id')}.wav", bytes)
+  end
+  print '.'
+end
+puts
+
+heard = spec.fetch('scripts').select { |script| script.fetch('id').start_with?('h') }
+suite.fetch('variants').each do |name, variant|
+  heard.each do |script|
+    suite.fetch('voices').each do |voice|
+      bytes = clean.fetch([script.fetch('id'), voice])
+      varied = if variant['snr_db']
+                 TalkAudio.with_noise(bytes, snr_db: variant.fetch('snr_db'), seed: variant.fetch('seed'))
+               else
+                 TalkAudio.ffmpeg_filter(bytes, variant.fetch('ffmpeg'))
+               end
+      write.call("#{name}/#{voice}/#{script.fetch('id')}.wav", varied)
+    end
+  end
+  print '.'
+end
+puts
+
+spec.dig('scenarios', 'silence_and_noise', 'clips').each do |name, source|
+  write.call("noise/#{name}.wav", TalkAudio.lavfi(source))
+end
+
+File.write(File.join(out, 'manifest.json'),
+           JSON.pretty_generate('versions' => TalkAudio.versions, 'files' => files.sort.to_h))
+puts "#{files.length} files in #{out}"
+
+if commit
+  directory = File.join(root, 'test/fixtures/talk/wav')
+  FileUtils.mkdir_p(directory)
+  digests = suite.fetch('committed').to_h do |id, voice|
+    bytes = clean.fetch([id, voice])
+    name = "#{id}-#{voice}.wav"
+    File.binwrite(File.join(directory, name), bytes)
+    File.chmod(0o644, File.join(directory, name))
+    [name, Digest::SHA256.hexdigest(bytes)]
+  end
+  File.write(File.join(root, 'test/fixtures/talk/digests.json'), "#{JSON.pretty_generate(digests)}\n")
+  puts "committed set: #{digests.keys.join(', ')}"
+end

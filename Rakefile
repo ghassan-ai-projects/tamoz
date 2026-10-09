@@ -190,9 +190,11 @@ TEST_WEIGHTS = {
   "test/agent_mcp_capability_source_test.rb"           => 3.2,
   "test/agent_profile_machinery_test.rb"               => 3.1,
   "test/experience_harness_test.rb"                    => 3.0,
+  "test/talk_http_test.rb"                             => 3.0,
   "test/agent_unattended_policy_test.rb"               => 2.8,
   "test/graph_execution_test.rb"                       => 2.7,
-  "test/sqlite_crash_recovery_test.rb"                 => 2.7
+  "test/sqlite_crash_recovery_test.rb"                 => 2.7,
+  "test/talk_client_js_test.rb"                        => 2.3
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the

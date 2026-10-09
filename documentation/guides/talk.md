@@ -94,3 +94,20 @@ messages and any card still waiting for your tap.
 
 `tamoz comms doctor` checks the talk token, whether the port is free and whether another gateway holds
 the channel.
+
+## 6. Measuring it
+
+The eval plays synthetic speech (macOS `say`, four English voices) through the real channel and real models, and
+grades what Tamoz heard, answered and said, plus the safety properties (a spoken "approve" never decides, Tamoz
+never obeys its own voice, Stop stops, nothing is kept). Protocol and thresholds:
+[`EVAL.md`](../../docs/talk-voice-2026-10-09/EVAL.md).
+
+```bash
+bundle exec ruby script/generate_talk_fixtures
+```
+
+```bash
+LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bundle exec ruby script/talk_eval --canary
+```
+
+A missing tool, key or credit is **BLOCKED** and fewer valid runs than stated is **SHORT**; neither is a pass.

@@ -46,6 +46,10 @@ class CoreSpokenTextTest < Minitest::Test
     assert_equal "Short. #{Spoken::REST}", speak('Short.', more: true)
   end
 
+  def test_emoji_are_never_read_out
+    assert_equal 'Glad it works! So, what next?', Spoken.project("Glad it works! 🎉\n\nSo, what next? ✅️", kind: 'answer')
+  end
+
   def test_nothing_left_to_say_is_silence
     assert_nil speak('`abcdef0123456789`'.delete('`') * 1)
   end

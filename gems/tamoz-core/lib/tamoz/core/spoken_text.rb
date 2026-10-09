@@ -46,7 +46,7 @@ module Tamoz
       end
 
       def speakable(text)
-        lines = without_code(text).lines.map(&:rstrip)
+        lines = without_code(text).gsub(/\p{Extended_Pictographic}\uFE0F?/, '').lines.map(&:rstrip)
         prose = collapse_tables(lines).map { |line| inline(line) }.reject(&:empty?)
         prose.join(' ').gsub(/\s+/, ' ').gsub(/(#{Regexp.escape(CODE)} )+/o, "#{CODE} ").strip
       end

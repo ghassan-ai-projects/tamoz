@@ -654,9 +654,10 @@ function start({ voice }) {
     const resumed = state.context.resume();
     const player = $('player');
     player.src = URL.createObjectURL(new Blob([encodeWav(new Float32Array(160))], { type: 'audio/wav' }));
-    const unlocked = player.play();
+    player.play().catch(() => {});
     navigator.wakeLock?.request('screen').catch(() => {});
-    Promise.allSettled([resumed, unlocked]).then(async () => {
+    // The microphone needs the running context, never the unlock clip: a play() that never settles must not keep it off.
+    Promise.race([resumed.catch(() => {}), sleep(1500)]).then(async () => {
       if (state.mode !== 'muted' && !(await startMicrophone())) {
         state.mode = 'muted';
         $('mode').value = 'muted';

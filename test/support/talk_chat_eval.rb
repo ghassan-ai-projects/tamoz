@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'fileutils'
 require 'json'
 require 'net/http'
 require 'open3'
+require 'psych'
 require 'rbconfig'
 require 'socket'
 require 'tmpdir'
@@ -16,10 +18,15 @@ class TalkChatEval
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
 
   Event = Struct.new(:at, :data)
+  FINAL = %w[answer failed stopped blocked].freeze
+  # What one turn showed: its Heard notice, its final reply or approval card, and when each arrived.
+  Turn = Struct.new(:sent_at, :voice, :admitted, :heard, :final, :card, :events, keyword_init: true) do
+    def answer = final && final.data['kind'] == 'answer' ? final.data['text'] : nil
+  end
 
-  attr_reader :runtime, :workspace, :events, :base
+  attr_reader :runtime, :workspace, :events, :base, :responses, :turns, :speech_times, :utterances
 
-  def initialize(env:, workspace_files: {})
+  def initialize(env:, workspace_files: {}, approval_profile: nil)
     @root = Dir.mktmpdir('tamoz-talk-eval')
     @runtime = File.join(@root, 'runtime')
     @workspace = File.join(@root, 'workspace')
@@ -27,18 +34,24 @@ class TalkChatEval
     workspace_files.each { |name, text| File.write(File.join(@workspace, name), text) }
     @env = env
     @events = []
+    @responses = []
+    @turns = []
+    @speech_times = []
+    @utterances = 0
+    @approval_profile = approval_profile
     @mutex = Mutex.new
   end
 
-  def start(timeout: 60)
+  def start(timeout: 60, args: [])
     @port = free_port
     out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'talk', 'setup',
                                   '--workspace', @workspace, '--port', @port.to_s)
     raise "talk setup failed: #{out}" unless status.success?
 
+    tighten_approvals if @approval_profile
     @token = File.read(File.join(@runtime, 'talk', 'token')).strip
     @log = File.join(@root, 'start.log')
-    @pid = Process.spawn(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'talk', 'start',
+    @pid = Process.spawn(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'talk', 'start', *args,
                          out: @log, err: @log, pgroup: true)
     wait_until(timeout, 'the talk page answers') { up? }
     @poller = Thread.new { poll_events }
@@ -57,6 +70,8 @@ class TalkChatEval
 
   def start_log = File.exist?(@log.to_s) ? File.read(@log) : ''
 
+  def page_url = "http://127.0.0.1:#{@port}/#token=#{@token}"
+
   def new_update_id = (Time.now.to_f * 1_000_000).to_i + rand(1000)
 
   # @return [Integer] the HTTP status, after resending the same update id while it is 503
@@ -66,7 +81,9 @@ class TalkChatEval
            'application/json')
   end
 
-  def say_audio(wav, update_id: new_update_id) = submit("/v1/utterances?update_id=#{update_id}", wav, 'audio/wav')
+  def say_audio(wav, update_id: new_update_id)
+    submit("/v1/utterances?update_id=#{update_id}", wav, 'audio/wav').tap { |status| @utterances += 1 if status == 200 }
+  end
 
   def decide(action, card)
     submit('/v1/decisions', JSON.generate('update_id' => new_update_id, 'action' => action,
@@ -75,7 +92,9 @@ class TalkChatEval
   end
 
   def speech(message_id)
-    response = request(Net::HTTP::Get.new("/v1/speech/#{message_id}"))
+    started = now
+    response = request(Net::HTTP::Get.new("/v1/speech/#{message_id}"), read_timeout: 30)
+    @speech_times << (now - started) if response.code == '200'
     [response.code.to_i, response.body.to_s.b]
   end
 
@@ -99,7 +118,60 @@ class TalkChatEval
 
   def now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
+  # Sends one utterance or text and waits for its final reply or an approval card.
+  def turn(text: nil, wav: nil, timeout: Float(ENV.fetch('TAMOZ_TALK_AWAIT_S', 180)))
+    sent_at = now
+    status = wav ? say_audio(wav) : say_text(text)
+    return Turn.new(sent_at:, voice: !wav.nil?, admitted: false, events: []) unless status == 200
+
+    settled = begin
+      await(timeout:, since: sent_at) { |event| FINAL.include?(event['kind']) || event['reference'] }
+    rescue RuntimeError
+      nil
+    end
+    seen = messages(since: sent_at)
+    Turn.new(sent_at:, voice: !wav.nil?, admitted: true, events: seen,
+             heard: seen.find { |event| event.data['text'].to_s.start_with?('Heard:') },
+             final: settled && FINAL.include?(settled.data['kind']) ? settled : nil,
+             card: settled && settled.data['reference'] ? settled : nil).tap { |turn| @turns << turn }
+  end
+
+  # Every earlier request has settled and nothing waits in the outbox, so the next scenario starts clean.
+  def settle(timeout: 240)
+    wait_until(timeout, 'the runtime to go idle') do
+      query("SELECT (SELECT COUNT(*) FROM tamoz_comms_requests WHERE projection_state = 'admitted') + " \
+            "(SELECT COUNT(*) FROM tamoz_comms_outbox WHERE status IN ('pending', 'claimed'))").first.to_i.zero?
+    end
+  end
+
+  def fresh_thread
+    settle
+    since = now
+    say_text('/new')
+    await(timeout: 30, since:) { |event| event['kind'] == 'control' }
+  rescue RuntimeError
+    nil
+  end
+
+  def query(sql)
+    out, = Open3.capture2('sqlite3', '-readonly', File.join(@runtime, 'runtime.sqlite3'), sql)
+    out.split("\n")
+  end
+
+  def workspace_digest
+    Dir.glob(File.join(@workspace, '**', '*'), File::FNM_DOTMATCH).select { |path| File.file?(path) }.sort
+       .map { |path| "#{path.delete_prefix(@workspace)}:#{Digest::SHA256.file(path).hexdigest}" }.join("\n")
+  end
+
   private
+
+  # The default profile lets chat tools write without asking; like the Telegram eval, a write must really ask.
+  def tighten_approvals
+    path = File.join(@runtime, 'config.yaml')
+    document = Psych.safe_load_file(path, aliases: false)
+    document['approval'] = { 'profile' => @approval_profile }
+    File.write(path, Psych.dump(document))
+  end
 
   def child_env
     @env.merge('TAMOZ_RUNTIME_DIR' => nil, 'LANG' => 'en_US.UTF-8', 'LC_ALL' => 'en_US.UTF-8',
@@ -143,7 +215,9 @@ class TalkChatEval
 
   def request(message, read_timeout: 10)
     message['Authorization'] = "Bearer #{@token}"
-    Net::HTTP.start('127.0.0.1', @port, read_timeout:, open_timeout: 2) { |http| http.request(message) }
+    response = Net::HTTP.start('127.0.0.1', @port, read_timeout:, open_timeout: 2) { |http| http.request(message) }
+    @mutex.synchronize { @responses << [message.path, response.to_hash.to_s + response.body.to_s.b] }
+    response
   end
 
   def free_port = TCPServer.open('127.0.0.1', 0) { |server| server.addr[1] }
