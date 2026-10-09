@@ -113,3 +113,11 @@
   (`sqlite_convergence_probe_test`, `sqlite_raw_oracle_test`) notices — `rake ci` stays green. Telegram
   attachments' migration 24 shipped two commits before `ci_full` caught it. Add the ordinal and checksum
   (`Tamoz::SQLite::Migrator::MIGRATION_<n>_CHECKSUM`, read through `bundle exec ruby`) in the same change.
+- **Renaming a test case, or adding an accepted ADR, a CLI verb, a migration or a public-API entry, also
+  changes `script/generate_requirements_manifest`.** Its `EVIDENCE` table names test cases by
+  `file#case`, and it generates one row per accepted ADR, verb, migration and API entry. Only
+  `requirements_manifest_test` (serial, so `rake ci_full` only) notices. PR #73 merged with six rows
+  missing (ADR-061, `CLI-talk`, MIG-25, three `tamoz-talk` API entries), and an earlier commit had
+  renamed a memory test the manifest still named. In the same change, add or rename the `EVIDENCE`
+  entry, run the script with `--accept`, then run `script/generate_requirements_audit --jobs 4`
+  (about 4 minutes).

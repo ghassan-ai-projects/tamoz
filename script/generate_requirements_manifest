@@ -609,6 +609,14 @@ EVIDENCE = {
                 supporting: ["test/agent_intent_catalog_test.rb#test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector"]},
   "ADR-059" => {test: "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected",
                 supporting: ["test/agent_session_records_test.rb#test_version_one_session_record_is_rejected_without_compatibility_migration"]},
+  "ADR-061" => {test: "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
+                supporting: ["test/comms_parties_test.rb#test_a_party_must_belong_to_its_surfaces_kind",
+                             "test/comms_parties_test.rb#test_telegram_bytes_are_unchanged_from_head",
+                             "test/chat_attachment_test.rb#test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo",
+                             "test/core_spoken_text_test.rb#test_paths_digests_references_and_timestamps_are_not_read_out",
+                             "test/talk_gateway_test.rb#test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing",
+                             "test/talk_server_test.rb#test_every_api_route_refuses_a_missing_or_wrong_token_without_reading_the_body",
+                             "test/talk_speaker_test.rb#test_the_cache_is_bounded_and_nothing_touches_the_disk"]},
 
   # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
   "OBJ-1" => {
@@ -686,7 +694,7 @@ EVIDENCE = {
                         supporting: ["test/agent_cli_investigate_test.rb#test_investigate_refuses_anything_but_a_read_only_turn"]},
   "CLI-probes" => {test: "test/agent_cli_investigate_test.rb#test_probes_lists_and_validates_the_catalog_without_starting_a_server"},
   "CLI-memory" => {test: "test/agent_cli_memory_test.rb#test_operator_lists_forgets_and_consolidates",
-                   supporting: ["test/agent_cli_memory_test.rb#test_threads_in_one_session_directory_share_memory_only_when_enabled"]},
+                   supporting: ["test/agent_cli_memory_test.rb#test_threads_share_the_runtime_memory_only_when_enabled"]},
   "CLI-ask" => {test: "test/agent_cli_test.rb#test_ask_creates_session_file"},
   "CLI-resume" => {test: "test/agent_cli_test.rb#test_resume_collects_interrupt_answers",
                    supporting: ["test/agent_cli_test.rb#test_resume_non_interactive_with_answer"]},
@@ -752,6 +760,9 @@ EVIDENCE = {
   "CLI-postmortem" => {test: "test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis"},
   "CLI-mcp" => {test: "test/mcp_server_test.rb#test_serves_mcp_over_stdio"},
   "CLI-skills" => {test: "test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections"},
+  "CLI-talk" => {test: "test/talk_cli_test.rb#test_setup_writes_the_channel_profile_and_a_private_token",
+                 supporting: ["test/talk_cli_test.rb#test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only",
+                              "test/talk_cli_test.rb#test_a_workspace_holding_the_runtime_is_refused_so_the_agent_cannot_read_the_token"]},
 
   # ---- Migrations ---------------------------------------------------------
   "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
@@ -793,6 +804,8 @@ EVIDENCE = {
                supporting: ["test/memory_spec_test.rb#test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
                             "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"]},
   "MIG-24" => {test: "test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle",
+               supporting: ["test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
+  "MIG-25" => {test: "test/sqlite_talk_migration_test.rb#test_an_upgrade_to_25_keeps_every_decision_and_admits_talk_actors",
                supporting: ["test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
