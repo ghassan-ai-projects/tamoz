@@ -14,7 +14,7 @@ class TalkHttpTest < Minitest::Test
   end
 
   def test_a_dripped_request_hits_its_deadline_and_cannot_extend_it
-    hub = start_hub(deadlines: { head: 0.3, body: 0.3 })
+    hub = start_hub(deadlines: { head: 0.15, body: 0.15 })
     socket = raw(hub, 'GET /v1/events', read: false)
     started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     15.times do
@@ -27,7 +27,7 @@ class TalkHttpTest < Minitest::Test
     response = parse(socket.read)
 
     assert_equal 408, response.status
-    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 0.7
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 0.5
   ensure
     socket&.close
   end
@@ -68,7 +68,7 @@ class TalkHttpTest < Minitest::Test
   end
 
   def test_a_dripped_body_hits_its_deadline
-    hub = start_hub(deadlines: { head: 0.3, body: 0.3 })
+    hub = start_hub(deadlines: { head: 0.15, body: 0.15 })
     line = 'POST /v1/messages HTTP/1.1'
     socket = raw(hub, "#{head(hub, "Content-Length: 100\r\nContent-Type: application/json\r\n", line:)}\r\n{",
                  read: false)
@@ -82,7 +82,7 @@ class TalkHttpTest < Minitest::Test
     end
 
     assert_equal 408, parse(socket.read).status
-    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 0.7
+    assert_operator Process.clock_gettime(Process::CLOCK_MONOTONIC) - started, :<, 0.5
   ensure
     socket&.close
   end
@@ -97,11 +97,8 @@ class TalkHttpTest < Minitest::Test
   end
 
   def test_a_client_that_never_reads_cannot_hold_a_slot_past_the_write_deadline
-    hub = start_hub
+    hub = start_hub(deadlines: { head: 0.5, body: 0.5, write: 0.1 })
     600.times { |index| hub.log.append_message('kind' => 'answer', 'text' => "#{'x' * 3000} #{index}") }
-    original = Tamoz::Talk::Http::WRITE_DEADLINE_S
-    Tamoz::Talk::Http.send(:remove_const, :WRITE_DEADLINE_S)
-    Tamoz::Talk::Http.const_set(:WRITE_DEADLINE_S, 0.3)
     readers = Array.new(Tamoz::Talk::Server::MAX_CONNECTIONS) do
       socket = Socket.new(:INET, :STREAM)
       socket.setsockopt(Socket::SOL_SOCKET, Socket::SO_RCVBUF, 1024)
@@ -110,13 +107,14 @@ class TalkHttpTest < Minitest::Test
                    "Authorization: Bearer #{TOKEN}\r\n\r\n")
       socket
     end
-    sleep 1.5
 
-    assert_equal 200, http(hub, 'GET', '/v1/events?timeout=0&after=0').status
+    eventually(3) do
+      http(hub, 'GET', '/v1/events?timeout=0&after=0').status == 200
+    rescue SystemCallError
+      false
+    end
   ensure
     Array(readers).each(&:close)
-    Tamoz::Talk::Http.send(:remove_const, :WRITE_DEADLINE_S)
-    Tamoz::Talk::Http.const_set(:WRITE_DEADLINE_S, original)
   end
 
   def test_the_connection_cap_holds

@@ -33,6 +33,7 @@ module Tamoz
         @hub = hub
         @head_deadline_s = deadlines.fetch(:head, Http::HEAD_DEADLINE_S)
         @body_deadline_s = deadlines.fetch(:body, Http::BODY_DEADLINE_S)
+        @write_deadline_s = deadlines.fetch(:write, Http::WRITE_DEADLINE_S)
         @host = host
         @port = port
         @token_digest = token_digest
@@ -83,16 +84,18 @@ module Tamoz
         request, early = Http.read_head(socket, deadline: Http.monotonic + @head_deadline_s)
         respond(socket, request, early)
       rescue Http::Refused => e
-        Http.write(socket, e.status, e.message)
+        reply(socket, e.status, e.message)
       rescue EOFError, IOError, SystemCallError
         nil
       rescue StandardError => e
         warn "tamoz: talk server request failed (#{e.class})"
-        Http.write(socket, 500)
+        reply(socket, 500)
       ensure
         release
         linger_close(socket)
       end
+
+      def reply(socket, status, body = '', **) = Http.write(socket, status, body, deadline_s: @write_deadline_s, **)
 
       # Unread request bytes would make the close a reset that discards the response; drain them, briefly.
       def linger_close(socket)
@@ -112,23 +115,23 @@ module Tamoz
       end
 
       def respond(socket, request, early)
-        return Http.write(socket, 421) unless allowed_host?(request.header('host'))
+        return reply(socket, 421) unless allowed_host?(request.header('host'))
         return static(socket, request) unless request.path.start_with?('/v1/')
-        return Http.write(socket, 401, '', headers: API_HEADERS) unless authorized?(request.header('authorization'))
+        return reply(socket, 401, '', headers: API_HEADERS) unless authorized?(request.header('authorization'))
 
         body = lambda do |max|
           Http.read_body(socket, request, early, max_bytes: max, deadline: Http.monotonic + @body_deadline_s)
         end
         status, payload, type = Api.new(@hub, trace: @trace).call(request, body, LIMITS)
-        Http.write(socket, status, payload, type:, headers: API_HEADERS)
+        reply(socket, status, payload, type:, headers: API_HEADERS)
       end
 
       def static(socket, request)
         name = STATIC[request.path]
-        return Http.write(socket, 404) unless name && request.method == 'GET'
+        return reply(socket, 404) unless name && request.method == 'GET'
 
-        Http.write(socket, 200, @assets.fetch(request.path),
-                   type: TYPES.fetch(File.extname(name)), headers: { 'Content-Security-Policy' => CSP })
+        reply(socket, 200, @assets.fetch(request.path),
+              type: TYPES.fetch(File.extname(name)), headers: { 'Content-Security-Policy' => CSP })
       end
 
       def authorized?(header)
@@ -149,7 +152,7 @@ module Tamoz
       def release = @mutex.synchronize { @open -= 1 }
 
       def refuse_busy(socket)
-        Http.write(socket, 503, 'too many connections')
+        reply(socket, 503, 'too many connections')
       ensure
         socket.close unless socket.closed?
       end

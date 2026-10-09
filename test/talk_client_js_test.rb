@@ -3,7 +3,7 @@
 require_relative 'test_helper'
 require 'open3'
 
-# The talk page's pure modules and the endpointing eval (C9), under node's own test runner.
+# The talk page's pure modules, under node's own test runner (the endpointing eval runs in the slow lane).
 class TalkClientJsTest < Minitest::Test
   TESTS = ROOT.join('gems/tamoz-talk/test/js').to_s
 
@@ -12,7 +12,8 @@ class TalkClientJsTest < Minitest::Test
                                                             .find { |path| File.executable?(path) }
     skip 'BLOCKED: node is not installed, so the client modules were not tested' unless node
 
-    output, status = Open3.capture2e(node, '--test', *Dir[File.join(TESTS, '*.test.mjs')].sort)
+    files = Dir[File.join(TESTS, '*.test.mjs')].reject { |path| path.end_with?('endpointing.test.mjs') }.sort
+    output, status = Open3.capture2e(node, '--test', *files)
     output = output.dup.force_encoding(Encoding::UTF_8)
 
     assert_predicate status, :success?, output

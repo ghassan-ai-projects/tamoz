@@ -95,12 +95,12 @@ module Tamoz
         end
       end
 
-      def write(socket, status, body = '', type: 'text/plain; charset=utf-8', headers: {})
+      def write(socket, status, body = '', type: 'text/plain; charset=utf-8', headers: {}, deadline_s: WRITE_DEADLINE_S)
         body = body.b
         head = "HTTP/1.1 #{status} #{REASONS.fetch(status)}\r\n"
         { 'Content-Type' => type, 'Content-Length' => body.bytesize.to_s, 'Connection' => 'close',
           'X-Content-Type-Options' => 'nosniff' }.merge(headers).each { |name, value| head << "#{name}: #{value}\r\n" }
-        write_all(socket, head.b + "\r\n".b + body, monotonic + WRITE_DEADLINE_S)
+        write_all(socket, head.b + "\r\n".b + body, monotonic + deadline_s)
       rescue IOError, SystemCallError
         nil
       end

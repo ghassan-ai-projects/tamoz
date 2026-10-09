@@ -47,6 +47,10 @@ SLOW_TESTS = %w[
   test/thermal_tournament_controls_test.rb
   test/sqlite_raw_oracle_test.rb
   test/talk_end_to_end_test.rb
+  test/talk_endpointing_eval_test.rb
+  test/talk_eval_controls_test.rb
+  test/talk_checks_test.rb
+  test/talk_fixtures_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
@@ -190,11 +194,9 @@ TEST_WEIGHTS = {
   "test/agent_mcp_capability_source_test.rb"           => 3.2,
   "test/agent_profile_machinery_test.rb"               => 3.1,
   "test/experience_harness_test.rb"                    => 3.0,
-  "test/talk_http_test.rb"                             => 3.0,
   "test/agent_unattended_policy_test.rb"               => 2.8,
   "test/graph_execution_test.rb"                       => 2.7,
-  "test/sqlite_crash_recovery_test.rb"                 => 2.7,
-  "test/talk_client_js_test.rb"                        => 2.3
+  "test/sqlite_crash_recovery_test.rb"                 => 2.7
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the
