@@ -28,11 +28,12 @@ for every channel (§3).
 - `talk_http_test` paid real time (a 1.5 s sleep and 0.3 s drips): the write deadline is now injectable like
   the head and body deadlines (`deadlines: { write: }`), 3.0 s → 1.3 s, and its test still fails when the
   deadline is long.
-- The eval-shaped gates moved to the slow lane, as the Rakefile does for `investigation_eval_controls_test`:
-  the endpointing eval (now `talk_endpointing_eval_test`), the grader controls, the grader goldens and the
-  corpus pins. `rake ci_full` still runs them.
+- The endpointing eval (now `talk_endpointing_eval_test`, about 2 s of CPU) moved to the slow lane; `rake ci_full`
+  still runs it. Owner rule: mark only the slowest files as slow, and only when they cannot be made faster.
 - Locally `rake test_fast` is 37 s on both `main` and the branch. If CI still exceeds 180 s, the next lever is
-  `rake test_profile` on the runner shape (3 workers) and refreshing `TEST_WEIGHTS`.
+  `rake test_profile` on the runner shape (3 workers) and refreshing `TEST_WEIGHTS`; the owner allows marking the
+  top 3 slowest everyday files as slow (`work_loop_test` 13.2 s, `subagent_spec_test` 10.3 s, `research_spec_test`
+  7.4 s) if they cannot be made faster.
 
 ## 2. Findings from the owner's live sessions (Chrome, real models)
 

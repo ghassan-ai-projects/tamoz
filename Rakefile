@@ -48,9 +48,6 @@ SLOW_TESTS = %w[
   test/sqlite_raw_oracle_test.rb
   test/talk_end_to_end_test.rb
   test/talk_endpointing_eval_test.rb
-  test/talk_eval_controls_test.rb
-  test/talk_checks_test.rb
-  test/talk_fixtures_test.rb
   test/mcp_invocation_test.rb
   test/agent_session_kill_matrix_test.rb
   test/subagent_kill_test.rb
