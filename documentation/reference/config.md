@@ -41,7 +41,7 @@ database with the schedules, the request inboxes and the checkpoints.
 ~/.tamoz/runtime.sqlite3      the durable runtime database
 ```
 
-Create it with `tamoz init --workspace PATH`. The directory carries unattended
+Create it with `tamoz setup --workspace PATH`. The directory carries unattended
 authority, so Tamoz refuses to use one that is readable or writable by group or
 others. Keep it private (`0700` directory, `0600` files).
 

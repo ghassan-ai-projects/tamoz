@@ -7,7 +7,7 @@ require "time"
 
 module Tamoz
   module Agent
-    # The unattended surface of the CLI: `init`, `queue`, `worker`, `status`.
+    # The unattended surface of the CLI: `queue`, `worker`, `status`.
     #
     # These are the commands an operator uses when they are not going to be
     # sitting there. They share the interactive commands' durable machinery and
@@ -16,30 +16,6 @@ module Tamoz
     module CLIWorkerCommands
       EXIT_WORKER_STOPPED = 0
       VOICE_TIMEOUT_S = 10
-
-      # `tamoz init --workspace PATH` — create the operator runtime directory.
-      def cmd_init(options, argv)
-        workspace = options[:root]
-        OptionParser.new do |value|
-          value.banner = "Usage: tamoz init --runtime-dir DIR [--workspace PATH]"
-          accept_json(value, options)
-          value.on("--workspace PATH", "Workspace root the runtime works on") { |entry| workspace = entry }
-        end.parse!(argv)
-
-        path = runtime_dir_path(options)
-        directory = RuntimeDirectory.create!(path, workspace:)
-        if options[:json]
-          @out.puts JSON.generate(
-            "runtime_dir" => directory.path,
-            "workspace" => directory.workspace_root,
-            "database" => directory.database_path
-          )
-        else
-          @out.puts "Runtime directory ready: #{directory.path}"
-          @out.puts "  workspace: #{directory.workspace_root}"
-        end
-        0
-      end
 
       # `tamoz queue add --task TASK [--profile ID] [--thread NAME]`
       #

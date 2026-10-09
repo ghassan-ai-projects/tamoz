@@ -40,7 +40,7 @@ class DocumentationSurfaceTest < Minitest::Test
     # for help means something else entirely. `queue` and `schedule` dispatch on
     # a verb first, so their flags live on the verb. `comms` and `config` do
     # the same.
-    [%w[init], %w[worker], %w[status], %w[queue add], %w[queue list],
+    [%w[setup], %w[worker], %w[status], %w[queue add], %w[queue list],
      %w[schedule add], %w[schedule list], %w[comms serve], %w[comms list],
      %w[comms doctor], %w[comms pair list], %w[comms delivery resolve],
      %w[config migrate], %w[observe tail], %w[observe metrics],

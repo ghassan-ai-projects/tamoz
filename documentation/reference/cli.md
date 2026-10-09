@@ -96,7 +96,7 @@ Work an operator runs against the runtime directory.
 
 | Subcommand | Purpose | Key options |
 |---|---|---|
-| `init` | Create the runtime directory for a workspace | `--workspace PATH` |
+| `setup` | Create or update the runtime: its workspace, models and chat profile | `--workspace PATH`, `--chat`, `--transcription`, `--vision PROVIDER/MODEL`, `--<role>-credential NAME`, `--<role>-api-base URL` |
 | `queue` | Submit a task durably, or list pending work | verbs below |
 | `worker` | Run the foreground worker that executes queued and scheduled work | `--once`, `--concurrency N`, `--poll-interval SECONDS` |
 | `status` | Report pending work, capability sources and safety counters | `--json` |

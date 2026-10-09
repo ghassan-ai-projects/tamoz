@@ -276,7 +276,7 @@ module Tamoz
         end
 
         def initialize_runtime!
-          invoke(base_args + ['init', '--workspace', @workspace, '--json'])
+          invoke(base_args + ['setup', '--workspace', @workspace, '--json'])
           directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env)
           return if File.expand_path(directory.workspace_root) == @workspace
 

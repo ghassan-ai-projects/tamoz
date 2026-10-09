@@ -4,6 +4,7 @@ require "psych"
 
 require "tamoz/comms"
 require_relative "runtime_models"
+require_relative "runtime_config_rules"
 
 module Tamoz
   module Agent
@@ -43,6 +44,7 @@ module Tamoz
       # Sources a runtime may enable. Closed set: an operator can turn on what
       # Tamoz ships, and nothing else. There is no plugin path by construction.
       KNOWN_SOURCES = %w[skills memory mcp websearch probes].freeze
+      CHAT_PROFILE = 'chat'
 
       attr_reader :path, :config, :models
 
@@ -62,9 +64,13 @@ module Tamoz
       # `tamoz worker` and friends refuse to run against a directory anyone else
       # can read or write: it holds the schedules and profiles that decide what
       # runs unattended.
-      def self.create!(path, workspace:)
+      def self.create!(path, workspace:, models: {})
+        ConfigRules.validate_models!(models)
+        fresh = !File.exist?(config_path(path))
+        require_workspace_directory!(workspace) if fresh
+
         ensure_private_runtime_directories!(path)
-        write_default_config!(path, workspace:) unless File.exist?(config_path(path))
+        write_default_config!(path, workspace:, models:) if fresh
         new(path)
       end
 
@@ -72,8 +78,6 @@ module Tamoz
       # ORIGINAL file is copied to a timestamped backup before the migration,
       # and the new file lands by atomic rename, so a crash or a partial write
       # can never leave a half-migrated config that startup would accept.
-      # :reek:TooManyStatements -- one migration sequence with a validation
-      #   gate, a backup, and an atomic rename.
       def self.migrate!(path, env: ENV)
         directory = resolve(path:, env:)
         config_path = config_path(directory.path)
@@ -81,23 +85,35 @@ module Tamoz
         version = document.dig("runtime", "schema_version")
         return [:already_current, directory] if version == SCHEMA_VERSION
 
-        validate_schema_version!(document)
+        ConfigRules.validate_schema_version!(document)
 
-        migrated = migrated_document(document)
-        # The whole migrated document must validate before anything is written:
-        # a config that would be refused after migration must be refused now,
-        # with the original file still untouched.
-        validate_document!(migrated)
-
-        backup = backup_config!(config_path)
-        write_migrated_config!(config_path, migrated)
+        backup = replace_config!(config_path, migrated_document(document))
         [:migrated, new(directory.path), backup]
+      end
+
+      # `tamoz setup` on an existing runtime is one edit; a written chat profile pins the workspace it was made for.
+      def self.configure!(path, workspace:, models:, env: ENV)
+        directory = resolve(path:, env:)
+        moved = workspace && !directory.workspace?(workspace)
+        if moved && directory.chat_profile?
+          raise Error, "the workspace of #{directory.path} cannot change: its chat profile works in " \
+                       "#{directory.workspace_root}"
+        end
+        require_workspace_directory!(workspace) if moved
+
+        edit_config!(directory) do |document|
+          document = document.merge('workspace' => { 'root' => File.expand_path(workspace) }) if moved
+          models.empty? ? document : document.merge('models' => RuntimeModels.merge(document['models'], models))
+        end
       end
 
       def database_path = File.join(path, DATABASE_FILE)
       def profiles_path = File.join(path, PROFILES_DIR)
       def attachment_spool = Tamoz::Core::AttachmentSpool.new(File.join(path, 'attachments'))
       def workspace_root = @config.dig("workspace", "root")
+      def workspace?(path) = canonical(path) == canonical(workspace_root)
+      def chat_profile_id = channels.values.first&.fetch('profile') || CHAT_PROFILE
+      def chat_profile? = File.exist?(File.join(profiles_path, "#{chat_profile_id}.yaml"))
 
       # Approval policy source of truth: an optional operator override in the
       # run config, else the policy data bundled with tamoz-approval.
@@ -145,7 +161,7 @@ module Tamoz
         return {}.freeze unless raw.is_a?(Hash)
 
         raw.each_with_object({}) do |(surface_id, entry), out|
-          out[surface_id] = self.class.validate_channel!(surface_id, entry)
+          out[surface_id] = ConfigRules.validate_channel!(surface_id, entry)
         end.freeze
       end
 
@@ -163,63 +179,6 @@ module Tamoz
         raw.is_a?(Hash) ? raw : {}
       end
 
-      def self.validate_document!(document)
-        validate_schema_version!(document)
-        validate_workspace_root!(document)
-        validate_channels!(document["channels"])
-        validate_subagents!(document['harness'])
-        validate_models!(document['models'])
-      end
-
-      # Strict per-entry validation (COMMS_DESIGN §14): the kind comes from the
-      # closed list in tamoz-comms, the revision is mandatory and positive, and
-      # expected_bot_id is mandatory — the identity the gateway pins with getMe.
-      # :reek:TooManyStatements -- one per-field validation sequence.
-      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-      #   -- one validation sequence per field, checked in the design's order.
-      def self.validate_channel!(surface_id, entry)
-        label = "channels.#{surface_id}"
-        raise Error, "#{label} must be a mapping" unless entry.is_a?(Hash)
-
-        kind = entry["kind"]
-        unless Tamoz::Comms::SurfaceDescriptor::KINDS.include?(kind)
-          raise Error, "#{label}.kind must be one of " \
-                       "#{Tamoz::Comms::SurfaceDescriptor::KINDS.join(', ')}"
-        end
-        unless entry["revision"].is_a?(Integer) && entry["revision"].positive?
-          raise Error, "#{label}.revision must be a positive integer"
-        end
-        unless entry["expected_bot_id"].is_a?(Integer)
-          raise Error, "#{label}.expected_bot_id is mandatory and must be an integer"
-        end
-        unless [true, false].include?(entry["enabled"])
-          raise Error, "#{label}.enabled must be a boolean"
-        end
-        unless entry["profile"].is_a?(String) && !entry["profile"].empty?
-          raise Error, "#{label}.profile must be a non-empty string"
-        end
-        unless entry["threading"].nil? ||
-               Tamoz::Comms::SurfaceDescriptor::THREADING_MODES.include?(entry["threading"])
-          raise Error, "#{label}.threading must be one of " \
-                       "#{Tamoz::Comms::SurfaceDescriptor::THREADING_MODES.join(', ')}"
-        end
-
-        credential = entry["credential_ref"]
-        unless credential.is_a?(Hash) && credential["kind"] == "env" &&
-               credential["name"].is_a?(String) && !credential["name"].empty?
-          raise Error, "#{label}.credential_ref must be {kind: env, name: ENV_NAME}"
-        end
-
-        direct = entry.dig("admission", "direct")
-        unless direct.nil? ||
-               Tamoz::Comms::SurfaceDescriptor::ADMISSION_MODES.include?(direct)
-          raise Error, "#{label}.admission.direct must be one of " \
-                       "#{Tamoz::Comms::SurfaceDescriptor::ADMISSION_MODES.join(', ')}"
-        end
-        entry.freeze
-      end
-      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-
       class << self
         private
 
@@ -232,13 +191,14 @@ module Tamoz
           Tamoz::Core::PrivateDirectory.secure(File.join(path, PROFILES_DIR))
         end
 
-        def write_default_config!(path, workspace:)
+        def write_default_config!(path, workspace:, models:)
           document = {
             "runtime" => {"schema_version" => SCHEMA_VERSION},
             "workspace" => {"root" => File.expand_path(workspace)},
             "sources" => {},
             "channels" => {}
           }
+          document["models"] = models unless models.empty?
           Tamoz::Core::AtomicFile.create(config_path(path), Psych.dump(document), mode: 0o600)
         rescue Errno::EEXIST
           nil
@@ -255,8 +215,29 @@ module Tamoz
           )
         end
 
+        # The whole new document must validate before anything is written, so a refused edit leaves the file untouched.
+        def replace_config!(config_path, document)
+          ConfigRules.validate_document!(document)
+          backup = backup_config!(config_path)
+          write_migrated_config!(config_path, document)
+          backup
+        end
+
+        def require_workspace_directory!(workspace)
+          raise Error, "the workspace #{workspace} is not a directory" unless File.directory?(workspace)
+        end
+
+        def edit_config!(directory)
+          config_path = config_path(directory.path)
+          edited = yield(read_config_document(config_path))
+          return directory if edited == read_config_document(config_path)
+
+          replace_config!(config_path, edited)
+          new(directory.path)
+        end
+
         def backup_config!(config_path)
-          backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}"
+          backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%S.%6NZ')}"
           Tamoz::Core::AtomicFile.create(backup, File.binread(config_path), mode: 0o600)
           backup
         end
@@ -264,53 +245,11 @@ module Tamoz
         def write_migrated_config!(config_path, document)
           Tamoz::Core::AtomicFile.replace(config_path, Psych.dump(document), mode: 0o600)
         end
-
-        def validate_schema_version!(document)
-          version = document.dig("runtime", "schema_version")
-          return if SCHEMA_VERSIONS.include?(version)
-
-          raise Error, "runtime configuration schema_version #{version.inspect} " \
-                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
-        end
-
-        def validate_workspace_root!(document)
-          root = document.dig("workspace", "root")
-          return if root.is_a?(String) && !root.empty?
-
-          raise Error, "runtime configuration must set workspace.root"
-        end
-
-        def validate_channels!(raw)
-          return unless raw.is_a?(Hash)
-
-          raw.each_key { |surface_id| validate_channel!(surface_id, raw.fetch(surface_id)) }
-        end
-
-        def validate_subagents!(harness)
-          return if harness.nil?
-          raise Error, 'harness must be a mapping' unless harness.is_a?(Hash)
-
-          roles = harness['subagents']
-          return if roles.nil?
-          unless subagent_roles_list?(roles)
-            raise Error, 'harness.subagents must be a unique list of role names'
-          end
-
-          roles.each { |role| Tamoz::Harness::SubagentRoles.shipped.fetch(role) }
-        rescue Tamoz::Harness::Error => error
-          raise Error, "harness.subagents: #{error.message}"
-        end
-
-        def subagent_roles_list?(roles) = roles.is_a?(Array) && roles.all?(String) && roles.uniq == roles
-
-        def validate_models!(raw)
-          RuntimeModels.parse(raw)
-        rescue ArgumentError => error
-          raise Error, error.message
-        end
       end
 
       private
+
+      def canonical(path) = File.exist?(path) ? File.realpath(path) : File.expand_path(path)
 
       def load_config
         ensure_runtime_directory_available
@@ -318,13 +257,13 @@ module Tamoz
         document = read_config_document(config_path)
         raise Error, "runtime configuration must be a mapping" unless document.is_a?(Hash)
 
-        self.class.validate_document!(document)
+        ConfigRules.validate_document!(document)
         document.freeze
       end
 
       def ensure_runtime_directory_available
         unless File.directory?(path)
-          raise Error, "runtime directory #{path} does not exist; run 'tamoz init' first"
+          raise Error, "runtime directory #{path} does not exist; run 'tamoz setup' first"
         end
 
         assert_private!(path, "runtime directory")
@@ -332,7 +271,7 @@ module Tamoz
 
       def private_config_path
         config_path = self.class.send(:config_path, path)
-        raise Error, "#{config_path} does not exist; run 'tamoz init' first" unless File.exist?(config_path)
+        raise Error, "#{config_path} does not exist; run 'tamoz setup' first" unless File.exist?(config_path)
 
         assert_private!(config_path, "runtime configuration")
         config_path

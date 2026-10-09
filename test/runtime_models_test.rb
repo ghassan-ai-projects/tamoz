@@ -26,6 +26,13 @@ class RuntimeModelsTest < Minitest::Test
     assert_nil Models.parse(nil)['chat']
   end
 
+  def test_a_provider_that_is_not_a_provider_name_is_refused_without_echoing_it
+    message = refusal('chat' => { 'provider' => KEY, 'model' => 'glm-5.3-flash' })
+
+    assert_match(/models\.chat\.provider must be a provider name/, message)
+    refute_includes message, KEY
+  end
+
   def test_an_unknown_role_is_refused
     assert_match(/models\.speech is not a model role/, refusal('speech' => SPEECH))
   end

@@ -216,8 +216,8 @@ module Agenteval
         workspace = File.join(dir, "workspace")
         FileUtils.mkdir_p(workspace)
         FileUtils.mkdir_p([runtime, File.join(dir, "sessions")], mode: 0o700)
-        init, code = tamoz(env, "--runtime-dir", runtime, "--root", workspace, "init")
-        raise "tamoz init failed: #{init}" unless code.zero?
+        setup, code = tamoz(env, "--runtime-dir", runtime, "--root", workspace, "setup")
+        raise "tamoz setup failed: #{setup}" unless code.zero?
 
         configure(runtime)
         budgets = File.join(dir, "budgets.json")

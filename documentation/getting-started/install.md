@@ -184,7 +184,7 @@ request inboxes and the checkpoints.
 
 | Subcommand | What it does |
 |---|---|
-| `init` | Create the runtime directory for a workspace |
+| `setup` | Create or update the runtime: its workspace, models and chat profile |
 | `queue` | Submit a task durably (`add`), or list pending work (`list`) |
 | `worker` | Run the foreground worker that executes queued and scheduled work |
 | `status` | Report pending work, capability sources and safety counters |
@@ -203,7 +203,7 @@ request inboxes and the checkpoints.
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 
 ```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz init --workspace .
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace .
 ```
 
 ```bash

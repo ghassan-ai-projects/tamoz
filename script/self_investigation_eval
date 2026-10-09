@@ -106,7 +106,7 @@ class SelfInvestigationEval
         paths = { workspace: File.join(directory, 'ws'), runtime: File.join(directory, 'rt'),
                   sessions: File.join(directory, 'sessions') }
         paths.each_value { |path| Dir.mkdir(path, 0o700) }
-        tamoz('--runtime-dir', paths.fetch(:runtime), 'init', '--workspace', paths.fetch(:workspace))
+        tamoz('--runtime-dir', paths.fetch(:runtime), 'setup', '--workspace', paths.fetch(:workspace))
         SelfDiagnosisCorpus.build(scenario, paths.fetch(:runtime))
         yield paths
       end

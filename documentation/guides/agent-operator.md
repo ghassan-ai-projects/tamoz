@@ -59,7 +59,7 @@ For durable unattended work:
 ```bash
 RUNTIME="$HOME/.tamoz"
 
-rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" init --workspace "$WORKSPACE"
+rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" setup --workspace "$WORKSPACE"
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" queue add \
   --task "Summarise the repository" --profile ops
