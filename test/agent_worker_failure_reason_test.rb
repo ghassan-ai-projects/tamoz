@@ -122,11 +122,26 @@ class AgentWorkerFailureReasonTest < Minitest::Test
     )
 
     delivery = runtime.delivery_sink.deliveries.fetch(0)
+
     assert_equal 'request.failed', delivery.fetch(:kind)
     assert_equal 'That request stopped safely. Check its status before retrying.', delivery.fetch(:text)
     refute_includes delivery.fetch(:text), 'CheckpointConflictError'
     refute_includes delivery.fetch(:text), 'internal conflict details'
     refute_includes delivery.fetch(:text), 'failed before it could finish'
     assert_equal 'request.failed', events.fetch(0).fetch('event')
+  end
+
+  def test_incompatible_checkpoint_crash_tells_the_correspondent_to_start_a_new_conversation
+    runtime = FailureRuntime.new
+    worker = Tamoz::Agent::Worker.new(runtime:, session_builder: nil, emitter: ->(_event) {})
+    entry = { thread_id: 'tg.t', head_request_id: 'occ-1', head_status: :queued }
+
+    worker.send(:handle_thread_failure, entry,
+                Tamoz::CheckpointVersionError.new('checkpoint graph identity is incompatible'))
+
+    text = runtime.delivery_sink.deliveries.fetch(0).fetch(:text)
+
+    assert_includes text, '/new'
+    refute_includes text, 'graph identity'
   end
 end

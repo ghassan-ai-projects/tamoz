@@ -204,10 +204,13 @@ error before anything starts.
 Message the bot like a person. It answers in one plain reply with a typing
 indicator, remembers the conversation (across restarts too) and replies in your
 language. It also reads what you send: text files and PDFs (PDFs need poppler's
-`pdftotext` on the worker's machine), photos and images (read by the model,
-text first), and voice notes (transcribed by a speech-to-text model you name,
-then answered as your words). Files are not kept: each is a temporary handoff, deleted once read — see
-the [guide](documentation/guides/telegram.md). Questions about the workspace are answered from its files; a change is
+`pdftotext` on the worker's machine), photos and images (read by the chat model,
+or by the model `TAMOZ_VISION_*` names, text first), and voice notes (transcribed
+by the speech-to-text model `TAMOZ_TRANSCRIPTION_*` names, then answered as your
+words; with none set, the bot says voice is not set up). Text files, PDFs and
+images are checked end to end on a live bot. Files are not kept: each is a temporary
+handoff, deleted once read — see the [guide](documentation/guides/telegram.md).
+Questions about the workspace are answered from its files; a change is
 shown to you first — the file and its content, the diff, or the command — with
 **Approve** and **Deny** buttons.
 
