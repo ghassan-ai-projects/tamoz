@@ -35,10 +35,13 @@ module Tamoz
         Reading.new(material:, event:, request:, task: nil)
       end
 
+      # The file is gone as soon as the opened turn holds what was read from it.
+      def discard(attachment) = @configuration.attachment_spool&.delete(attachment.fetch('handoff'))
+
       private
 
       def read_of(attachment, context)
-        bytes = @configuration.artifact_store&.resolve(attachment.fetch('digest'))&.fetch('bytes')
+        bytes = @configuration.attachment_spool&.read(attachment.fetch('handoff'), digest: attachment.fetch('digest'))
         return Read.new(AttachmentText::Result.failed(:missing), nil) unless bytes
 
         case attachment.fetch('kind')

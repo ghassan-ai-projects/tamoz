@@ -66,7 +66,7 @@ module Tamoz
               Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport:, descriptor:,
                 poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:,
-                controls: controls_source, credential: token
+                controls: controls_source, credential: token, attachments: directory.attachment_spool
               )
             end
             if once

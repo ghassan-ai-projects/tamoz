@@ -1112,6 +1112,7 @@ module Tamoz
           ),
           artifact_tenant: "profile:#{profile_id || 'default'}",
           transcriber: @transcriber,
+          attachment_spool: @directory.attachment_spool,
           child_task_runtime: self,
           mcp:,
           routing: @routing,

@@ -112,11 +112,11 @@ module Tamoz
 
       attr_reader :transport
 
-      def forget_artifact(digest)
-        @runtime.adapter.__send__(:transaction, operation: 'test.forget') do |tx|
-          tx.execute('test.forget', 'DELETE FROM tamoz_artifacts WHERE digest = ?', [digest])
-        end
-      end
+      def handoff_folder = File.join(@runtime.path, 'attachments')
+
+      def handoffs = Dir.exist?(handoff_folder) ? Dir.children(handoff_folder) : []
+
+      def forget_handoffs = handoffs.each { |name| File.delete(File.join(handoff_folder, name)) }
 
       def admit_document(bytes, mime_type:)
         file_id = "doc-#{next_update_id}"
@@ -244,7 +244,8 @@ module Tamoz
             store: @store, transport: @transport, descriptor: surface,
             owner: 'sim:gateway:drainer', batch_size: 50, sleeper: ->(_) {}
           ),
-          controls: ->(thread_id) { @runtime.session_for(thread_id) }
+          controls: ->(thread_id) { @runtime.session_for(thread_id) },
+          attachments: Tamoz::Core::AttachmentSpool.new(handoff_folder)
         )
         sink = Tamoz::Comms::OutboxDeliverySink.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints

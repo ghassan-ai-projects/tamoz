@@ -46,6 +46,7 @@ module Tamoz
       end
 
       def step(state, context)
+        @attachment.discard(state[:attachment]) if state[:attachment] && state.fetch(:work_step_count).zero?
         return CANCELLED if stopped?(context)
 
         exhausted = state[:work_exhausted] || budget_reason(state)

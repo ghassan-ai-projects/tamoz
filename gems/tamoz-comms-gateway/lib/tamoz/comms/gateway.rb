@@ -115,7 +115,8 @@ module Tamoz
         voice_too_long: ['rejected',
                          "That voice message is too long for me; the limit is #{Attachments::MAX_VOICE_SECONDS / 60} minutes."],
         attachment_empty: ['rejected', 'That file is empty.'],
-        attachment_unavailable: ['rejected', "I couldn't download that file. Please send it again."]
+        attachment_unavailable: ['rejected', "I couldn't download that file. Please send it again."],
+        attachments_unavailable: ['rejected', "This channel isn't set up to receive files."]
       }.freeze
 
       include Admission
@@ -134,7 +135,7 @@ module Tamoz
       # list while the lifecycle is split into intent-specific modules.
       # rubocop:disable Metrics/ParameterLists
       def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil,
-                     controls: nil, credential: nil)
+                     controls: nil, credential: nil, attachments: nil)
         @adapter = adapter
         @checkpoints = checkpoints
         @store = adapter.bind_comms_store(checkpoints)
@@ -144,6 +145,7 @@ module Tamoz
         @batch_size = batch_size
         @controls = controls
         @credential = credential
+        @attachments = attachments
         @fence = 0
         @stopping = false
         # The store keeps only challenge digests; plaintext codes live here so
@@ -212,6 +214,7 @@ module Tamoz
         return :transient unless batch
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
+        sweep_handoffs
         @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
         return :auth_failed if drain && drain_outbox(now:) == :authentication_refused
 

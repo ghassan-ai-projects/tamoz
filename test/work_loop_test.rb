@@ -486,24 +486,22 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
   end
   Tamoz::Agent::WorkMemory.prepend(LoseWorkerOnceAfterTheRead)
 
-  def deliver(model, root, adapter, payload, transcriber: nil)
-    work_session(model:, root:, adapter:, transcriber:)
-      .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
-  end
+  def spool(root) = Tamoz::Core::AttachmentSpool.new(File.join(File.dirname(root), 'attachments'))
 
-  def store(adapter, bytes, media_type)
-    digest = "sha256:#{Digest::SHA256.hexdigest(bytes)}"
-    adapter.bind_artifact_store(tenant: 'work-test').retain(digest:, bytes:, media_type:)
+  def deliver(model, root, adapter, payload, transcriber: nil)
+    work_session(model:, root:, adapter:, transcriber:, attachment_spool: spool(root))
+      .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
   end
 
   def test_a_crash_after_the_image_was_read_never_reads_it_again
     with_work_workspace do |root, adapter|
-      store(adapter, PNG, 'image/png')
-      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png')
+      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
+                                                                 spool: spool(root))
       first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }], crash_at: 3)
       assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
       second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:).recover(thread: 'work', request_id: 'work-1')
+      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
+                                                                                                    request_id: 'work-1')
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
       assert_includes second.requests.first, 'TOTAL 93.50'
@@ -513,13 +511,14 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
 
   def test_a_crash_inside_intake_after_the_read_replays_the_journaled_image_receipt
     with_work_workspace do |root, adapter|
-      store(adapter, PNG, 'image/png')
-      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png')
+      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
+                                                                 spool: spool(root))
       first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }])
       LoseWorkerOnceAfterTheRead.armed = []
       assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
       second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:).recover(thread: 'work', request_id: 'work-1')
+      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
+                                                                                                    request_id: 'work-1')
       stages = outcome.state.fetch(:work_trace).filter_map { |entry| entry['stage'] if entry['event'] == 'request' }
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
@@ -534,8 +533,8 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
   def test_a_crash_inside_intake_after_the_transcription_replays_its_receipt
     with_work_workspace do |root, adapter|
       ogg = "OggS\x00voice".b
-      store(adapter, ogg, 'audio/ogg')
-      payload = attachment_payload('[voice message]', kind: 'voice', bytes: ogg, media_type: 'audio/ogg')
+      payload = attachment_payload('[voice message]', kind: 'voice', bytes: ogg, media_type: 'audio/ogg',
+                                                      spool: spool(root))
       first = ScriptedTranscriber.new('my locker code is four seven one nine')
       seen = LoseWorkerOnceAfterTheRead.armed = []
       assert_raises(ScriptedConversationModel::Crash) do
@@ -543,7 +542,9 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
       end
       second = ScriptedTranscriber.new('never asked')
       model = ScriptedConversationModel.new(turns: [{ content: 'Noted.' }])
-      outcome = work_session(model:, root:, adapter:, transcriber: second).recover(thread: 'work', request_id: 'work-1')
+      outcome = work_session(model:, root:, adapter:, transcriber: second, attachment_spool: spool(root)).recover(
+        thread: 'work', request_id: 'work-1'
+      )
 
       assert_equal [1, 0], [first.calls.length, second.calls.length]
       assert_equal "[voice message]\nmy locker code is four seven one nine", outcome.state.fetch(:task)

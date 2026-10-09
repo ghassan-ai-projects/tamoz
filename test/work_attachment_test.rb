@@ -7,13 +7,14 @@ class WorkAttachmentTest < Minitest::Test
   PNG = WorkLoopFixtures::PNG
   Outcome = Struct.new(:status, :value, :effect_key, keyword_init: true)
   Store = Struct.new(:bytes) do
-    def resolve(_digest) = { 'bytes' => bytes }
+    def read(_handoff, digest:) = (bytes if digest)
   end
   Effects = Struct.new(:outcome) do
     def converse(*, **) = outcome
   end
-  Configuration = Struct.new(:artifact_store)
-  IMAGE = { 'kind' => 'image', 'digest' => 'sha256:x', 'media_type' => 'image/png', 'name' => nil }.freeze
+  Configuration = Struct.new(:attachment_spool)
+  IMAGE = { 'kind' => 'image', 'handoff' => 'x', 'digest' => 'sha256:x', 'media_type' => 'image/png',
+            'name' => nil }.freeze
 
   def read(outcome)
     Tamoz::Agent::WorkAttachment.new(configuration: Configuration.new(Store.new(PNG)), effects: Effects.new(outcome))
@@ -47,7 +48,8 @@ class WorkAttachmentTest < Minitest::Test
     assert_equal Tamoz::Comms::Gateway::Attachments::MAX_IMAGE_BYTES, Tamoz::Agent::WorkAttachment::MAX_IMAGE_BYTES
   end
 
-  VOICE = { 'kind' => 'voice', 'digest' => 'sha256:y', 'media_type' => 'audio/ogg', 'name' => nil }.freeze
+  VOICE = { 'kind' => 'voice', 'handoff' => 'y', 'digest' => 'sha256:y', 'media_type' => 'audio/ogg',
+            'name' => nil }.freeze
   Transcribing = Struct.new(:outcome) do
     def transcribe(*, **) = outcome
   end
@@ -56,7 +58,7 @@ class WorkAttachmentTest < Minitest::Test
     Tamoz::Agent::WorkAttachment.new(configuration: VoiceConfiguration.new(Store.new('OggS'), Object.new),
                                      effects: Transcribing.new(outcome)).read(VOICE, window: 20_000, context: nil)
   end
-  VoiceConfiguration = Struct.new(:artifact_store, :transcriber)
+  VoiceConfiguration = Struct.new(:attachment_spool, :transcriber)
 
   def test_a_heard_voice_note_is_the_turns_words
     reading = heard(Outcome.new(status: :succeeded, value: { 'text' => ' call the dentist ' }))

@@ -122,9 +122,9 @@ module WorkLoopFixtures
     end
   end
 
-  def attachment_payload(task, kind:, bytes:, media_type:)
+  def attachment_payload(task, kind:, bytes:, media_type:, spool:)
     { 'task' => task,
-      'attachment' => { 'kind' => kind, 'digest' => "sha256:#{Digest::SHA256.hexdigest(bytes)}",
+      'attachment' => { 'kind' => kind, 'handoff' => 'f' * 64, 'digest' => spool.put('f' * 64, bytes),
                         'media_type' => media_type, 'name' => nil, 'duration_s' => nil, 'size_bytes' => bytes.bytesize } }
   end
 
@@ -146,12 +146,12 @@ module WorkLoopFixtures
   end
 
   def work_session(model:, root:, adapter:, profile: 'auto', checks: { 'test' => ['true'] }, harness: {},
-                   skills: Tamoz::Skills.empty, transcriber: nil)
+                   skills: Tamoz::Skills.empty, transcriber: nil, attachment_spool: nil)
     Tamoz::Agent::Session.new(
       model:, toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks:, skills:), checkpointer: adapter,
       routing: :work, approval_engine: Tamoz::Agent.build_approval_engine(profile_name: profile),
       approval_session_id: 'work-test', artifact_store: adapter.bind_artifact_store(tenant: 'work-test'),
-      artifact_tenant: 'work-test', harness:, transcriber:
+      artifact_tenant: 'work-test', harness:, transcriber:, attachment_spool:
     )
   end
 

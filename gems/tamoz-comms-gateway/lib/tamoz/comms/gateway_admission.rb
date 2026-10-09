@@ -77,9 +77,10 @@ module Tamoz
             envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
                       reservation: reservation_slots, now:, history:, research:, attachment:
           )
-          return if %i[enqueued duplicate].include?(outcome)
+          return outcome if %i[enqueued duplicate].include?(outcome)
 
           refuse_admission(envelope, outcome, now:)
+          outcome
         end
 
         # One typed admission refusal: durable disposition plus one bounded reply.

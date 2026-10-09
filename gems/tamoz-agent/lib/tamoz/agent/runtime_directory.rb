@@ -94,6 +94,7 @@ module Tamoz
 
       def database_path = File.join(path, DATABASE_FILE)
       def profiles_path = File.join(path, PROFILES_DIR)
+      def attachment_spool = Tamoz::Core::AttachmentSpool.new(File.join(path, 'attachments'))
       def workspace_root = @config.dig("workspace", "root")
 
       # Approval policy source of truth: an optional operator override in the

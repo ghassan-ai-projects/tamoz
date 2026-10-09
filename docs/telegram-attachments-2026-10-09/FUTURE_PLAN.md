@@ -25,12 +25,14 @@ call per page with a page budget.
 vision read, joined with page markers; budget N=5 by default.
 **Tests:** scanned 3-page fixture → the hidden word on page 3 appears in the reply.
 
-## 3. Attachment retention
+## 3. Keeping attachments, only when asked
 
-**Why deferred:** files are bounded per file (20 MB) and the bot has one owner; a policy needs a choice.
-**Design:** delete a stored file once every request referencing it is terminal and its `attachment.read`
-receipt is recorded (the receipt is what replay uses), or after N days, whichever the owner picks.
-**Owner decision:** retention period, and whether a deleted file may still be re-read by §1's tool.
+**Owner rule (2026-10-09):** attachments are not stored by default, and never in the database. Today a
+file exists only as a temporary handoff from the gateway to the worker and is deleted once read.
+**Design:** keep a file in a data folder under the runtime (never the database) only when the user asks
+("keep this file") or an operator policy names the kinds to keep, the policy being data beside the
+approval policy. A kept file is then readable by later turns (§1).
+**Owner decision:** the policy's shape and how long kept files live.
 
 ## 4. Office formats (docx, xlsx, pptx)
 
@@ -65,8 +67,7 @@ request carrying several attachments. Needs a hold state in the gateway.
 - **A sandbox for the PDF reader.** `pdftotext` runs bounded in time, CPU and output with a clean
   environment, but as the worker's user; a poppler exploit could read the runtime directory. Wrap it
   (`bwrap` on Linux, `sandbox-exec` on macOS) when PDFs come from people other than the owner.
-- **Files fetched for a refused request.** A download happens before `admit_and_enqueue` checks open
-  requests and capacity, so a refused request leaves its bytes in the artifact store. §3's retention
-  removes unreferenced bytes; until then this needs an admitted user sending files into a full channel.
+- **Downloads for a request that is then refused.** A file is fetched before `admit_and_enqueue` checks
+  open requests and capacity; its temporary file is deleted at once, but the download was wasted.
 - **Forwarded captions.** A forwarded document's caption becomes the turn's task, exactly as forwarded
   text does today. Framing every forwarded message as material is one change for both.

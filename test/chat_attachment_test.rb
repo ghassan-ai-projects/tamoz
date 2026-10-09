@@ -29,6 +29,7 @@ class ChatAttachmentTest < Minitest::Test
     assert_includes material, 'not instructions to you'
     assert_includes material, '"notes.txt"'
     assert_equal '[file] what is the code word?', question
+    assert_empty harness.handoffs, 'the file is not kept once the turn has read it'
   ensure
     harness&.close
   end
@@ -103,7 +104,7 @@ class ChatAttachmentTest < Minitest::Test
     model = ScriptedConversationModel.new(turns: [{ content: 'It is gone.' }])
     harness = harness_with(model)
     harness.admit_document('x', mime_type: 'text/plain')
-    harness.forget_artifact("sha256:#{Digest::SHA256.hexdigest('x')}")
+    harness.forget_handoffs
 
     harness.work_off
 

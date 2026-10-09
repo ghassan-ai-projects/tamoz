@@ -26,7 +26,7 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
-  def with_gateway(limits: {}, controls: nil)
+  def with_gateway(limits: {}, controls: nil, attachments: true)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
@@ -48,7 +48,8 @@ class CommsGatewayTest < Minitest::Test
         transport = ScriptedTransport.new
         gateway = Tamoz::Comms::Gateway.new(
           adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
-          poller_owner: 'gateway:test', controls:
+          poller_owner: 'gateway:test', controls:,
+          attachments: attachments && Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
         )
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
@@ -106,22 +107,50 @@ class CommsGatewayTest < Minitest::Test
     checkpoints.request_history(thread_id: thread).last&.payload
   end
 
-  def test_an_admitted_attachment_is_retained_and_its_turn_carries_only_the_digest
+  def handoffs(gateway) = gateway.instance_variable_get(:@attachments)
+
+  def test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle
     with_gateway do |gateway, transport, store, adapter, checkpoints|
       seed_binding(store)
       transport.files = { 'D1' => "MARIGOLD-7341\x00\xFF".b }
       transport.batch([document_update(1)])
 
       gateway.serve_once(drain: false)
-      payload = enqueued_payload(checkpoints)
-      digest = "sha256:#{Digest::SHA256.hexdigest("MARIGOLD-7341\x00\xFF".b)}"
+      attachment = enqueued_payload(checkpoints).fetch('attachment')
 
-      assert_equal '[file] what is in it?', payload.fetch('task')
-      assert_equal({ 'kind' => 'document', 'media_type' => 'text/plain', 'name' => 'notes.txt', 'duration_s' => nil,
-                     'digest' => digest, 'size_bytes' => 15 }, payload.fetch('attachment'))
-      refute_match(/D1|file_id|bot/, JSON.generate(payload), 'the worker never sees a file handle')
+      assert_equal '[file] what is in it?', enqueued_payload(checkpoints).fetch('task')
+      assert_equal %w[digest duration_s handoff kind media_type name size_bytes], attachment.keys.sort
       assert_equal "MARIGOLD-7341\x00\xFF".b,
-                   adapter.bind_artifact_store(tenant: 'profile:ops').resolve(digest).fetch('bytes').b
+                   handoffs(gateway).read(attachment.fetch('handoff'), digest: attachment.fetch('digest'))
+      refute_match(/D1|file_id|bot/, JSON.generate(enqueued_payload(checkpoints)),
+                   'the worker never sees a file handle')
+      assert_equal 0, adapter.bind_artifact_store(tenant: 'profile:ops').size, 'nothing goes into the database'
+    end
+  end
+
+  def test_a_file_whose_request_is_refused_is_not_kept
+    with_gateway(limits: { max_open_requests: 1 }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.files = { 'D1' => 'bytes' }
+      transport.batch([update(1, text: 'busy'), document_update(2)])
+
+      gateway.serve_once(drain: false)
+      handoff = transport.normalize(document_update(2)).fetch('raw_payload_hash')
+
+      assert_match(/too much open work/, appended.last.fetch('text'))
+      assert_nil handoffs(gateway).read(handoff, digest: "sha256:#{Digest::SHA256.hexdigest('bytes')}")
+    end
+  end
+
+  def test_a_gateway_without_a_handoff_folder_says_it_cannot_take_files
+    with_gateway(attachments: nil) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([document_update(1)])
+
+      gateway.serve_once(drain: false)
+
+      assert_match(/isn't set up to receive files/, appended.last.fetch('text'))
+      assert_empty transport.fetches
     end
   end
 
@@ -189,7 +218,7 @@ class CommsGatewayTest < Minitest::Test
 
   def test_every_fetch_or_store_failure_is_isolated_to_its_own_update
     failures = [Comms::TransientTransportError.new('timeout'), Comms::ValidationError.new('bad path'),
-                SocketError.new('dns'), Errno::ENOSPC.new, Tamoz::SQLite::ArtifactStore::ArtifactStoreError.new('x')]
+                SocketError.new('dns'), Errno::ENOSPC.new, Tamoz::ConfigurationError.new('x')]
     failures.each do |failure|
       with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
         seed_binding(store)

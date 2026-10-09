@@ -32,10 +32,12 @@ Constraints that decide the design:
 - **ADR-016:** a non-deterministic or external call (vision read, transcription) is journaled. Decoding
   stored, content-addressed bytes (text, PDF) is deterministic and is not an effect.
 - **ADR-048:** Tamoz owns the model boundary; transcription is a second endpoint on the same transport.
-- **ADR-052 / "extend, don't reinvent":** both processes already hold the runtime SQLite adapter and the
-  verified, tenant-scoped `Tamoz::SQLite::ArtifactStore` (`retain`/`resolve`, rehash on both). The worker
-  passes it to every session (`WorkerRuntime#build_session`, tenant `profile:<id>`). Attachments use it;
-  no new store.
+- **Owner decision (2026-10-09, revision 4): attachments are not stored, and never in the database.**
+  The gateway hands each file to the worker as a temporary file in `<runtime>/attachments/` (folder 0700,
+  file 0600, named by the update), which the worker deletes as soon as the opened turn holds what was
+  read from it. A refused request's file is deleted at once; anything no turn read is swept after a
+  day. Keeping files (in a data folder, on the user's request or by policy) is a future plan. What was
+  read from the file — text, image reading, transcript — is kept like a typed message.
 
 ## 2. Probes run before planning (2026-10-09)
 
@@ -73,14 +75,14 @@ Gateway admit:  Admission.decide → :request (same authorization as text; stran
                 inbound anchor already exists → admit_and_enqueue answers :duplicate, nothing fetched or said
                 announced size/duration over the limit → one refusal reply, nothing fetched
                 transport.fetch_attachment(file_id, max_bytes:)  (getFile + bounded download: 40 s, 15 s per read)
-                artifact_store(tenant "profile:<profile_id>").retain(bytes) → "sha256:…"
+                AttachmentSpool#put(update hash, bytes) → temporary file, "sha256:…"
                 renew the poller lease
                 admit_and_enqueue(task = "[PDF] <caption>", attachment = {kind, digest, size_bytes,
                                   media_type, name, duration_s})
                 ANY failure fetching or storing one attachment → recorded disposition + one reply, the pass
                 continues and the offset advances (only auth / throttle / poller conflict stay pass-level)
 Worker opened:  WorkAttachment.read(state) — before the memory brief
-                  document → artifact_store.resolve → text / PDF text (deterministic, bounded, isolated)
+                  document → AttachmentSpool#read → text / PDF text (deterministic, bounded, isolated)
                   image    → SessionEffects#converse(stage: :attachment_image, image part) — the journal entry
                   voice/audio → SessionEffects#transcribe — the journal entry
                 → own voice: :task = transcript;  otherwise a framed `user` entry before the task
@@ -98,7 +100,7 @@ Worker opened:  WorkAttachment.read(state) — before the memory brief
 | Admission | `tamoz-comms` `Admission` | Attachment → request for an authorized user; unsupported reply names what works |
 | `Transport#fetch_attachment(file_id, max_bytes:)` | `tamoz-comms` contract + `tamoz-telegram` | **Cross-gem interface change (OD2)**. `getFile`; Telegram's "file is too big" → `ResponseTooLargeError`; `file_path` validated; own byte cap (not the 10 MB JSON cap); the download has a 40 s deadline and a 15 s read timeout (`getFile` itself uses the client's ordinary timeouts) |
 | Gateway fetch → retain → enqueue | `tamoz-comms-gateway` `Gateway::Attachments` (new module beside `Answers`, `Callbacks`) | Anchor check before fetch; per-update failure isolation; lease renewed before and after each download. (A per-phase `READABLE_KINDS` gate admitted each kind only once it could be read; removed when every kind became readable) |
-| Byte store | existing `Tamoz::SQLite::ArtifactStore` via `adapter.bind_artifact_store` | `MAX_ARTIFACT_BYTES` 4 MB → 20 MB (own commit); binary round-trip (NUL, invalid UTF-8) tested |
+| Handoff | `Tamoz::Core::AttachmentSpool` (`tamoz-core`): `put`/`read`/`delete`/`sweep` over `<runtime>/attachments/` | Never the database; the worker deletes the file at the first work step (after the opened turn is committed); the gateway deletes a refused request's file and sweeps leftovers older than a day each pass |
 | Payload `attachment` | `CommsStore#admit_and_enqueue(attachment:)` (contract + sqlite) | Beside `research:` |
 | `attachment` state channel | `SessionGraph::WORK_SCALAR_CHANNELS` | Declared in the same commit as the payload key. No version bump (precedent: `research`, d0d07d02): new turns on existing threads run; a thread paused across the upgrade fails `CheckpointVersionError` as any definition change does. **Attachments need the work route** (`tamoz telegram start` runs `--work-routing`); a legacy-routing worker refuses the payload exactly as it refuses `/research` |
 | `WorkAttachment` | `tamoz-agent-session` | Called from `SessionWork#opened`; uses entry kind `user` (no new context-engine kind); scrubbing already happens in `WorkContext#entry` |
@@ -156,7 +158,7 @@ only in the phase that can read it.
 | Phase | Outcome | Main files | Evidence |
 |---|---|---|---|
 | **P0** Plan | This folder, reviewed from both lenses, findings folded in | `docs/telegram-attachments-2026-10-09/` | review |
-| **P1** Inbound path | Attachments normalize, admit, download into the artifact store and enqueue with the `attachment` channel declared; `READABLE_KINDS` is empty, so users still get the unsupported reply; every gateway failure path is isolated per update | normalizer, envelope, admission, transport (comms + telegram), client, gateway, comms store, artifact store limit, session graph channel | plumbing |
+| **P1** Inbound path | Attachments normalize, admit, download and enqueue with the `attachment` channel declared; `READABLE_KINDS` is empty, so users still get the unsupported reply; every gateway failure path is isolated per update | normalizer, envelope, admission, transport (comms + telegram), client, gateway, comms store, session graph channel | plumbing |
 | **P2** Documents and PDFs | `document` readable: text and PDF text layer reach the turn as framed material; caps; hostile-PDF isolation | `work_attachment.rb`, `attachment_text.rb`, `session_work.rb`, `work_context.rb`, prompts | plumbing + **real model** (`document`, `arabic_document`, `injection`; `pdf`, `scanned_pdf` BLOCKED on O3) |
 | **P3** Images | `image` readable through one journaled vision call | `work_attachment.rb`, `session_effects.rb` use, prompts | plumbing + **real model** (`image_ocr`) |
 | **P4** Voice and audio | `voice`/`audio` readable through one journaled transcription call; own voice becomes the task | `episode_model_transport.rb`, `session_options.rb`, `worker_runtime.rb`, `child_environments.rb`, CLI flags, ADR-048 | plumbing (local fake transcription server) + **real model BLOCKED on O1** |
@@ -197,8 +199,9 @@ rate claim.
 
 Taken under the owner's request to build this (each flagged again in the final approval):
 
-- **OD1** The gateway downloads into the existing artifact store (tenant `profile:<id>`); the worker reads
-  it there (ADR-042 kept: the worker never holds the bot token).
+- **OD1** (revised by the owner, revision 4) The gateway downloads and hands the file over as a temporary
+  file deleted once read — never stored, never in the database (ADR-042 kept: the worker never holds
+  the bot token).
 - **OD2** `Comms::Transport` gains `fetch_attachment` — a cross-gem interface change (AGENTS.md: ask
   first); the smallest extension that keeps downloads in the transport gem.
 - **OD3** (revised in P2) PDFs are read by poppler's `pdftotext` as a host tool, in its own limited
@@ -206,14 +209,16 @@ Taken under the owner's request to build this (each flagged again in the final a
   Ruby-or-GPL, `ruby-rc4` unlicensed). No new gem dependency.
 - **OD4** Images are read by the configured chat model; voice and audio by a separately configured
   OpenAI-compatible transcription endpoint, bytes sent as received (no ffmpeg).
-- **OD5** `ArtifactStore::MAX_ARTIFACT_BYTES` rises from 4 MB to 20 MB.
+- **OD5** (withdrawn in revision 4) the artifact store is not used for attachments; its 4 MB ceiling is
+  unchanged.
 
 Open:
 
 - **O1** No funded transcription endpoint (Z.ai ASR: "insufficient balance"). To grade voice for real:
   fund one (OpenAI `whisper-1` and Groq accept OGG directly), or approve installing `whisper-cpp` and a
   model locally and running its server with `--convert`.
-- **O2** Attachments are kept in the runtime database (no retention yet), 20 MB each; `FUTURE_PLAN.md` §3.
+- **O2** (closed by the owner, 2026-10-09) attachments are not kept; keeping them on request or by policy
+  is `FUTURE_PLAN.md` §3.
 - **O3** `pdftotext` is not installed on this machine. To grade PDFs for real: approve
   `brew install poppler` (Homebrew bottle). Without it a PDF gets one plain line saying PDF reading is
   not set up on this machine.
