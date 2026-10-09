@@ -177,16 +177,40 @@ class TestSuiteTest < Minitest::Test
     end
   end
 
+  def test_file_clock_fails_the_run_naming_only_the_file_over_the_cap
+    sources = { 'test/fast_test.rb' => minitest_source('FastTest', ''),
+                'test/slow_test.rb' => minitest_source('SlowTest', 'sleep 0.15') }
+    with_sources(sources) do |root|
+      output, status = run_fixture(*sources.keys.map { |path| File.join(root, path) }, env: { 'TEST_FILE_CAP_SECONDS' => '0.1' })
+
+      refute_predicate status, :success?, output
+      assert_equal %w[slow_test.rb], output.scan(%r{TEST FILE OVER CAP: \S+/test/(\S+) took}).flatten
+    end
+  end
+
+  def test_file_clock_passes_files_inside_the_cap
+    with_sources('test/fast_test.rb' => minitest_source('FastTest', '')) do |root|
+      output, status = run_fixture(File.join(root, 'test/fast_test.rb'), env: { 'TEST_FILE_CAP_SECONDS' => '0.1' })
+
+      assert_predicate status, :success?, output
+      refute_includes output, 'TEST FILE OVER CAP'
+    end
+  end
+
   def test_repository_test_identities_are_unique
     assert_silent { TestSuite.validate_identities!(TestSuite.files) }
   end
 
   private
 
-  def run_fixture(path, env: {})
-    script = 'load ARGV.shift; exit(system(*test_command([ARGV.shift])) ? 0 : 1)'
+  def run_fixture(*paths, env: {})
+    script = 'load ARGV.shift; exit(system(*test_command(ARGV)) ? 0 : 1)'
     Open3.capture2e(env, RbConfig.ruby, '-rrake', '-e', script,
-                    File.join(TestSuite::ROOT, 'Rakefile'), path, chdir: TestSuite::ROOT)
+                    File.join(TestSuite::ROOT, 'Rakefile'), *paths, chdir: TestSuite::ROOT)
+  end
+
+  def minitest_source(name, body)
+    "require 'minitest/autorun'\nclass #{name} < Minitest::Test\n  def test_runs\n    #{body}\n    assert true\n  end\nend\n"
   end
 
   def with_sources(sources)
