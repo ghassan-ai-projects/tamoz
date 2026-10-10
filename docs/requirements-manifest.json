@@ -808,7 +808,7 @@
       "named_test": "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
       "supporting_tests": [
         "test/comms_parties_test.rb#test_a_party_must_belong_to_its_surfaces_kind",
-        "test/comms_parties_test.rb#test_telegram_bytes_are_unchanged_from_head",
+        "test/comms_parties_test.rb#test_telegram_ids_are_pinned",
         "test/chat_attachment_test.rb#test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo",
         "test/core_spoken_text_test.rb#test_paths_digests_references_and_timestamps_are_not_read_out",
         "test/talk_gateway_test.rb#test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing",
@@ -6361,21 +6361,6 @@
       "promotion_exclusion": null
     },
     {
-      "id": "CLI-config",
-      "category": "cli_command",
-      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
-      "title": "tamoz config",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
-      "supporting_tests": [
-        "test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
       "id": "CLI-context",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7934,9 +7919,22 @@
       "title": "MIGRATION_25",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/sqlite_talk_migration_test.rb#test_an_upgrade_to_25_keeps_every_decision_and_admits_talk_actors",
+      "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-26",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_26",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/sqlite_channels_migration_test.rb#test_an_upgrade_from_25_empties_the_comms_tables_and_keeps_everything_else",
       "supporting_tests": [
-        "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"
+        "test/sqlite_channels_migration_test.rb#test_a_decision_names_one_kind_on_both_sides"
       ],
       "classification": "direct",
       "rationale": null,

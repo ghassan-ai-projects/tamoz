@@ -77,10 +77,10 @@ module Tamoz
 
         def validate_schema_version!(document)
           version = document.dig('runtime', 'schema_version')
-          return if SCHEMA_VERSIONS.include?(version)
+          return if version == SCHEMA_VERSION
 
-          raise Error, "runtime configuration schema_version #{version.inspect} " \
-                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
+          raise Error, "runtime configuration schema_version #{version.inspect} is not supported " \
+                       "(expected #{SCHEMA_VERSION}); run `tamoz setup` on a new runtime directory"
         end
 
         def validate_workspace_root!(document)

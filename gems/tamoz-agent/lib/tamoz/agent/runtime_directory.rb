@@ -27,10 +27,6 @@ module Tamoz
     # repository the agent reads and edits — is ever consulted for configuration.
     # That separation is the whole point: a checkout the agent can write to must
     # never be able to widen what the agent may do.
-    #
-    # Schema 2 (COMMS_DESIGN §14): a strict `channels:` mapping. Schema 1 loads
-    # unchanged as "no channels". Startup never rewrites operator authority —
-    # `config migrate` is the only writer, and it is explicit and atomic.
     class RuntimeDirectory
       class Error < Tamoz::Agent::Error; end
 
@@ -38,8 +34,6 @@ module Tamoz
       DATABASE_FILE = "runtime.sqlite3"
       PROFILES_DIR = "profiles"
       SCHEMA_VERSION = 2
-      LEGACY_SCHEMA_VERSION = 1
-      SCHEMA_VERSIONS = [LEGACY_SCHEMA_VERSION, SCHEMA_VERSION].freeze
 
       # Sources a runtime may enable. Closed set: an operator can turn on what
       # Tamoz ships, and nothing else. There is no plugin path by construction.
@@ -72,23 +66,6 @@ module Tamoz
         ensure_private_runtime_directories!(path)
         write_default_config!(path, workspace:, models:) if fresh
         new(path)
-      end
-
-      # `tamoz config migrate`: schema 1 -> 2, explicitly and atomically. The
-      # ORIGINAL file is copied to a timestamped backup before the migration,
-      # and the new file lands by atomic rename, so a crash or a partial write
-      # can never leave a half-migrated config that startup would accept.
-      def self.migrate!(path, env: ENV)
-        directory = resolve(path:, env:)
-        config_path = config_path(directory.path)
-        document = read_config_document(config_path)
-        version = document.dig("runtime", "schema_version")
-        return [:already_current, directory] if version == SCHEMA_VERSION
-
-        ConfigRules.validate_schema_version!(document)
-
-        backup = replace_config!(config_path, migrated_document(document))
-        [:migrated, new(directory.path), backup]
       end
 
       # `tamoz setup` on an existing runtime is one edit; a written chat profile pins the workspace it was made for.
@@ -222,18 +199,11 @@ module Tamoz
           Psych.safe_load_file(config_path, permitted_classes: [], aliases: false)
         end
 
-        def migrated_document(document)
-          document.merge(
-            "runtime" => {"schema_version" => SCHEMA_VERSION},
-            "channels" => {}
-          )
-        end
-
         # The whole new document must validate before anything is written, so a refused edit leaves the file untouched.
         def replace_config!(config_path, document)
           ConfigRules.validate_document!(document)
           backup = backup_config!(config_path)
-          write_migrated_config!(config_path, document)
+          Tamoz::Core::AtomicFile.replace(config_path, Psych.dump(document), mode: 0o600)
           backup
         end
 
@@ -254,10 +224,6 @@ module Tamoz
           backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%S.%6NZ')}"
           Tamoz::Core::AtomicFile.create(backup, File.binread(config_path), mode: 0o600)
           backup
-        end
-
-        def write_migrated_config!(config_path, document)
-          Tamoz::Core::AtomicFile.replace(config_path, Psych.dump(document), mode: 0o600)
         end
       end
 

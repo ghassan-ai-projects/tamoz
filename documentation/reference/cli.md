@@ -180,7 +180,6 @@ exit 1.
 
 | Verb | Purpose |
 |---|---|
-| `config migrate` | Migrate runtime configuration schema 1 to schema 2 (`channels:`), with a backup and atomic rename |
 
 ## Exit codes
 

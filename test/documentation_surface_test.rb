@@ -38,12 +38,11 @@ class DocumentationSurfaceTest < Minitest::Test
     # The unattended subcommands each carry their own `--help`. The interactive
     # ones share the global flag surface and parse positionally, so asking them
     # for help means something else entirely. `queue` and `schedule` dispatch on
-    # a verb first, so their flags live on the verb. `comms` and `config` do
-    # the same.
+    # a verb first, so their flags live on the verb. `comms` does the same.
     [%w[setup], %w[worker], %w[status], %w[queue add], %w[queue list],
      %w[schedule add], %w[schedule list], %w[comms serve], %w[comms list],
      %w[comms doctor], %w[comms pair list], %w[comms delivery resolve],
-     %w[config migrate], %w[observe tail], %w[observe metrics],
+     %w[observe tail], %w[observe metrics],
      %w[observe doctor], %w[diagnose], %w[explain], %w[postmortem]].each do |argv|
       help << capture_help(argv + ["--help"])
     end

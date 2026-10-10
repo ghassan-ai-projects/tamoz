@@ -245,7 +245,7 @@ module AutonomyCase
 
   def write_config(runtime_dir, workspace, channels: nil, approval_profile: nil, approval_ask: nil)
     document = {
-      "runtime" => {"schema_version" => channels ? 2 : 1},
+      "runtime" => {"schema_version" => 2},
       "workspace" => {"root" => workspace},
       "sources" => {}
     }

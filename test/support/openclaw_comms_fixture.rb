@@ -495,7 +495,7 @@ module Tamoz
 
         def write_config(runtime_dir, approval_ask)
           document = {
-            'runtime' => { 'schema_version' => 1 },
+            'runtime' => { 'schema_version' => 2 },
             'workspace' => { 'root' => @workspace },
             'sources' => {}
           }

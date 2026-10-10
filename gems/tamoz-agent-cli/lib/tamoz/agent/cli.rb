@@ -70,7 +70,6 @@ module Tamoz
         "start" => :cmd_start,
         "service" => :cmd_service,
         "channel" => :cmd_channel,
-        "config" => :cmd_config,
         "setup" => :cmd_setup,
         "queue" => :cmd_queue,
         "worker" => :cmd_worker,

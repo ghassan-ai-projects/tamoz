@@ -7,9 +7,8 @@ module Tamoz
   module Agent
     # The rest of the channel operator surface (COMMS_DESIGN §14): pairing and
     # revocation (`tamoz comms pair`), honest resolution of genuinely
-    # ambiguous sends (`tamoz comms delivery resolve`), the explicit config
-    # migration (`tamoz config migrate`), and the `channels` section of
-    # `tamoz status`.
+    # ambiguous sends (`tamoz comms delivery resolve`), and the `channels`
+    # section of `tamoz status`.
     # rubocop:disable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength
     # rubocop:disable Metrics/PerceivedComplexity, Metrics/CyclomaticComplexity
     # rubocop:disable Metrics/BlockLength
@@ -23,27 +22,6 @@ module Tamoz
     #   global convention and the operator surfaces are one sequence each.
     module CLICommsOps
       include CLICommsShared
-
-      def cmd_config(options, argv)
-        action = argv.shift
-        raise OptionParser::InvalidArgument, 'usage: tamoz config migrate' unless action == 'migrate'
-
-        OptionParser.new do |value|
-          value.banner = 'Usage: tamoz config migrate'
-          accept_json(value, options)
-        end.parse!(argv)
-
-        outcome, _directory, backup = RuntimeDirectory.migrate!(runtime_dir_path(options))
-        if outcome == :already_current
-          @out.puts "already schema #{RuntimeDirectory::SCHEMA_VERSION}"
-        else
-          @out.puts "migrated to schema #{RuntimeDirectory::SCHEMA_VERSION} (backup: #{backup})"
-        end
-        0
-      rescue RuntimeDirectory::Error => e
-        @err.puts "tamoz: #{e.message}"
-        1
-      end
 
       # `tamoz comms pair list | approve CODE | revoke ID` — operator pairing
       # and revocation (design §7). Revocation prints the admitted work it

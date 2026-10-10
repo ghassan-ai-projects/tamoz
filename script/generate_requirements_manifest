@@ -615,7 +615,7 @@ EVIDENCE = {
                              "test/cli_service_test.rb#test_no_output_carries_a_secret"]},
   "ADR-061" => {test: "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
                 supporting: ["test/comms_parties_test.rb#test_a_party_must_belong_to_its_surfaces_kind",
-                             "test/comms_parties_test.rb#test_telegram_bytes_are_unchanged_from_head",
+                             "test/comms_parties_test.rb#test_telegram_ids_are_pinned",
                              "test/chat_attachment_test.rb#test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo",
                              "test/core_spoken_text_test.rb#test_paths_digests_references_and_timestamps_are_not_read_out",
                              "test/talk_gateway_test.rb#test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing",
@@ -761,8 +761,6 @@ EVIDENCE = {
 
   "CLI-comms" => {test: "test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly",
                   supporting: ["test/comms_cli_test.rb#test_comms_list_shows_bindings_routes_and_outbox_depth"]},
-  "CLI-config" => {test: "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
-                   supporting: ["test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"]},
   "CLI-observe" => {test: "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal"},
   "CLI-trace" => {test: "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal"},
   "CLI-diagnose" => {test: "test/agent_cli_self_diagnosis_test.rb#test_diagnose_reads_a_worker_runtime_directory_in_json"},
@@ -812,8 +810,9 @@ EVIDENCE = {
                             "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"]},
   "MIG-24" => {test: "test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle",
                supporting: ["test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
-  "MIG-25" => {test: "test/sqlite_talk_migration_test.rb#test_an_upgrade_to_25_keeps_every_decision_and_admits_talk_actors",
-               supporting: ["test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
+  "MIG-25" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
+  "MIG-26" => {test: "test/sqlite_channels_migration_test.rb#test_an_upgrade_from_25_empties_the_comms_tables_and_keeps_everything_else",
+               supporting: ["test/sqlite_channels_migration_test.rb#test_a_decision_names_one_kind_on_both_sides"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",

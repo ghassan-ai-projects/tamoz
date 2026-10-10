@@ -49,12 +49,8 @@ others. Keep it private (`0700` directory, `0600` files).
 ### `config.yaml` (schema 2)
 
 `config.yaml` carries the workspace root, `sources:` (skills, memory, MCP,
-websearch, probes), `budgets:` and `channels:`. A schema 1 directory loads unchanged as
-"no channels"; migrate explicitly with a backup and atomic rename:
-
-```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
-```
+websearch, probes), `budgets:` and `channels:`. Only schema 2 loads; a directory
+written by an older Tamoz is refused, and `tamoz setup` makes a new one.
 
 An example fragment:
 
