@@ -13,7 +13,7 @@ module Tamoz
       EXIT_SIGINT = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigint")
       EXIT_SIGTERM = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigterm")
 
-      # The unattended surface (`init`, `queue`, `worker`, `status`) lives in its
+      # The unattended surface (`queue`, `worker`, `status`) lives in its
       # own file; it is the same CLI object, split only so neither half becomes
       # unreadable.
       include CLIWorkerCommands
@@ -31,6 +31,15 @@ module Tamoz
       include CLICommsOps
       include CLITelegramCommands
       include CLITalkCommands
+      include CLITalkGateway
+      include CLITelegramPairing
+      include CLISetupCommands
+      include CLIChannelCommands
+      include CLIChildProcesses
+      include CLIStartChecks
+      include CLIStartCommands
+      include CLIServiceCommands
+      include CLILaunchd
       include CLISelfObservationCommands
 
       # Every subcommand dispatches to exactly one same-shaped cmd_* method
@@ -61,10 +70,11 @@ module Tamoz
         "verbose" => :cmd_verbose,
         "profile" => :cmd_profile,
         "comms" => :cmd_comms,
-        "telegram" => :cmd_telegram,
-        "talk" => :cmd_talk,
+        "start" => :cmd_start,
+        "service" => :cmd_service,
+        "channel" => :cmd_channel,
         "config" => :cmd_config,
-        "init" => :cmd_init,
+        "setup" => :cmd_setup,
         "queue" => :cmd_queue,
         "worker" => :cmd_worker,
         "improve" => :cmd_improve,
@@ -87,7 +97,7 @@ module Tamoz
       # and stops there, without opening a runtime directory it was never
       # asked to touch.
       NEEDS_HELP_CATCH = %w[
-        comms telegram config init queue worker status schedule approve observe trace
+        comms channel config setup start service queue worker status schedule approve observe trace
         diagnose explain postmortem mcp
       ].freeze
 

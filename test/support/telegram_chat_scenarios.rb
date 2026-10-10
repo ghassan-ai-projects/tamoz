@@ -335,7 +335,7 @@ module TelegramChatScenarios
     refused = eval.start_with_refused_key
     eval.check('provider_down', 'start refuses a rejected key within 30s',
                refused[:status] != 0 && refused[:seconds] <= 30, format('exit %<status>s in %<seconds>.1fs', refused))
-    eval.check('provider_down', 'start names the key it tried', refused[:out].include?('OPENROUTER_API_KEY'),
+    eval.check('provider_down', 'start names the key it tried', refused[:out].include?(eval.chat_key),
                refused[:out].lines.last(2).join.strip)
     eval.run_with_revoked_key
     check_revoked_key_reply(eval, eval.turn(eval.fresh_user, 'hi', timeout: 60))

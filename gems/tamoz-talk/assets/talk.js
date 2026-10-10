@@ -131,8 +131,8 @@ function addReplay(entry, messageId) {
   if (entry.replay) return;
   const button = document.createElement('button');
   button.type = 'button';
-  button.className = 'replay';
-  button.textContent = 'Replay';
+  button.className = 'replay icon';
+  button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
   button.setAttribute('aria-label', 'Replay this reply');
   button.addEventListener('click', () => speak(messageId, { force: true }));
   entry.meta.appendChild(button);
@@ -160,7 +160,7 @@ function heard(event) {
   const entry = pairHeard(state.bubbles, event.text);
   mark('heard', { message_id: event.message_id });
   if (entry) {
-    setMeta(entry, `🎙 Heard: «${entry.heard}»`);
+    setMeta(entry, `Heard: “${entry.heard}”`);
     return;
   }
   const note = document.createElement('div');
@@ -174,7 +174,7 @@ function message(event) {
   const entry = bubble({ mine: false, text: event.text });
   state.messages.set(event.message_id, { entry, event });
   const settled = settleOldest(state.bubbles, event.kind, event.part_index || 0);
-  if (settled?.voice && settled.heard === null) setMeta(settled, '🎙 not transcribed');
+  if (settled?.voice && settled.heard === null) setMeta(settled, 'Not transcribed');
   if (event.kind === 'approval_request' && event.reference) card(entry, event);
   if (event.spoken) addReplay(entry, event.message_id);
   if (state.live) {
@@ -198,19 +198,23 @@ function card(entry, event) {
   entry.node.setAttribute('role', 'alertdialog');
   entry.node.setAttribute('aria-label', 'Approval needed');
   entry.node.tabIndex = -1;
+  const overline = document.createElement('div');
+  overline.className = 'overline';
+  overline.textContent = 'Approval needed';
+  entry.node.prepend(overline);
   const actions = document.createElement('div');
   actions.className = 'actions';
   const status = document.createElement('span');
   status.className = 'card-status';
-  for (const action of event.actions || ['deny']) {
+  actions.appendChild(status);
+  for (const action of [...(event.actions || ['deny'])].sort((a, b) => (a === 'approve') - (b === 'approve'))) {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = action === 'approve' ? 'Approve' : 'Deny';
-    button.className = action === 'approve' ? 'primary' : 'danger';
+    button.className = action === 'approve' ? 'filled' : 'text';
     button.addEventListener('click', () => decide(action, event, entry));
     actions.appendChild(button);
   }
-  actions.appendChild(status);
   entry.node.appendChild(actions);
   entry.actions = actions;
   entry.cardStatus = status;
@@ -223,6 +227,7 @@ function resolveCard(messageId) {
   if (!known?.entry.actions) return;
   known.entry.actions.querySelectorAll('button').forEach((b) => { b.disabled = true; });
   known.entry.node.classList.add('resolved');
+  known.entry.cardStatus.textContent ||= 'Answered';
 }
 
 let toastTimer = null;
@@ -236,13 +241,15 @@ function toast(text) {
 
 // ---- state line ----
 
-function setState(text) {
+// kind: listening, ptt, off, thinking, speaking, offline or idle; the page styles the mic and Stop from it.
+function setState(text, kind = 'idle') {
   if ($('state-label').textContent !== text) $('state-label').textContent = text;
   $('state-detail').textContent = '';
+  document.body.dataset.state = kind;
 }
 
-const AUDIO_PAUSED = 'Audio paused — tap Talk to resume.';
-const SCREEN_PAUSED = 'paused: the microphone stops when the screen locks';
+const AUDIO_PAUSED = 'Audio paused. Tap the mic to resume.';
+const SCREEN_PAUSED = 'Mic paused while the screen is off';
 
 function clearHint(text) {
   if ($('hint').textContent === text) setHint('');
@@ -256,42 +263,55 @@ function setHint(text) {
 function setWorking(working) {
   const was = state.working;
   state.working = working;
+  document.body.toggleAttribute('data-working', Boolean(working));
   if (!working && was) {
     state.bubbles.filter((b) => b.queued).forEach((b) => {
       b.queued = false;
-      if (b.heard === undefined) setMeta(b, b.voice ? '🎙 sent' : 'sent');
+      if (b.heard === undefined) setMeta(b, b.voiceLabel || '');
     });
   }
   if (working && !state.playing) {
     const seconds = Math.max(0, Math.round((Date.parse(working.last_pulse) - Date.parse(working.since)) / 1000));
-    setState('Thinking');
-    $('state-detail').textContent = ` ${seconds} s`;
+    setState('Thinking', 'thinking');
+    $('state-detail').textContent = ` · ${seconds} s`;
     if (state.voice && Date.now() - state.lastTone > WORKING_TONE_MS) {
       state.lastTone = Date.now();
       tone(440, 0.04);
     }
   } else if (!working && !state.playing && state.started) {
-    setState(listeningLabel());
+    setState(listeningLabel(), listeningKind());
   }
 }
 
 function listeningLabel() {
-  if (!state.voice || state.mode === 'muted') return 'Microphone off — type below';
-  if (state.mode === 'push-to-talk') return 'Hold Talk to speak';
+  if (!state.voice || state.mode === 'muted') return 'Mic off';
+  if (state.mode === 'push-to-talk') return 'Hold the mic to talk';
   return 'Listening';
+}
+
+function listeningKind() {
+  if (!state.voice || state.mode === 'muted') return 'off';
+  return state.mode === 'push-to-talk' ? 'ptt' : 'listening';
+}
+
+function labelTalk() {
+  const label = state.mode === 'push-to-talk' ? 'Hold to talk' : 'Talk';
+  $('talk').setAttribute('aria-label', label);
+  $('talk').title = label;
 }
 
 function setConnected(on) {
   $('connection').classList.toggle('on', on);
   $('connection').title = on ? 'Connected' : 'Reconnecting…';
   $('connection').setAttribute('aria-label', $('connection').title);
-  if (!on && state.started) setState('Reconnecting…');
+  if (!on && state.started) setState('Reconnecting…', 'offline');
 }
 
 function stopDead(text) {
   state.dead = true;
   $('connection').classList.remove('on');
-  setState(text);
+  setHint('');
+  setState(text, 'offline');
   $('start-note').textContent = text;
   $('start-button').disabled = true;
   $('text-only').disabled = true;
@@ -312,7 +332,7 @@ async function poll() {
         { signal: timer.signal });
       if (response.status === 401) {
         if (state.token !== token) continue;
-        stopDead('This link is not valid any more. Open the link printed by `tamoz talk start` on this device.');
+        stopDead('This link is not valid any more. Open the link printed by `tamoz start` on this device.');
         return;
       }
       if (!response.ok) throw new Error(String(response.status));
@@ -372,12 +392,14 @@ async function post(path, body, headers, onRetry = () => {}) {
   });
 }
 
+const COMMAND_LABELS = { '/cancel': 'Stop', '/status': 'Status' };
+
 async function sendText(text) {
   const command = text.startsWith('/');
-  const entry = bubble({ mine: true, text, command });
-  setMeta(entry, 'sending');
+  const entry = bubble({ mine: true, text: COMMAND_LABELS[text] || text, command });
+  setMeta(entry, '');
   const result = await post('/v1/messages', (id) => JSON.stringify({ update_id: id, text }),
-    { 'Content-Type': 'application/json' }, (_status, attempt) => { if (attempt >= 2) setMeta(entry, 'retrying…'); });
+    { 'Content-Type': 'application/json' }, (_status, attempt) => { if (attempt >= 2) setMeta(entry, 'Retrying…'); });
   settle(entry, result);
 }
 
@@ -385,27 +407,27 @@ async function sendUtterance(samples) {
   mark('segment_end');
   tone(880, 0.05);
   const entry = bubble({ mine: true, text: '', voice: true });
-  setMeta(entry, `🎙 ${seconds(samples).toFixed(1)} s · sending`);
+  entry.voiceLabel = `Voice · ${seconds(samples).toFixed(1)} s`;
+  setMeta(entry, entry.voiceLabel);
   mark('post');
   const result = await post('/v1/utterances?', encodeWav(samples), { 'Content-Type': 'audio/wav' },
-    (_status, attempt) => { if (attempt >= 2) setMeta(entry, '🎙 retrying…'); });
+    (_status, attempt) => { if (attempt >= 2) setMeta(entry, 'Retrying…'); });
   settle(entry, result);
 }
 
 function settle(entry, result) {
   if (!recordSend(entry, result.outcome)) {
-    setMeta(entry, result.status === 413 ? 'too long to send' : 'not sent');
+    setMeta(entry, result.status === 413 ? 'Too long to send' : 'Not sent');
     return;
   }
   mark('admitted');
   if (entry.command) {
-    setMeta(entry, 'done');
+    setMeta(entry, '');
     return;
   }
   if (entry.heard !== undefined) return;
   entry.queued = Boolean(state.working);
-  const label = entry.queued ? 'queued — Tamoz will hear this after the current request' : 'sent';
-  setMeta(entry, entry.voice ? `🎙 ${label}` : label);
+  setMeta(entry, entry.queued ? 'Queued' : (entry.voiceLabel || ''));
 }
 
 async function decide(action, event, entry) {
@@ -418,7 +440,7 @@ async function decide(action, event, entry) {
   if (result.outcome === 'admitted') {
     entry.cardStatus.textContent = action === 'approve' ? 'Approval sent' : 'Denial sent';
   } else {
-    entry.cardStatus.textContent = 'Could not send — try again';
+    entry.cardStatus.textContent = "Couldn't send. Try again.";
     buttons.forEach((b) => { b.disabled = false; });
   }
   $('talk').focus();
@@ -469,7 +491,7 @@ async function playNext() {
       if (generation !== state.generation) return;
       state.playing = messageId;
       mark('playing', { message_id: messageId });
-      setState('Speaking — tap Talk or press Space to interrupt');
+      setState('Speaking', 'speaking');
     };
     player.onended = () => { if (generation === state.generation) finished(); };
     player.onpause = () => { if (generation === state.generation && !player.ended) finished(); };
@@ -478,7 +500,7 @@ async function playNext() {
   } catch (error) {
     if (generation !== state.generation) return;
     const known = state.messages.get(messageId);
-    if (known) setMeta(known.entry, error?.name === 'NotAllowedError' ? 'tap Replay to hear it' : 'voice unavailable');
+    if (known) setMeta(known.entry, error?.name === 'NotAllowedError' ? 'Tap play to hear it' : 'Voice unavailable');
     finished();
   } finally {
     timer.done();
@@ -555,8 +577,8 @@ function onFrame(frame) {
   if (event.type === 'start') {
     if (state.fullDuplex) bargeIn();
     else yieldToSpeech();
-    setState('Listening…');
-    if (state.working) setHint('Press Stop to interrupt; speech is queued.');
+    setState('Listening', 'listening');
+    if (state.working) setHint('Speech queued. Tap Stop to cancel.');
     return;
   }
   if (event.type === 'closing' || event.type === 'resume') {
@@ -572,8 +594,8 @@ function onFrame(frame) {
 }
 
 function caught() {
-  setHint("Didn't catch that.");
-  setTimeout(() => { if ($('hint').textContent === "Didn't catch that.") setHint(''); }, 2500);
+  setHint("Didn't catch that");
+  setTimeout(() => { if ($('hint').textContent === "Didn't catch that") setHint(''); }, 2500);
 }
 
 function startMicrophone() {
@@ -583,7 +605,7 @@ function startMicrophone() {
 
 async function openMicrophone() {
   if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
-    setHint('The microphone needs HTTPS: open this page through `tailscale serve`, or on this computer. Typing works.');
+    setHint('The mic needs HTTPS. Open this page through tailscale serve, or type.');
     return false;
   }
   let stream = null;
@@ -616,7 +638,7 @@ async function openMicrophone() {
     return true;
   } catch {
     stream?.getTracks().forEach((t) => t.stop());
-    setHint('The microphone is not available. Allow it in the browser, or type.');
+    setHint('Mic blocked. Allow it in your browser, or type.');
     return false;
   }
 }
@@ -625,7 +647,7 @@ function micLost() {
   state.stream = null;
   state.vad.reset();
   $('sending').hidden = true;
-  setHint('Microphone paused — tap Talk to resume.');
+  setHint('Mic paused. Tap the mic to resume.');
   resumeQueue();
 }
 
@@ -640,7 +662,7 @@ async function ensureMicrophone({ retry = false } = {}) {
   if (await startMicrophone()) {
     if (state.mode === 'muted') state.mode = 'hands-free';
     $('mode').value = state.mode;
-    setState(listeningLabel());
+    setState(listeningLabel(), listeningKind());
   }
 }
 
@@ -668,14 +690,14 @@ function start({ voice }) {
         state.mode = 'muted';
         $('mode').value = 'muted';
       }
-      setState(listeningLabel());
+      setState(listeningLabel(), listeningKind());
     });
   } else {
     state.mode = 'muted';
     $('mode').value = 'muted';
   }
   $('talk').focus();
-  setState(listeningLabel());
+  setState(listeningLabel(), listeningKind());
 }
 
 // ---- controls ----
@@ -689,7 +711,7 @@ function releasePtt(cancel = false) {
   setTimeout(() => {
     if (token !== state.pressToken) return;
     flushPtt(cancel);
-    setState(listeningLabel());
+    setState(listeningLabel(), listeningKind());
   }, cancel ? 0 : PTT_TAIL_MS);
 }
 
@@ -716,7 +738,7 @@ function pressTalk() {
   const token = state.pressToken;
   state.pttFrames = [];
   $('talk').setAttribute('aria-pressed', 'true');
-  setState('Listening…');
+  setState('Listening', 'listening');
   setTimeout(() => { if (state.pressed && token === state.pressToken) releasePtt(); }, PTT_MAX_MS);
 }
 
@@ -728,7 +750,11 @@ function bindControls() {
   $('start-button').addEventListener('click', () => start({ voice: true }));
   $('text-only').addEventListener('click', () => start({ voice: false }));
   $('stop').addEventListener('click', () => { bargeIn(); sendText('/cancel'); });
-  $('status').addEventListener('click', () => sendText('/status'));
+  $('status').addEventListener('click', () => {
+    $('settings').hidden = true;
+    $('settings-button').setAttribute('aria-expanded', 'false');
+    sendText('/status');
+  });
   $('send-now').addEventListener('click', () => {
     const event = state.vad.flush();
     $('sending').hidden = true;
@@ -739,7 +765,7 @@ function bindControls() {
   $('discard').addEventListener('click', () => {
     state.vad.reset();
     $('sending').hidden = true;
-    setState(listeningLabel());
+    setState(listeningLabel(), listeningKind());
     resumeQueue();
   });
   $('compose').addEventListener('submit', (event) => {
@@ -781,7 +807,7 @@ function bindControls() {
   $('mode').addEventListener('change', () => {
     state.mode = $('mode').value;
     store('tamoz.talk.mode', state.mode);
-    talk.textContent = state.mode === 'push-to-talk' ? 'Hold to talk' : 'Talk';
+    labelTalk();
     state.vad.reset();
     $('sending').hidden = true;
     setTracks(state.mode !== 'muted');
@@ -789,7 +815,7 @@ function bindControls() {
     else talk.removeAttribute('aria-pressed');
     if (state.mode !== 'muted' && !state.voice && state.started) start({ voice: true });
     else if (state.mode !== 'muted') ensureMicrophone();
-    setState(listeningLabel());
+    setState(listeningLabel(), listeningKind());
     resumeQueue();
   });
   $('hangover').value = String(state.vad.options.hangoverMs);
@@ -804,7 +830,7 @@ function bindControls() {
     if (!state.speech) bargeIn();
   });
   $('headphones').addEventListener('change', () => { state.fullDuplex = $('headphones').checked; });
-  talk.textContent = state.mode === 'push-to-talk' ? 'Hold to talk' : 'Talk';
+  labelTalk();
   if (state.mode !== 'push-to-talk') talk.removeAttribute('aria-pressed');
   navigator.mediaSession?.setActionHandler?.('pause', () => bargeIn());
   document.addEventListener('visibilitychange', () => {
@@ -849,8 +875,8 @@ function requireToken() {
   $('start-button').disabled = !ready;
   $('text-only').disabled = !ready;
   $('start-note').textContent = ready
-    ? 'Tap Start to use your microphone and hear replies.'
-    : 'Open the link printed by `tamoz talk start` on this device.';
+    ? 'Tamoz will use your microphone and speak replies.'
+    : 'Open the link printed by `tamoz start` on this device.';
   return ready;
 }
 

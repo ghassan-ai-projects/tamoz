@@ -3,7 +3,7 @@
 The browser talk channel for Tamoz: one gem implementing the `Tamoz::Comms::Transport` seam over a
 hardened stdlib HTTP server and the talk page (ADR-061). Depends only on `tamoz-core`, `tamoz-comms` and
 the standard library. Speech synthesis is injected (`synthesize: ->(text) { mp3_bytes }`), so the gem
-never loads a model client; `tamoz talk start` builds it from the VOICE role.
+never loads a model client; `tamoz start` builds it from the runtime's voice model.
 
 ## Facade
 

@@ -87,7 +87,7 @@ The highest-risk surface in the feature. `tamoz approve` is authorized by filesy
 | Surface `approvals.mode` | Permits | Default |
 |---|---|---|
 | `none` | render a notice; the operator uses local `tamoz approve` | yes |
-| `deny_only` | approval prompts with Approve and Deny buttons, bound to the exact pending interrupt | set by `tamoz telegram setup` |
+| `deny_only` | approval prompts with Approve and Deny buttons, bound to the exact pending interrupt | set by `tamoz channel add telegram` |
 
 The `deny_only` name predates the 2026-09-24 policy: since then `gems/tamoz-approval/policy/base.yaml` sets `evidence.approve: chat_bound`, so on such a surface the bound correspondent can approve every asked action. Raising `evidence.approve` to `filesystem_operator` makes the chat deny-only again. `headless_auto_approvals` must remain zero; `chat_grants` counts approvals made from chat.
 

@@ -8,11 +8,10 @@ default.
 
 ```sh
 export OPENAI_API_KEY="..."
-export TAMOZ_MODEL="gpt-5-mini"
-bundle exec tamoz --root /path/to/project "Explain how authentication works"
+bundle exec tamoz --model gpt-5-mini --root /path/to/project "Explain how authentication works"
 
 # Opt in to approved atomic patches and a named check.
-bundle exec tamoz --root /path/to/project --allow-changes \
+bundle exec tamoz --model gpt-5-mini --root /path/to/project --allow-changes \
   --check 'test=bundle exec rake test' "Fix the failing test"
 ```
 

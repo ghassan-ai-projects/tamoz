@@ -22,8 +22,12 @@ module Tamoz
         'anthropic' => { default_base: nil, protocol: 'native-rejected', kind: 'rejected' },
         'gemini' => { default_base: nil, protocol: 'native-rejected', kind: 'rejected' }
       }.transform_values(&:freeze).freeze
+      ROLE_CREDENTIAL = /\A(?!TAMOZ_)[A-Z][A-Z0-9_]*_API_KEY\z/
 
       class << self
+        # A model role reads its key from the `*_API_KEY` variable it names, never from a runtime or channel one.
+        def role_credential?(name) = name.is_a?(String) && name.match?(ROLE_CREDENTIAL)
+
         # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists -- one build: every ensure,
         # the configuration digest and the transport in the order a caller can read them.
         def build(provider:, model:, profile_role:, environment:, explicit_api_base: nil,
@@ -33,7 +37,7 @@ module Tamoz
           ensure_model!(model, name)
           ensure_role_binding!(profile_role, name, model)
           ensure_protocol!(descriptor, name)
-          credential_name = role_credential_name(credential_name, profile_role, name) ||
+          credential_name = role_credential_name(credential_name, profile_role) ||
                             credential_name_for(profile_role, name)
           api_key = environment_value(environment, credential_name)
           endpoint = explicit_api_base || profile_endpoint(profile_role) ||
@@ -55,7 +59,7 @@ module Tamoz
 
         def environment_names(provider:, profile_role: nil, credential_name: nil)
           name = normalize_provider(provider)
-          names = [role_credential_name(credential_name, profile_role, name) || credential_env_key(name),
+          names = [role_credential_name(credential_name, profile_role) || credential_env_key(name),
                    api_base_name(name)]
           ref = profile_credential_reference(profile_role, name)
           names << ref.fetch('name') if ref
@@ -129,10 +133,10 @@ module Tamoz
           raise ModelCallError.new(code: 'native_protocol_rejected')
         end
 
-        def role_credential_name(name, profile_role, provider)
+        def role_credential_name(name, profile_role)
           return nil if name.to_s.empty?
           raise ConfigurationError, 'a profile role names its credential in the profile' if profile_role
-          unless name.match?(/\A[A-Z][A-Z0-9_]*\z/) && name != api_base_name(provider)
+          unless role_credential?(name)
             raise ConfigurationError, 'a role credential must name an environment variable, never hold the key'
           end
 

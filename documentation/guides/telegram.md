@@ -23,31 +23,32 @@ TAMOZ_TELEGRAM_BOT_TOKEN=<token from BotFather>
 OPENROUTER_API_KEY=<your key>
 ```
 
-Then two commands. `setup` is the one-time pairing; `start` runs the gateway and
-the worker together in the foreground until Ctrl-C:
+Then three commands. `setup` makes the runtime, its chat model and its chat
+profile, `channel add telegram` is the one-time pairing, and `start` runs one
+gateway per channel and the worker together in the foreground until Ctrl-C:
 
 ```bash
-rbenv exec bundle exec tamoz telegram setup --workspace ~/my-project --env-file .env
-rbenv exec bundle exec tamoz telegram start --env-file .env
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace ~/my-project --chat openrouter/deepseek/deepseek-v4.1-flash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz start --env-file .env
 ```
 
-`setup` authenticates the token (`getMe`), waits up to 120s for your first
+`channel add telegram` authenticates the token (`getMe`), waits up to 120s for your first
 private message to the bot, prints the sender's name and id, and asks you to
 confirm it is you (`--owner TELEGRAM_USER_ID` skips the question). On `y` it
-writes the channel and a workspace profile into the runtime directory (default
-`~/.tamoz`, or `--runtime-dir PATH` on both commands). Running it again on an
-existing runtime repairs it: an unpinned channel is adopted and a missing
-profile is written.
+writes the channel, which serves the runtime's one chat profile. Running it again
+changes nothing, and an unpinned channel left by a half-finished setup is adopted.
+`channel add` needs the chat profile `setup` writes; an existing profile is never
+rewritten.
 
-`start` verifies the token, then tries each configured provider with one real
-call and uses the first that answers (DeepSeek, then OpenRouter; force one with
-`--provider NAME --model NAME`). A missing token, a refused token, a missing or
-refused key, or an empty provider account is named in one `tamoz:` line before
-anything runs. The worker runs with `--work-routing`, the tool-calling loop chat
+`start` verifies the token, then calls the chat model `setup --chat` named once.
+A missing token, a refused token, a missing or refused key, or an empty provider
+account is named in one `tamoz:` line before anything runs. A channel another run
+already serves is refused, naming that run. The worker runs with `--work-routing`, the tool-calling loop chat
 is built on.
 
 Now message the bot. Section 7 describes what to expect; the rest of this guide
-is the manual path — what those two commands write, and how to configure each
+is the manual path — what those commands write, and how to configure each
 piece by hand.
 
 ### When it does not answer
@@ -247,19 +248,17 @@ until you send `/new`. Replies come in the language you write in.
 - **Photos and images.** A photo, or a PNG/JPEG/WebP/GIF sent as a file (up to
   5 MB), is read in one extra model call: every piece of text in it verbatim,
   then two sentences on what it shows; the answer is built from that. Name an
-  image-reading model with `TAMOZ_VISION_PROVIDER`, `TAMOZ_VISION_MODEL` (and
-  optionally `TAMOZ_VISION_API_BASE`); without one, the chat model reads images,
+  image-reading model with `tamoz setup --vision PROVIDER/MODEL` (and optionally
+  `--vision-api-base URL`); without one, the chat model reads images,
   so it must accept image input. If the model refuses, the bot says it could
   not read the image.
 - **Voice messages.** A voice note is transcribed and answered as if you had
   typed it, in the language you spoke. A forwarded voice note or an audio file is
   someone else's speech: its transcript is shown to the model as material, not as
   your request. Transcription needs an OpenAI-compatible speech-to-text model the
-  operator names in the env file the worker reads, for example:
-  `TAMOZ_TRANSCRIPTION_PROVIDER=openai`, `TAMOZ_TRANSCRIPTION_MODEL=whisper-1` and
-  `OPENAI_API_KEY`, or a local whisper server with
-  `TAMOZ_TRANSCRIPTION_PROVIDER=ollama` (no key is sent) and
-  `TAMOZ_TRANSCRIPTION_API_BASE` pointing at it. The audio is sent as Telegram delivered it
+  operator names with `tamoz setup`, for example `--transcription openai/whisper-1`
+  with `OPENAI_API_KEY` in `.env`, or a local whisper server with
+  `--transcription ollama/whisper --transcription-api-base URL` (no key is sent). The audio is sent as Telegram delivered it
   (OGG/Opus), so the endpoint must accept that format. Without a transcription
   model the bot says voice is not set up. Up to 10 minutes per message.
 - **Other messages.** Stickers, videos and formats the bot cannot read yet get

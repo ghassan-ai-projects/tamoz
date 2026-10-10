@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Regression coverage for the unattended surface: `init`, `queue`, `worker`,
+# Regression coverage for the unattended surface: `setup`, `queue`, `worker`,
 # `status`.
 #
 # The autonomy scorecard proves the product behaviours; this file guards the
@@ -59,8 +59,8 @@ class AgentWorkerTest < Minitest::Test
 
   # -------------------------------------------------------------- the directory
 
-  def test_init_creates_a_private_runtime_directory
-    Dir.mktmpdir("tamoz-init") do |directory|
+  def test_setup_creates_a_private_runtime_directory
+    Dir.mktmpdir("tamoz-setup") do |directory|
       runtime_dir = File.join(directory, "runtime")
       workspace = File.join(directory, "workspace")
       FileUtils.mkdir_p(workspace)
@@ -68,7 +68,7 @@ class AgentWorkerTest < Minitest::Test
       err = StringIO.new
 
       status = Tamoz::Agent::CLI.run(
-        ["--runtime-dir", runtime_dir, "init", "--workspace", workspace, "--json"],
+        ["--runtime-dir", runtime_dir, "setup", "--workspace", workspace, "--json"],
         out:, err:, input: StringIO.new, env: {}
       )
 

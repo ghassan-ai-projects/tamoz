@@ -85,13 +85,13 @@ module Tamoz
         checks
       end
 
-      # The talk token lives in the runtime directory, not the environment; `talk start` hands it to the gateway.
+      # The talk token lives in the runtime directory, not the environment; `start` hands it to the gateway.
       def doctor_talk(store, descriptor, directory)
         token = File.join(directory.path, 'talk', 'token')
-        present = File.exist?(token) && File.read(token).strip.length >= 32
+        present = File.exist?(token) && File.read(token).strip.length >= CLITalkCommands::TOKEN_MIN
         poller = poller_ok?(store, descriptor)
         port = descriptor.transport.fetch(:port)
-        [['token', present || 'no talk token; run `tamoz talk setup`'],
+        [['token', present || 'no talk token; run `tamoz channel add talk`'],
          ["port #{port}", poller == true ? port_free?(@env.to_h.fetch('TAMOZ_TALK_HOST', '127.0.0.1'), port) : true],
          ['poller', poller]]
       end

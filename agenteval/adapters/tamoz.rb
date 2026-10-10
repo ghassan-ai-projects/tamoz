@@ -27,8 +27,6 @@ module Agenteval
       approvals_auto_granted: true,
       env: {
         "DEEPSEEK_API_KEY" => api_key,
-        "TAMOZ_PROVIDER" => ENV.fetch("AGENTEVAL_PROVIDER", "openrouter"),
-        "TAMOZ_MODEL" => ENV.fetch("AGENTEVAL_MODEL", "deepseek/deepseek-v4.1-flash"),
         "PATH" => ENV.fetch("PATH"),
         "HOME" => ENV.fetch("HOME"),
         # The agent runs with the workspace as its working directory, which is a temp dir
@@ -46,8 +44,9 @@ module Agenteval
         # behind and its state can leak between trials.
         session_dir = File.join(ENV.fetch("AGENTEVAL_SESSION_DIR", Agenteval::ROOT), "sessions")
         FileUtils.mkdir_p(session_dir, mode: 0o700)
-        argv = ["rbenv", "exec", "bundle", "exec", "tamoz",
-                "--root", dir, "--session-dir", session_dir]
+        argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", dir, "--session-dir", session_dir,
+                "--provider", ENV.fetch("AGENTEVAL_PROVIDER", "openrouter"),
+                "--model", ENV.fetch("AGENTEVAL_MODEL", "deepseek/deepseek-v4.1-flash")]
         unless scenario.readonly
           argv += ["--allow-changes", "--check", "test=#{scenario.notes.fetch("check_command")}"]
         end

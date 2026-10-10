@@ -1,9 +1,9 @@
 {
   "generated_by": "script/adr_catalog.rb",
-  "count": 61,
-  "next_number": 62,
+  "count": 62,
+  "next_number": 63,
   "states": {
-    "accepted": 50,
+    "accepted": 51,
     "proposed": 2,
     "retired": 9
   },
@@ -1439,6 +1439,35 @@
         "042",
         "048",
         "049"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "History"
+      ]
+    },
+    {
+      "num": "062",
+      "title": "A runtime is one agent; channels are ways in to it",
+      "status": "Accepted 2026-10-10",
+      "state": "accepted",
+      "date": "2026-10-10",
+      "tier": "F",
+      "implementation": "Partial — built and plumbing-tested; the owner's live runtime moves to it in P7 of `docs/one-setup-2026-10-09/PLAN.md`",
+      "file": "adr-062-a-runtime-is-one-agent-and-channels-are-ways-in.md",
+      "relates_to": [
+        "016",
+        "042",
+        "048",
+        "059",
+        "061"
       ],
       "supersedes": [],
       "superseded_by": [],

@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 589 | 320 | 14 | **no** |
+| 591 | 326 | 14 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 561 |
+| pass | 563 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -91,6 +91,7 @@ generating run.
 | `ADR-058` | adr | yes | pass | `test/stream_episode_intent_authority_test.rb#test_gate4_a_novel_domain_produces_a_decision_with_zero_new_ruby` |
 | `ADR-059` | adr | yes | pass | `test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected` |
 | `ADR-061` | adr | yes | pass | `test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` |
+| `ADR-062` | adr | yes | pass | `test/child_environments_test.rb#test_the_worker_holds_its_models_and_sources_keys_and_nothing_else` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -481,6 +482,7 @@ generating run.
 | `CLI-approve` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_06_approval_resumes_the_same_occurrence` |
 | `CLI-ask` | cli_command | yes | pass | `test/agent_cli_test.rb#test_ask_creates_session_file` |
 | `CLI-cancel` | cli_command | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
+| `CLI-channel` | cli_command | yes | pass | `test/cli_channel_telegram_test.rb#test_the_first_private_sender_the_operator_confirms_is_allowed` |
 | `CLI-code` | cli_command | yes | pass | `test/cli_code_test.rb#test_code_runs_the_work_loop_and_exits_zero_on_a_verified_change` |
 | `CLI-comms` | cli_command | yes | pass | `test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly` |
 | `CLI-compact` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards` |
@@ -492,7 +494,6 @@ generating run.
 | `CLI-explain` | cli_command | yes | pass | `test/agent_cli_self_diagnosis_test.rb#test_explain_attributes_policy_and_actor_and_marks_unanswered_approval` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-improve` | cli_command | yes | pass | `test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories` |
-| `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-investigate` | cli_command | yes | pass | `test/agent_cli_investigate_test.rb#test_investigate_json_prints_a_grounded_report_and_exits_zero` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
 | `CLI-mcp` | cli_command | yes | pass | `test/mcp_server_test.rb#test_serves_mcp_over_stdio` |
@@ -507,11 +508,12 @@ generating run.
 | `CLI-resolve` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resolve_records_a_human_effect_resolution` |
 | `CLI-resume` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resume_collects_interrupt_answers` |
 | `CLI-schedule` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence` |
+| `CLI-service` | cli_command | yes | pass | `test/cli_service_test.rb#test_install_writes_one_private_job_per_child_and_loads_it` |
+| `CLI-setup` | cli_command | yes | pass | `test/cli_setup_test.rb#test_setup_creates_a_runtime_with_its_models` |
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
 | `CLI-skills` | cli_command | yes | pass | `test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections` |
+| `CLI-start` | cli_command | yes | pass | `test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` |
 | `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |
-| `CLI-talk` | cli_command | yes | pass | `test/talk_cli_test.rb#test_setup_writes_the_channel_profile_and_a_private_token` |
-| `CLI-telegram` | cli_command | yes | pass | `test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel` |
 | `CLI-think` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-trace` | cli_command | yes | pass | `test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal` |
 | `CLI-usage` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |

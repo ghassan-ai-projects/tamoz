@@ -5,8 +5,8 @@ require_relative 'support/talk_fake_provider'
 require_relative 'support/talk_chat_eval'
 require_relative 'support/talk_fixtures'
 
-# The real `tamoz talk setup|start`, gateway and worker processes against a fake provider: plumbing, not
-# intelligence.
+# The real `tamoz setup`, `channel add talk` and `start`, gateway and worker processes against a fake provider:
+# plumbing, not intelligence.
 # rubocop:disable Minitest/MultipleAssertions
 class TalkEndToEndTest < Minitest::Test
   include TalkFixtures
@@ -17,14 +17,13 @@ class TalkEndToEndTest < Minitest::Test
       (working << true) && sleep(30) if text.include?('take your time')
       'Pond 7 is fine.'
     }).start
-    env = { 'PATH' => ENV.fetch('PATH'), 'HOME' => Dir.home,
-            'ZAI_API_KEY' => 'chat-key', 'ZAI_API_BASE' => provider.base_url,
-            'TAMOZ_TRANSCRIPTION_PROVIDER' => 'openai', 'TAMOZ_TRANSCRIPTION_MODEL' => 'whisper-1',
-            'TAMOZ_TRANSCRIPTION_API_BASE' => provider.base_url, 'TAMOZ_TRANSCRIPTION_CREDENTIAL' => 'SPEECH_API_KEY',
-            'TAMOZ_VOICE_PROVIDER' => 'openai', 'TAMOZ_VOICE_MODEL' => 'tts-1', 'TAMOZ_VOICE_NAME' => 'alloy',
-            'TAMOZ_VOICE_API_BASE' => provider.base_url, 'TAMOZ_VOICE_CREDENTIAL' => 'SPEECH_API_KEY',
-            'SPEECH_API_KEY' => 'speech-key', 'TAMOZ_PROVIDER' => 'zai', 'TAMOZ_MODEL' => 'glm-5.3-flash' }
-    eval = TalkChatEval.new(env:).start
+    env = { 'PATH' => ENV.fetch('PATH'), 'HOME' => Dir.home, 'ZAI_API_KEY' => 'chat-key',
+            'ZAI_API_BASE' => provider.base_url, 'SPEECH_API_KEY' => 'speech-key' }
+    speech = ['--transcription-api-base', provider.base_url, '--transcription-credential', 'SPEECH_API_KEY',
+              '--voice-api-base', provider.base_url, '--voice-credential', 'SPEECH_API_KEY']
+    models = ['--chat', 'zai/glm-5.3-flash', '--transcription', 'openai/whisper-1', '--voice', 'openai/tts-1',
+              '--voice-name', 'alloy', *speech]
+    eval = TalkChatEval.new(env:, models:).start
     started = eval.now
 
     assert_equal 200, eval.say_audio(wav(1.5))

@@ -280,8 +280,8 @@ def environment
 end
 
 def live_report
-  provider = ENV.fetch("TAMOZ_PROVIDER")
-  model_name = ENV.fetch("TAMOZ_MODEL")
+  provider = ENV.fetch("AGENTEVAL_PROVIDER")
+  model_name = ENV.fetch("AGENTEVAL_MODEL")
   model = Tamoz::Agent::ModelClientFactory.build(
     provider:, model: model_name, profile_role: nil, environment: ENV, safety: :unsafe
   )

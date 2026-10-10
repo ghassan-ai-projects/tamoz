@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-10-09T23:07:15Z",
-  "manifest_requirements": 589,
-  "named_cases_run": 320,
+  "generated_at": "2026-10-10T08:33:31Z",
+  "manifest_requirements": 591,
+  "named_cases_run": 326,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 3,
     "missing": 14,
-    "pass": 561
+    "pass": 563
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -884,6 +884,26 @@
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "Accepted 2026-10-09",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "ADR-062",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "A runtime is one agent; channels are ways in to it",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/child_environments_test.rb#test_the_worker_holds_its_models_and_sources_keys_and_nothing_else",
+      "supporting_tests": [
+        "test/runtime_directory_update_test.rb#test_every_channel_names_the_same_profile",
+        "test/no_env_model_readers_test.rb#test_no_code_reads_a_model_from_the_environment",
+        "test/cli_service_test.rb#test_no_output_carries_a_secret"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-10-10",
       "evidence_result": "pass",
       "owner_signature": null
     },
@@ -7129,6 +7149,24 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-channel",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz channel",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/cli_channel_telegram_test.rb#test_the_first_private_sender_the_operator_confirms_is_allowed",
+      "supporting_tests": [
+        "test/cli_channel_talk_test.rb#test_the_channel_serves_the_runtime_profile",
+        "test/cli_channel_talk_test.rb#test_a_runtime_inside_the_workspace_is_refused_so_the_agent_cannot_read_the_token"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-code",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7300,23 +7338,6 @@
       "status": "pass",
       "named_test": "test/cli_improve_test.rb#test_generator_emits_a_candidate_from_verified_trajectories",
       "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "CLI-init",
-      "category": "cli_command",
-      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
-      "title": "tamoz init",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory",
-      "supporting_tests": [
-        "test/agent_worker_test.rb#test_worker_refuses_a_world_readable_runtime_directory"
-      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7550,6 +7571,41 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-service",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz service",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/cli_service_test.rb#test_install_writes_one_private_job_per_child_and_loads_it",
+      "supporting_tests": [
+        "test/cli_service_test.rb#test_uninstall_unloads_the_jobs_and_keeps_their_plists_aside"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-setup",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz setup",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/cli_setup_test.rb#test_setup_creates_a_runtime_with_its_models",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_setup_creates_a_private_runtime_directory",
+        "test/cli_setup_test.rb#test_an_existing_chat_profile_is_never_rewritten"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-show",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7580,6 +7636,24 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-start",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz start",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
+      "supporting_tests": [
+        "test/cli_start_test.rb#test_one_gateway_per_channel_and_one_worker_without_model_flags",
+        "test/cli_start_test.rb#test_a_revoked_bot_token_is_named"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-status",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7589,42 +7663,6 @@
       "named_test": "test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model",
       "supporting_tests": [
         "test/agent_worker_test.rb#test_status_safety_counters_are_present_and_zero_on_a_clean_runtime"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "CLI-talk",
-      "category": "cli_command",
-      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
-      "title": "tamoz talk",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/talk_cli_test.rb#test_setup_writes_the_channel_profile_and_a_private_token",
-      "supporting_tests": [
-        "test/talk_cli_test.rb#test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only",
-        "test/talk_cli_test.rb#test_a_workspace_holding_the_runtime_is_refused_so_the_agent_cannot_read_the_token"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "CLI-telegram",
-      "category": "cli_command",
-      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
-      "title": "tamoz telegram",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel",
-      "supporting_tests": [
-        "test/cli_telegram_test.rb#test_setup_repairs_an_existing_unpinned_channel_without_a_profiles_directory",
-        "test/cli_telegram_test.rb#test_start_names_a_revoked_bot_token"
       ],
       "classification": "direct",
       "rationale": null,
@@ -9305,7 +9343,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

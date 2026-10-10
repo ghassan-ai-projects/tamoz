@@ -123,6 +123,7 @@ decision is not built; the ADR says which part.
 | [041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) | Communication channels are a contract gem plus per-transport adapter gems | C | Complete |
 | [042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) | The channel gateway is a separate process in the connector zone | F | Complete |
 | [061](./adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md) | The talk channel is a browser surface; its voice is presentation, its record is text | F | Complete |
+| [062](./adr-062-a-runtime-is-one-agent-and-channels-are-ways-in.md) | A runtime is one agent; channels are ways in to it | F | Partial — the live runtime moves in P7 |
 
 ### Observability
 
@@ -159,7 +160,7 @@ decision is not built; the ADR says which part.
 
 What each said and why it died: [`RETIRED.md`](./RETIRED.md).
 
-**Next number to assign: 062.**
+**Next number to assign: 063.**
 
 ## Other files here
 

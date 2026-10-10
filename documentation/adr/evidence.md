@@ -120,7 +120,7 @@ Checked 2026-10-01 (source inspection).
 | Succeeded is immutable | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb` | `test/sqlite_effect_journal_test.rb` — `test_prepare_start_complete_is_idempotent_and_succeeded_is_immutable` | — |
 | Unsafe ambiguous attempts become `:unknown` | effect journal + dispatcher | `test/sqlite_effect_journal_test.rb` — `test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth` | — |
 | Human resolution is audited and fenced | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb` | `test/sqlite_effect_journal_test.rb` — `test_human_resolution_refuses_a_foreign_writer_row_scope` | — |
-| Speech of delivered text is presentation, outside any node; only the injected synthesizer speaks | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_talk_commands.rb` | `test/talk_boundary_test.rb` — `test_speech_synthesis_has_one_caller_the_injected_synthesizer` | Checked 2026-10-09 (tests run) |
+| Speech of delivered text is presentation, outside any node; only the talk gateway's injected synthesizer speaks (and `start`'s one probe) | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_talk_gateway.rb` | `test/talk_boundary_test.rb` — `test_speech_is_synthesized_only_by_the_talk_gateway_and_the_start_probe` | Checked 2026-10-10 (tests run) |
 
 ## ADR-017
 
@@ -374,7 +374,24 @@ Checked 2026-10-01 (source inspection); the talk rows 2026-10-09 (tests run).
 | The gateway authenticates its transport before polling | `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb` | `test/comms_gateway_test.rb` — `test_start_authenticates_the_transport_before_polling` | — |
 | A replayed update creates no second request | gateway + store | `test/comms_gateway_test.rb` — `test_a_replayed_update_does_not_create_a_second_request` | — |
 | The packaged gateway runs with an injected transport and store | packaging | `test/packaging_test.rb` — `test_packaged_comms_gateway_runs_with_injected_transport_and_store` | "Never loads a model credential" is source inspection, not a test |
-| A talk gateway gets the token and the VOICE key only, never the chat key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/talk_cli_test.rb` — `test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only`, `test_start_refuses_the_chat_key_as_the_voice_key_by_name_or_by_value` | — |
+| A talk gateway gets the token and the voice key only, never the chat key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/child_environments_test.rb` — `test_the_talk_gateway_holds_its_token_and_the_voice_key_never_the_chat_key`; `test/cli_start_test.rb` — `test_the_chat_key_is_refused_as_the_voice_key_by_name`, `test_the_chat_key_is_refused_as_the_voice_key_by_value` | — |
+
+## ADR-062
+
+Checked 2026-10-10 (tests run).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| Every channel names one profile | `gems/tamoz-agent/lib/tamoz/agent/runtime_config_rules.rb` | `test/runtime_directory_update_test.rb` — `test_every_channel_names_the_same_profile`, `test_a_channel_naming_another_profile_is_refused_before_writing` | — |
+| An existing profile is never rewritten | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_setup_commands.rb` | `test/cli_setup_test.rb` — `test_an_existing_chat_profile_is_never_rewritten`; `test/cli_channel_telegram_test.rb` — `test_an_operator_edit_to_the_profile_survives_pairing` | — |
+| No code reads a model from a `TAMOZ_*` variable | source scan | `test/no_env_model_readers_test.rb` — `test_no_code_reads_a_model_from_the_environment` | A name built at runtime other than `TAMOZ_#{…}` is not seen; harness scripts' `AGENTEVAL_*` knob is out of scope by design |
+| A key in a model's fields is refused and never echoed | `gems/tamoz-agent/lib/tamoz/agent/runtime_models.rb` | `test/runtime_models_test.rb` — `test_a_key_in_the_credential_field_is_refused_and_never_echoed`, `test_a_provider_that_is_not_a_provider_name_is_refused_without_echoing_it` | — |
+| Each child holds exactly its keys | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/child_environments_test.rb` — `test_the_worker_holds_its_models_and_sources_keys_and_nothing_else`, `test_the_talk_gateway_holds_its_token_and_the_voice_key_never_the_chat_key`, `test_a_source_cannot_override_the_runtime_or_reach_the_env_file` | — |
+| `start` runs one gateway per channel and one worker | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_start_commands.rb` | `test/cli_start_test.rb` — `test_one_gateway_per_channel_and_one_worker_without_model_flags`, `test_each_child_gets_its_own_environment` | The plan and environments only (spawn stubbed); supervision is covered by the talk end-to-end test alone |
+| A second run on a channel, or on a runtime the service runs, is refused | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_start_checks.rb`, `gems/tamoz-agent-cli/lib/tamoz/agent/cli_launchd.rb` | `test/cli_start_test.rb` — `test_a_channel_another_run_holds_is_refused_naming_it`, `test_a_talk_channel_another_run_holds_is_refused_naming_it`; `test/cli_service_test.rb` — `test_start_is_refused_while_the_service_runs_this_runtime` | Fake launchctl |
+| The voice key is never the chat key | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_start_checks.rb` | `test/cli_start_test.rb` — `test_the_chat_key_is_refused_as_the_voice_key_by_name`, `test_the_chat_key_is_refused_as_the_voice_key_by_value` | Checked when a talk channel is enabled |
+| A `.env` others can read is refused | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_child_processes.rb` | `test/cli_channel_telegram_test.rb` — `test_an_env_file_others_can_read_is_refused`; `test/cli_child_processes_test.rb` — `test_an_env_file_others_can_read_is_refused` | `start`, `service install` and `channel add` share this guard |
+| The service's plists are private and nothing prints a secret | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_service_commands.rb` | `test/cli_service_test.rb` — `test_install_writes_one_private_job_per_child_and_loads_it`, `test_no_output_carries_a_secret`, `test_status_names_each_job_and_never_prints_launchd_state` | Fake launchctl; backups' mode is set by the same `AtomicFile` call, untested; the owner's machine is a P7 live check |
 
 ## ADR-061
 
@@ -390,7 +407,7 @@ Checked 2026-10-09 (tests run).
 | A typed or spoken approve decides nothing | admission + callbacks | `test/talk_gateway_test.rb` — `test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing` | The real-model case is EVAL `approval_by_voice` |
 | Tamoz's own voice is framed as an echo | `gems/tamoz-agent-session/lib/tamoz/agent/work_attachment.rb` | `test/chat_attachment_test.rb` — `test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo` | — |
 | Speech is only a delivered spoken message | `gems/tamoz-talk/lib/tamoz/talk/hub.rb` | `test/talk_hub_test.rb` — `test_only_the_first_part_of_a_spoken_kind_is_spoken` | — |
-| The whole loop runs through real processes | `tamoz talk start` | `test/talk_end_to_end_test.rb` — `test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` | Fake provider: plumbing, not intelligence |
+| The whole loop runs through real processes | `tamoz start` | `test/talk_end_to_end_test.rb` — `test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` | Fake provider: plumbing, not intelligence |
 
 ## ADR-044
 
@@ -446,7 +463,7 @@ Checked 2026-10-01 (source inspection).
 | No retry of a received failure | `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb` | `test/model_transport_parity_test.rb` — `test_transport_does_not_retry_a_received_failure` | — |
 | The graph loads no model, eval, or HTTP package | `tamoz-graph` | `test/dependency_isolation_test.rb` — `test_graph_loads_no_model_eval_or_adapter_package` | — |
 | Speech goes through the same transport, bounded and mp3-checked | `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb` | `test/model_speech_test.rb` — `test_a_body_past_the_bound_is_refused_not_truncated`, `test_a_body_that_is_not_mp3_is_refused` | Checked 2026-10-09 (tests run) |
-| A role names the `*_API_KEY` variable it reads, never the key | `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/child_environments_test.rb` — `test_a_role_reads_its_key_from_the_variable_it_names`, `test_a_role_may_not_name_a_channel_secret_or_a_runtime_variable` | Checked 2026-10-09 (tests run) |
+| A role names the `*_API_KEY` variable it reads, never the key | `gems/tamoz-agent/lib/tamoz/agent/runtime_models.rb`, `gems/tamoz-agent/lib/tamoz/agent/child_environments.rb` | `test/runtime_models_test.rb` — `test_a_key_in_the_credential_field_is_refused_and_never_echoed`, `test_a_credential_names_an_api_key_variable_outside_tamoz`; `test/child_environments_test.rb` — `test_the_worker_holds_its_models_and_sources_keys_and_nothing_else` | Checked 2026-10-10 (tests run) |
 
 ## ADR-049
 

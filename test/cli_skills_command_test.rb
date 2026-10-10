@@ -46,35 +46,37 @@ class CliSkillsCommandTest < Minitest::Test
     assert_equal File.join(Tamoz::Skills.bundled_root, 'evidence-audit'), out.strip
   end
 
-def test_an_operator_skills_root_inside_the_workspace_is_refused_for_a_session
-  inside = File.join(@workspace, 'skills')
-  FileUtils.mkdir_p(inside)
-  sessions = File.join(@dir, 'sessions')
-  FileUtils.mkdir_p(sessions, mode: 0o700)
-  err = StringIO.new
-  status = Tamoz::Agent::CLI.run(['--root', @workspace, '--session-dir', sessions, '--skills', inside, '--allow-changes',
-                                  'code', 'task'], out: StringIO.new, err:,
-                                 env: { 'TAMOZ_PROVIDER' => 'deepseek', 'TAMOZ_MODEL' => 'deepseek-chat', 'DEEPSEEK_API_KEY' => 'unused' })
+  def test_an_operator_skills_root_inside_the_workspace_is_refused_for_a_session
+    inside = File.join(@workspace, 'skills')
+    FileUtils.mkdir_p(inside)
+    sessions = File.join(@dir, 'sessions')
+    FileUtils.mkdir_p(sessions, mode: 0o700)
+    err = StringIO.new
+    argv = ['--root', @workspace, '--session-dir', sessions, '--skills', inside, '--allow-changes',
+            '--provider', 'deepseek', '--model', 'deepseek-chat', 'code', 'task']
+    status = Tamoz::Agent::CLI.run(argv,
+                                   out: StringIO.new, err:, env: { 'DEEPSEEK_API_KEY' => 'unused' })
 
-  refute_equal 0, status
-  assert_match(/overlaps the workspace/, err.string)
-  assert_equal 0, tamoz('--skills', inside, 'skills', 'list').first, 'a read-only view is not a session'
-end
+    refute_equal 0, status
+    assert_match(/overlaps the workspace/, err.string)
+    assert_equal 0, tamoz('--skills', inside, 'skills', 'list').first, 'a read-only view is not a session'
+  end
 
   def test_an_invoked_skill_must_load_before_the_first_model_call
-    sessions = File.join(@dir, "sessions")
+    sessions = File.join(@dir, 'sessions')
     FileUtils.mkdir_p(sessions, mode: 0o700)
-    env = { "TAMOZ_PROVIDER" => "deepseek", "TAMOZ_MODEL" => "deepseek-chat", "DEEPSEEK_API_KEY" => "unused" }
+    env = { 'DEEPSEEK_API_KEY' => 'unused' }
     run = lambda do |*flags|
       err = StringIO.new
-      status = Tamoz::Agent::CLI.run(["--root", @workspace, "--session-dir", sessions, "--allow-changes", *flags,
-                                      "code", "task"], out: StringIO.new, err:, env:)
+      status = Tamoz::Agent::CLI.run(['--root', @workspace, '--session-dir', sessions, '--allow-changes',
+                                      '--provider', 'deepseek', '--model', 'deepseek-chat', *flags, 'code', 'task'],
+                                     out: StringIO.new, err:, env:)
       [status, err.string]
     end
 
-    refute_equal 0, run.call("--skill", "evidence-audit").first
-    assert_match(/needs --skills DIR or --bundled-skills/, run.call("--skill", "evidence-audit").last)
-    assert_match(/skill_unknown/, run.call("--bundled-skills", "--skill", "nope").last)
+    refute_equal 0, run.call('--skill', 'evidence-audit').first
+    assert_match(/needs --skills DIR or --bundled-skills/, run.call('--skill', 'evidence-audit').last)
+    assert_match(/skill_unknown/, run.call('--bundled-skills', '--skill', 'nope').last)
   end
 
   def test_new_show_and_promote_author_a_skill_through_a_named_person

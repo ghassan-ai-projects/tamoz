@@ -609,6 +609,10 @@ EVIDENCE = {
                 supporting: ["test/agent_intent_catalog_test.rb#test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector"]},
   "ADR-059" => {test: "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected",
                 supporting: ["test/agent_session_records_test.rb#test_version_one_session_record_is_rejected_without_compatibility_migration"]},
+  "ADR-062" => {test: "test/child_environments_test.rb#test_the_worker_holds_its_models_and_sources_keys_and_nothing_else",
+                supporting: ["test/runtime_directory_update_test.rb#test_every_channel_names_the_same_profile",
+                             "test/no_env_model_readers_test.rb#test_no_code_reads_a_model_from_the_environment",
+                             "test/cli_service_test.rb#test_no_output_carries_a_secret"]},
   "ADR-061" => {test: "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
                 supporting: ["test/comms_parties_test.rb#test_a_party_must_belong_to_its_surfaces_kind",
                              "test/comms_parties_test.rb#test_telegram_bytes_are_unchanged_from_head",
@@ -728,8 +732,17 @@ EVIDENCE = {
   # ---- The unattended surface ---------------------------------------------
   # These are the autonomy milestone's public commands. Each row points at a
   # test that drives the REAL command, never a library call underneath it.
-  "CLI-init" => {test: "test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory",
-                 supporting: ["test/agent_worker_test.rb#test_worker_refuses_a_world_readable_runtime_directory"]},
+  "CLI-setup" => {test: "test/cli_setup_test.rb#test_setup_creates_a_runtime_with_its_models",
+                  supporting: ["test/agent_worker_test.rb#test_setup_creates_a_private_runtime_directory",
+                               "test/cli_setup_test.rb#test_an_existing_chat_profile_is_never_rewritten"]},
+  "CLI-channel" => {test: "test/cli_channel_telegram_test.rb#test_the_first_private_sender_the_operator_confirms_is_allowed",
+                    supporting: ["test/cli_channel_talk_test.rb#test_the_channel_serves_the_runtime_profile",
+                                 "test/cli_channel_talk_test.rb#test_a_runtime_inside_the_workspace_is_refused_so_the_agent_cannot_read_the_token"]},
+  "CLI-start" => {test: "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
+                  supporting: ["test/cli_start_test.rb#test_one_gateway_per_channel_and_one_worker_without_model_flags",
+                               "test/cli_start_test.rb#test_a_revoked_bot_token_is_named"]},
+  "CLI-service" => {test: "test/cli_service_test.rb#test_install_writes_one_private_job_per_child_and_loads_it",
+                    supporting: ["test/cli_service_test.rb#test_uninstall_unloads_the_jobs_and_keeps_their_plists_aside"]},
   "CLI-queue" => {test: "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
                   supporting: ["test/agent_worker_test.rb#test_queue_add_refuses_an_unknown_profile",
                                "test/agent_worker_test.rb#test_profile_id_cannot_escape_the_runtime_directory"]},
@@ -748,9 +761,6 @@ EVIDENCE = {
 
   "CLI-comms" => {test: "test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly",
                   supporting: ["test/comms_cli_test.rb#test_comms_list_shows_bindings_routes_and_outbox_depth"]},
-  "CLI-telegram" => {test: "test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel",
-                     supporting: ["test/cli_telegram_test.rb#test_setup_repairs_an_existing_unpinned_channel_without_a_profiles_directory",
-                                  "test/cli_telegram_test.rb#test_start_names_a_revoked_bot_token"]},
   "CLI-config" => {test: "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
                    supporting: ["test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"]},
   "CLI-observe" => {test: "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal"},
@@ -760,9 +770,6 @@ EVIDENCE = {
   "CLI-postmortem" => {test: "test/agent_cli_self_diagnosis_test.rb#test_postmortem_writes_files_and_embeds_an_analysis"},
   "CLI-mcp" => {test: "test/mcp_server_test.rb#test_serves_mcp_over_stdio"},
   "CLI-skills" => {test: "test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections"},
-  "CLI-talk" => {test: "test/talk_cli_test.rb#test_setup_writes_the_channel_profile_and_a_private_token",
-                 supporting: ["test/talk_cli_test.rb#test_start_prints_the_link_once_and_hands_the_token_to_the_gateway_only",
-                              "test/talk_cli_test.rb#test_a_workspace_holding_the_runtime_is_refused_so_the_agent_cannot_read_the_token"]},
 
   # ---- Migrations ---------------------------------------------------------
   "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",

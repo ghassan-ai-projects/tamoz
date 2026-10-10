@@ -138,7 +138,8 @@ module Agenteval
         thread = scenario.id.downcase.tr(".", "-")
         workspace = chain.workspace
         argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", workspace.dir, "--session-dir", chain.session_dir,
-                "--session", thread, "--allow-changes", "--check", "test=#{Shellwords.join(CHECK)}"]
+                "--session", thread, *TamozCode.model_flags, "--allow-changes",
+                "--check", "test=#{Shellwords.join(CHECK)}"]
         argv += ["--subagents", roles.join(",")] if arm == "subagents-on"
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         output, status = MemoryPack.capture(env, argv + ["code", session.prompt], workspace.dir, budget)

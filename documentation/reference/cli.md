@@ -96,7 +96,11 @@ Work an operator runs against the runtime directory.
 
 | Subcommand | Purpose | Key options |
 |---|---|---|
-| `init` | Create the runtime directory for a workspace | `--workspace PATH` |
+| `setup` | Create or update the runtime: its workspace, models and chat profile | `--workspace PATH`, `--chat`, `--transcription`, `--vision PROVIDER/MODEL`, `--<role>-credential NAME`, `--<role>-api-base URL` |
+| `channel add telegram` | Pair a Telegram bot with you; the channel serves the runtime's chat profile | `--owner TELEGRAM_USER_ID`, `--env-file PATH` |
+| `start` | Check every channel and model with one real call, then run one gateway per channel and one worker together; print the talk link | `--env-file PATH`, `--host ADDRESS` |
+| `service install` / `status` / `uninstall` | Run the runtime's gateways and worker as launchd jobs (macOS); install runs `start`'s checks, writes 0600 plists and moves earlier ones to `<runtime>/service-backups/` | `--env-file PATH` (install) |
+| `channel add talk` | Add the talk page and its private access token; the channel serves the runtime's chat profile | `--port N`, `--allow-host NAME` (repeatable), `--rotate-token` |
 | `queue` | Submit a task durably, or list pending work | verbs below |
 | `worker` | Run the foreground worker that executes queued and scheduled work | `--once`, `--concurrency N`, `--poll-interval SECONDS` |
 | `status` | Report pending work, capability sources and safety counters | `--json` |
@@ -109,23 +113,7 @@ Work an operator runs against the runtime directory.
 | `postmortem` | Write `postmortem-<ms>.md` and `.json` for a window | `--title TEXT`, `--out DIR`, `--since`, `--analysis FILE`, `--json` |
 | `mcp` | Run Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for investigation probes | |
 | `comms` | The channel surface | verbs below |
-| `telegram` | Set up and run the Telegram bot | verbs below |
-| `talk` | Set up and run the browser talk channel | verbs below |
 | `config` | Explicit configuration migration | `migrate` |
-
-### Telegram verbs
-
-| Verb | Purpose | Options |
-|---|---|---|
-| `telegram setup` | Pair the bot once and write its channel + workspace profile | `--workspace PATH`, `--owner TELEGRAM_USER_ID`, `--env-file PATH`, `--runtime-dir PATH` |
-| `telegram start` | Verify the token and provider, then run the gateway and worker together | `--env-file PATH`, `--provider NAME`, `--model NAME`, `--runtime-dir PATH` |
-
-### Talk verbs
-
-| Verb | Purpose | Options |
-|---|---|---|
-| `talk setup` | Write the talk channel, its workspace profile and a private access token | `--workspace PATH`, `--port N`, `--allow-host NAME` (repeatable), `--rotate-token`, `--runtime-dir PATH` |
-| `talk start` | Check the chat, speech-to-text and voice models with one real call each, run the gateway and worker, print the link | `--env-file PATH`, `--host ADDRESS`, `--provider NAME`, `--model NAME`, `--runtime-dir PATH` |
 
 ### Chat commands (sent in Telegram)
 

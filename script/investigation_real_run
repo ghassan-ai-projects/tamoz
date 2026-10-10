@@ -27,8 +27,8 @@ require 'support/investigation_control_gate'
 module InvestigationRealRun
   module_function
 
-  PROVIDER = ENV.fetch('TAMOZ_PROVIDER', 'openrouter')
-  MODEL = ENV.fetch('TAMOZ_MODEL', 'z-ai/glm-5.3-flash')
+  PROVIDER = ENV.fetch('AGENTEVAL_PROVIDER', 'openrouter')
+  MODEL = ENV.fetch('AGENTEVAL_MODEL', 'z-ai/glm-5.3-flash')
 
   def profile_builder
     lambda do |root:, model:, **|

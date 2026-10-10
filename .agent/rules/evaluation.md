@@ -37,7 +37,7 @@ harness that scores an agent.
   runtime with hand-started gateway and worker; the owner's phone got "something went wrong" to
   every message. Their `~/.tamoz` had conversations bound to an older profile (re-running `setup`
   rewrote it) and an MCP server that was offline — neither exists in a fresh directory. Run the
-  documented command itself (`tamoz telegram start`, not its children) and run it on a copy of the
+  documented command itself (`tamoz start`, not its children) and run it on a copy of the
   real runtime (`script/telegram_chat_eval --runtime-from ~/.tamoz`); a copy also carries state a
   stand-in must honour, such as Telegram's real update offset.
 - **Exercise non-ASCII and length together, over many turns.** Two limits were enforced in bytes

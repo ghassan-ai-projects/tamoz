@@ -11,7 +11,7 @@
 # manifest with the model/provider/prompt bound in.
 #
 # Requires a funded provider key in the environment. Defaults to GLM 5.3 Flash via
-# OpenRouter; override with TAMOZ_PROVIDER / TAMOZ_MODEL.
+# OpenRouter; override with AGENTEVAL_PROVIDER / AGENTEVAL_MODEL.
 #
 #   export OPENROUTER_API_KEY=... LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 #   ruby script/thermal_real_run
@@ -37,8 +37,8 @@ module ThermalRealRun
   module_function
 
   ROOT = File.expand_path('..', __dir__)
-  PROVIDER = ENV.fetch('TAMOZ_PROVIDER', 'openrouter')
-  MODEL = ENV.fetch('TAMOZ_MODEL', 'z-ai/glm-5.3-flash')
+  PROVIDER = ENV.fetch('AGENTEVAL_PROVIDER', 'openrouter')
+  MODEL = ENV.fetch('AGENTEVAL_MODEL', 'z-ai/glm-5.3-flash')
   DOMAIN = ThermalLabDomain
   ALLOWED = %w[install_watch_condition request_evidence set_indicator request_bounded_cooling].freeze
 

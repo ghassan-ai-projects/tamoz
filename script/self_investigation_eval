@@ -19,8 +19,8 @@ class SelfInvestigationEval
   ROOT = File.expand_path('..', __dir__)
   TAMOZ = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
   LIBS = Dir[File.join(ROOT, 'gems/*/lib')].flat_map { |lib| ['-I', lib] }.freeze
-  PROVIDER = ENV.fetch('TAMOZ_PROVIDER', 'openrouter')
-  MODEL = ENV.fetch('TAMOZ_MODEL', 'deepseek/deepseek-v4.1-flash')
+  PROVIDER = ENV.fetch('AGENTEVAL_PROVIDER', 'openrouter')
+  MODEL = ENV.fetch('AGENTEVAL_MODEL', 'deepseek/deepseek-v4.1-flash')
   PROBES = YAML.safe_load_file(File.join(ROOT, 'test/fixtures/self_diagnosis/probes.yaml'))
 
   class << self
@@ -106,7 +106,7 @@ class SelfInvestigationEval
         paths = { workspace: File.join(directory, 'ws'), runtime: File.join(directory, 'rt'),
                   sessions: File.join(directory, 'sessions') }
         paths.each_value { |path| Dir.mkdir(path, 0o700) }
-        tamoz('--runtime-dir', paths.fetch(:runtime), 'init', '--workspace', paths.fetch(:workspace))
+        tamoz('--runtime-dir', paths.fetch(:runtime), 'setup', '--workspace', paths.fetch(:workspace))
         SelfDiagnosisCorpus.build(scenario, paths.fetch(:runtime))
         yield paths
       end

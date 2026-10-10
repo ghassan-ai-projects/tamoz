@@ -31,7 +31,7 @@ class DocumentationTest < Minitest::Test
                  invariants.scan(/^\| (\d+) \| \*\*/).flatten.map(&:to_i)
     # The ADR catalog moved to documentation/adr/ (regenerated 2026-08-29);
     # the pin follows the new home and its contiguous numbering.
-    assert_equal (1..61).to_a, adr_numbers
+    assert_equal (1..62).to_a, adr_numbers
   end
 
   def test_design_validation_passes_without_a_utf8_locale

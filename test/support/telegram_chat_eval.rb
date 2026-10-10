@@ -13,8 +13,8 @@ require 'tamoz/agent_cli'
 require 'tamoz/telegram'
 require_relative 'telegram_bot_api_fake'
 
-# Drives the real `tamoz telegram setup` and `tamoz telegram start` against a stand-in Bot API, on a
-# real model provider, from a fresh runtime or a copy of a lived-in one; see docs/telegram-chat/GOAL.md.
+# Drives the real `tamoz setup`, `channel add telegram` and `start` against a stand-in Bot API, on a real
+# model provider, from a fresh runtime or a copy of a lived-in one; see docs/telegram-chat/GOAL.md.
 # rubocop:disable Metrics/ClassLength -- one collaborator per concern (processes, the
 #   fake, DB observations, settlement, reporting); splitting it would scatter the settle
 #   rules every scenario depends on.
@@ -28,9 +28,7 @@ class TelegramChatEval
     [/\b(effect_unknown|effect_key|occurrence_id|request_id|execution_id)\b|sha256:\h{8}/, 'internal vocabulary'],
     [/\A\s*[{\[]/, 'raw JSON']
   ].freeze
-  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY ZAI_API_KEY ZAI_API_BASE OPENAI_API_KEY
-                     TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_TRANSCRIPTION_API_BASE
-                     TAMOZ_VISION_PROVIDER TAMOZ_VISION_MODEL TAMOZ_VISION_API_BASE].freeze
+  PROVIDER_KEYS = %w[DEEPSEEK_API_KEY OPENROUTER_API_KEY ZAI_API_KEY ZAI_API_BASE OPENAI_API_KEY].freeze
   TOKEN = '123:eval'
   USERS = (1001..1040).to_a.freeze
   STRANGER = 9_999
@@ -65,13 +63,15 @@ class TelegramChatEval
     end
   end
 
-  attr_reader :fake, :results, :transcript, :setup, :owner
+  attr_reader :fake, :results, :transcript, :setup, :owner, :model
 
   # runtime_from: a runtime directory (e.g. ~/.tamoz) to copy and run on, as its owner would.
-  def initialize(provider: nil, model: nil, runtime_from: nil)
-    @provider = provider
-    @model = model
+  # roles: `tamoz setup` flags for the attachment models, e.g. ['--transcription', 'openai/whisper-1'].
+  def initialize(provider: nil, model: nil, runtime_from: nil, roles: [])
+    @provider = provider || 'openrouter'
+    @model = model || 'deepseek/deepseek-v4.1-flash'
     @runtime_from = runtime_from
+    @roles = roles
     @root = Dir.mktmpdir('tamoz-telegram-eval')
     @workspace = File.join(@root, 'workspace')
     @runtime = File.join(@root, 'runtime')
@@ -84,19 +84,17 @@ class TelegramChatEval
   end
 
   def label
-    chosen = log_tail(:start, 50)[/starting as \S+ with (\S+)\./, 1] || [@provider, @model].compact.join('/')
     where = @runtime_from ? "copy of #{@runtime_from}" : 'fresh runtime'
-    "#{chosen.empty? ? 'first provider that answers' : chosen} · #{where}"
+    "#{@provider}/#{@model} · #{where}"
   end
 
   def fresh_user = @users.shift
 
-  def model = @model || 'deepseek/deepseek-v4.1-flash'
+  def chat_key = Tamoz::Agent::Providers::ENV_KEYS.fetch(@provider.to_sym)
 
   # The one command the operator runs: gateway and worker together, supervised by `start`.
   def start
-    spawn_child(:start, [EXE, '--runtime-dir', @runtime, 'telegram', 'start', '--env-file', env_file,
-                         *(['--provider', @provider, '--model', @model] if @provider)])
+    spawn_child(:start, [EXE, '--runtime-dir', @runtime, 'start', '--env-file', env_file])
     started = Time.now.to_f
     wait_until('worker started', timeout: 90) { log_tail(:worker, 200).include?('worker.started') }
     wait_until('gateway polling') { @fake.polled_since?(started) }
@@ -107,19 +105,18 @@ class TelegramChatEval
   # `start` against a key the provider refuses: it must name the problem, not run.
   def start_with_refused_key
     file = File.join(@root, 'refused.env')
-    File.write(file, "TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}\nOPENROUTER_API_KEY=sk-invalid\n")
+    File.write(file, "TAMOZ_TELEGRAM_BOT_TOKEN=#{TOKEN}\n#{chat_key}=sk-invalid\n")
     started = Time.now
-    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'telegram', 'start',
-                                  '--env-file', file, '--provider', 'openrouter', '--model', model, chdir: ROOT)
+    out, status = Open3.capture2e(child_env.except(chat_key), RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'start',
+                                  '--env-file', file, chdir: ROOT)
     { out:, status: status.exitstatus, seconds: Time.now - started }
   end
 
   # A worker whose key stopped working mid-run (revoked, out of credit): the chat must say so.
   def run_with_revoked_key
     spawn_child(:gateway, [EXE, '--runtime-dir', @runtime, 'comms', 'serve'])
-    spawn_child(:worker, [EXE, '--runtime-dir', @runtime, '--provider', 'openrouter', '--model',
-                          model, '--work-routing', 'worker', '--json'],
-                'OPENROUTER_API_KEY' => 'sk-invalid')
+    spawn_child(:worker, [EXE, '--runtime-dir', @runtime, '--work-routing', 'worker', '--json'],
+                chat_key => 'sk-invalid')
     wait_until('worker started') { log_tail(:worker, 200).include?('worker.started') }
   end
 
@@ -193,22 +190,27 @@ class TelegramChatEval
     return nil if capabilities.fetch(need)
 
     { 'pdf_reader' => 'pdftotext is not installed (brew install poppler)',
-      'transcription' => 'no transcription model (TAMOZ_TRANSCRIPTION_PROVIDER, TAMOZ_TRANSCRIPTION_MODEL)' }.fetch(need)
+      'transcription' => 'no transcription model (--roles "--transcription PROVIDER/MODEL")' }.fetch(need)
   end
 
+  def runtime_models = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {}).models
+
   def configured_model(role)
-    provider = secret("TAMOZ_#{role}_PROVIDER")
-    provider && "#{provider}/#{secret("TAMOZ_#{role}_MODEL")}"
+    model = runtime_models[role.downcase]
+    model && "#{model.provider}/#{model.model}"
+  end
+
+  def model_key_names(model)
+    Tamoz::Agent::ModelClientFactory.environment_names(provider: model.provider, credential_name: model.credential)
   end
 
   # The digest of the configured image model, when one is named, so the eval can see which model read.
   def vision_digest
-    provider = secret('TAMOZ_VISION_PROVIDER') or return nil
-    environment = (Tamoz::Agent::ModelClientFactory.environment_names(provider:) + ['TAMOZ_VISION_API_BASE'])
-                  .to_h { |name| [name, secret(name)] }.compact
+    model = runtime_models['vision'] or return nil
     Tamoz::Agent::ModelClientFactory.build(
-      provider:, model: secret('TAMOZ_VISION_MODEL'), profile_role: nil, environment:,
-      explicit_api_base: secret('TAMOZ_VISION_API_BASE'), safety: :idempotent
+      provider: model.provider, model: model.model, profile_role: nil,
+      environment: model_key_names(model).to_h { |name| [name, secret(name)] }.compact,
+      explicit_api_base: model.api_base, credential_name: model.credential, safety: :idempotent
     ).provider_configuration_digest
   end
 
@@ -279,8 +281,8 @@ class TelegramChatEval
 
   private
 
-  # The runtime is written by the documented one command (S1), pairing by message the way a person
-  # does it: the owner messages the bot, `setup` shows who wrote, the operator answers y. Two operator
+  # The runtime is written by the documented commands (S1), pairing by message the way a person
+  # does it: the owner messages the bot, `channel add` shows who wrote, the operator answers y. Two operator
   # edits follow, both of which a real operator makes: the allowlist is widened the way a teammate is
   # added, and the approval profile is tightened to `unattended` so a workspace write really asks.
   def provision
@@ -335,12 +337,28 @@ class TelegramChatEval
   end
 
   def run_setup
+    point_copy_at_workspace if @runtime_from
+    set_up_runtime
     @fake.say(@owner, '/start')
-    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'telegram', 'setup',
-                                  '--workspace', @workspace, '--env-file', env_file, stdin_data: "y\n", chdir: ROOT)
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'channel', 'add',
+                                  'telegram', '--env-file', env_file, stdin_data: "y\n", chdir: ROOT)
     directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {})
     { status: status.exitstatus, out:, err: out, channel: telegram_channel(directory.channels) || {},
-      profile: File.join(directory.profiles_path, 'telegram.yaml') }
+      profile: File.join(directory.profiles_path, "#{directory.chat_profile_id}.yaml") }
+  end
+
+  def set_up_runtime
+    out, status = Open3.capture2e(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'setup',
+                                  '--workspace', @workspace, '--chat', "#{@provider}/#{@model}", *@roles,
+                                  chdir: ROOT)
+    raise "tamoz setup failed: #{out}" unless status.success?
+  end
+
+  # The copy works in the eval's workspace; a profile is pinned to its root, so the copy gets a fresh one.
+  def point_copy_at_workspace
+    edit_config { |document| document['workspace'] = { 'root' => @workspace } }
+    profile = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime, env: {}).chat_profile_id
+    FileUtils.rm_f(File.join(@runtime, 'profiles', "#{profile}.yaml"))
   end
 
   def telegram_channel(channels) = channels.values.find { |channel| channel['kind'] == 'telegram' }
@@ -376,15 +394,10 @@ class TelegramChatEval
 
   def chat(user) = "telegram:chat:#{user}"
 
-  # Every role's provider key and base, so a model the owner adds later reaches the worker.
+  # The keys of the attachment models the runtime names, so they reach the worker.
   def role_keys
-    %w[VISION TRANSCRIPTION].flat_map do |role|
-      provider = secret("TAMOZ_#{role}_PROVIDER")
-      next [] unless provider
-
-      names = Tamoz::Agent::ModelClientFactory.environment_names(provider:) +
-              %w[PROVIDER MODEL API_BASE].map { |part| "TAMOZ_#{role}_#{part}" }
-      names.filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
+    %w[vision transcription].filter_map { |role| runtime_models[role] }.flat_map do |model|
+      model_key_names(model).filter_map { |name| (value = secret(name)) && "#{name}=#{value}" }
     end
   end
 

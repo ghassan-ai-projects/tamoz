@@ -97,19 +97,15 @@ Read-only is the default. Nothing is written without `--allow-changes`, and
 nothing is written without an approval you granted.
 
 ```bash
-export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"
+export OPENAI_API_KEY="..."
 ```
 
-For another provider, set both the provider and model explicitly. The provider's
-credential remains in its normal environment variable:
+For another provider, name both the provider and model (`--provider deepseek
+--model deepseek-v4-flash`). The provider's credential remains in its normal
+environment variable.
 
 ```bash
-export DEEPSEEK_API_KEY="..."
-export TAMOZ_PROVIDER="deepseek" TAMOZ_MODEL="deepseek-v4-flash"
-```
-
-```bash
-rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+rbenv exec bundle exec tamoz --model gpt-5-mini --root . "Explain the persistence boundary"
 ```
 
 To let it change files, opt in and configure the check it must satisfy. The
@@ -184,7 +180,10 @@ request inboxes and the checkpoints.
 
 | Subcommand | What it does |
 |---|---|
-| `init` | Create the runtime directory for a workspace |
+| `setup` | Create or update the runtime: its workspace, models and chat profile |
+| `channel` | `channel add telegram` pairs a bot; `channel add talk` adds the browser talk page and its private link. Every channel serves the runtime's one chat profile |
+| `start` | Checks every channel and model with one real call, then runs one gateway per channel and one worker, supervised; prints the talk link |
+| `service` | `install --env-file F` writes and loads one launchd job per gateway and one for the worker (macOS); `status` and `uninstall` |
 | `queue` | Submit a task durably (`add`), or list pending work (`list`) |
 | `worker` | Run the foreground worker that executes queued and scheduled work |
 | `status` | Report pending work, capability sources and safety counters |
@@ -197,13 +196,11 @@ request inboxes and the checkpoints.
 | `postmortem` | Write a Markdown + JSON postmortem of a window, optionally with a model analysis |
 | `mcp` | Serve Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for probes |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
-| `talk` | Set up and run the browser talk channel: `setup` writes it once, `start` checks the models, runs the gateway and worker, and prints the link |
-| `telegram` | Set up and run the Telegram bot: `setup` pairs it once, `start` runs the gateway and worker together |
 | `config` | Explicit configuration migration (`migrate`) |
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 
 ```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz init --workspace .
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz setup --workspace .
 ```
 
 ```bash
@@ -311,8 +308,9 @@ performs the explicit, backup-and-atomic-rename migration:
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
 ```
 
-The short path is two commands — `tamoz telegram setup --workspace PATH
---env-file .env` once, then `tamoz telegram start --env-file .env` — and needs
+The short path is `tamoz --runtime-dir ~/.tamoz setup --workspace PATH` and
+`tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env` once, then
+`tamoz --runtime-dir ~/.tamoz start --env-file .env` — and needs
 only the bot token and one provider key. The full channel walkthrough — creating the bot, authenticating it, collecting
 the allowlist, configuring the surface, and running the gateway and worker — is
 in [`../guides/telegram.md`](../guides/telegram.md). The gateway holds the bot
