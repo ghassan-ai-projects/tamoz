@@ -444,6 +444,35 @@ class McpInvocationTest < Minitest::Test
     supervisor&.close
   end
 
+  def test_the_transport_read_timeout_is_typed_as_a_timeout
+    _config, _snapshot, supervisor = setup_environment(budgets: Budgets.new(request_timeout: 0.5))
+    client = MCP::Client.new(transport: supervisor)
+    client.connect
+
+    assert_raises(Tamoz::Mcp::ReadTimeoutError) { client.call_tool(name: "sleep_ms", arguments: { "ms" => 700 }) }
+  ensure
+    supervisor&.close
+  end
+
+  def test_a_transport_read_timeout_restarts_the_server_like_the_call_deadline
+    config, snapshot, = setup_environment
+    supervisor = Supervisor.new(config, base_backoff: 0.01)
+    descriptor = descriptor_for(snapshot, "sleep_ms")
+    client = FakeMrtrClient.new(responses: [Tamoz::Mcp::ReadTimeoutError.new])
+    supervisor.start
+    stale_pid = supervisor.pid
+
+    assert_raises(Tamoz::Mcp::ToolArgumentError) do
+      Invocation.call(descriptor, { "ms" => 1 }, snapshot: snapshot, supervisor: supervisor,
+                                                 client_factory: ->(_) { client })
+    end
+
+    assert_equal :timeout, supervisor.last_failure_kind
+    refute_equal stale_pid, supervisor.pid, "the server that still owes the timed-out answer was replaced"
+  ensure
+    supervisor&.close
+  end
+
   def signaled_client(supervisor, started)
     client = MCP::Client.new(transport: supervisor)
     client.singleton_class.prepend(Module.new do

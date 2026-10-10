@@ -297,6 +297,12 @@ module Tamoz
         raise OutputLimitError
       end
 
+      def wait_for_readable!(method, params)
+        super
+      rescue MCP::Client::RequestHandlerError
+        raise ReadTimeoutError
+      end
+
       # Environment handed to the child: allowlisted names inherited from the
       # operator environment plus credential refs resolved from it. Values are
       # never logged; a missing credential ref fails closed naming the
