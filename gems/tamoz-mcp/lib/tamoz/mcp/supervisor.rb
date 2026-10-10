@@ -128,18 +128,13 @@ module Tamoz
       # Poll interval while waiting for the process group to die.
       REAP_POLL_SECONDS = 0.05
 
-      attr_reader :config, :circuit_threshold, :retry_budget
+      attr_reader :config, :circuit_threshold, :retry_budget, :pid
 
       def self.build(config, **)
         return HttpSupervisor.new(config, **) if config.transport == :http
 
         new(config, **)
       end
-
-      DEFAULT_CIRCUIT_THRESHOLD = CircuitSupervision::DEFAULT_CIRCUIT_THRESHOLD
-      DEFAULT_RETRY_BUDGET = CircuitSupervision::DEFAULT_RETRY_BUDGET
-      DEFAULT_BASE_BACKOFF = CircuitSupervision::DEFAULT_BASE_BACKOFF
-      DEFAULT_MAX_BACKOFF = CircuitSupervision::DEFAULT_MAX_BACKOFF
 
       def initialize(
         config,
@@ -171,10 +166,6 @@ module Tamoz
           args: config.arguments,
           read_timeout: config.budgets.request_timeout
         )
-      end
-
-      def pid
-        @pid
       end
 
       # --- request-sent boundary ---------------------------------------------
@@ -304,6 +295,12 @@ module Tamoz
         end
 
         raise OutputLimitError
+      end
+
+      def wait_for_readable!(method, params)
+        super
+      rescue MCP::Client::RequestHandlerError
+        raise ReadTimeoutError
       end
 
       # Environment handed to the child: allowlisted names inherited from the

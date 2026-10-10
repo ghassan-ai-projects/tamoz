@@ -45,7 +45,7 @@ module Tamoz
               retry
             end
             # A timed-out request may still answer on this pipe; the next call must read a fresh one.
-            supervisor.restart if e.is_a?(Timeout::Error) && !supervisor.open?
+            supervisor.restart if timed_out?(e) && !supervisor.open?
             TransportErrors.new.raise_classified_transport(descriptor, supervisor, e, sent: sent)
           end
           response
@@ -53,6 +53,10 @@ module Tamoz
 
         def retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
           attempts < max_attempts && descriptor.read_only? && !supervisor.open? && !TransportErrors.new.corruption?(error)
+        end
+
+        def timed_out?(error)
+          error.is_a?(Timeout::Error) || error.is_a?(ReadTimeoutError)
         end
 
         def call_with_deadline(client, descriptor, arguments, supervisor, input)
@@ -85,7 +89,7 @@ module Tamoz
                    :output_limit
                  elsif TransportErrors.new.corruption?(error)
                    :corruption
-                 elsif error.is_a?(Timeout::Error)
+                 elsif timed_out?(error)
                    :timeout
                  else
                    :transport

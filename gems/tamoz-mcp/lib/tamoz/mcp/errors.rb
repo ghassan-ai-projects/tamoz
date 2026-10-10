@@ -134,5 +134,12 @@ module Tamoz
         )
       end
     end
+
+    # The SDK's read timeout races Invocation's call deadline (both are request_timeout); either one is a timeout.
+    class ReadTimeoutError < MCP::Client::RequestHandlerError
+      def initialize
+        super("Timed out waiting for the MCP server response.", {}, error_type: :internal_error)
+      end
+    end
   end
 end
