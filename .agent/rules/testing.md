@@ -132,3 +132,7 @@
   renamed a memory test the manifest still named. In the same change, add or rename the `EVIDENCE`
   entry, run the script with `--accept`, then run `script/generate_requirements_audit --jobs 4`
   (about 4 minutes).
+- **A failure that tracks the seed may not be about order.** `mcp_invocation_test`'s timeout-restart case
+  failed on seeds 1 and 2 and passed on 3, but also failed alone under `-n`: two equal deadlines (the SDK's
+  read timeout and `Exchange`'s `Timeout.timeout`) raced, and only one of them restarted the server. Run the
+  same seed several times, and the case alone, before hunting for leaked state.
