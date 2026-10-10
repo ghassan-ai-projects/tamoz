@@ -184,9 +184,9 @@ class CommsPairingFirstContactTest < Minitest::Test
 
   def descriptor
     @descriptor ||= Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: SURFACE_ID, revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
       identity: { expected_bot_id: BOT_ID, bot_username: 'relay_bot' },
       admission: { direct: 'pairing' },

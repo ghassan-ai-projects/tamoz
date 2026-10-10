@@ -34,12 +34,12 @@ module Tamoz
         problem = env_file_problem(request[:env_file])
         return start_fail(problem) if problem
 
-        base = start_env(request)
+        base = env_with_file(request[:env_file])
         directory = RuntimeDirectory.resolve(path: runtime_dir_path(options), env: base)
         problem = start_problem(options, directory, base)
         return start_fail(problem) if problem
 
-        install_jobs(directory, base.merge(talk_token_env(directory)).merge(child_runtime_env))
+        install_jobs(directory, base.merge(child_runtime_env))
       end
 
       def install_jobs(directory, base)

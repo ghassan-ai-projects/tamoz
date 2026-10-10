@@ -206,8 +206,8 @@ class ChatAttachmentTest < Minitest::Test
 
   OGG = "OggS\x00\x02voice-bytes".b
 
-  def voice_harness(model, transcriber)
-    Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work, transcriber:)
+  def voice_harness(model, transcriber, speech: false)
+    Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work, transcriber:, speech:)
   end
 
   def test_an_own_voice_note_becomes_the_users_words
@@ -306,17 +306,6 @@ class ChatAttachmentTest < Minitest::Test
     harness&.close
   end
 
-  def with_speaking_surface(kind = 'telegram')
-    parties = Tamoz::Comms::Parties
-    original = parties::KINDS
-    parties.send(:remove_const, :KINDS)
-    parties.const_set(:KINDS, original.merge(kind => original.fetch(kind).with(speaks: true)).freeze)
-    yield
-  ensure
-    parties.send(:remove_const, :KINDS)
-    parties.const_set(:KINDS, original)
-  end
-
   def last_turn(model)
     JSON.parse(model.requests.last).fetch('messages').select { |message| message['role'] == 'user' }
                                                      .map { |message| message['content'] }.last(2)
@@ -326,20 +315,18 @@ class ChatAttachmentTest < Minitest::Test
     reply = 'Pond 7 oxygen fell from 6.1 to 4.3 since six this morning.'
     transcriber = ScriptedTranscriber.new('pond 7 oxygen fell from 6.1 to 4.3 since six')
     model = ScriptedConversationModel.new(turns: [{ content: reply }, { content: 'I heard myself.' }])
-    with_speaking_surface do
-      harness = voice_harness(model, transcriber)
-      notices = capture_notices(harness)
-      harness.say('how is pond 7?')
-      harness.send_voice(OGG)
-      material, task = last_turn(model)
+    harness = voice_harness(model, transcriber, speech: true)
+    notices = capture_notices(harness)
+    harness.say('how is pond 7?')
+    harness.send_voice(OGG)
+    material, task = last_turn(model)
 
-      assert_equal '[voice message]', task
-      assert_includes material, 'The microphone picked up your own previous reply'
-      assert_includes material, "<<<heard\npond 7 oxygen fell from 6.1 to 4.3 since six\nheard>>>"
-      assert_empty notices, 'an echo is not heard as the user'
-    ensure
-      harness&.close
-    end
+    assert_equal '[voice message]', task
+    assert_includes material, 'The microphone picked up your own previous reply'
+    assert_includes material, "<<<heard\npond 7 oxygen fell from 6.1 to 4.3 since six\nheard>>>"
+    assert_empty notices, 'an echo is not heard as the user'
+  ensure
+    harness&.close
   end
 
   def test_a_surface_that_never_speaks_takes_a_repeat_as_the_users_words

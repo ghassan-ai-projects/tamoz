@@ -162,12 +162,14 @@ module Tamoz
       end
       # rubocop:enable Metrics/ParameterLists
 
-      # Acquire the poller lease and enter the serve loop. A fatal transport
-      # error exits through ensure; INT/TERM ask through stop.
+      # Acquire the poller lease and enter the serve loop. `on_started` runs once the lease is held, before the
+      # first pass. A fatal transport error exits through ensure; INT/TERM ask through stop.
       def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0, drain: true,
-                     sleeper: ->(seconds) { sleep seconds })
+                     sleeper: ->(seconds) { sleep seconds }, on_started: nil)
         start_outcome = start(now: now_provider.call)
         return start_outcome unless start_outcome == :started
+
+        on_started&.call
 
         outcome = :stopped
         until @stopping

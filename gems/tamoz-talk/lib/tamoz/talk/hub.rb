@@ -13,14 +13,14 @@ module Tamoz
       attr_reader :inbox, :log, :speaker, :normalizer, :identity_id, :submit_timeout_s
 
       # rubocop:disable Metrics/ParameterLists -- the surface's facts plus the two injected collaborators.
-      def initialize(descriptor:, token:, floor:, synthesize: nil, host: '127.0.0.1', port: nil, trace: false,
+      def initialize(descriptor:, token:, floor: 0, synthesize: nil, host: '127.0.0.1', port: nil, trace: false,
                      submit_timeout_s: 20.0, deadlines: {})
         raise ArgumentError, 'the talk token must be at least 32 characters' if token.to_s.length < MIN_TOKEN
 
         @descriptor = descriptor
         @token_digest = Digest::SHA256.digest(token)
         @host = host
-        @port = port || descriptor.transport.fetch(:port)
+        @port = port || descriptor.settings.fetch(:port)
         @trace = trace ? [] : nil
         @identity_id = descriptor.identity.fetch(:expected_bot_id)
         @clock = Clock.new(floor:)
@@ -38,12 +38,18 @@ module Tamoz
 
       def start
         @server = Server.new(hub: self, host: @host, port: @port, token_digest: @token_digest,
-                             allow_hosts: Array(@descriptor.transport[:allow_hosts]), trace: !@trace.nil?,
+                             allow_hosts: Array(@descriptor.settings[:allow_hosts]), trace: !@trace.nil?,
                              deadlines: @deadlines).start
         self
       end
 
       def port = @server&.port
+
+      # Above the durable cursor, and with the delivered history on the page, once the gateway holds the lease.
+      def resume(floor:, history:)
+        @clock.raise_floor(floor)
+        seed(history)
+      end
 
       def alive? = @server&.alive? || false
 

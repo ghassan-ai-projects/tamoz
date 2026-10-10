@@ -191,9 +191,11 @@ module Tamoz
                                     verify: VERIFY_OK }.freeze
 
         def initialize(model_factory: self.class.model_factory(**DEFAULT_MODEL_RESPONSES),
-                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil)
+                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil,
+                       speech: false)
           @now = Time.now.utc
           @transcriber = transcriber
+          @speech = speech
           @directory = Dir.mktmpdir('tamoz-comms-b0')
           @model_factory = model_factory
           @routing = routing
@@ -210,16 +212,16 @@ module Tamoz
 
         def descriptor(mode)
           Tamoz::Comms::SurfaceDescriptor.build(
+            kind: 'telegram',
             surface_id: SURFACE_ID, revision: SURFACE_REVISION,
-            transport: { mode: 'long_poll',
-                         credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+            transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                          poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
             identity: { expected_bot_id: BOT_ID, bot_username: BOT_USERNAME },
             admission: admission_spec(mode),
             threading: 'conversation', profile_id: PROFILE_ID,
             profile_digest: @runtime.profile(PROFILE_ID).canonical_digest,
             approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-            rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
+            rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate', speech: @speech },
             limits: { max_inbound_bytes: 8192, max_open_requests: 50,
                       max_denial_prompts_per_request: 4, outbox_capacity: 500,
                       control_capacity: 500, per_chat_messages_per_s: 1.0,

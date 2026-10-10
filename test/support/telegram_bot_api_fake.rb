@@ -184,6 +184,7 @@ class TelegramBotApiFake
     when 'editMessageReplyMarkup' then record(method, params) { edit_markup(params) }
     when 'sendChatAction', 'answerCallbackQuery' then record(method, params) { ok(true) }
     when 'getFile' then record(method, params) { file_info(params['file_id']) }
+    when 'getWebhookInfo' then ok('url' => '')
     else [404, { 'ok' => false, 'error_code' => 404, 'description' => 'Not Found' }]
     end
   end

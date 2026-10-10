@@ -31,13 +31,22 @@ class CliChannelTalkTest < Minitest::Test
 
   def channel(runtime) = Psych.safe_load_file(File.join(runtime, 'config.yaml')).dig('channels', 'talk')
 
-  def token(runtime) = File.read(File.join(runtime, 'talk', 'token'))
+  def token(runtime) = File.read(File.join(runtime, 'channels', 'talk', 'token'))
 
   def test_the_page_listens_on_the_default_port
     with_runtime do |runtime|
       status, = add_talk(runtime)
 
-      assert_equal [0, 8787], [status, channel(runtime).dig('talk', 'port')]
+      assert_equal [0, 8787], [status, channel(runtime).dig('settings', 'port')]
+    end
+  end
+
+  def test_the_listen_address_is_the_channels_own_setting
+    with_runtime do |runtime|
+      add_talk(runtime, '--host', '100.64.0.1', '--allow-host', 'mac.tail.ts.net')
+
+      assert_equal '100.64.0.1', channel(runtime).dig('settings', 'host')
+      assert_equal 0o700, File.stat(File.join(runtime, 'channels', 'talk')).mode & 0o777
     end
   end
 
@@ -45,7 +54,7 @@ class CliChannelTalkTest < Minitest::Test
     with_runtime do |runtime|
       add_talk(runtime, '--allow-host', 'Mac.tail.ts.net')
 
-      assert_equal ['mac.tail.ts.net'], channel(runtime).dig('talk', 'allow_hosts')
+      assert_equal ['mac.tail.ts.net'], channel(runtime).dig('settings', 'allow_hosts')
     end
   end
 
@@ -93,7 +102,7 @@ class CliChannelTalkTest < Minitest::Test
     with_runtime do |runtime|
       _status, out, = add_talk(runtime)
 
-      assert_equal 0o600, File.stat(File.join(runtime, 'talk', 'token')).mode & 0o777
+      assert_equal 0o600, File.stat(File.join(runtime, 'channels', 'talk', 'token')).mode & 0o777
       refute_includes out, token(runtime).strip
     end
   end
@@ -132,7 +141,7 @@ class CliChannelTalkTest < Minitest::Test
   def test_a_damaged_token_is_replaced
     with_runtime do |runtime|
       add_talk(runtime)
-      File.write(File.join(runtime, 'talk', 'token'), "short\n")
+      File.write(File.join(runtime, 'channels', 'talk', 'token'), "short\n")
       add_talk(runtime)
 
       assert_operator token(runtime).strip.length, :>=, 32
@@ -146,8 +155,8 @@ class CliChannelTalkTest < Minitest::Test
       status, _out, err = add_talk(runtime)
 
       assert_equal 1, status
-      assert_includes err, 'could read the talk token'
-      refute_path_exists File.join(runtime, 'talk', 'token')
+      assert_includes err, "could read the channel's secrets"
+      refute_path_exists File.join(runtime, 'channels', 'talk', 'token')
     end
   end
 end

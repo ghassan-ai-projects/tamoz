@@ -9,8 +9,7 @@ class CommsValuesTest < Minitest::Test
   def surface_fields
     {
       surface_id: 'telegram-ops', revision: 3, kind: 'telegram',
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
       identity: { expected_bot_id: 7_463_512_990 },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
@@ -56,7 +55,9 @@ class CommsValuesTest < Minitest::Test
   end
 
   def test_surface_rejects_open_modes_and_unknown_kinds
-    assert_raises(Comms::ValidationError) { surface(kind: 'slack') }
+    ['Slack', 'os', 'cli', '', 'a', 'tele-gram'].each do |kind|
+      assert_raises(Comms::ValidationError, kind) { surface(kind:) }
+    end
     assert_raises(Comms::ValidationError) { surface(threading: 'by_thread') }
     assert_raises(Comms::ValidationError) { surface(admission: { direct: 'open' }) }
     assert_raises(Comms::ValidationError) { surface(approvals: { mode: 'grant', prompt_ttl_s: 900 }) }

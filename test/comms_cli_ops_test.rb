@@ -278,7 +278,7 @@ class CommsCliOpsTest < Minitest::Test
         args,
         out:, err:, input: StringIO.new,
         env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' }.merge(env),
-        comms_client_factory: factory || ->(_token) { client }
+        channel_kinds: ChannelKindsFixture.telegram(factory || ->(_token) { client })
       )
       [exit_code, out.string, err.string]
     end

@@ -36,15 +36,29 @@ class CommsServeSupervisionTest < Minitest::Test
       @stopped = true
     end
 
-    def serve_loop(drain: true, interval_s: 1.0)
+    def serve_loop(drain: true, interval_s: 1.0, on_started: nil)
+      on_started&.call
       sleep(0.01) until @stopped
       :stopped
     end
   end
 
+  # A connection with nothing to open; the store answers the cursor and history it starts from.
+  class IdleConnection
+    include Tamoz::Comms::Channel::Connection
+
+    def transport = Object.new
+    def interval_s = 0.01
+  end
+
+  class CursorStore
+    def poll_offset(bot_id:) = nil
+    def delivered_messages(surface_id:, limit:) = []
+  end
+
   def test_a_storage_failure_stops_the_loops_names_the_class_and_exits_non_zero
     err = StringIO.new
-    supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands, Tamoz::Agent::CLITalkGateway)
+    supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands)
     supervisor.instance_variable_set(:@err, err)
     gateway = QuietGateway.new
     drainer = Tamoz::Comms::DeliveryDrainer.new(
@@ -56,7 +70,10 @@ class CommsServeSupervisionTest < Minitest::Test
       sleeper: ->(_seconds) {}
     )
 
-    status = Timeout.timeout(10) { supervisor.send(:run_gateway_loops, [gateway], [drainer]) }
+    surface = Tamoz::Agent::CLICommsCommands::ServedSurface.new(
+      descriptor: supervised_descriptor, connection: IdleConnection.new, credential: nil, drainer:, gateway:
+    )
+    status = Timeout.timeout(10) { supervisor.send(:run_gateway_loops, CursorStore.new, [surface]) }
 
     assert_equal 1, status, 'a storage failure exits non-zero'
     assert_includes err.string, 'StorageExploded', 'stderr names the exception class'
@@ -68,9 +85,9 @@ class CommsServeSupervisionTest < Minitest::Test
 
   def supervised_descriptor
     Tamoz::Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: nil },
       identity: { expected_bot_id: 7_463_512_990 }, admission: { direct: 'disabled' },
       threading: 'conversation', profile_id: 'ops',

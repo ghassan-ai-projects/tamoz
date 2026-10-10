@@ -23,12 +23,18 @@ module Tamoz
       DOWNLOAD_DEADLINE_S = 40.0
       DOWNLOAD_READ_TIMEOUT_S = 15.0
       FILE_PATH = %r{\A(?!/)(?!.*(?:\A|/)\.\.(?:/|\z))[A-Za-z0-9_.\-/]{1,256}\z}
+      # A stand-in Bot API on this machine (the evals) is the only origin besides Telegram's own.
+      LOOPBACK_ORIGIN = %r{\Ahttp://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?\z}
 
       attr_reader :token, :origin, :max_response_bytes
 
       def initialize(token, origin: DEFAULT_ORIGIN, open_timeout: DEFAULT_OPEN_TIMEOUT,
                      read_timeout: DEFAULT_READ_TIMEOUT, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
                      download_deadline: DOWNLOAD_DEADLINE_S)
+        unless origin == DEFAULT_ORIGIN || origin.match?(LOOPBACK_ORIGIN)
+          raise Comms::ValidationError, 'the Bot API origin must be Telegram or a loopback stand-in'
+        end
+
         @token = token
         @origin = origin
         @open_timeout = open_timeout

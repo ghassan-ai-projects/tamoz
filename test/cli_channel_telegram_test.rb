@@ -52,6 +52,30 @@ class CliChannelTelegramTest < Minitest::Test
     end
   end
 
+  # Keeps every update until an offset confirms it, as the Bot API does.
+  class QueueBot < Bot
+    def call(method, params, idempotent: false)
+      return super unless method == 'getUpdates'
+
+      @calls << [method, params]
+      @updates.reject! { |update| update['update_id'] < params['offset'].to_i } if params['offset']
+      @updates.dup
+    end
+  end
+
+  def test_pairing_confirms_every_update_so_none_is_answered_later
+    with_dirs do |runtime, workspace|
+      set_up_runtime(runtime, workspace)
+      group = { 'update_id' => 3, 'message' => { 'chat' => { 'id' => -9, 'type' => 'group' }, 'text' => 'hi all' } }
+      later = private_message(OWNER, 'G').merge('update_id' => 9)
+      bot = QueueBot.new([group, private_message(OWNER, 'G'), later])
+      status, _out, err = cli(runtime, %w[channel add telegram], bot:, input: "y\n")
+
+      assert_equal 0, status, err
+      assert_empty bot.call('getUpdates', { 'offset' => nil })
+    end
+  end
+
   def test_the_channel_serves_the_runtime_profile
     with_dirs do |runtime, workspace|
       pair(runtime, workspace)
@@ -252,12 +276,18 @@ class CliChannelTelegramTest < Minitest::Test
   end
 
   def test_a_missing_telegram_adapter_is_named
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {},
-                                comms_client_factory: lambda { |_token|
-                                  raise Tamoz::Agent::CLICommsShared::MissingAdapterError, 'no adapter'
-                                })
+    missing = Tamoz::Agent::ChannelKind.new(name: 'telegram', library: 'tamoz/no_such_adapter',
+                                            namespace: 'Tamoz::NoSuchAdapter')
+    with_dirs do |runtime, workspace|
+      set_up_runtime(runtime, workspace)
+      err = StringIO.new
+      status = Tamoz::Agent::CLI.run(['--runtime-dir', runtime, 'channel', 'add', 'telegram'],
+                                     out: StringIO.new, err:, input: StringIO.new, env: {},
+                                     channel_kinds: Tamoz::Agent::CHANNEL_KINDS.merge('telegram' => missing))
 
-    assert_equal 'no adapter', cli.send(:token_problem, { 'TAMOZ_TELEGRAM_BOT_TOKEN' => 'x' })
+      assert_equal 1, status
+      assert_includes err.string, 'the telegram channel (tamoz-no_such_adapter) is not installed'
+    end
   end
 
   private

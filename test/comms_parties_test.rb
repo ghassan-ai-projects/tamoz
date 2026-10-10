@@ -11,8 +11,9 @@ class CommsPartiesTest < Minitest::Test
 
   def telegram_descriptor
     Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: 'telegram', revision: 3,
-      transport: { mode: 'long_poll', credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 10, batch: 50, max_response_bytes: nil },
       identity: { expected_bot_id: 8_724_435_334, bot_username: 'tamoz_bot' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:4242'] }, threading: 'conversation',
@@ -24,8 +25,9 @@ class CommsPartiesTest < Minitest::Test
   def talk_descriptor(port: 8787, hosts: ['mac.tail.ts.net'])
     Comms::SurfaceDescriptor.build(
       surface_id: 'talk', revision: 1, kind: 'talk',
-      transport: { mode: 'long_poll', credential_ref: { kind: 'env', name: 'TAMOZ_TALK_TOKEN' },
-                   poll_timeout_s: 10, batch: 50, max_response_bytes: nil, port:, allow_hosts: hosts },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TALK_TOKEN' },
+                   poll_timeout_s: 10, batch: 50, max_response_bytes: nil },
+      settings: { port:, allow_hosts: hosts },
       identity: { expected_bot_id: 123_456_789_012 },
       admission: { direct: 'allowlist', correspondents: ['talk:user:1'] }, threading: 'conversation',
       profile_id: 'talk', approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -40,12 +42,12 @@ class CommsPartiesTest < Minitest::Test
     ).wire
   end
 
-  # Captured in a detached worktree at 1e6ee1ea before any change.
+  # Captured in a detached worktree at 1e6ee1ea; the descriptor digest re-pinned when it gained `settings`.
   def test_telegram_bytes_are_unchanged_from_head
     assert_equal 'tg.telegram.5749c9dc3be7bd32', Comms::Admission.thread_id('telegram', 'telegram:chat:4242')
     assert_equal 'tg.telegram.64c1a2390a187a38',
                  Comms::Admission.thread_id('telegram', 'telegram:chat:4242', generation: 1)
-    assert_equal '86ee4511c3f4226f73da83bc8541245186c355a3b7feb0e4d4c190c61b0cf91b',
+    assert_equal 'fc91cc4d53c8ea98f5c669982ddc04e00b60fd5cbe33a3fd20bfed3458862958',
                  telegram_descriptor.definition_digest
     decision = Comms::DecisionRecord.build(
       thread_id: 'tg.telegram.0123456789abcdef', occurrence_id: 'occ-1', interrupts: [], interrupt_digest: 'b' * 64,
@@ -113,15 +115,17 @@ class CommsPartiesTest < Minitest::Test
   end
 
   def test_a_talk_descriptor_needs_a_port_and_bounded_hosts
+    talk = Tamoz::Talk::Channel.new
+
     assert_equal 'talk', talk_descriptor.kind
-    assert_raises(Comms::ValidationError) { talk_descriptor(port: nil) }
-    assert_raises(Comms::ValidationError) { talk_descriptor(port: 70_000) }
-    assert_raises(Comms::ValidationError) { talk_descriptor(hosts: ['x' * 254]) }
-    assert_raises(Comms::ValidationError) { talk_descriptor(hosts: 'mac.tail.ts.net') }
+    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(port: nil)) }
+    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(port: 70_000)) }
+    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(hosts: ['x' * 254])) }
+    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(hosts: 'mac.tail.ts.net')) }
     ['*', 'mac.tail.ts.net:443', 'two words', ''].each do |host|
-      assert_raises(Comms::ValidationError, host) { talk_descriptor(hosts: [host]) }
+      assert_raises(Comms::ValidationError, host) { talk.validate!(talk_descriptor(hosts: [host])) }
     end
-    assert_raises(Comms::ValidationError) { talk_descriptor(hosts: %w[a.b a.b]) }
+    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(hosts: %w[a.b a.b])) }
   end
 
   def test_talk_decisions_carry_their_own_actor_and_source

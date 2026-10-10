@@ -4,21 +4,14 @@ require 'json'
 
 module Tamoz
   module Agent
-    # Shared comms-CLI machinery (COMMS_DESIGN §14, ADR-042): opening the
-    # runtime directory + adapter + request-inbox seam WITHOUT constructing a
-    # Session or a model, and building the transport through the lazy adapter
-    # seam. `tamoz-comms` is a hard dependency; `tamoz-telegram` is loaded
-    # only when a command actually needs the wire, so an installation without
-    # the adapter reports a typed missing-adapter error instead of failing to
-    # boot.
+    # Shared comms-CLI machinery (COMMS_DESIGN §14, ADR-042): opening the runtime directory, its adapter and request
+    # inbox WITHOUT constructing a Session or a model, and turning a config entry into a descriptor its channel kind
+    # accepts. Each kind's adapter gem is loaded through the registry only when a command needs it.
     # :reek:DuplicateMethodCall, :reek:FeatureEnvy, :reek:UtilityFunction
     # :reek:TooManyStatements, :reek:NilCheck, :reek:LongYieldList
-    # :reek:IrresponsibleModule -- the module is the shared seam: one
-    #   runtime-open sequence, one config->descriptor projection, one lazy
-    #   adapter load. Splitting the helpers would scatter the ordering
-    #   invariant (ADR-042: no Session, no model, no workspace file).
-    # rubocop:disable Metrics/ModuleLength -- one shared seam, per the :reek
-    #   rationale above: splitting these helpers scatters the ordering invariant.
+    # :reek:IrresponsibleModule -- the module is the shared seam: one runtime-open sequence and one
+    #   config->descriptor projection; splitting them would scatter the ordering invariant (ADR-042).
+    # rubocop:disable Metrics/ModuleLength -- one shared seam, per the :reek rationale above.
     module CLICommsShared
       class MissingAdapterError < Tamoz::Agent::Error; end
 
@@ -66,31 +59,42 @@ module Tamoz
         [filter]
       end
 
-      # Config entry -> validated SurfaceDescriptor. Fields the operator may
-      # omit get the design defaults; every mandatory field of the descriptor
-      # contract is filled here. YAML keys are strings; the descriptor
-      # contract is symbol-keyed, so the nested sections are converted.
+      # Config entry -> a descriptor its channel kind accepts. Defaults fill what the operator may omit; the
+      # credential must be one the kind declares, so a config cannot point a gateway at another key.
       def build_descriptor(surface_id, entry, directory)
+        kind = channel_kind(entry.fetch('kind'))
+        credential = entry.fetch('credential_ref')
+        unless kind.setup.env_names.include?(credential['name'])
+          raise Comms::ValidationError, "channels.#{surface_id}.credential_ref names #{credential['name']}, which a " \
+                                        "#{entry['kind']} channel does not hold"
+        end
+        descriptor = surface_descriptor(surface_id, entry, directory)
+        kind.channel.validate!(descriptor)
+        descriptor
+      end
+
+      def surface_descriptor(surface_id, entry, directory)
         Tamoz::Comms::SurfaceDescriptor.build(
           surface_id:,
-          kind: entry.fetch('kind', 'telegram'),
+          kind: entry.fetch('kind'),
           revision: entry.fetch('revision'),
           transport: symbolize({
-            mode: 'long_poll',
             credential_ref: entry.fetch('credential_ref'),
             poll_timeout_s: entry.dig('transport', 'poll_timeout_s') || 30,
             batch: entry.dig('transport', 'batch') || 50,
             max_response_bytes: entry.dig('transport', 'max_response_bytes')
-          }.merge(entry['kind'] == 'talk' ? entry.fetch('talk', {}) : {})),
+          }),
           identity: symbolize({ expected_bot_id: entry.fetch('expected_bot_id'),
                                 bot_username: entry['bot_username'] }.compact),
+          settings: symbolize(entry.fetch('settings', {})),
           admission: symbolize({ 'direct' => 'disabled' }.merge(entry.fetch('admission', {}))),
           threading: entry.fetch('threading', 'conversation'),
           profile_id: entry.fetch('profile'),
           profile_digest: pinned_profile_digest(directory, entry.fetch('profile')),
           approvals: symbolize({ 'mode' => 'none', 'prompt_ttl_s' => 900 }.merge(entry.fetch('approvals', {}))),
           rendering: symbolize({
-            'format' => 'plain', 'max_parts' => 5, 'part_characters' => 3500, 'overflow' => 'truncate'
+            'format' => 'plain', 'max_parts' => 5, 'part_characters' => 3500, 'overflow' => 'truncate',
+            'speech' => false
           }.merge(entry.fetch('rendering', {}))),
           limits: symbolize({
             'max_inbound_bytes' => 8192, 'max_open_requests' => 50,
@@ -119,48 +123,34 @@ module Tamoz
         end
       end
 
-      def credential(descriptor)
-        name = credential_name(descriptor)
-        @env.fetch(name) do
-          raise ArgumentError, "credential #{name.inspect} is not set in the environment"
+      def channel_kinds = @channel_kinds || CHANNEL_KINDS
+
+      def channel_kind(name)
+        channel_kinds.fetch(name) do
+          raise Comms::ValidationError, "#{name.inspect} is not a channel kind (#{channel_kinds.keys.join(', ')})"
+        end
+      end
+
+      # Only the variables the kind declares; a channel never sees the rest of the environment.
+      def channel_env(kind, env = @env.to_h) = env.to_h.slice(*kind.setup.env_names)
+
+      def channel_state_dir(directory, surface_id)
+        File.join(directory.path, 'channels', surface_id).tap do |path|
+          Tamoz::Core::PrivateDirectory.secure(File.dirname(path))
+          Tamoz::Core::PrivateDirectory.secure(path)
         end
       end
 
       def credential_name(descriptor) = descriptor.transport.fetch(:credential_ref).fetch(:name)
 
-      # The lazy adapter load (ADR-041: tamoz-agent has no HTTP client; the
-      # transport is optional). A missing adapter is a typed error, never a
-      # boot failure.
-      def build_transport(descriptor, token)
-        return @talk_hubs.fetch(descriptor.surface_id).transport if descriptor.kind == 'talk'
-
-        client = comms_client_factory(descriptor).call(token)
-        require 'tamoz/telegram'
-        normalizer = Tamoz::Telegram::Normalizer.new(
-          surface_id: descriptor.surface_id,
-          surface_revision: descriptor.revision,
-          bot_username: descriptor.identity[:bot_username]
-        )
-        Tamoz::Telegram::Transport.new(client:, normalizer:)
-      end
-
-      # The client seam: production builds the real Telegram client carrying
-      # the surface's DECLARED response cap (nil means the client's own
-      # default — one source of truth); tests inject a fixture client (the
-      # design's "inject a fixture client rather than weakening this
-      # production origin rule"). A missing adapter surfaces as
-      # MissingAdapterError, never a boot failure.
-      def comms_client_factory(descriptor = nil)
-        @comms_client_factory || lambda do |token|
-          require 'tamoz/telegram'
-          cap = descriptor && descriptor.transport[:max_response_bytes]
-          origin = @env.to_h['TAMOZ_TELEGRAM_API_ORIGIN'].to_s
-          Tamoz::Telegram::Client.new(token, max_response_bytes: cap,
-                                             origin: origin.empty? ? Tamoz::Telegram::Client::DEFAULT_ORIGIN : origin)
-        rescue LoadError
-          raise MissingAdapterError,
-                'the Telegram adapter (tamoz-telegram) is not installed; install it to run comms commands'
-        end
+      # A speaking surface's voice; one that cannot be built (its key is missing) leaves replies text only, and
+      # `start` has said so.
+      def voice_synthesizer(directory)
+        voice = directory.models['voice']
+        model = voice && attachment_model('VOICE', runtime: directory)
+        model && ->(text) { model.speak(text:, voice: voice.voice).audio }
+      rescue ModelCallError, ConfigurationError
+        nil
       end
 
       def ms_to_iso(ms_value)

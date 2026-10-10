@@ -5,6 +5,10 @@ module Tamoz
     class RuntimeDirectory
       # Load-time validation of the operator configuration; every rule raises RuntimeDirectory::Error.
       module ConfigRules
+        SURFACE_ID = /\A[a-z0-9][a-z0-9_-]{0,63}\z/
+        CHANNEL_KEYS = %w[kind enabled revision profile credential_ref expected_bot_id bot_username transport settings
+                          admission approvals rendering limits threading].freeze
+
         module_function
 
         def validate_document!(document)
@@ -15,20 +19,21 @@ module Tamoz
           validate_models!(document['models'])
         end
 
-        # Strict per-entry validation (COMMS_DESIGN §14): the kind comes from the
-        # closed list in tamoz-comms, the revision is mandatory and positive, and
-        # expected_bot_id is mandatory — the identity the gateway pins with getMe.
+        # Strict per-entry validation (COMMS_DESIGN §14): the kind is a well-formed name (the closed set is the
+        # CLI's channel registry), the revision is mandatory and positive, and expected_bot_id is mandatory.
         # :reek:TooManyStatements -- one per-field validation sequence.
         # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         #   -- one validation sequence per field, checked in the design's order.
         def validate_channel!(surface_id, entry)
           label = "channels.#{surface_id}"
+          raise Error, "#{label}: a surface id is lowercase letters, digits, - and _" unless
+            surface_id.is_a?(String) && surface_id.match?(SURFACE_ID)
           raise Error, "#{label} must be a mapping" unless entry.is_a?(Hash)
 
-          kind = entry['kind']
-          unless Tamoz::Comms::SurfaceDescriptor::KINDS.include?(kind)
-            raise Error, "#{label}.kind must be one of " \
-                         "#{Tamoz::Comms::SurfaceDescriptor::KINDS.join(', ')}"
+          unknown = entry.keys - CHANNEL_KEYS
+          raise Error, "#{label}.#{unknown.first} is not a channel field" unless unknown.empty?
+          unless Tamoz::Comms::SurfaceDescriptor.valid_kind?(entry['kind'])
+            raise Error, "#{label}.kind must be a lowercase channel name"
           end
           unless entry['revision'].is_a?(Integer) && entry['revision'].positive?
             raise Error, "#{label}.revision must be a positive integer"

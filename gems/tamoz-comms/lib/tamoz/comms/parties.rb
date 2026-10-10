@@ -4,22 +4,20 @@ require_relative 'errors'
 
 module Tamoz
   module Comms
-    # What differs per surface kind: identity prefixes, the thread prefix, and whether the surface speaks its
-    # replies aloud (which turns on the Heard notice and the worker's echo guard). Telegram's entry is byte-identical to the literals it replaced.
+    # What differs per surface kind: identity prefixes and the thread prefix.
     module Parties
-      Kind = Data.define(:name, :correspondent, :admissible, :bindable, :refused_groups, :thread_prefix,
-                         :speaks)
+      Kind = Data.define(:name, :correspondent, :admissible, :bindable, :refused_groups, :thread_prefix)
 
       KINDS = {
         'telegram' => Kind.new(
           name: 'telegram', correspondent: 'telegram:user:',
           admissible: %w[telegram:chat: telegram:group: telegram:supergroup: telegram:channel:],
           bindable: %w[telegram:chat:], refused_groups: %w[telegram:supergroup: telegram:channel: telegram:group:],
-          thread_prefix: 'tg.', speaks: false
+          thread_prefix: 'tg.'
         ),
         'talk' => Kind.new(
           name: 'talk', correspondent: 'talk:user:', admissible: %w[talk:chat:], bindable: %w[talk:chat:],
-          refused_groups: [], thread_prefix: 'tk.', speaks: true
+          refused_groups: [], thread_prefix: 'tk.'
         )
       }.freeze
 

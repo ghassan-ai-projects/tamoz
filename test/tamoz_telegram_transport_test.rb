@@ -100,6 +100,16 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  def test_the_bot_api_origin_is_telegram_or_a_loopback_stand_in
+    assert_equal Tamoz::Telegram::Client::DEFAULT_ORIGIN, Tamoz::Telegram::Client.new('t').origin
+    %w[http://127.0.0.1:9 http://localhost:80 http://[::1]:8443].each do |origin|
+      assert_equal origin, Tamoz::Telegram::Client.new('t', origin:).origin
+    end
+    %w[http://api.telegram.org https://evil.example http://127.0.0.1.evil.example].each do |origin|
+      assert_raises(Comms::ValidationError, origin) { Tamoz::Telegram::Client.new('t', origin:) }
+    end
+  end
+
   def test_authenticate_refuses_a_wrong_token
     with_transport do |transport, server|
       server.script('getMe', status: 401, body: { 'ok' => false, 'description' => 'Unauthorized' }, times: 1)

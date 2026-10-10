@@ -76,9 +76,9 @@ module Tamoz
 
       private
 
-      # A notice is shown on surfaces that ask for it, never settles the request, and is keyed by it.
+      # A notice is shown on surfaces that speak, never settles the request, and is keyed by it.
       def push_notice(event, route, surface)
-        return nil unless Parties::KINDS.fetch(surface.fetch('kind')).speaks
+        return nil unless surface.fetch('rendering')['speech']
 
         part = render_parts(event, surface).first
         @store.append_delivery(rendered_delivery(event, route, part, 'control').wire,

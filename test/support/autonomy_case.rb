@@ -110,7 +110,7 @@ module AutonomyCase
         out:, err:, input: StringIO.new(input),
         env:,
         model_factory: factory,
-        comms_client_factory: comms_factory || (@client && ->(_token) { @client })
+        channel_kinds: ChannelKindsFixture.telegram(comms_factory || (@client && ->(_token) { @client }))
       )
       @out = out.string
       @err = err.string

@@ -2,52 +2,47 @@
 
 module Tamoz
   module Agent
-    # C7 (PLAN_ADR049 Phase 6): exact per-command child environments. Every
-    # child gets the standard runtime allowlist plus only the credentials its
-    # command may hold: the gateway gets its channel token (and, for talk, the
-    # voice key) but never the chat model key, the worker gets its models' and
-    # sources' keys but never a channel token, queue/status
-    # get neither, and the harness gets only sanitized pointers. A value that
-    # is not in the map never reaches the child — there is no shared-env path.
-    #
-    # The ALMS endpoint is deliberately NOT here: the worker resolves it from
-    # the runtime config's MCP server entry (`sources.mcp.servers[alms].
-    # endpoint`) the way every other MCP surface is resolved, so no child
-    # needs it as an environment variable.
+    # Each child's exact environment: a gateway only its kind's declared variables (and, when it speaks, the voice
+    # key); the worker its models' and sources' keys but never a channel variable.
     module ChildEnvironments
       STANDARD = %w[PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB].freeze
-      CHANNEL_TOKENS = %w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_TALK_TOKEN].freeze
       FORBIDDEN_EVERYWHERE = %w[TAMOZ_ENV_FILE].freeze
+      MODEL_ROLES = %w[chat transcription vision].freeze
+
+      class Error < Tamoz::Agent::Error; end
 
       def self.standard_env(base)
         STANDARD.filter_map { |name| [name, base[name]] }.to_h
       end
 
-      def self.gateway_env(base, directory:, surface:)
-        return talk_gateway_env(base, directory:) if directory.channels.fetch(surface)['kind'] == 'talk'
-
-        standard_env(base).merge(
-          'TAMOZ_RUNTIME_DIR' => directory.path,
-          'TAMOZ_TELEGRAM_SURFACE' => surface,
-          'TAMOZ_TELEGRAM_BOT_TOKEN' => base.fetch('TAMOZ_TELEGRAM_BOT_TOKEN'),
-          'TAMOZ_TELEGRAM_API_ORIGIN' => base['TAMOZ_TELEGRAM_API_ORIGIN']
-        ).compact
+      # @param vars [Hash] what the surface's channel setup hands its gateway; @param allowed [Array<String>] the
+      #   variable names that kind declares; any other name is refused, not dropped.
+      def self.gateway_env(base, directory:, vars:, allowed:, speech:)
+        refuse_foreign!(base, directory, vars, allowed)
+        standard_env(base).merge('TAMOZ_RUNTIME_DIR' => directory.path).merge(vars.compact)
+                          .merge(speech ? model_keys(base, directory.models['voice']) : {})
       end
 
-      # The talk gateway holds its access token and the one presentation key, the voice role's (ADR-042).
-      def self.talk_gateway_env(base, directory:)
-        standard_env(base).merge(
-          'TAMOZ_RUNTIME_DIR' => directory.path, 'TAMOZ_TALK_TOKEN' => base.fetch('TAMOZ_TALK_TOKEN'),
-          'TAMOZ_TALK_HOST' => base['TAMOZ_TALK_HOST'], 'TAMOZ_TALK_TRACE' => base['TAMOZ_TALK_TRACE']
-        ).compact.merge(model_keys(base, directory.models['voice']))
+      def self.refuse_foreign!(base, directory, vars, allowed)
+        foreign = vars.keys - allowed
+        unless foreign.empty?
+          raise Error,
+                "a channel handed its gateway #{foreign.join(', ')}, which it does not declare"
+        end
+
+        held = vars.keys & (FORBIDDEN_EVERYWHERE + MODEL_ROLES.flat_map do |role|
+          model_keys(base, directory.models[role]).keys
+        end)
+        raise Error, "a channel's gateway may not hold #{held.join(', ')}" unless held.empty?
       end
 
-      # The worker's models and sources come from the runtime config; it holds their keys and never a channel token.
-      def self.worker_env(base, directory:)
+      # The worker's models and sources come from the runtime config; it never holds a channel variable, even one a
+      # model's key is named after (`start` refuses that configuration).
+      def self.worker_env(base, directory:, channel_names:)
         models = directory.models
-        base.slice(*directory.source_variables).except(*CHANNEL_TOKENS, *FORBIDDEN_EVERYWHERE)
-            .merge(standard_env(base), 'TAMOZ_RUNTIME_DIR' => directory.path)
-            .merge(*%w[chat transcription vision].map { |role| model_keys(base, models[role]) })
+        base.slice(*directory.source_variables).merge(standard_env(base), 'TAMOZ_RUNTIME_DIR' => directory.path)
+            .merge(*MODEL_ROLES.map { |role| model_keys(base, models[role]) })
+            .except(*channel_names, *FORBIDDEN_EVERYWHERE)
       end
 
       def self.model_keys(base, model)

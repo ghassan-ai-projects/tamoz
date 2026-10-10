@@ -126,6 +126,22 @@ class RuntimeDirectoryConfigTest < Minitest::Test
     end
   end
 
+  # A surface id names a folder under the runtime, so it can never climb out of it.
+  def test_a_surface_id_is_a_plain_name
+    Dir.mktmpdir('tamoz-runtime-config') do |root|
+      FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
+      path = RuntimeDirectory.create!(File.join(root, 'runtime'), workspace:).path
+      config = File.join(path, RuntimeDirectory::CONFIG_FILE)
+      entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'expected_bot_id' => 7,
+                'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' } }
+      ['../..', 'Telegram', 'a/b', ''].each do |surface|
+        File.write(config, Psych.dump(Psych.safe_load_file(config).merge('channels' => { surface => entry })))
+
+        assert_raises(RuntimeDirectory::Error, surface) { RuntimeDirectory.resolve(path:, env: {}).channels }
+      end
+    end
+  end
+
   # Schema 2 with a strict channels mapping: a bad kind, a missing revision,
   # or a missing expected_bot_id is refused at LOAD, before any command runs.
   def test_schema_two_validates_channels_strictly
@@ -145,7 +161,7 @@ class RuntimeDirectoryConfigTest < Minitest::Test
         } }
       }
 
-      { 'kind' => 'slack', 'revision' => 0, 'expected_bot_id' => 'abc' }.each do |key, value|
+      { 'kind' => 'Slack', 'revision' => 0, 'expected_bot_id' => 'abc' }.each do |key, value|
         document = deep_dup(base)
         document.fetch('channels').fetch('telegram-ops')[key] = value
         File.write(config_path, Psych.dump(document))

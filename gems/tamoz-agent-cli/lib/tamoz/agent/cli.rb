@@ -29,13 +29,10 @@ module Tamoz
       include CLICommsCommands
       include CLICommsDoctor
       include CLICommsOps
-      include CLITelegramCommands
-      include CLITalkCommands
-      include CLITalkGateway
-      include CLITelegramPairing
       include CLISetupCommands
       include CLIChannelCommands
       include CLIChildProcesses
+      include CLIChannelProcesses
       include CLIStartChecks
       include CLIStartCommands
       include CLIServiceCommands
@@ -104,18 +101,18 @@ module Tamoz
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
 
       def self.run(argv = ARGV, out: $stdout, err: $stderr, input: $stdin, env: ENV, model_factory: nil,
-                   comms_client_factory: nil)
-        new(out:, err:, input:, env:, model_factory:, comms_client_factory:).run(argv)
+                   channel_kinds: nil)
+        new(out:, err:, input:, env:, model_factory:, channel_kinds:).run(argv)
       end
 
-      def initialize(out:, err:, input:, env:, model_factory: nil, comms_client_factory: nil)
+      def initialize(out:, err:, input:, env:, model_factory: nil, channel_kinds: nil)
         @out = out
         @err = err
         @input = input
         @env = env
         @cancellation = nil
         @model_factory = model_factory
-        @comms_client_factory = comms_client_factory
+        @channel_kinds = channel_kinds
         @prompts = PromptAdapter.new(input:, err:)
         @events = EventRenderer.new(out:, err:)
         @models = ModelBuilder.new(env:, factory: model_factory)

@@ -32,9 +32,9 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
 
   def descriptor(**overrides)
     Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
       identity: { expected_bot_id: 7_463_512_990 },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },

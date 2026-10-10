@@ -311,9 +311,9 @@ class DeliveryDrainerTest < Minitest::Test
 
   def descriptor
     Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: 'telegram-ops', revision: 1,
       transport: {
-        mode: 'long_poll',
         credential_ref: { kind: 'env', name: 'TOKEN' },
         poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144
       },

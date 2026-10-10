@@ -71,5 +71,17 @@ module Tamoz
       CATEGORY = "comms_poller_conflict"
       SAFE_MESSAGE = "A competing poller holds the communications surface."
     end
+
+    # A channel could not open its connection (e.g. its listening port is taken); the message names why.
+    class ConnectionError < CommsError
+      CATEGORY = "comms_connection"
+      SAFE_MESSAGE = "The channel could not open its connection."
+    end
+
+    # Adding a channel failed for a reason the operator can act on; the message says what to do.
+    class SetupError < CommsError
+      CATEGORY = "comms_setup"
+      SAFE_MESSAGE = "The channel could not be added."
+    end
   end
 end

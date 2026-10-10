@@ -27,8 +27,9 @@ module Tamoz
     # :reek:TooManyInstanceVariables, :reek:TooManyStatements
     # :reek:DuplicateMethodCall, :reek:FeatureEnvy
     class SurfaceDescriptor
-      KINDS = %w[telegram talk].freeze
-      POLL_MODES = %w[long_poll].freeze
+      KIND_NAME = /\A[a-z][a-z0-9_]{1,31}\z/
+      RESERVED_KINDS = %w[os cli].freeze
+      MAX_SETTINGS_BYTES = 4096
       ADMISSION_MODES = %w[disabled allowlist pairing].freeze
       THREADING_MODES = %w[conversation per_message].freeze
       APPROVAL_MODES = %w[none deny_only affirmative].freeze
@@ -37,22 +38,21 @@ module Tamoz
       RENDER_OVERFLOWS = %w[truncate].freeze
       CLASSIFICATIONS = %w[restricted].freeze
       DIGEST_DOMAIN = 'tamoz.comms.surface.v1'
-      HOST = /\A(?=.{1,253}\z)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\z/i
       MAX_IDS = 1024
-      STRUCTURED_FIELDS = %i[transport identity admission approvals rendering limits].freeze
+      STRUCTURED_FIELDS = %i[transport identity settings admission approvals rendering limits].freeze
       private_constant :STRUCTURED_FIELDS
 
-      attr_reader :surface_id, :revision, :kind, :transport, :identity,
+      attr_reader :surface_id, :revision, :kind, :transport, :identity, :settings,
                   :admission, :threading, :profile_id, :profile_digest, :approvals, :rendering,
                   :limits, :classification, :definition_digest
 
       def initialize(
-        surface_id:, revision:, kind:, transport:, identity:, admission:,
+        surface_id:, revision:, kind:, transport:, identity:, settings:, admission:,
         threading:, profile_id:, approvals:, rendering:, limits:,
         classification:, definition_digest:, profile_digest: nil
       )
         fields = {
-          surface_id:, revision:, kind:, transport:, identity:, admission:, threading:, profile_id:,
+          surface_id:, revision:, kind:, transport:, identity:, settings:, admission:, threading:, profile_id:,
           profile_digest:, approvals:, rendering:, limits:, classification:, definition_digest:
         }
         validate!(fields)
@@ -66,14 +66,14 @@ module Tamoz
       # deployed without one cannot execute a bound thread (the worker refuses
       # an unpinned binding) — see `Gateway::AdmissionBinding`.
       # @return [SurfaceDescriptor]
-      def self.build(surface_id:, revision:, transport:, identity:, admission:, threading:, profile_id:, approvals:,
-                     rendering:, limits:, kind: 'telegram', classification: 'restricted', profile_digest: nil)
+      def self.build(surface_id:, revision:, kind:, transport:, identity:, admission:, threading:, profile_id:,
+                     approvals:, rendering:, limits:, settings: {}, classification: 'restricted', profile_digest: nil)
         digest = Canonical.hexdigest(
           DIGEST_DOMAIN,
-          [surface_id, revision, kind, transport, identity, admission,
+          [surface_id, revision, kind, transport, identity, settings, admission,
            threading, profile_id, profile_digest, approvals, rendering, limits, classification]
         )
-        new(surface_id:, revision:, kind:, transport:, identity:, admission:,
+        new(surface_id:, revision:, kind:, transport:, identity:, settings:, admission:,
             threading:, profile_id:, profile_digest:, approvals:, rendering:, limits:,
             classification:, definition_digest: digest)
       end
@@ -85,6 +85,7 @@ module Tamoz
           'kind' => @kind,
           'transport' => self.class.symbol_keys_to_strings(@transport),
           'identity' => self.class.symbol_keys_to_strings(@identity),
+          'settings' => self.class.symbol_keys_to_strings(@settings),
           'admission' => self.class.symbol_keys_to_strings(@admission),
           'threading' => @threading,
           'profile_id' => @profile_id,
@@ -104,6 +105,7 @@ module Tamoz
           kind: wire.fetch('kind'),
           transport: symbolized_field(wire, 'transport'),
           identity: symbolized_field(wire, 'identity'),
+          settings: symbolized_field(wire, 'settings'),
           admission: symbolized_field(wire, 'admission'),
           threading: wire.fetch('threading'),
           profile_id: wire.fetch('profile_id'),
@@ -121,6 +123,10 @@ module Tamoz
       def pairing? = admission.fetch(:direct) == 'pairing'
 
       def disabled? = admission.fetch(:direct) == 'disabled'
+
+      def speech? = rendering.fetch(:speech, false)
+
+      def self.valid_kind?(kind) = kind.is_a?(String) && kind.match?(KIND_NAME) && !RESERVED_KINDS.include?(kind)
 
       class << self
         # Wire-key conversion helpers shared by `wire` and `from_wire`.
@@ -148,7 +154,7 @@ module Tamoz
         validate_classification!(fields)
         validate_references!(fields)
         validate_transport!(fields.fetch(:transport))
-        validate_talk!(fields.fetch(:transport)) if fields.fetch(:kind) == 'talk'
+        validate_settings!(fields.fetch(:settings))
         validate_identity!(fields.fetch(:identity))
         validate_admission!(fields.fetch(:admission))
         validate_approvals!(fields.fetch(:approvals))
@@ -159,7 +165,8 @@ module Tamoz
       def validate_classification!(fields)
         Shapes.require_string!(fields.fetch(:surface_id), 'surface_id', max_bytes: MAX_IDS)
         Shapes.require_positive!(fields.fetch(:revision), 'revision')
-        Shapes.require_member!(fields.fetch(:kind), KINDS, 'kind')
+        raise ValidationError, 'kind must be a lowercase name that is not os or cli' unless
+          self.class.valid_kind?(fields.fetch(:kind))
         Shapes.require_member!(fields.fetch(:threading), THREADING_MODES, 'threading')
         Shapes.require_member!(fields.fetch(:classification), CLASSIFICATIONS, 'classification')
       end
@@ -176,8 +183,6 @@ module Tamoz
       end
 
       def validate_transport!(transport)
-        raise ValidationError, 'transport mode must be long_poll in v1' unless Shapes.member?(transport.fetch(:mode),
-                                                                                              POLL_MODES)
         raise ValidationError, 'transport needs a credential_ref' unless transport.fetch(:credential_ref).is_a?(Hash)
         raise ValidationError, 'poll_timeout_s must be positive' unless Shapes.bounded_integer?(
           transport.fetch(:poll_timeout_s), max: 600
@@ -188,14 +193,11 @@ module Tamoz
         raise ValidationError, 'max_response_bytes must be positive'
       end
 
-      def validate_talk!(transport)
-        port = transport[:port]
-        raise ValidationError, 'a talk surface needs a port' unless port.is_a?(Integer) && (1..65_535).cover?(port)
+      def validate_settings!(settings)
+        raise ValidationError, 'settings must be a mapping' unless settings.is_a?(Hash)
+        return if Canonical.canonical_bytes(settings).bytesize <= MAX_SETTINGS_BYTES
 
-        hosts = transport.fetch(:allow_hosts, [])
-        valid = hosts.is_a?(Array) && hosts.length <= 16
-        valid &&= hosts.uniq.length == hosts.length && hosts.all? { |host| host.is_a?(String) && host.match?(HOST) }
-        raise ValidationError, 'allow_hosts must be at most 16 host names' unless valid
+        raise ValidationError, "settings must be at most #{MAX_SETTINGS_BYTES} bytes"
       end
 
       def validate_identity!(identity)
@@ -254,6 +256,12 @@ module Tamoz
         end
         raise ValidationError, 'overflow must be truncate in v1' unless Shapes.member?(rendering.fetch(:overflow),
                                                                                        RENDER_OVERFLOWS)
+        validate_speech!(rendering)
+      end
+
+      def validate_speech!(rendering)
+        speech = rendering.fetch(:speech, false)
+        raise ValidationError, 'speech must be true or false' unless [true, false].include?(speech)
       end
 
       def validate_limits!(limits)
