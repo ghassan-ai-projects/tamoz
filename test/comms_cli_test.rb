@@ -217,14 +217,19 @@ class CommsCliTest < Minitest::Test
   # client carrying the surface's declared max_response_bytes; an undeclared
   # cap falls through to the client's own default.
   def test_the_production_client_carries_the_declared_response_cap
+    built = []
     channel = Tamoz::Telegram::Channel.new
+    channel.define_singleton_method(:client) { |*args| super(*args).tap { built << _1 } }
+    env = { 'TAMOZ_TELEGRAM_BOT_TOKEN' => 'token' }
 
-    declared = channel.client('token', {}, telegram_descriptor(4096).transport[:max_response_bytes])
+    channel.connect(telegram_descriptor(4096), env:)
+    declared = built.last
 
     assert_kind_of Tamoz::Telegram::Client, declared
     assert_equal 4096, declared.max_response_bytes
 
-    undeclared = channel.client('token', {}, telegram_descriptor(nil).transport[:max_response_bytes])
+    channel.connect(telegram_descriptor(nil), env:)
+    undeclared = built.last
 
     assert_equal Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES, undeclared.max_response_bytes
   end

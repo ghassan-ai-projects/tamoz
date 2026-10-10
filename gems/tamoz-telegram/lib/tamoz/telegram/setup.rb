@@ -92,9 +92,12 @@ module Tamoz
       end
 
       def paired_owner(request, client, bot, terminal)
-        owner, offset = request[:owner] ? [request[:owner], nil] : pair_owner(client, bot, terminal)
+        return request[:owner] if request[:owner]
+
+        message, offset = pair_owner(client, bot, terminal)
         confirm_backlog(client, offset)
-        owner
+        greet(client, message)
+        message.dig('from', 'id')
       end
 
       def refuse_other_bot(existing, bot)
@@ -114,24 +117,27 @@ module Tamoz
           client.call('getUpdates', { 'timeout' => 10, 'offset' => offset }.compact, idempotent: true).each do |update|
             offset = update.fetch('update_id') + 1
             message = update['message']
-            return [confirm_owner(client, message, terminal), offset] if message && message.dig('chat',
-                                                                                                'type') == 'private'
+            next unless message && message.dig('chat', 'type') == 'private'
+
+            confirm_owner(message, terminal)
+            return [message, offset]
           end
         end
         raise Comms::SetupError, 'no message arrived; run `tamoz channel add telegram` again, or pass --owner with ' \
                                  'your user id'
       end
 
-      def confirm_owner(client, message, terminal)
+      def confirm_owner(message, terminal)
         sender = message.fetch('from')
         name = [sender['first_name'], sender['username'] && "@#{sender['username']}"].compact.join(' ')
         raise Comms::SetupError, 'not paired' unless
           terminal.confirm("Message from #{name} (id #{sender.fetch('id')}). Is that you?")
+      end
 
+      def greet(client, message)
         client.call('sendMessage', { 'chat_id' => message.dig('chat', 'id'),
-                                     'text' => "Hi #{sender['first_name']}! I'm paired with you. I'll answer here " \
-                                               'once the bot is started.' })
-        sender.fetch('id')
+                                     'text' => "Hi #{message.dig('from', 'first_name')}! I'm paired with you. " \
+                                               "I'll answer here once the bot is started." })
       end
 
       # Everything sent before the bot was paired is confirmed now, so the gateway never answers it later: each

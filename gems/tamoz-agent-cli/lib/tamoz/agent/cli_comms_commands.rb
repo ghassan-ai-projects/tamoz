@@ -34,11 +34,8 @@ module Tamoz
         end
       end
 
-      # `tamoz comms serve [--surface ID] [--once]` — the long-running gateway
-      # (design §5, ADR-042). Each enabled surface gets its own fenced poller
-      # gateway over the shared runtime database; a surface's connection and
-      # drainer start only once its gateway holds the lease. `--once` does a
-      # single poll/drain pass for deterministic supervision.
+      # `tamoz comms serve [--surface ID] [--once]`: one fenced gateway per enabled surface; its connection and
+      # drainer start only once it holds the lease.
       def comms_serve(options, argv)
         surface_filter = nil
         once = false
@@ -149,14 +146,8 @@ module Tamoz
         outcomes.any? { |outcome| %i[auth_failed poller_busy poller_lost].include?(outcome) } ? 1 : 0
       end
 
-      # A fenced gateway loop per surface, supervised like `tamoz worker`:
-      # INT/TERM ask every loop to stop, and the previous handlers are
-      # restored so an in-process test never leaks traps. A surface's
-      # connection and drainer start from the gateway's `on_started`, so a run
-      # that cannot take the lease never listens or delivers. A drainer that
-      # loses its credential stops every loop and exits non-zero; an
-      # unexpected failure is named on stderr with its type and turns into a
-      # non-zero exit — never a quiet spin beside a dead sibling thread.
+      # One loop per surface, stopped together; a failure in any is named on stderr and exits non-zero, never a
+      # quiet spin beside a dead sibling.
       def run_gateway_loops(store, surfaces)
         # Trap.install hands each stop request to a thread for us: `stop`
         # releases the poller lease with a database write, whose mutex raises

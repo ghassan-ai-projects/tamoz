@@ -39,7 +39,7 @@ module Tamoz
         kind = channel_kind(descriptor.kind)
         poller = poller_ok?(store, descriptor)
         [['adapter', true]] +
-          kind.setup.check(descriptor:, env: channel_env(kind), state_dir: channel_state_dir(directory, surface_id),
+          kind.setup.check(descriptor:, env: channel_env(kind), state_dir: channel_state_path(directory, surface_id),
                            poller_free: poller == true) + [['poller', poller]]
       rescue MissingAdapterError => e
         [['adapter', e.message]]

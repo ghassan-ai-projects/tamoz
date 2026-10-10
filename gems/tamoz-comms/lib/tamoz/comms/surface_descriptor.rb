@@ -12,10 +12,6 @@ module Tamoz
     # durable records name the revision they were admitted under, so "who was
     # allowed to do what, when" is answerable without consulting the file.
     #
-    # The Telegram API origin is deliberately NOT configurable (design §6.1):
-    # a configurable origin is a bot-token exfiltration primitive. Test
-    # fixtures are injected as clients, never enabled by production config.
-    #
     # The descriptor's fields ARE the value and its validation is the
     # per-field rule set; splitting either would fragment the deployed
     # contract.

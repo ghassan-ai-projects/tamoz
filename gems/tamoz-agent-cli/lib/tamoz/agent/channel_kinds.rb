@@ -16,12 +16,14 @@ module Tamoz
       def adapter
         require library
         Object.const_get(namespace)
-      rescue LoadError
+      rescue LoadError => e
+        raise unless e.path == library
+
         raise CLICommsShared::MissingAdapterError, "the #{name} channel (#{library.tr('/', '-')}) is not installed"
       end
     end
 
-    # The closed set of channel kinds (ADR-014): configuration can name only these.
+    # The closed set of channel kinds: configuration can name only these.
     CHANNEL_KINDS = [
       ChannelKind.new(name: 'telegram', library: 'tamoz/telegram', namespace: 'Tamoz::Telegram'),
       ChannelKind.new(name: 'talk', library: 'tamoz/talk', namespace: 'Tamoz::Talk')

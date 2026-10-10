@@ -27,6 +27,9 @@ module Tamoz
 
       def validate!(descriptor)
         raise Comms::ValidationError, 'a Telegram surface cannot speak its replies' if descriptor.speech?
+        unless descriptor.transport.dig(:credential_ref, :name) == Setup::TOKEN
+          raise Comms::ValidationError, "a Telegram surface's credential is #{Setup::TOKEN}"
+        end
 
         unknown = descriptor.settings.keys - SETTINGS
         raise Comms::ValidationError, "a Telegram surface has no setting #{unknown.first}" unless unknown.empty?

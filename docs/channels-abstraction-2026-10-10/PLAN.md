@@ -314,6 +314,9 @@ feature, checked by `git diff --word-diff`):
 | C2b | `comms_cli_test.rb` `test_doctor_names_a_tls_deviation_for_a_non_https_origin` | the doctor's `tls` row is gone: the client now refuses any origin but Telegram's or a loopback stand-in (`tamoz_telegram_transport_test` `test_the_bot_api_origin_is_telegram_or_a_loopback_stand_in`) |
 | C2b | `chat_attachment_test.rb` `with_speaking_surface` | swapped a `Parties` constant; a speaking surface is now the descriptor's `rendering.speech`, passed to the fixture |
 | C2b | `child_environments_test.rb:79,87`; `cli_channel_*_test.rb`; `cli_service_test.rb`; `cli_start_test.rb`; `comms_cli_test.rb` | the new child-env signature; `channel_kinds:` replaces `comms_client_factory:`; the talk token in `state_dir`; `talk_boundary_test`'s `.speak(` caller list |
+| C2 | `cli_channel_telegram_test.rb` `test_setup_then_pairing_repairs_an_unpinned_channel` → `test_adding_the_same_bot_again_keeps_its_surface` | an unpinned entry cannot exist once `stream_id` is mandatory; the test now pins surface reuse |
+| C3 | `sqlite_talk_migration_test.rb` → `sqlite_channels_migration_test.rb` | migration 26 recreates the comms tables, so 25's row carrying is moot; the new file pins 26 |
+| C3 | `comms_seams_test.rb` `test_commands_accept_only_the_matching_bot_suffix` | the own-bot suffix rule moved to the Telegram normalizer (`telegram_normalizer_test`), including the no-username case |
 | C3 | the 37 files naming `bot_id`/`expected_bot_id` (`cli_channel_telegram_test.rb:40,176,272`, `cli_start_test.rb:202`, …); `sqlite_comms_store_test.rb:212-287`, `comms_values_test.rb:210` | `stream_id`; the `telegram.`/`talk.` thread prefix |
 
 C0 and C1 come first: C0 measures the outcome, C1 pins the transport behavior every later phase must keep.

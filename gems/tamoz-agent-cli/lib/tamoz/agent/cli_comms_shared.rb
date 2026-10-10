@@ -133,8 +133,10 @@ module Tamoz
       # Only the variables the kind declares; a channel never sees the rest of the environment.
       def channel_env(kind, env = @env.to_h) = env.to_h.slice(*kind.setup.env_names)
 
+      def channel_state_path(directory, surface_id) = File.join(directory.path, 'channels', surface_id)
+
       def channel_state_dir(directory, surface_id)
-        File.join(directory.path, 'channels', surface_id).tap do |path|
+        channel_state_path(directory, surface_id).tap do |path|
           Tamoz::Core::PrivateDirectory.secure(File.dirname(path))
           Tamoz::Core::PrivateDirectory.secure(path)
         end

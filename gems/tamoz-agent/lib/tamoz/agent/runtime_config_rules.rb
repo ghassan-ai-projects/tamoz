@@ -26,15 +26,7 @@ module Tamoz
         #   -- one validation sequence per field, checked in the design's order.
         def validate_channel!(surface_id, entry)
           label = "channels.#{surface_id}"
-          raise Error, "#{label}: a surface id is lowercase letters, digits, - and _" unless
-            surface_id.is_a?(String) && surface_id.match?(SURFACE_ID)
-          raise Error, "#{label} must be a mapping" unless entry.is_a?(Hash)
-
-          unknown = entry.keys - CHANNEL_KEYS
-          unless unknown.empty?
-            raise Error, "#{label}.#{unknown.first} is not a channel field; remove the channels block and run " \
-                         '`tamoz channel add` again'
-          end
+          validate_channel_shape!(label, surface_id, entry)
           unless Tamoz::Comms::SurfaceDescriptor.valid_kind?(entry['kind'])
             raise Error, "#{label}.kind must be a lowercase channel name"
           end
@@ -69,6 +61,19 @@ module Tamoz
           entry.freeze
         end
         # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        # A surface id names a folder under the runtime; a removed key fails by name, never silently.
+        def validate_channel_shape!(label, surface_id, entry)
+          raise Error, "#{label}: a surface id is lowercase letters, digits, - and _" unless
+            surface_id.is_a?(String) && surface_id.match?(SURFACE_ID)
+          raise Error, "#{label} must be a mapping" unless entry.is_a?(Hash)
+
+          unknown = entry.keys - CHANNEL_KEYS
+          return if unknown.empty?
+
+          raise Error, "#{label}.#{unknown.first} is not a channel field; remove the channels block and run " \
+                       '`tamoz channel add` again'
+        end
 
         def validate_schema_version!(document)
           version = document.dig('runtime', 'schema_version')

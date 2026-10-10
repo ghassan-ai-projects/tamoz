@@ -1425,8 +1425,8 @@ module Tamoz
 
       MIGRATION_25_CHECKSUM = migration_checksum(MIGRATION_25)
 
-      # Channels as one abstraction: 25 -> 26 through MIGRATION_26. Every comms table is recreated empty (ADR-059:
-      # no row is carried): an update stream is a `<kind>:...` string, and a decision's actor and source name one kind.
+      # 25 -> 26: every comms table recreated empty, no row carried; an update stream is a `<kind>:...` string and a
+      # decision's actor and source name one kind.
       MIGRATION_26 = [
         <<~SQL.freeze,
           DROP TABLE tamoz_comms_approval_prompts

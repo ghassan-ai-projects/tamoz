@@ -27,6 +27,9 @@ class TelegramNormalizerTest < Minitest::Test
 
     assert_equal 'cancel', Tamoz::Comms::Commands.parse(ours.fetch('text')).command
     assert_nil Tamoz::Comms::Commands.parse(theirs.fetch('text'))
+    unknown = normalizer.normalize(message_update(update_id: 3, message_id: 3, text: '/cancel@ops_bot')).wire
+
+    assert_nil Tamoz::Comms::Commands.parse(unknown.fetch('text')), 'without its own name a bot strips no suffix'
   end
 
   # Same bytes normalized twice MUST collide on the same digest — that is

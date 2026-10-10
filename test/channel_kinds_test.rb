@@ -124,6 +124,15 @@ class ChannelKindsTest < Minitest::Test
     end
   end
 
+  def test_a_kinds_credential_is_its_own_token_not_another_declared_variable
+    with_runtime do |runtime|
+      tamoz(runtime, 'channel', 'add', 'talk')
+      edit_channel(runtime, 'talk') { |entry| entry['credential_ref']['name'] = 'TAMOZ_TALK_TRACE' }
+
+      assert_includes tamoz(runtime, 'comms', 'serve', '--once')[2], "a talk surface's credential is TAMOZ_TALK_TOKEN"
+    end
+  end
+
   def test_a_telegram_surface_cannot_speak
     with_runtime do |runtime|
       cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})

@@ -63,7 +63,7 @@ module Tamoz
         "the provider could not be reached (#{e.class})"
       end
 
-      # A speaking surface's gateway holds the voice key, so the voice key must never be the chat model's (ADR-042).
+      # A speaking surface's gateway holds the voice key, so the voice key must never be the chat model's.
       def voice_key_problem(directory, base)
         voice = directory.models['voice']
         return unless voice

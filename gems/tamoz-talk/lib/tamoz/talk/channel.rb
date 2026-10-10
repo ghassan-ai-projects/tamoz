@@ -40,6 +40,10 @@ module Tamoz
 
       def validate!(descriptor)
         settings = descriptor.settings
+        unless descriptor.transport.dig(:credential_ref, :name) == Setup::TOKEN
+          raise Comms::ValidationError, "a talk surface's credential is #{Setup::TOKEN}"
+        end
+
         unknown = settings.keys - SETTINGS
         raise Comms::ValidationError, "a talk surface has no setting #{unknown.first}" unless unknown.empty?
 
