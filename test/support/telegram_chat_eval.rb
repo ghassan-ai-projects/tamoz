@@ -67,20 +67,38 @@ class TelegramChatEval
 
   # runtime_from: a runtime directory (e.g. ~/.tamoz) to copy and run on, as its owner would.
   # roles: `tamoz setup` flags for the attachment models, e.g. ['--transcription', 'openai/whisper-1'].
-  def initialize(provider: nil, model: nil, runtime_from: nil, roles: [])
+  # stop_grace: seconds a child gets on TERM before its process group is killed; `start` stops its two children
+  # one after the other with 8 s each, so the default covers both.
+  def initialize(provider: nil, model: nil, runtime_from: nil, roles: [], stop_grace: 20)
     @provider = provider || 'openrouter'
     @model = model || 'deepseek/deepseek-v4.1-flash'
     @runtime_from = runtime_from
     @roles = roles
-    @root = Dir.mktmpdir('tamoz-telegram-eval')
-    @workspace = File.join(@root, 'workspace')
-    @runtime = File.join(@root, 'runtime')
-    @fake = TelegramBotApiFake.new(**lived_in_bot)
+    @stop_grace = stop_grace
     @results = []
     @transcript = []
     @pids = {}
     @users = USERS.dup
-    provision
+    @root = Dir.mktmpdir('tamoz-telegram-eval')
+    @workspace = File.join(@root, 'workspace')
+    @runtime = File.join(@root, 'runtime')
+    begin
+      @fake = TelegramBotApiFake.new(**lived_in_bot)
+      provision
+    rescue Exception # rubocop:disable Lint/RescueException -- an interrupted provision must not leave its dir
+      shutdown
+      raise
+    end
+  end
+
+  # One run: whatever the block does or raises, its processes are stopped, its report written and its dir removed.
+  def self.run(report_to:, **)
+    evaluation = new(**)
+    yield evaluation
+    evaluation
+  ensure
+    evaluation&.shutdown
+    evaluation&.write_report(report_to)
   end
 
   def label
@@ -128,7 +146,9 @@ class TelegramChatEval
   def shutdown
     @logs = %i[start gateway worker].to_h { |name| [name, log_tail(name, 40)] }
     %i[start gateway worker].each { |name| stop_child(name) }
-    @fake.stop
+    @fake&.stop
+  ensure
+    FileUtils.rm_rf(@root)
   end
 
   # A tap on Approve resumes work whose answer follows the ack; a Deny only closes the request.
@@ -425,7 +445,7 @@ class TelegramChatEval
 
   def spawn_child(name, args, env = {})
     log = File.join(@root, "#{name}.log")
-    @pids[name] = Process.spawn(child_env(env), RbConfig.ruby, *args, out: log, err: log, chdir: ROOT)
+    @pids[name] = Process.spawn(child_env(env), RbConfig.ruby, *args, out: log, err: log, chdir: ROOT, pgroup: true)
   end
 
   # `start` writes its children's output under the runtime's logs; a hand-started child logs beside it.
@@ -434,11 +454,27 @@ class TelegramChatEval
     name == :start || @pids.key?(name) || !File.exist?(supervised) ? File.join(@root, "#{name}.log") : supervised
   end
 
+  # `start` stops its own children one by one; whatever of the group outlives the grace is killed with it.
   def stop_child(name)
     pid = @pids.delete(name) or return
-    Process.kill('TERM', pid)
-    Process.kill('KILL', pid) unless exited_within?(pid, 8)
+    signal('TERM', pid)
+    exited_within?(pid, @stop_grace)
+  ensure
+    if pid
+      signal('KILL', -pid)
+      reap(pid)
+    end
+  end
+
+  def signal(name, pid)
+    Process.kill(name, pid)
   rescue Errno::ESRCH
+    nil
+  end
+
+  def reap(pid)
+    Process.wait(pid)
+  rescue Errno::ECHILD
     nil
   end
 

@@ -29,34 +29,29 @@ OptionParser.new do |parser|
   parser.on('--model NAME') { |name| options[:model] = name }
 end.parse!
 
-evaluation = TelegramChatEval.new(**options.slice(:provider, :model, :runtime_from))
-begin
+directory = File.expand_path("../tmp/telegram-eval/#{Time.now.strftime('%Y%m%d-%H%M%S')}", __dir__)
+evaluation = TelegramChatEval.run(report_to: directory, **options.slice(:provider, :model, :runtime_from)) do |run|
   begin
-    evaluation.start
+    run.start
   rescue StandardError => e
-    evaluation.check('start', 'tamoz start runs the bot', false, "#{e.class}: #{e.message}")
+    run.check('start', 'tamoz start runs the bot', false, "#{e.class}: #{e.message}")
     options[:only] = []
   end
-  puts "telegram chat eval — #{evaluation.label}"
+  puts "telegram chat eval — #{run.label}"
   (TelegramChatScenarios.all & options[:only]).each do |name|
     print "  #{name} … "
     started = Time.now
     begin
-      TelegramChatScenarios.public_send(name, evaluation)
+      TelegramChatScenarios.public_send(name, run)
     rescue TelegramChatEval::ProcessDied => e
-      evaluation.check(name, 'scenario ran', false, e.message)
+      run.check(name, 'scenario ran', false, e.message)
       break
     rescue StandardError => e
-      evaluation.check(name, 'scenario ran', false, "#{e.class}: #{e.message}")
+      run.check(name, 'scenario ran', false, "#{e.class}: #{e.message}")
     end
     puts format('%.0fs', Time.now - started)
   end
-ensure
-  evaluation.shutdown
 end
-
-directory = File.expand_path("../tmp/telegram-eval/#{Time.now.strftime('%Y%m%d-%H%M%S')}", __dir__)
-evaluation.write_report(directory)
 results = evaluation.results
 results.select { |result| result[:pass].nil? }.each do |result|
   puts "  BLOCKED #{result[:scenario]}: #{result[:detail]}"
