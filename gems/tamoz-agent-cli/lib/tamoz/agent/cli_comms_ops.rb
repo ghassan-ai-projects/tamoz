@@ -322,7 +322,7 @@ module Tamoz
 
       def surface_status(store, row)
         descriptor = Tamoz::Comms::SurfaceDescriptor.from_wire(JSON.parse(row.fetch('descriptor_json')))
-        poll = store.poll_state(bot_id: descriptor.identity.fetch(:expected_bot_id))
+        poll = store.poll_state(stream_id: descriptor.identity.fetch(:stream_id))
         outbox = store.outbox_counts(surface_id: row.fetch('surface_id'))
         {
           'surface_id' => row.fetch('surface_id'),

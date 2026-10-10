@@ -2,6 +2,8 @@
 
 require_relative 'test_helper'
 require_relative 'support/loopback_channel'
+require_relative 'support/loopback_pass'
+require 'open3'
 require 'tmpdir'
 
 # The CLI reaches every channel through the registry: a new kind needs only its own code, an unknown kind is
@@ -53,6 +55,31 @@ class ChannelKindsTest < Minitest::Test
     end
   end
 
+  def test_a_new_kind_admits_and_delivers_through_the_shared_gateway
+    Dir.mktmpdir('tamoz-loopback') do |root|
+      result = LoopbackPass.run(root)
+
+      assert_equal [0, 0], result.values_at('admitted', 'delivered')
+      assert_match(/\Aloopback\.loopback\.\h{16}\z/, result.fetch('threads').first)
+      assert_equal ['hi back'], result.fetch('replies')
+    end
+  end
+
+  def test_the_cli_and_core_run_a_new_kind_without_either_adapter_gem
+    Dir.mktmpdir('tamoz-loopback') do |root|
+      # A bare environment: an inherited bundle would read every gemspec, adapters' version files included.
+      env = ENV.to_h.slice('PATH', 'HOME', 'LANG', 'LC_ALL', 'TMPDIR', 'GEM_HOME', 'GEM_PATH')
+      out, err, status = Open3.capture3(env, RbConfig.ruby, ROOT.join('test/support/loopback_pass.rb').to_s,
+                                        ROOT.to_s, root, unsetenv_others: true)
+
+      assert_predicate status, :success?, err
+      result = JSON.parse(out.lines.last)
+
+      assert_equal ['hi back'], result.fetch('replies')
+      assert_empty result.fetch('adapters_loaded')
+    end
+  end
+
   def test_a_setup_sees_only_the_variables_it_declares
     with_runtime do |runtime, kind|
       tamoz(runtime, 'channel', 'add', 'loopback', kinds: LoopbackChannel.kinds(kind))
@@ -101,7 +128,7 @@ class ChannelKindsTest < Minitest::Test
     with_runtime do |runtime|
       cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
       entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat',
-                'expected_bot_id' => 7, 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+                'stream_id' => 'telegram:bot:7', 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                 'rendering' => { 'speech' => true } }
 
       error = assert_raises(Tamoz::Comms::ValidationError) do

@@ -15,7 +15,7 @@ class CommsDecisionRecordTest < Minitest::Test
 
   def record(**overrides)
     Comms::DecisionRecord.build(
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1', interrupts: interrupts,
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1', interrupts: interrupts,
       direction: :deny, actor_kind: 'os_user', actor_id: '501', source: 'cli',
       decided_at: Time.utc(2026, 8, 10, 12, 0, 0),
       **overrides
@@ -25,6 +25,14 @@ class CommsDecisionRecordTest < Minitest::Test
   # One record, every derived property at once: the digest, the status, the
   # direction and the resume id are ONE construction's output.
   # rubocop:disable Minitest/MultipleAssertions
+  def test_actor_and_source_name_one_kind
+    assert_equal 'loopback', record(actor_kind: 'loopback_user', source: 'loopback').source
+    assert_equal 'cli', record(actor_kind: 'os_user', source: 'cli').source
+    [%w[telegram_user talk], %w[os_user telegram], %w[cli_user cli], %w[Slack_user Slack]].each do |actor_kind, source|
+      assert_raises(Comms::ValidationError, actor_kind) { record(actor_kind:, source:) }
+    end
+  end
+
   def test_build_derives_stable_digests_and_defaults_to_pending
     value = record
 
@@ -163,7 +171,7 @@ class CommsDecisionRecordTest < Minitest::Test
 
         assert_equal :created, store.insert_decision(value.wire)
         stored = store.pending_decision_for(
-          thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+          thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
           interrupt_digest: value.interrupt_digest, now: Time.utc(2026, 8, 10, 12, 0, 1)
         )
 

@@ -30,6 +30,7 @@ module Tamoz
       KIND_NAME = /\A[a-z][a-z0-9_]{1,31}\z/
       RESERVED_KINDS = %w[os cli].freeze
       MAX_SETTINGS_BYTES = 4096
+      STREAM = /\A[a-z][a-z0-9_]{1,31}:[!-~]{1,200}\z/
       ADMISSION_MODES = %w[disabled allowlist pairing].freeze
       THREADING_MODES = %w[conversation per_message].freeze
       APPROVAL_MODES = %w[none deny_only affirmative].freeze
@@ -155,7 +156,7 @@ module Tamoz
         validate_references!(fields)
         validate_transport!(fields.fetch(:transport))
         validate_settings!(fields.fetch(:settings))
-        validate_identity!(fields.fetch(:identity))
+        validate_identity!(fields.fetch(:identity), fields.fetch(:kind))
         validate_admission!(fields.fetch(:admission))
         validate_approvals!(fields.fetch(:approvals))
         validate_rendering!(fields.fetch(:rendering))
@@ -200,11 +201,13 @@ module Tamoz
         raise ValidationError, "settings must be at most #{MAX_SETTINGS_BYTES} bytes"
       end
 
-      def validate_identity!(identity)
-        bot_id = identity.fetch(:expected_bot_id)
-        return if Shapes.bounded_integer?(bot_id, max: 9_999_999_999_999)
+      # The update stream the surface consumes is named for its kind, so two kinds can never share a lease.
+      def validate_identity!(identity, kind)
+        stream = identity[:stream_id]
+        return if identity.keys == [:stream_id] && stream.is_a?(String) && stream.match?(STREAM) &&
+                  stream.start_with?("#{kind}:")
 
-        raise ValidationError, 'expected_bot_id must be a bounded integer'
+        raise ValidationError, 'identity is one stream_id, "<kind>:<name>"'
       end
 
       def validate_admission!(admission)

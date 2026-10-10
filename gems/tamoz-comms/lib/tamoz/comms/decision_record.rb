@@ -39,8 +39,6 @@ module Tamoz
     #   an empty interrupt list would forge a different question.
     class DecisionRecord
       DIRECTIONS = %w[approve deny].freeze
-      ACTOR_KINDS = %w[os_user telegram_user talk_user].freeze
-      SOURCES = %w[cli telegram talk].freeze
       STATUSES = %w[pending claimed consumed].freeze
       DEFAULT_TTL_S = 900
       ID_DOMAIN = 'tamoz.comms.decision.v1'
@@ -262,13 +260,11 @@ module Tamoz
       end
 
       def validate_actor!(actor_kind:, actor_id:, source:)
-        unless ACTOR_KINDS.include?(actor_kind)
-          raise ValidationError, "actor_kind must be one of #{ACTOR_KINDS.join(', ')}"
-        end
         raise ValidationError, 'actor_id must be a bounded string' unless bounded_string?(actor_id)
-        return if SOURCES.include?(source)
+        return if actor_kind == 'os_user' && source == 'cli'
+        return if SurfaceDescriptor.valid_kind?(source) && actor_kind == "#{source}_user"
 
-        raise ValidationError, "source must be one of #{SOURCES.join(', ')}"
+        raise ValidationError, 'actor_kind and source must name one channel kind (or os_user with cli)'
       end
 
       # The audit trail (ADR-049, contract §7.1): an evidence level, when

@@ -77,3 +77,11 @@ test that would prove it, and what it waits on. None is built.
   the same `Session` methods the CLI calls and answers through the outbox.
 - **Test:** each control on a channel changes the same session state as the CLI verb; a parity test compares the two.
 - **Waits on:** the owner wanting these controls on a phone.
+
+## F11. More than one talk page per runtime
+
+- **Today:** every talk surface's update stream is `talk:page` (`Talk::Setup::STREAM`), so a second talk entry
+  written by hand would find the stream's lease held and stop as `:poller_busy`.
+- **Sketch:** name the stream after the surface (`talk:<surface_id>`), which needs `ChannelSetup#add` to know the
+  surface id.
+- **Waits on:** a need for two pages on one runtime.

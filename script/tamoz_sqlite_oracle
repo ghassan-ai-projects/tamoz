@@ -26,10 +26,11 @@ module TamozSQLiteOracle
   # 21 -> 22 adds the request-local ownership columns (tamoz_comms_outbox,
   # tamoz_effects). 22 -> 23 adds the memory full-text table. 23 -> 24 rebuilds
   # tamoz_comms_inbound so its kind admits Telegram attachments. 24 -> 25 rebuilds tamoz_comms_decisions so a
-  # talk-channel actor and source are admitted. The oracle is a second, independent read-only verifier: it
+  # talk-channel actor and source are admitted. 25 -> 26 recreates every comms table empty with string update
+  # streams and a one-kind decision rule. The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 25
+  SCHEMA_VERSION = 26
   MIGRATION_1_CHECKSUM =
     "d27658b46031e0484dac3ab1a37364b125b01c4a2dbc8a72f3be71e2771c8814"
   MIGRATION_2_CHECKSUM =
@@ -104,6 +105,8 @@ module TamozSQLiteOracle
     "e6a55c53229dc7265d83104f486b6df326c89d0890a099195ec6bf3584c4a4c0"
   MIGRATION_25_CHECKSUM =
     "20738ee418d5d326ba9c6595c53038870350ae1838bee16f9e91421bb0109b55"
+  MIGRATION_26_CHECKSUM =
+    "4d208fa73f3ec4fd103f0b590d3d7d8397a71f6d7f3c34de82b2c3ad07756435"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -842,7 +845,8 @@ module TamozSQLiteOracle
         [22, MIGRATION_22_CHECKSUM],
         [23, MIGRATION_23_CHECKSUM],
         [24, MIGRATION_24_CHECKSUM],
-        [25, MIGRATION_25_CHECKSUM]
+        [25, MIGRATION_25_CHECKSUM],
+        [26, MIGRATION_26_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

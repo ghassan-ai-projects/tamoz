@@ -318,9 +318,9 @@ class PackagingTest < Minitest::Test
             @authentications = []
           end
 
-          def authenticate(descriptor, _credential)
-            @authentications << descriptor.surface_id
-            {"id" => descriptor.identity.fetch(:expected_bot_id)}
+          def authenticate
+            @authentications << :authenticated
+            {"stream_id" => "telegram:bot:7"}
           end
 
           def poll(**kwargs)
@@ -338,7 +338,7 @@ class PackagingTest < Minitest::Test
         transport = Transport.new
         descriptor = Descriptor.new(
           surface_id: "injected",
-          identity: {expected_bot_id: 7},
+          identity: {stream_id: 'telegram:bot:7'},
           transport: {poll_timeout_s: 0},
           limits: {
             control_capacity: 1, per_chat_messages_per_s: 1.0,

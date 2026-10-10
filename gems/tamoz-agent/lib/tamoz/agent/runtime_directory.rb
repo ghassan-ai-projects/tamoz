@@ -168,7 +168,7 @@ module Tamoz
 
       # The deployed channel surfaces (COMMS_DESIGN §14): surface_id -> entry,
       # validated strictly at load against the closed kind list and the
-      # mandatory revision/expected_bot_id fields. Deep field validation is
+      # mandatory revision/stream_id fields. Deep field validation is
       # SurfaceDescriptor's contract; this is the fast, load-time gate.
       def channels
         raw = @config["channels"]

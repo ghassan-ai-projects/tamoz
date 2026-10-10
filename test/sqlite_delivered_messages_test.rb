@@ -13,7 +13,7 @@ class SQLiteDeliveredMessagesTest < Minitest::Test
       live, = card(store, 'live', at: Time.utc(2026, 10, 9, 10))
       _, consumed = card(store, 'consumed', at: Time.utc(2026, 10, 9, 10, 1))
       decision = Comms::DecisionRecord.build(
-        thread_id: 'tk.talk.consumed', occurrence_id: 'consumed', interrupts: [],
+        thread_id: 'talk.talk.consumed', occurrence_id: 'consumed', interrupts: [],
         interrupt_digest: consumed.interrupt_digest, direction: 'deny', actor_kind: 'talk_user', actor_id: 'talk:user:1',
         source: 'talk', decided_at: Time.utc(2026, 10, 9, 10, 2), ttl_s: 900
       )
@@ -33,7 +33,7 @@ class SQLiteDeliveredMessagesTest < Minitest::Test
 
   def card(store, name, at:)
     reference, prompt = Comms::ApprovalPrompt.build(
-      surface_id: 'talk', surface_revision: 1, thread_id: "tk.talk.#{name}", occurrence_id: name,
+      surface_id: 'talk', surface_revision: 1, thread_id: "talk.talk.#{name}", occurrence_id: name,
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence: :chat_bound, correspondent_id: 'talk:user:1', conversation_id: 'talk:chat:1',
       prompt_ttl_s: 900, created_at: at

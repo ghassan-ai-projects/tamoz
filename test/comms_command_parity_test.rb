@@ -120,7 +120,7 @@ class CommsCommandParityTest < Minitest::Test
       ref = "r#{'f' * 10}"
       stub_request_status(
         store,
-        'thread_id' => 'tg.ops.abc', 'state' => 'idle', 'open_requests' => 0,
+        'thread_id' => 'telegram.ops.abc', 'state' => 'idle', 'open_requests' => 0,
         'request_id' => 'f' * 64, 'request_ref' => ref,
         'task_state' => 'failed', 'effect_state' => 'failed',
         'capability_state' => 'not_inspected', 'delivery_state' => 'succeeded',
@@ -361,7 +361,7 @@ class CommsCommandParityTest < Minitest::Test
   def derived_ref(raw_update)
     Comms::Lifecycle::RequestRef.for(
       Tamoz::Core::RequestIdentity.request_id(
-        surface_id: SURFACE_ID, surface_revision: 1, bot_id: BOT_ID,
+        surface_id: SURFACE_ID, surface_revision: 1, stream_id: "telegram:bot:#{BOT_ID}",
         update_id: raw_update.fetch('update_id'),
         raw_payload_hash: Digest::SHA256.hexdigest(JSON.generate(raw_update))
       )

@@ -19,7 +19,7 @@ class TamozTelegramTransportTest < Minitest::Test
       @test = test
     end
 
-    def identity = BOT_ID
+    def identity = "telegram:bot:#{BOT_ID}"
     def descriptor = nil
     def credential = 'test-token'
     def conversation_id = 'telegram:chat:22222222'
@@ -93,9 +93,10 @@ class TamozTelegramTransportTest < Minitest::Test
     with_transport do |transport, server|
       server.script('getMe', body: { 'ok' => true, 'result' => { 'id' => 7_463_512_990,
                                                                  'username' => 'ops_bot' } }, times: 1)
-      result = transport.authenticate(nil, nil)
+      result = transport.authenticate
 
       assert_equal 7_463_512_990, result.fetch('id')
+      assert_equal 'telegram:bot:7463512990', result.fetch('stream_id')
       assert_equal 'ops_bot', result.fetch('username')
     end
   end
@@ -114,7 +115,7 @@ class TamozTelegramTransportTest < Minitest::Test
     with_transport do |transport, server|
       server.script('getMe', status: 401, body: { 'ok' => false, 'description' => 'Unauthorized' }, times: 1)
 
-      assert_raises(Comms::AuthenticationError) { transport.authenticate(nil, nil) }
+      assert_raises(Comms::AuthenticationError) { transport.authenticate }
     end
   end
 

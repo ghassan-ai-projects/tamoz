@@ -11,12 +11,12 @@ class CommsCliTest < Minitest::Test
 
   BOT_ID = 7_463_512_990
 
-  def channel_entry(admission: 'allowlist', expected_bot_id: BOT_ID)
+  def channel_entry(admission: 'allowlist', stream_id: "telegram:bot:#{BOT_ID}")
     {
       'kind' => 'telegram', 'revision' => 1, 'enabled' => true,
       'profile' => 'ops',
       'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-      'expected_bot_id' => expected_bot_id,
+      'stream_id' => stream_id,
       'admission' => { 'direct' => admission, 'correspondents' => ['telegram:user:11111111'] }
     }
   end
@@ -63,7 +63,7 @@ class CommsCliTest < Minitest::Test
 
       assert_equal 0, status, err
       with_store(rt) do |store|
-        poll = store.poll_state(bot_id: BOT_ID)
+        poll = store.poll_state(stream_id: "telegram:bot:#{BOT_ID}")
 
         assert_equal 56, poll.fetch('next_offset'), 'the durable offset must confirm the prefix'
         pending = store.pairing_challenges(status: 'pending')
@@ -115,7 +115,7 @@ class CommsCliTest < Minitest::Test
       assert_equal 0, rt.cli(%w[comms serve --once]).first
       with_store(rt) do |store|
         store.append_delivery(delivery_wire, surface_id: 'telegram-ops', capacity: 500, now: Time.now.utc)
-        store.acquire_poller_lease(surface_id: 'telegram-ops', bot_id: BOT_ID, owner: 'gateway:999', fence: 1,
+        store.acquire_poller_lease(surface_id: 'telegram-ops', stream_id: "telegram:bot:#{BOT_ID}", owner: 'gateway:999', fence: 1,
                                    ttl_s: 60, now: Time.now.utc)
       end
 
@@ -170,7 +170,7 @@ class CommsCliTest < Minitest::Test
       rt.client.updates = []
       # Re-acquire a live poller lease the doctor must see as foreign.
       with_store(rt) do |store|
-        store.acquire_poller_lease(surface_id: 'telegram-ops', bot_id: BOT_ID,
+        store.acquire_poller_lease(surface_id: 'telegram-ops', stream_id: "telegram:bot:#{BOT_ID}",
                                    owner: 'gateway:999', fence: 1, ttl_s: 60,
                                    now: Time.now.utc)
       end
@@ -178,7 +178,7 @@ class CommsCliTest < Minitest::Test
       status, out, err = rt.cli(%w[comms doctor], env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' })
 
       assert_equal 1, status, err
-      assert_match(/FAIL  bot id: token authenticates bot 111111111/, out)
+      assert_match(/FAIL  bot id: token authenticates telegram:bot:111111111/, out)
       assert_match(%r{FAIL  webhook: a webhook is set at https://example.com/hook}, out)
       assert_match(/FAIL  poller: another gateway \(gateway:999\) holds the poller lease/, out)
     end
@@ -237,7 +237,7 @@ class CommsCliTest < Minitest::Test
       surface_id: 'telegram-ops', revision: 1,
       transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: },
-      identity: { expected_bot_id: BOT_ID, bot_username: 'ops_bot' },
+      identity: { stream_id: "telegram:bot:#{BOT_ID}" }, settings: { bot_username: 'ops_bot' },
       admission: { direct: 'disabled' }, threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'none', prompt_ttl_s: 900 },
       rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },

@@ -135,7 +135,7 @@ module Tamoz
       # list while the lifecycle is split into intent-specific modules.
       # rubocop:disable Metrics/ParameterLists
       def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil,
-                     controls: nil, credential: nil, attachments: nil)
+                     controls: nil, attachments: nil)
         @adapter = adapter
         @checkpoints = checkpoints
         @store = adapter.bind_comms_store(checkpoints)
@@ -144,7 +144,6 @@ module Tamoz
         @poller_owner = poller_owner
         @batch_size = batch_size
         @controls = controls
-        @credential = credential
         @attachments = attachments
         @fence = 0
         @stopping = false
@@ -188,7 +187,7 @@ module Tamoz
       # Acquire the fenced poller lease, then authenticate before polling.
       def start(now: Time.now.utc)
         acquired = @store.acquire_poller_lease(
-          surface_id:, bot_id:, owner: @poller_owner, fence: next_fence,
+          surface_id:, stream_id:, owner: @poller_owner, fence: next_fence,
           ttl_s: poller_ttl_s, now:
         )
         return :poller_busy unless acquired == :acquired
@@ -211,13 +210,13 @@ module Tamoz
       def serve_once(now: Time.now.utc, drain: true)
         return :poller_lost unless renew_poller(now)
 
-        next_offset = @store.poll_offset(bot_id:)
+        next_offset = @store.poll_offset(stream_id:)
         batch = poll_batch(next_offset)
         return :transient unless batch
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
         sweep_handoffs
-        @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
+        @store.persist_next_offset(surface_id:, stream_id:, next_offset: batch[:next_offset], now:)
         return :auth_failed if drain && drain_outbox(now:) == :authentication_refused
 
         :served
@@ -248,7 +247,7 @@ module Tamoz
         return true if @fence.zero?
 
         @store.acquire_poller_lease(
-          surface_id:, bot_id:, owner: @poller_owner, fence: @fence,
+          surface_id:, stream_id:, owner: @poller_owner, fence: @fence,
           ttl_s: poller_ttl_s, now:
         ) == :acquired
       end
@@ -285,16 +284,14 @@ module Tamoz
       end
 
       def release_poller
-        @store.release_poller_lease(bot_id:, owner: @poller_owner, fence: @fence)
+        @store.release_poller_lease(stream_id:, owner: @poller_owner, fence: @fence)
       end
 
       def authenticate_transport
-        return true unless @transport.respond_to?(:authenticate)
+        identity = @transport.authenticate
+        return true if identity.is_a?(Hash) && identity['stream_id'] == stream_id
 
-        identity = @transport.authenticate(@descriptor, @credential)
-        return true if identity.is_a?(Hash) && identity['id'].to_i == bot_id
-
-        raise Comms::AuthenticationError, 'authenticated bot does not match the configured surface identity'
+        raise Comms::AuthenticationError, 'the authenticated stream does not match the configured surface identity'
       end
 
       def latest_binding(envelope)
@@ -307,13 +304,11 @@ module Tamoz
 
       def surface_id = @descriptor.surface_id
 
-      def bot_id = @descriptor.identity.fetch(:expected_bot_id)
+      def stream_id = @descriptor.identity.fetch(:stream_id)
 
       def decision_actor_kind = "#{@descriptor.kind}_user"
 
       def decision_source = @descriptor.kind
-
-      def bot_username = @descriptor.identity[:bot_username]
 
       def poll_timeout_s = @descriptor.transport.fetch(:poll_timeout_s)
 

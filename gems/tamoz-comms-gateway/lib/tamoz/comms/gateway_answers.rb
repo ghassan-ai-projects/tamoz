@@ -27,8 +27,10 @@ module Tamoz
           return answer_refusal_for(envelope, answer_refusal(resolved), now:, reason: 'answer_refusal') if
             resolved.is_a?(Symbol)
 
-          return answer_refusal_for(envelope, ANSWER_WRONG_CORRESPONDENT_REPLY, now:,
-                                    reason: 'wrong_correspondent') unless answer_correspondent?(envelope)
+          unless answer_correspondent?(envelope)
+            return answer_refusal_for(envelope, ANSWER_WRONG_CORRESPONDENT_REPLY, now:,
+                                                                                  reason: 'wrong_correspondent')
+          end
 
           interrupts = clarification_interrupts(
             resolved.fetch('thread_id'), resolved.fetch('request_id')
@@ -36,9 +38,9 @@ module Tamoz
           return answer_refusal_for(envelope, ANSWER_STALE_REPLY, now:, reason: 'answer_stale') unless interrupts
 
           outcome = @store.admit_and_enqueue_answer(
-            envelope, surface_id:, bot_id:, thread: resolved.fetch('thread_id'),
-            request_id: Comms::ClarificationAnswerRequest.id_for(resolved.fetch('request_id')),
-            payload: clarification_answers(interrupts, text), now:
+            envelope, surface_id:, stream_id:, thread: resolved.fetch('thread_id'),
+                      request_id: Comms::ClarificationAnswerRequest.id_for(resolved.fetch('request_id')),
+                      payload: clarification_answers(interrupts, text), now:
           )
           return nil if outcome == :duplicate
           return ANSWER_UNQUEUED_REPLY if outcome == :integrity_conflict

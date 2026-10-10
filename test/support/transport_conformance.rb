@@ -5,7 +5,7 @@
 module TransportConformance
   def test_conformance_authenticate_returns_the_configured_identity
     with_conformance do |transport, driver|
-      assert_equal driver.identity, transport.authenticate(driver.descriptor, driver.credential).fetch('id')
+      assert_equal driver.identity, transport.authenticate.fetch('stream_id')
     end
   end
 

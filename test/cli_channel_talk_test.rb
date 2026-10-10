@@ -8,7 +8,7 @@ class CliChannelTalkTest < Minitest::Test
   RuntimeDirectory = Tamoz::Agent::RuntimeDirectory
   TELEGRAM = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'telegram',
                'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-               'expected_bot_id' => 7_000_000_001 }.freeze
+               'stream_id' => 'telegram:bot:7000000001' }.freeze
 
   def with_runtime
     Dir.mktmpdir('tamoz-channel-talk') do |root|

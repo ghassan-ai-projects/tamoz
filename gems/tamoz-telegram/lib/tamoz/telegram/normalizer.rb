@@ -68,7 +68,7 @@ module Tamoz
         envelope(
           update_id:, kind: attachment ? 'attachment' : text_kind(message['text']),
           digest_fields: message_digest_fields(update_id, message, chat, from, attachment),
-          text: attachment ? message['caption'] : message['text'], attachment:,
+          text: attachment ? message['caption'] : own_command(message['text']), attachment:,
           correspondent_id: "telegram:user:#{from.fetch('id')}",
           conversation_id: chat_id(chat),
           message_id: message['message_id'],
@@ -167,6 +167,15 @@ module Tamoz
         )
       end
       # rubocop:enable Metrics/ParameterLists
+
+      # `/help@this_bot` addresses this bot, so the suffix is dropped; any other `@name` stays and is not a command.
+      def own_command(text)
+        return text unless @bot_username && text&.start_with?('/')
+
+        word, rest = text.split(/(?=\s)/, 2)
+        command, _, suffix = word.partition('@')
+        suffix.casecmp?(@bot_username) ? "#{command}#{rest}" : text
+      end
 
       def text_kind(text)
         return 'command' if text&.start_with?('/')

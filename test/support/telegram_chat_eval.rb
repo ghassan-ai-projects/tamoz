@@ -320,13 +320,15 @@ class TelegramChatEval
     channel = lived_in_channel
     return {} unless channel
 
-    { bot_id: channel['expected_bot_id'], username: channel['bot_username'] || 'tamoz_eval_bot',
-      first_update_id: lived_in_offset(channel['expected_bot_id']) }
+    stream = channel.fetch('stream_id') { raise 'the runtime predates stream ids; re-add its Telegram channel' }
+    { bot_id: stream.delete_prefix('telegram:bot:').to_i,
+      username: channel.dig('settings', 'bot_username') || 'tamoz_eval_bot',
+      first_update_id: lived_in_offset(stream) }
   end
 
-  def lived_in_offset(bot_id)
+  def lived_in_offset(stream)
     database = File.join(File.expand_path(@runtime_from), 'runtime.sqlite3')
-    sql = "select max(next_offset) from tamoz_comms_poll_state where bot_id = #{bot_id.to_i}"
+    sql = "select max(next_offset) from tamoz_comms_poll_state where stream_id = '#{stream.delete("'")}'"
     out, = Open3.capture2('sqlite3', database, sql)
     [out.to_i, 101].max
   end

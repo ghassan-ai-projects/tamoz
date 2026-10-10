@@ -20,6 +20,15 @@ class TelegramNormalizerTest < Minitest::Test
     }
   end
 
+  def test_a_command_addressed_to_this_bot_drops_the_suffix_and_any_other_bot_keeps_it
+    own = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1, bot_username: 'ops_bot')
+    ours = own.normalize(message_update(update_id: 1, message_id: 1, text: '/cancel@ops_bot now')).wire
+    theirs = own.normalize(message_update(update_id: 2, message_id: 2, text: '/cancel@other_bot now')).wire
+
+    assert_equal 'cancel', Tamoz::Comms::Commands.parse(ours.fetch('text')).command
+    assert_nil Tamoz::Comms::Commands.parse(theirs.fetch('text'))
+  end
+
   # Same bytes normalized twice MUST collide on the same digest — that is
   # the dedup key admission compares.
   def test_the_digest_is_stable_for_identical_updates

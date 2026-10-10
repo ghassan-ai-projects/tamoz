@@ -6,7 +6,7 @@ module Tamoz
       # Load-time validation of the operator configuration; every rule raises RuntimeDirectory::Error.
       module ConfigRules
         SURFACE_ID = /\A[a-z0-9][a-z0-9_-]{0,63}\z/
-        CHANNEL_KEYS = %w[kind enabled revision profile credential_ref expected_bot_id bot_username transport settings
+        CHANNEL_KEYS = %w[kind enabled revision profile credential_ref stream_id transport settings
                           admission approvals rendering limits threading].freeze
 
         module_function
@@ -20,7 +20,7 @@ module Tamoz
         end
 
         # Strict per-entry validation (COMMS_DESIGN §14): the kind is a well-formed name (the closed set is the
-        # CLI's channel registry), the revision is mandatory and positive, and expected_bot_id is mandatory.
+        # CLI's channel registry), the revision is mandatory and positive, and stream_id is mandatory.
         # :reek:TooManyStatements -- one per-field validation sequence.
         # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         #   -- one validation sequence per field, checked in the design's order.
@@ -31,15 +31,18 @@ module Tamoz
           raise Error, "#{label} must be a mapping" unless entry.is_a?(Hash)
 
           unknown = entry.keys - CHANNEL_KEYS
-          raise Error, "#{label}.#{unknown.first} is not a channel field" unless unknown.empty?
+          unless unknown.empty?
+            raise Error, "#{label}.#{unknown.first} is not a channel field; remove the channels block and run " \
+                         '`tamoz channel add` again'
+          end
           unless Tamoz::Comms::SurfaceDescriptor.valid_kind?(entry['kind'])
             raise Error, "#{label}.kind must be a lowercase channel name"
           end
           unless entry['revision'].is_a?(Integer) && entry['revision'].positive?
             raise Error, "#{label}.revision must be a positive integer"
           end
-          unless entry['expected_bot_id'].is_a?(Integer)
-            raise Error, "#{label}.expected_bot_id is mandatory and must be an integer"
+          unless entry['stream_id'].is_a?(String) && !entry['stream_id'].empty?
+            raise Error, "#{label}.stream_id is mandatory and must be a string"
           end
           raise Error, "#{label}.enabled must be a boolean" unless [true, false].include?(entry['enabled'])
           unless entry['profile'].is_a?(String) && !entry['profile'].empty?

@@ -68,7 +68,7 @@ module Tamoz
               surface.with(drainer:, gateway: Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport: surface.connection.transport, descriptor: surface.descriptor,
                 poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:,
-                controls: controls_source, credential: surface.credential, attachments: directory.attachment_spool
+                controls: controls_source, attachments: directory.attachment_spool
               ))
             end
             once ? serve_surfaces_once(store, surfaces, options) : run_gateway_loops(store, surfaces)
@@ -112,7 +112,7 @@ module Tamoz
         0
       end
 
-      ServedSurface = Data.define(:descriptor, :connection, :credential, :drainer, :gateway)
+      ServedSurface = Data.define(:descriptor, :connection, :drainer, :gateway)
 
       private
 
@@ -124,13 +124,13 @@ module Tamoz
 
         connection = kind.channel.connect(descriptor, env:,
                                                       voice: descriptor.speech? ? voice_synthesizer(directory) : nil)
-        ServedSurface.new(descriptor:, connection:, credential: env.fetch(name), drainer: nil, gateway: nil)
+        ServedSurface.new(descriptor:, connection:, drainer: nil, gateway: nil)
       end
 
       def start_connection(store, surface)
         descriptor = surface.descriptor
         surface.connection.start(
-          floor: store.poll_offset(bot_id: descriptor.identity.fetch(:expected_bot_id)),
+          floor: store.poll_offset(stream_id: descriptor.identity.fetch(:stream_id)),
           history: store.delivered_messages(surface_id: descriptor.surface_id, limit: 50)
         )
       end
@@ -265,12 +265,12 @@ module Tamoz
 
       def surface_summary(store, row)
         descriptor = Tamoz::Comms::SurfaceDescriptor.from_wire(JSON.parse(row.fetch('descriptor_json')))
-        bot_id = descriptor.identity.fetch(:expected_bot_id)
-        poll = store.poll_state(bot_id:)
+        stream_id = descriptor.identity.fetch(:stream_id)
+        poll = store.poll_state(stream_id:)
         {
           'surface_id' => row.fetch('surface_id'),
           'revision' => row.fetch('revision'),
-          'bot_id' => bot_id,
+          'stream_id' => stream_id,
           'bindings' => store.bindings(surface_id: row.fetch('surface_id')).map do |binding|
             { 'correspondent_id' => binding.fetch('correspondent_id'),
               'conversation_id' => binding.fetch('conversation_id'),
@@ -286,7 +286,7 @@ module Tamoz
       end
 
       def render_surface_summary(row)
-        @out.puts "surface #{row.fetch('surface_id')} rev #{row.fetch('revision')} bot #{row.fetch('bot_id')}"
+        @out.puts "surface #{row.fetch('surface_id')} rev #{row.fetch('revision')} stream #{row.fetch('stream_id')}"
         @out.puts "  offset #{row['next_offset'].inspect} last poll #{row['last_poll_at']}"
         row.fetch('bindings').each do |binding|
           @out.puts "  binding v#{binding.fetch('version')} #{binding.fetch('correspondent_id')} " \

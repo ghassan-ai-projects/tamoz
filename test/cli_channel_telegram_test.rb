@@ -37,7 +37,7 @@ class CliChannelTelegramTest < Minitest::Test
     with_dirs do |runtime, workspace|
       pair(runtime, workspace)
 
-      assert_equal BOT.fetch('id'), channel(runtime).fetch('expected_bot_id')
+      assert_equal "telegram:bot:#{BOT.fetch('id')}", channel(runtime).fetch('stream_id')
     end
   end
 
@@ -186,18 +186,18 @@ class CliChannelTelegramTest < Minitest::Test
     end
   end
 
-  # The owner's half-finished runtime: a channel with no bot id, whose profile `setup` then writes.
-  def test_setup_then_pairing_repairs_an_unpinned_channel
+  # A runtime whose Telegram surface already exists under its own name: pairing the same bot reuses it.
+  def test_adding_the_same_bot_again_keeps_its_surface
     with_dirs do |runtime, workspace|
       RuntimeDirectory.create!(runtime, workspace:)
-      write_unpinned_channel(runtime)
+      write_existing_channel(runtime)
       set_up_runtime(runtime, workspace)
       status, _out, err = cli(runtime, %W[channel add telegram --owner #{OWNER}], bot: Bot.new([]))
 
       assert_equal 0, status, err
-      assert_equal [['telegram-ghassan'], BOT.fetch('id'), 'default'],
+      assert_equal [['telegram-ghassan'], "telegram:bot:#{BOT.fetch('id')}", 'default'],
                    [RuntimeDirectory.resolve(path: runtime, env: {}).channels.keys,
-                    *channel(runtime, 'telegram-ghassan').values_at('expected_bot_id', 'profile')]
+                    *channel(runtime, 'telegram-ghassan').values_at('stream_id', 'profile')]
     end
   end
 
@@ -292,14 +292,14 @@ class CliChannelTelegramTest < Minitest::Test
 
   private
 
-  def write_unpinned_channel(runtime)
+  def write_existing_channel(runtime)
     path = File.join(runtime, 'config.yaml')
     document = Psych.safe_load_file(path, aliases: false)
     document['channels'] = {
       'telegram-ghassan' => {
         'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'default',
         'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-        'expected_bot_id' => 0, 'admission' => { 'direct' => 'pairing' }
+        'stream_id' => "telegram:bot:#{BOT.fetch('id')}", 'admission' => { 'direct' => 'pairing' }
       }
     }
     File.write(path, Psych.dump(document))

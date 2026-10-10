@@ -144,10 +144,11 @@ module Tamoz
       end
 
       def validate_parties!(correspondent_id, conversation_id)
-        Shapes.require_prefixed!(correspondent_id, Parties.correspondent_prefixes,
-                                 'correspondent_id must be a bound user id', max_bytes: MAX_ID_BYTES)
-        Shapes.require_prefixed!(conversation_id, Parties.admissible_prefixes,
-                                 'conversation_id must be a bound chat id', max_bytes: MAX_ID_BYTES)
+        unless Parties.correspondent?(correspondent_id)
+          raise ValidationError,
+                'correspondent_id must be a bound user id'
+        end
+        raise ValidationError, 'conversation_id must be a bound chat id' unless Parties.conversation?(conversation_id)
       end
 
       def validate_message_refs!(fields)

@@ -21,7 +21,7 @@ class ReconnectionResumeProtocolTest < Minitest::Test
   SURFACE_ID = 'telegram-ops'
   BOT_ID = 7_463_512_990
   CONVERSATION = 'telegram:chat:33333333'
-  THREAD = 'tg.ops.resume'
+  THREAD = 'telegram.ops.resume'
   NOW = Time.utc(2026, 8, 10, 12, 0, 0)
 
   def test_a_reconnecting_client_gets_identity_state_and_one_terminal_without_rerunning
@@ -105,7 +105,7 @@ class ReconnectionResumeProtocolTest < Minitest::Test
         ).wire, now: NOW
       )
       assert_equal :enqueued, store.admit_and_enqueue(
-        envelope(update_id: 401), surface_id: SURFACE_ID, bot_id: BOT_ID,
+        envelope(update_id: 401), surface_id: SURFACE_ID, stream_id: "telegram:bot:#{BOT_ID}",
         thread: THREAD, profile_id: 'ops', reservation: 1, now: NOW
       )
     end
@@ -117,7 +117,7 @@ class ReconnectionResumeProtocolTest < Minitest::Test
       surface_id: SURFACE_ID, revision: 1,
       transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: BOT_ID, bot_username: 'ops_bot' },
+      identity: { stream_id: "telegram:bot:#{BOT_ID}" }, settings: { bot_username: 'ops_bot' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -157,7 +157,7 @@ class ReconnectionResumeProtocolTest < Minitest::Test
                                                               'credential_ref' => {
                                                                 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN'
                                                               },
-                                                              'expected_bot_id' => BOT_ID,
+                                                              'stream_id' => "telegram:bot:#{BOT_ID}",
                                                               'admission' => { 'direct' => 'pairing',
                                                                                'correspondents' => [] }
                                                             }

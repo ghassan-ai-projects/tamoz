@@ -10,7 +10,7 @@ class CLISetupTest < Minitest::Test
               --transcription-credential OPENROUTER_SPEECH_API_KEY].freeze
   TALK = { 'kind' => 'talk', 'revision' => 1, 'enabled' => true, 'profile' => 'telegram',
            'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TALK_TOKEN' },
-           'expected_bot_id' => 123_456_789_012, 'settings' => { 'port' => 8787 } }.freeze
+           'stream_id' => 'talk:page', 'settings' => { 'port' => 8787 } }.freeze
 
   def with_dirs
     Dir.mktmpdir('tamoz-setup') do |root|

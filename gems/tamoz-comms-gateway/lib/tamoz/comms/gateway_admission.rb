@@ -24,8 +24,7 @@ module Tamoz
           Comms::Admission.decide(
             envelope, surface: @descriptor,
                       binding: latest_binding(envelope),
-                      conversation: conversation_for(envelope),
-                      bot_username: bot_username
+                      conversation: conversation_for(envelope)
           )
         end
 
@@ -74,7 +73,7 @@ module Tamoz
             surface_id:, conversation_id: envelope.fetch('conversation_id'), thread_id: thread
           )
           outcome = @store.admit_and_enqueue(
-            envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
+            envelope, surface_id:, stream_id:, thread:, profile_id: @descriptor.profile_id,
                       reservation: reservation_slots, now:, history:, research:, attachment:
           )
           return outcome if %i[enqueued duplicate].include?(outcome)
@@ -108,7 +107,7 @@ module Tamoz
         end
 
         def record_disposition(envelope, disposition:, reason:, now:)
-          @store.disposition_only(envelope, surface_id:, bot_id:, disposition:, reason:, now:)
+          @store.disposition_only(envelope, surface_id:, stream_id:, disposition:, reason:, now:)
         end
 
         def control_inbound_too_large?(envelope)

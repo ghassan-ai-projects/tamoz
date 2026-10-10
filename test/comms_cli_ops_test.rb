@@ -17,7 +17,7 @@ class CommsCliOpsTest < Minitest::Test
       'kind' => 'telegram', 'revision' => 1, 'enabled' => true,
       'profile' => 'ops',
       'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-      'expected_bot_id' => BOT_ID,
+      'stream_id' => "telegram:bot:#{BOT_ID}",
       'admission' => { 'direct' => admission, 'correspondents' => [] }
     }
   end
@@ -78,7 +78,7 @@ class CommsCliOpsTest < Minitest::Test
 
       assert_equal 0, rt.cli(%w[comms serve --once]).first
       with_store(rt) do |store|
-        assert_equal 71, store.poll_state(bot_id: BOT_ID).fetch('next_offset')
+        assert_equal 71, store.poll_state(stream_id: "telegram:bot:#{BOT_ID}").fetch('next_offset')
       end
     end
   end

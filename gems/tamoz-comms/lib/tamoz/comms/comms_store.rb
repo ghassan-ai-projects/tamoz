@@ -28,7 +28,7 @@ module Tamoz
       end
 
       # Admit ONE inbound update AND enqueue its turn in one transaction.
-      # `bot_id` is the authenticated surface identity the update arrived on;
+      # `stream_id` is the authenticated surface identity the update arrived on;
       # `reservation` is the terminal capacity reserved at admission
       # (invariant 57). Intake limits — max_open_requests, max_inbound_bytes,
       # and outbox_capacity — are enforced from the DEPLOYED surface row:
@@ -43,7 +43,7 @@ module Tamoz
       # makes the turn a deep-research turn; `attachment` (the stored file's kind, digest and labels, or nil) rides
       # the same way and is read by the worker, never by the gateway.
       # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
+      def admit_and_enqueue(envelope_wire, surface_id:, stream_id:, thread:, profile_id:, reservation:, now:,
                             history: [], research: nil, attachment: nil)
         raise NotImplementedError
       end
@@ -52,14 +52,14 @@ module Tamoz
       # same transaction. The request id includes the exact target request,
       # allowing the worker to reject a stale answer after the pause changes.
       # @return [:enqueued, :duplicate, :integrity_conflict]
-      def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+      def admit_and_enqueue_answer(envelope_wire, surface_id:, stream_id:, thread:, request_id:, payload:, now:)
         raise NotImplementedError
       end
 
       # Whether this update identity already has a durable disposition — read before work that a
       # redelivery must not repeat (an attachment download).
       # @return [Boolean]
-      def inbound_observed?(envelope_wire, bot_id:)
+      def inbound_observed?(envelope_wire, stream_id:)
         raise NotImplementedError
       end
 
@@ -67,7 +67,7 @@ module Tamoz
       # KNOWN update identity updates that identity's single anchor row and
       # returns :conflict_recorded.
       # @return [:recorded, :conflict_recorded, :duplicate]
-      def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
+      def disposition_only(envelope_wire, surface_id:, stream_id:, disposition:, reason:, now:)
         raise NotImplementedError
       end
 
@@ -109,17 +109,17 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # One fenced poller per authenticated bot; an expired lease is
+      # One fenced poller per update stream; an expired lease is
       # recoverable.
       # @return [:acquired, :not_acquirable]
-      def acquire_poller_lease(surface_id:, bot_id:, owner:, fence:, ttl_s:, now:)
+      def acquire_poller_lease(surface_id:, stream_id:, owner:, fence:, ttl_s:, now:)
         raise NotImplementedError
       end
 
       # Persist the candidate next_offset ONLY after the returned prefix is
       # durable. Never regresses.
       # @return [:persisted, :behind]
-      def persist_next_offset(surface_id:, bot_id:, next_offset:, now:)
+      def persist_next_offset(surface_id:, stream_id:, next_offset:, now:)
         raise NotImplementedError
       end
 

@@ -29,11 +29,11 @@ module Tamoz
 
       module_function
 
-      def decide(envelope, surface:, binding: nil, conversation: nil, bot_username: nil)
+      def decide(envelope, surface:, binding: nil, conversation: nil)
         screened = screening_decision(envelope, surface:, binding:)
         return screened if screened
         return callback_disposition if envelope.fetch('kind') == 'callback'
-        return command_admission(envelope, surface:, binding:, bot_username:) if envelope.fetch('kind') == 'command'
+        return command_admission(envelope, surface:, binding:) if envelope.fetch('kind') == 'command'
 
         text_disposition(envelope, surface:, binding:, conversation:)
       end
@@ -51,32 +51,32 @@ module Tamoz
       end
 
       # The deterministic per-conversation thread id (design §5):
-      # `tg.<surface_id>.<sha256(conversation_id, generation)[0,16]>` —
+      # `<kind>.<surface_id>.<sha256(conversation_id, generation)[0,16]>` —
       # bounded and safe for the CLI's per-thread naming. The generation
       # folds into the digest so `/new` rotates to a fresh thread without
       # deleting audit history (plan 02, work item 4); the domain is v2
       # because the digest input changed.
       def thread_id(surface_id, conversation_id, generation: 0)
         digest = ::Digest::SHA256.hexdigest("#{thread_domain}\n#{conversation_id}\n#{generation}")[0, 16]
-        kind = Parties.of_conversation(conversation_id)
+        kind = Parties.kind_of(conversation_id)
         raise ValidationError, 'conversation_id belongs to no surface kind' unless kind
 
-        "#{kind.thread_prefix}#{surface_id}.#{digest}"
+        "#{kind}.#{surface_id}.#{digest}"
       end
 
       def thread_domain = 'tamoz.comms.thread.v2'
 
       def group_chat?(conversation_id) = Parties.group_chat?(conversation_id)
 
-      def command_admission(envelope, surface:, binding:, bot_username:)
+      def command_admission(envelope, surface:, binding:)
         refusal = admission_refusal(envelope, surface:, binding:)
         return refusal if refusal
 
-        command_disposition(envelope, bot_username:)
+        command_disposition(envelope)
       end
 
-      def command_disposition(envelope, bot_username:)
-        parsed = Commands.parse(envelope.fetch('text'), bot_username:)
+      def command_disposition(envelope)
+        parsed = Commands.parse(envelope.fetch('text'))
         return Decision.new(:control, :unknown_command, 'Unknown command.', nil, nil) if parsed.nil?
 
         Decision.new(:control, :command, nil, nil, parsed.intent)

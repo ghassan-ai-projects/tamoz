@@ -317,7 +317,7 @@ class DeliveryDrainerTest < Minitest::Test
         credential_ref: { kind: 'env', name: 'TOKEN' },
         poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144
       },
-      identity: { expected_bot_id: 7, bot_username: 'ops_bot' },
+      identity: { stream_id: 'telegram:bot:7' }, settings: { bot_username: 'ops_bot' },
       admission: { direct: 'disabled' }, threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'none', prompt_ttl_s: 900 },
       rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },

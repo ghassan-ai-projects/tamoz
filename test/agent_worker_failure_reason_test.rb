@@ -40,7 +40,7 @@ class AgentWorkerFailureReasonTest < Minitest::Test
 
   def view_with(state)
     Tamoz::Agent::SessionView.new(
-      thread_id: 'tg.t', checkpoint_id: 'c', sequence: 1, execution_id: 'e', request_id: 'r',
+      thread_id: 'telegram.t', checkpoint_id: 'c', sequence: 1, execution_id: 'e', request_id: 'r',
       status: :failed, phase: 'repair', accepted_plan: nil, approvals: [],
       effect_receipts: [], blocked: nil, terminal: nil, provider_ambiguity: nil,
       interrupts: [], state:
@@ -113,7 +113,7 @@ class AgentWorkerFailureReasonTest < Minitest::Test
       session_builder: nil,
       emitter: ->(event) { events << event }
     )
-    entry = { thread_id: 'tg.t', head_request_id: 'occ-1', head_status: :queued }
+    entry = { thread_id: 'telegram.t', head_request_id: 'occ-1', head_status: :queued }
 
     worker.send(
       :handle_thread_failure,
@@ -134,7 +134,7 @@ class AgentWorkerFailureReasonTest < Minitest::Test
   def test_incompatible_checkpoint_crash_tells_the_correspondent_to_start_a_new_conversation
     runtime = FailureRuntime.new
     worker = Tamoz::Agent::Worker.new(runtime:, session_builder: nil, emitter: ->(_event) {})
-    entry = { thread_id: 'tg.t', head_request_id: 'occ-1', head_status: :queued }
+    entry = { thread_id: 'telegram.t', head_request_id: 'occ-1', head_status: :queued }
 
     worker.send(:handle_thread_failure, entry,
                 Tamoz::CheckpointVersionError.new('checkpoint graph identity is incompatible'))

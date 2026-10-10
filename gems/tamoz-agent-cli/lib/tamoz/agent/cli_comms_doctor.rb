@@ -48,7 +48,7 @@ module Tamoz
       end
 
       def poller_ok?(store, descriptor)
-        state = store.poll_state(bot_id: descriptor.identity.fetch(:expected_bot_id))
+        state = store.poll_state(stream_id: descriptor.identity.fetch(:stream_id))
         return true unless state && state['poller_owner_id'] && !state['poller_expires_at_ms'].nil?
         return true if state.fetch('poller_expires_at_ms') <= (Time.now.utc.to_r * 1000).to_i
 

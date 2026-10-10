@@ -52,7 +52,7 @@ class CommsServeSupervisionTest < Minitest::Test
   end
 
   class CursorStore
-    def poll_offset(bot_id:) = nil
+    def poll_offset(stream_id:) = nil
     def delivered_messages(surface_id:, limit:) = []
   end
 
@@ -71,7 +71,7 @@ class CommsServeSupervisionTest < Minitest::Test
     )
 
     surface = Tamoz::Agent::CLICommsCommands::ServedSurface.new(
-      descriptor: supervised_descriptor, connection: IdleConnection.new, credential: nil, drainer:, gateway:
+      descriptor: supervised_descriptor, connection: IdleConnection.new, drainer:, gateway:
     )
     status = Timeout.timeout(10) { supervisor.send(:run_gateway_loops, CursorStore.new, [surface]) }
 
@@ -89,7 +89,7 @@ class CommsServeSupervisionTest < Minitest::Test
       surface_id: 'telegram-ops', revision: 1,
       transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: nil },
-      identity: { expected_bot_id: 7_463_512_990 }, admission: { direct: 'disabled' },
+      identity: { stream_id: 'telegram:bot:7463512990' }, admission: { direct: 'disabled' },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'none', prompt_ttl_s: 900 },
       rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },

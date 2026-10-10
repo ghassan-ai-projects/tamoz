@@ -10,7 +10,7 @@ module Tamoz
       MIN_TOKEN = 32
       FINAL_KINDS = %w[answer failed stopped blocked approval_request].freeze
 
-      attr_reader :inbox, :log, :speaker, :normalizer, :identity_id, :submit_timeout_s
+      attr_reader :inbox, :log, :speaker, :normalizer, :stream_id, :submit_timeout_s
 
       # rubocop:disable Metrics/ParameterLists -- the surface's facts plus the two injected collaborators.
       def initialize(descriptor:, token:, floor: 0, synthesize: nil, host: '127.0.0.1', port: nil, trace: false,
@@ -22,7 +22,7 @@ module Tamoz
         @host = host
         @port = port || descriptor.settings.fetch(:port)
         @trace = trace ? [] : nil
-        @identity_id = descriptor.identity.fetch(:expected_bot_id)
+        @stream_id = descriptor.identity.fetch(:stream_id)
         @clock = Clock.new(floor:)
         @inbox = Inbox.new(clock: @clock)
         @log = EventLog.new(clock: @clock)

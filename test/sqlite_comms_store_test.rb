@@ -36,7 +36,7 @@ class SQLiteCommsStoreTest < Minitest::Test
                                                  credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                                                  poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144
                                                },
-      identity: { expected_bot_id: 7_463_512_990 },
+      identity: { stream_id: 'telegram:bot:7463512990' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -89,7 +89,7 @@ class SQLiteCommsStoreTest < Minitest::Test
     checkpoints.request_history(thread_id: thread).map(&:request_id)
   end
 
-  def bind_route!(store, thread: 'tg.ops.abc', conversation_id: 'telegram:chat:22222222')
+  def bind_route!(store, thread: 'telegram.ops.abc', conversation_id: 'telegram:chat:22222222')
     store.bind_conversation(
       Comms::Conversation.new(
         surface_id: 'telegram-ops', surface_revision: 1,
@@ -99,7 +99,7 @@ class SQLiteCommsStoreTest < Minitest::Test
     )
   end
 
-  def insert_request!(store, request_id:, conversation_id:, created_at_ms:, thread: 'tg.ops.abc')
+  def insert_request!(store, request_id:, conversation_id:, created_at_ms:, thread: 'telegram.ops.abc')
     store.__send__(:transaction, 'test.request.insert') do |tx|
       binds = [request_id, 'telegram-ops', 1, conversation_id, thread, 'ops', 1, 'admitted', created_at_ms, created_at_ms]
       tx.execute('test.request.insert', <<~SQL, binds)
@@ -112,9 +112,9 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
-  def admit(store, wire, thread: 'tg.ops.abc', now: self.now)
+  def admit(store, wire, thread: 'telegram.ops.abc', now: self.now)
     store.admit_and_enqueue(
-      wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+      wire, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
             thread:, profile_id: 'ops', reservation: 1, now:
     )
   end
@@ -127,7 +127,7 @@ class SQLiteCommsStoreTest < Minitest::Test
     ).wire
   end
 
-  def prompt_wire(reference:, status: 'inactive', expires_at: now + 900, thread: 'tg.ops.abc',
+  def prompt_wire(reference:, status: 'inactive', expires_at: now + 900, thread: 'telegram.ops.abc',
                   required_evidence: 'filesystem_operator')
     {
       'reference_digest' => reference, 'surface_id' => 'telegram-ops',
@@ -162,7 +162,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def decision_wire(direction: 'deny')
     Comms::DecisionRecord.build(
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       direction:, actor_kind: 'telegram_user', actor_id: 'telegram:user:11111111',
       source: 'telegram', decided_at: now
@@ -191,7 +191,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :enqueued, result
       assert_equal :duplicate, admit(store, envelope, now: now + 1)
 
-      requests = checkpoints.request_history(thread_id: 'tg.ops.abc')
+      requests = checkpoints.request_history(thread_id: 'telegram.ops.abc')
 
       assert_equal 1, requests.length, 'the replay must not enqueue twice'
       assert_equal :turn, requests.first.operation
@@ -209,7 +209,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       outcome = admit(store, envelope(update_id: 7))
 
       assert_equal :duplicate, outcome
-      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 1, checkpoints.request_history(thread_id: 'telegram.ops.abc').length
       assert_equal 1, request_row_count(store)
       assert_equal [%w[request accepted]], inbound_dispositions(store, 7)
     end
@@ -229,7 +229,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :enqueued, admit(store, first)
       assert_equal :integrity_conflict, admit(store, second)
       assert_equal :conflict_recorded, store.disposition_only(
-        second, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+        second, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
                 disposition: 'quarantined', reason: 'integrity_conflict', now: now + 1
       )
       assert_equal :integrity_conflict, admit(store, third)
@@ -245,7 +245,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal(%w[quarantined integrity_conflict],
                    [anchor.fetch('disposition'), anchor.fetch('reason')])
       assert_equal 1, request_row_count(store), 'the original request row is untouched'
-      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length,
+      assert_equal 1, checkpoints.request_history(thread_id: 'telegram.ops.abc').length,
                    'no conflicting digest ever becomes a turn'
 
       assert_equal :integrity_conflict, admit(store, third, now: now + 2),
@@ -256,7 +256,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :duplicate, admit(store, first, now: now + 3),
                    'the original digest still replays as a duplicate'
       assert_equal :duplicate, store.disposition_only(
-        third, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+        third, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
                disposition: 'quarantined', reason: 'integrity_conflict', now: now + 4
       ), 're-recording the identical quarantine dedups'
     end
@@ -272,7 +272,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :enqueued, admit(store, envelope(update_id: 11))
       assert_equal :open_request_limit, admit(store, envelope(update_id: 12))
 
-      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 1, checkpoints.request_history(thread_id: 'telegram.ops.abc').length
       assert_equal 1, request_row_count(store)
       assert_empty inbound_dispositions(store, 12), 'the refusal inserts no inbound row'
     end
@@ -284,7 +284,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_equal :inbound_too_large, admit(store, envelope(update_id: 13, text: 'x' * 33))
 
-      assert_empty checkpoints.request_history(thread_id: 'tg.ops.abc')
+      assert_empty checkpoints.request_history(thread_id: 'telegram.ops.abc')
       assert_empty inbound_dispositions(store, 13), 'the refusal inserts no inbound row'
     end
   end
@@ -301,7 +301,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :enqueued, admit(store, envelope(update_id: 72)), 'the second slot fills'
       assert_equal :open_request_limit, admit(store, envelope(update_id: 73)),
                    'the request past max_open_requests refuses'
-      assert_equal 2, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 2, checkpoints.request_history(thread_id: 'telegram.ops.abc').length
     end
   end
 
@@ -310,11 +310,11 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor(limits: { max_open_requests: 1 }).wire, now:)
 
       assert_equal :enqueued, admit(store, envelope(update_id: 81))
-      request_id = checkpoints.request_history(thread_id: 'tg.ops.abc').first.request_id
+      request_id = checkpoints.request_history(thread_id: 'telegram.ops.abc').first.request_id
       assert_equal :open_request_limit, admit(store, envelope(update_id: 82))
 
       assert_equal :released,
-                   store.complete_request(thread_id: 'tg.ops.abc', request_id: request_id, settle_kind: 'answer')
+                   store.complete_request(thread_id: 'telegram.ops.abc', request_id: request_id, settle_kind: 'answer')
 
       assert_equal :enqueued, admit(store, envelope(update_id: 82)),
                    'the freed slot lets the next admission through'
@@ -363,12 +363,12 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       store.admit_and_enqueue(
         envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
-                                                      bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                      stream_id: 'telegram:bot:7463512990', thread: 'telegram.ops.abc', profile_id: 'ops',
                                                       reservation: 1, now:
       )
       answer = delivery(text: 'done, it is blue')
       store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1,
-                                    reserved_request_id: request_ids(checkpoints, 'tg.ops.abc').first)
+                                    reserved_request_id: request_ids(checkpoints, 'telegram.ops.abc').first)
       claim_and_mark!(store, answer.fetch('delivery_id'), 'succeeded')
       store.append_delivery(
         delivery(text: 'Accepted. I will report committed progress.', kind: 'control',
@@ -377,12 +377,12 @@ class SQLiteCommsStoreTest < Minitest::Test
       )
       store.admit_and_enqueue(
         envelope(update_id: 2, text: 'and the font?'), surface_id: 'telegram-ops',
-                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                       stream_id: 'telegram:bot:7463512990', thread: 'telegram.ops.abc', profile_id: 'ops',
                                                        reservation: 1, now: now + 2
       )
 
       history = store.conversation_history(
-        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.abc'
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', thread_id: 'telegram.ops.abc'
       )
 
       assert_equal(
@@ -394,7 +394,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         history
       )
       assert_empty store.conversation_history(
-        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.after-new'
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', thread_id: 'telegram.ops.after-new'
       ), '/new starts a thread with no earlier transcript'
     end
   end
@@ -410,11 +410,11 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       store.admit_and_enqueue(
         envelope(update_id: 1, text: "make it\nblue"), surface_id: 'telegram-ops',
-                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                       stream_id: 'telegram:bot:7463512990', thread: 'telegram.ops.abc', profile_id: 'ops',
                                                        reservation: 1, now:, history:
       )
 
-      task = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload.fetch('task')
+      task = checkpoints.request_history(thread_id: 'telegram.ops.abc').first.payload.fetch('task')
       control = /[\u0000-\u001f\u007f]/
       assert_equal 'make it blue', task.fetch('text')
       refute_match control, task.fetch('text')
@@ -434,18 +434,18 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       history = [{ 'role' => 'user', 'text' => 'earlier' }]
       store.admit_and_enqueue(
-        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
+        envelope, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
+                  thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1,
                   now:, history:
       )
 
-      payload = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload
+      payload = checkpoints.request_history(thread_id: 'telegram.ops.abc').first.payload
 
       task = payload.fetch('task')
       assert_equal 'hello', task.fetch('text')
       context = task.fetch('context')
-      assert_equal 'tg.ops.abc', context.fetch('thread_id')
-      assert_equal checkpoints.request_history(thread_id: 'tg.ops.abc').first.request_id,
+      assert_equal 'telegram.ops.abc', context.fetch('thread_id')
+      assert_equal checkpoints.request_history(thread_id: 'telegram.ops.abc').first.request_id,
                    context.fetch('request_id')
       assert_equal history, context.fetch('fragments')
       assert_equal Tamoz::Core::TurnContext.digest(context.reject { |key, _| key == 'digest' }),
@@ -456,11 +456,11 @@ class SQLiteCommsStoreTest < Minitest::Test
   def test_disposition_only_records_and_dedups
     with_engine do |store|
       assert_equal :recorded, store.disposition_only(
-        envelope(update_id: 1), surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+        envelope(update_id: 1), surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
                                 disposition: 'ignored', reason: 'unbound', now:
       )
       assert_equal :duplicate, store.disposition_only(
-        envelope(update_id: 1), surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+        envelope(update_id: 1), surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
                                 disposition: 'ignored', reason: 'unbound', now: now + 1
       )
     end
@@ -469,13 +469,13 @@ class SQLiteCommsStoreTest < Minitest::Test
   def test_poller_lease_is_one_fenced_poller_per_bot
     with_engine do |store|
       assert_equal :acquired, store.acquire_poller_lease(
-        surface_id: 'telegram-ops', bot_id: 1, owner: 'gateway:a', fence: 1, ttl_s: 30, now:
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', owner: 'gateway:a', fence: 1, ttl_s: 30, now:
       )
       assert_equal :not_acquirable, store.acquire_poller_lease(
-        surface_id: 'telegram-ops', bot_id: 1, owner: 'gateway:b', fence: 2, ttl_s: 30, now: now + 1
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', owner: 'gateway:b', fence: 2, ttl_s: 30, now: now + 1
       )
       assert_equal :acquired, store.acquire_poller_lease(
-        surface_id: 'telegram-ops', bot_id: 1, owner: 'gateway:b', fence: 2, ttl_s: 30,
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', owner: 'gateway:b', fence: 2, ttl_s: 30,
         now: now + 60
       ), 'an expired poller lease is recoverable'
     end
@@ -484,13 +484,13 @@ class SQLiteCommsStoreTest < Minitest::Test
   def test_next_offset_persists_only_forward
     with_engine do |store|
       assert_equal :persisted, store.persist_next_offset(
-        surface_id: 'telegram-ops', bot_id: 1, next_offset: 100, now:
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', next_offset: 100, now:
       )
       assert_equal :persisted, store.persist_next_offset(
-        surface_id: 'telegram-ops', bot_id: 1, next_offset: 200, now: now + 1
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', next_offset: 200, now: now + 1
       )
       assert_equal :behind, store.persist_next_offset(
-        surface_id: 'telegram-ops', bot_id: 1, next_offset: 150, now: now + 2
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', next_offset: 150, now: now + 2
       ), 'a stale offset must never regress the durable one'
     end
   end
@@ -568,7 +568,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       reopened = Tamoz::SQLite::Adapter.new(path:)
       begin
-        decisions = reopened.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+        decisions = reopened.bind_comms_decision_store.each_decision(thread_id: 'telegram.ops.abc')
 
         assert_equal 1, decisions.length
         assert_equal 'pending', decisions.first.fetch('status'),
@@ -614,14 +614,14 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store|
       route = Comms::Conversation.new(
         surface_id: 'telegram-ops', surface_revision: 1,
-        conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.abc',
+        conversation_id: 'telegram:chat:22222222', thread_id: 'telegram.ops.abc',
         profile_id: 'ops', bound_at: now
       ).wire
 
       assert_equal :bound, store.bind_conversation(route, now:)
       assert_equal :duplicate, store.bind_conversation(route, now: now + 1)
 
-      assert_equal 'tg.ops.abc', store.conversation(
+      assert_equal 'telegram.ops.abc', store.conversation(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
       ).fetch('thread_id')
     end
@@ -650,7 +650,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :enqueued, admit(store, envelope(update_id: 41), now:)
       assert_equal :enqueued, admit(store, envelope(update_id: 42), now: now + 1)
 
-      active = request_ids(checkpoints, 'tg.ops.abc').last
+      active = request_ids(checkpoints, 'telegram.ops.abc').last
       status = store.conversation_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now: now + 5
       )
@@ -659,7 +659,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 2, status.fetch('open_requests')
       assert_equal active, status.fetch('request_id')
       assert_equal "r#{active[0, 10]}", status.fetch('request_ref')
-      assert_equal request_ids(checkpoints, 'tg.ops.abc').map { |id| "r#{id[0, 10]}" },
+      assert_equal request_ids(checkpoints, 'telegram.ops.abc').map { |id| "r#{id[0, 10]}" },
                    status.fetch('open_request_refs')
       assert_equal 1, status.fetch('queue_position'), 'one admitted request is older than the active one'
       assert_equal 5_000, status.fetch('queue_age_ms')
@@ -671,7 +671,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 51))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
 
       found = store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
@@ -681,7 +681,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_kind_of Hash, found
       assert_equal request_id, found.fetch('request_id')
       assert_equal "r#{request_id[0, 10]}", found.fetch('request_ref')
-      assert_equal 'tg.ops.abc', found.fetch('thread_id')
+      assert_equal 'telegram.ops.abc', found.fetch('thread_id')
       assert_equal 0, found.fetch('queue_position')
       assert found.key?('terminal_reason')
 
@@ -746,7 +746,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 52))
       assert_equal :enqueued, admit(store, envelope(update_id: 53), now: now + 1)
-      first_id, second_id = request_ids(checkpoints, 'tg.ops.abc')
+      first_id, second_id = request_ids(checkpoints, 'telegram.ops.abc')
 
       unknown = delivery.merge('delivery_id' => 'delivery-request-first')
       delivered = delivery.merge('delivery_id' => 'delivery-request-second')
@@ -795,12 +795,12 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 55))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
 
       assert_empty store.working_conversations(surface_id: 'telegram-ops', now:), 'queued is not working'
 
       checkpoints.open_writer(
-        thread_id: 'tg.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
+        thread_id: 'telegram.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
       ) do |writer|
         writer.claim_next_request(validator: nil)
 
@@ -809,7 +809,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_empty store.working_conversations(surface_id: 'telegram-ops', now: Time.now.utc),
                    'a released lease means no worker is on it'
-      store.complete_request(thread_id: 'tg.ops.abc', request_id:, settle_kind: 'answer')
+      store.complete_request(thread_id: 'telegram.ops.abc', request_id:, settle_kind: 'answer')
 
       assert_empty store.working_conversations(surface_id: 'telegram-ops', now:), 'a settled request is not working'
     end
@@ -820,7 +820,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 54))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
       reference = "r#{request_id[0, 10]}"
       address = { surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref: reference }
       created_at_ms = store.__send__(:read, 'test.request.created_at') do |txn|
@@ -841,7 +841,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 'queued-unclaimed', store.request_status(**address, now: claim_window_time).fetch('worker_state')
 
       checkpoints.open_writer(
-        thread_id: 'tg.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
+        thread_id: 'telegram.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
       ) do |writer|
         assert_equal request_id, writer.claim_next_request(validator: nil).request_id
       end
@@ -854,10 +854,10 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
-      bind_route!(store, thread: 'tg.ops.other', conversation_id: 'telegram:chat:33333333')
+      bind_route!(store, thread: 'telegram.ops.other', conversation_id: 'telegram:chat:33333333')
 
       assert_equal :enqueued, admit(store, envelope(update_id: 61))
-      foreign_ref = "r#{request_ids(checkpoints, 'tg.ops.abc').first[0, 10]}"
+      foreign_ref = "r#{request_ids(checkpoints, 'telegram.ops.abc').first[0, 10]}"
 
       assert_equal :unknown_ref, store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:33333333',
@@ -895,33 +895,33 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 91))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
 
       assert_equal :requested, store.request_cancellation(
-        thread_id: 'tg.ops.abc', request_id: 'cancel-91',
+        thread_id: 'telegram.ops.abc', request_id: 'cancel-91',
         payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
       )
 
       stamps = cancellation_stamps(store, request_id)
 
       assert_equal epoch_ms(now + 2), stamps.fetch('requested_at_ms')
-      history = checkpoints.request_history(thread_id: 'tg.ops.abc')
+      history = checkpoints.request_history(thread_id: 'telegram.ops.abc')
 
       assert_equal :redirect, history.last.operation
       assert_equal 'redirect', history.last.delivery_mode.to_s
       assert history.last.payload.fetch('task').fetch('cancel')
 
-      tombstone_thread!(store, 'tg.ops.abc')
+      tombstone_thread!(store, 'telegram.ops.abc')
       assert_raises(Tamoz::CheckpointConflictError) do
         store.request_cancellation(
-          thread_id: 'tg.ops.abc', request_id: 'cancel-92',
+          thread_id: 'telegram.ops.abc', request_id: 'cancel-92',
           payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 4
         )
       end
 
       assert_equal epoch_ms(now + 2), cancellation_stamps(store, request_id).fetch('requested_at_ms'),
                    'a failed enqueue must not leave a later requested stamp behind'
-      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc')
+      assert_equal 1, checkpoints.request_history(thread_id: 'telegram.ops.abc')
                                 .count { |request| request.operation == :redirect }
     end
   end
@@ -931,18 +931,18 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 93))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
 
-      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 1)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'telegram.ops.abc', now: now + 1)
       assert_nil cancellation_stamps(store, request_id).fetch('observed_at_ms'),
                 'an unrequested thread gains no observed stamp'
 
       assert_equal :requested, store.request_cancellation(
-        thread_id: 'tg.ops.abc', request_id: 'cancel-93',
+        thread_id: 'telegram.ops.abc', request_id: 'cancel-93',
         payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
       )
-      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 5)
-      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 9)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'telegram.ops.abc', now: now + 5)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'telegram.ops.abc', now: now + 9)
 
       assert_equal epoch_ms(now + 5), cancellation_stamps(store, request_id).fetch('observed_at_ms'),
                    'first write wins; a replay never moves the stamp'
@@ -957,7 +957,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 94))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
       ref = "r#{request_id[0, 10]}"
 
       bare = store.request_status(
@@ -967,7 +967,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       refute bare.key?('cancellation'), 'no cancellation key exists until a cancel was handled'
 
       assert_equal :requested, store.request_cancellation(
-        thread_id: 'tg.ops.abc', request_id: 'cancel-94',
+        thread_id: 'telegram.ops.abc', request_id: 'cancel-94',
         payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
       )
       requested = store.request_status(
@@ -979,7 +979,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 1_000, requested.fetch('requested_age_ms')
       assert_nil requested.fetch('terminal')
 
-      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'telegram.ops.abc', now: now + 6)
       stopped = store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 7
       ).fetch('cancellation')
@@ -1005,16 +1005,16 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 95))
-      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      request_id = request_ids(checkpoints, 'telegram.ops.abc').first
       ref = "r#{request_id[0, 10]}"
 
       assert_equal :requested, store.request_cancellation(
-        thread_id: 'tg.ops.abc', request_id: 'cancel-95',
+        thread_id: 'telegram.ops.abc', request_id: 'cancel-95',
         payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
       )
       assert_equal :released,
-                   store.complete_request(thread_id: 'tg.ops.abc', request_id:, settle_kind: 'answer')
-      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
+                   store.complete_request(thread_id: 'telegram.ops.abc', request_id:, settle_kind: 'answer')
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'telegram.ops.abc', now: now + 6)
 
       facts = store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 7
@@ -1041,23 +1041,23 @@ class SQLiteCommsStoreTest < Minitest::Test
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 96))
       assert_equal :enqueued, admit(store, envelope(update_id: 97))
-      failed_id, blocked_id = request_ids(checkpoints, 'tg.ops.abc').first(2)
+      failed_id, blocked_id = request_ids(checkpoints, 'telegram.ops.abc').first(2)
       raise 'two requests were not admitted' unless blocked_id
 
       [failed_id, blocked_id].each do |request_id|
         assert_equal :requested, store.request_cancellation(
-          thread_id: 'tg.ops.abc', request_id: "cancel-#{request_id[0, 6]}",
+          thread_id: 'telegram.ops.abc', request_id: "cancel-#{request_id[0, 6]}",
           payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
         )
       end
 
       assert_raises(KeyError) do
-        store.complete_request(thread_id: 'tg.ops.abc', request_id: failed_id, settle_kind: 'vanished')
+        store.complete_request(thread_id: 'telegram.ops.abc', request_id: failed_id, settle_kind: 'vanished')
       end
       assert_equal :released,
-                   store.complete_request(thread_id: 'tg.ops.abc', request_id: failed_id, settle_kind: 'failed')
+                   store.complete_request(thread_id: 'telegram.ops.abc', request_id: failed_id, settle_kind: 'failed')
       assert_equal :released,
-                   store.complete_request(thread_id: 'tg.ops.abc', request_id: blocked_id, settle_kind: 'blocked')
+                   store.complete_request(thread_id: 'telegram.ops.abc', request_id: blocked_id, settle_kind: 'blocked')
 
       assert_equal 'failed_before_effect', settle_terminal(store, failed_id)
       assert_equal 'blocked', settle_terminal(store, blocked_id)
@@ -1105,14 +1105,14 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       admit(store, envelope(update_id: 1, text: 'first'))
       admit(store, envelope(update_id: 2, text: 'second'))
-      first_id, second_id = request_ids(checkpoints, 'tg.ops.abc')
+      first_id, second_id = request_ids(checkpoints, 'telegram.ops.abc')
       draft = delivery(text: 'draft answer', content_digest: 'b' * 63 + '1')
       lost = delivery(text: 'lost reply', content_digest: 'b' * 63 + '2')
       store.append_delivery(draft, surface_id: 'telegram-ops', capacity: 10, now:, reserved_request_id: first_id)
       store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1, reserved_request_id: second_id)
       assistant_texts = lambda {
         store.conversation_history(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
-                                   thread_id: 'tg.ops.abc')
+                                   thread_id: 'telegram.ops.abc')
              .select { |entry| entry.fetch('role') == 'assistant' }.map { |entry| entry.fetch('text') }
       }
 
@@ -1210,7 +1210,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         store = first.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now:)
         store.append_delivery(delivery, surface_id: 'telegram-ops', capacity: 10, now:)
-        store.persist_next_offset(surface_id: 'telegram-ops', bot_id: 1, next_offset: 100, now:)
+        store.persist_next_offset(surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', next_offset: 100, now:)
       ensure
         first&.close
       end
@@ -1230,7 +1230,7 @@ class SQLiteCommsStoreTest < Minitest::Test
                      store.surface(surface_id: 'telegram-ops').fetch('definition_digest')
         assert_equal 1, store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).length
         assert_equal :behind, store.persist_next_offset(
-          surface_id: 'telegram-ops', bot_id: 1, next_offset: 50, now: now + 5
+          surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', next_offset: 50, now: now + 5
         ), 'the durable offset survives a restart'
       ensure
         reopened&.close

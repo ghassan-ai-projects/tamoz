@@ -84,8 +84,7 @@ module Tamoz
             batch: entry.dig('transport', 'batch') || 50,
             max_response_bytes: entry.dig('transport', 'max_response_bytes')
           }),
-          identity: symbolize({ expected_bot_id: entry.fetch('expected_bot_id'),
-                                bot_username: entry['bot_username'] }.compact),
+          identity: { stream_id: entry.fetch('stream_id') },
           settings: symbolize(entry.fetch('settings', {})),
           admission: symbolize({ 'direct' => 'disabled' }.merge(entry.fetch('admission', {}))),
           threading: entry.fetch('threading', 'conversation'),

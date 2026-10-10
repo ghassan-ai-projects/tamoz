@@ -132,7 +132,7 @@ class RuntimeDirectoryConfigTest < Minitest::Test
       FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
       path = RuntimeDirectory.create!(File.join(root, 'runtime'), workspace:).path
       config = File.join(path, RuntimeDirectory::CONFIG_FILE)
-      entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'expected_bot_id' => 7,
+      entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'stream_id' => 'telegram:bot:7',
                 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' } }
       ['../..', 'Telegram', 'a/b', ''].each do |surface|
         File.write(config, Psych.dump(Psych.safe_load_file(config).merge('channels' => { surface => entry })))
@@ -143,7 +143,7 @@ class RuntimeDirectoryConfigTest < Minitest::Test
   end
 
   # Schema 2 with a strict channels mapping: a bad kind, a missing revision,
-  # or a missing expected_bot_id is refused at LOAD, before any command runs.
+  # or a missing stream_id is refused at LOAD, before any command runs.
   def test_schema_two_validates_channels_strictly
     Dir.mktmpdir('tamoz-config') do |directory|
       runtime_dir = File.join(directory, 'runtime')
@@ -157,11 +157,11 @@ class RuntimeDirectoryConfigTest < Minitest::Test
         'channels' => { 'telegram-ops' => {
           'kind' => 'telegram', 'revision' => 1, 'enabled' => true,
           'profile' => 'ops', 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-          'expected_bot_id' => 7_463_512_990
+          'stream_id' => 'telegram:bot:7463512990'
         } }
       }
 
-      { 'kind' => 'Slack', 'revision' => 0, 'expected_bot_id' => 'abc' }.each do |key, value|
+      { 'kind' => 'Slack', 'revision' => 0, 'stream_id' => 7 }.each do |key, value|
         document = deep_dup(base)
         document.fetch('channels').fetch('telegram-ops')[key] = value
         File.write(config_path, Psych.dump(document))
@@ -174,13 +174,13 @@ class RuntimeDirectoryConfigTest < Minitest::Test
       end
 
       document = deep_dup(base)
-      document.fetch('channels').fetch('telegram-ops').delete('expected_bot_id')
+      document.fetch('channels').fetch('telegram-ops').delete('stream_id')
       File.write(config_path, Psych.dump(document))
       File.chmod(0o600, config_path)
       error = assert_raises(RuntimeDirectory::Error) do
         RuntimeDirectory.resolve(path: runtime_dir, env: {})
       end
-      assert_match(/expected_bot_id is mandatory/, error.message)
+      assert_match(/stream_id is mandatory/, error.message)
     end
   end
 
@@ -198,7 +198,7 @@ class RuntimeDirectoryConfigTest < Minitest::Test
                                   'kind' => 'telegram', 'revision' => 2, 'enabled' => true,
                                   'profile' => 'ops',
                                   'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-                                  'expected_bot_id' => 7_463_512_990,
+                                  'stream_id' => 'telegram:bot:7463512990',
                                   'admission' => {
                                     'direct' => 'allowlist',
                                     'correspondents' => ['telegram:user:11111111']

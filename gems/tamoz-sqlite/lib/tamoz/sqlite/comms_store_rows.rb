@@ -17,7 +17,7 @@ module Tamoz
         updated_at_ms
       ].freeze
       POLL_COLUMNS = %w[
-        bot_id surface_id next_offset poller_owner_id poller_fence
+        stream_id surface_id next_offset poller_owner_id poller_fence
         poller_expires_at_ms updated_at_ms
       ].freeze
       PAIRING_COLUMNS = %w[
@@ -72,11 +72,11 @@ module Tamoz
         (now.utc.to_r * 1000).to_i
       end
 
-      def request_id_for(envelope_wire, bot_id)
+      def request_id_for(envelope_wire, stream_id)
         Tamoz::Core::RequestIdentity.request_id(
           surface_id: envelope_wire.fetch('surface_id'),
           surface_revision: envelope_wire.fetch('surface_revision'),
-          bot_id:,
+          stream_id:,
           update_id: envelope_wire.fetch('update_id'),
           raw_payload_hash: envelope_wire.fetch('raw_payload_hash')
         )
@@ -123,12 +123,12 @@ module Tamoz
       # The ONE durable anchor row for an update identity (invariant 1): its
       # original payload digest plus the last conflicting digest seen and the
       # disposition those bytes currently carry.
-      def inbound_anchor(txn, envelope_wire, bot_id)
+      def inbound_anchor(txn, envelope_wire, stream_id)
         txn.first('comms.admit.inbound.anchor',
-                  <<~SQL, [envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id')])
+                  <<~SQL, [envelope_wire.fetch('surface_id'), stream_id, envelope_wire.fetch('update_id')])
                     SELECT raw_payload_hash, last_conflict_digest, disposition, reason
                     FROM tamoz_comms_inbound
-                    WHERE surface_id = ? AND bot_id = ? AND update_id = ?
+                    WHERE surface_id = ? AND stream_id = ? AND update_id = ?
                     LIMIT 1
                   SQL
       end
@@ -142,22 +142,22 @@ module Tamoz
 
       # A disposition re-record dedups only on the FULL identity (digest
       # included), so a conflicting digest can still be recorded quarantined.
-      def identical_inbound_row?(txn, envelope_wire, bot_id)
+      def identical_inbound_row?(txn, envelope_wire, stream_id)
         hash = envelope_wire.fetch('raw_payload_hash')
         txn.first('comms.admit.inbound.identical',
-                  <<~SQL, [envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id'), hash])
+                  <<~SQL, [envelope_wire.fetch('surface_id'), stream_id, envelope_wire.fetch('update_id'), hash])
                     SELECT 1 FROM tamoz_comms_inbound
-                    WHERE surface_id = ? AND bot_id = ? AND update_id = ?
+                    WHERE surface_id = ? AND stream_id = ? AND update_id = ?
                       AND raw_payload_hash = ?
                   SQL
       end
 
-      def insert_inbound!(txn, envelope_wire, bot_id:, disposition:, reason:, now:,
+      def insert_inbound!(txn, envelope_wire, stream_id:, disposition:, reason:, now:,
                           request_id: envelope_wire['request_id'])
         txn.execute('comms.admit.inbound.insert',
-                    <<~SQL, inbound_binds(envelope_wire, bot_id, disposition, reason, now, request_id))
+                    <<~SQL, inbound_binds(envelope_wire, stream_id, disposition, reason, now, request_id))
                       INSERT INTO tamoz_comms_inbound (
-                        surface_id, surface_revision, bot_id, update_id, raw_payload_hash,
+                        surface_id, surface_revision, stream_id, update_id, raw_payload_hash,
                         parser_version, kind, correspondent_id, conversation_id,
                         disposition, reason, request_id, decision_id,
                         observed_at_ms, ingested_at_ms
@@ -168,10 +168,10 @@ module Tamoz
       # A conflicting observation never becomes a row of its own: it moves the
       # anchor's last_conflict_digest and counts once per DISTINCT conflicting
       # digest — redelivered identical conflicting bytes count exactly once.
-      def record_inbound_conflict!(txn, envelope_wire, bot_id, disposition: nil, reason: nil)
+      def record_inbound_conflict!(txn, envelope_wire, stream_id, disposition: nil, reason: nil)
         hash = envelope_wire.fetch('raw_payload_hash')
         binds = [hash, hash, disposition, reason,
-                 envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id')]
+                 envelope_wire.fetch('surface_id'), stream_id, envelope_wire.fetch('update_id')]
         txn.execute('comms.admit.inbound.conflict', <<~SQL, binds)
           UPDATE tamoz_comms_inbound
           SET conflict_count = conflict_count + CASE WHEN last_conflict_digest = ?
@@ -179,14 +179,14 @@ module Tamoz
               last_conflict_digest = ?,
               disposition = COALESCE(?, disposition),
               reason = COALESCE(?, reason)
-          WHERE surface_id = ? AND bot_id = ? AND update_id = ?
+          WHERE surface_id = ? AND stream_id = ? AND update_id = ?
         SQL
       end
 
-      def inbound_binds(envelope_wire, bot_id, disposition, reason, now, request_id)
+      def inbound_binds(envelope_wire, stream_id, disposition, reason, now, request_id)
         [
           envelope_wire.fetch('surface_id'), envelope_wire.fetch('surface_revision'),
-          bot_id, envelope_wire.fetch('update_id'),
+          stream_id, envelope_wire.fetch('update_id'),
           envelope_wire.fetch('raw_payload_hash'), envelope_wire.fetch('parser_version'),
           envelope_wire.fetch('kind'), envelope_wire.fetch('correspondent_id'),
           envelope_wire.fetch('conversation_id'), disposition, reason,
@@ -228,18 +228,19 @@ module Tamoz
         SQL
       end
 
-      def upsert_poller!(txn, surface_id:, bot_id:, owner:, fence:, expires_at_ms:, now:)
-        txn.execute('comms.poll.lease.upsert', <<~SQL, [bot_id, surface_id, owner, fence, expires_at_ms, now_ms(now)])
-          INSERT INTO tamoz_comms_poll_state (
-            bot_id, surface_id, poller_owner_id, poller_fence,
-            poller_expires_at_ms, updated_at_ms
-          ) VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(bot_id) DO UPDATE SET
-            poller_owner_id = excluded.poller_owner_id,
-            poller_fence = excluded.poller_fence,
-            poller_expires_at_ms = excluded.poller_expires_at_ms,
-            updated_at_ms = excluded.updated_at_ms
-        SQL
+      def upsert_poller!(txn, surface_id:, stream_id:, owner:, fence:, expires_at_ms:, now:)
+        txn.execute('comms.poll.lease.upsert',
+                    <<~SQL, [stream_id, surface_id, owner, fence, expires_at_ms, now_ms(now)])
+                      INSERT INTO tamoz_comms_poll_state (
+                        stream_id, surface_id, poller_owner_id, poller_fence,
+                        poller_expires_at_ms, updated_at_ms
+                      ) VALUES (?, ?, ?, ?, ?, ?)
+                      ON CONFLICT(stream_id) DO UPDATE SET
+                        poller_owner_id = excluded.poller_owner_id,
+                        poller_fence = excluded.poller_fence,
+                        poller_expires_at_ms = excluded.poller_expires_at_ms,
+                        updated_at_ms = excluded.updated_at_ms
+                    SQL
       end
 
       def outbox_binds(delivery_wire, surface_id, now, request_id:)

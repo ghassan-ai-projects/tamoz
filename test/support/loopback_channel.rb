@@ -4,6 +4,7 @@
 # interfaces as Telegram and talk. It proves a new kind needs nothing outside its own code and one registry entry.
 module LoopbackChannel
   TOKEN = 'LOOPBACK_TOKEN'
+  STREAM = 'loopback:1'
 
   # Holds what was sent in and out, confirms by cursor like every other transport.
   class Transport
@@ -18,7 +19,7 @@ module LoopbackChannel
       @next_id = 0
     end
 
-    def authenticate(descriptor, _credential) = { 'id' => descriptor&.identity&.fetch(:expected_bot_id) || 1 }
+    def authenticate = { 'stream_id' => STREAM }
 
     def say(wire) = @inbox << wire
 
@@ -57,6 +58,8 @@ module LoopbackChannel
       def interval_s = 0.01
     end
 
+    attr_reader :transport
+
     def initialize(transport: Transport.new) = @transport = transport
 
     def validate!(descriptor)
@@ -81,7 +84,7 @@ module LoopbackChannel
       @seen_env = env
       terminal.say 'Loopback ready.'
       { 'kind' => 'loopback', 'enabled' => true, 'credential_ref' => { 'kind' => 'env', 'name' => TOKEN },
-        'expected_bot_id' => 1, 'admission' => { 'direct' => 'allowlist', 'correspondents' => ['loopback:user:1'] },
+        'stream_id' => STREAM, 'admission' => { 'direct' => 'allowlist', 'correspondents' => ['loopback:user:1'] },
         'approvals' => { 'mode' => 'deny_only', 'prompt_ttl_s' => 900 } }
     end
 

@@ -8,7 +8,7 @@ class CallbackAckCrashTest < Minitest::Test
   include AutonomyCase
 
   Comms = Tamoz::Comms
-  THREAD_ID = 'tg.ops.abc'
+  THREAD_ID = 'telegram.ops.abc'
   SURFACE_ID = 'telegram-ops'
   CONVERSATION_ID = 'telegram:chat:22222222'
   BOT_ID = 7_463_512_990
@@ -21,7 +21,7 @@ class CallbackAckCrashTest < Minitest::Test
       surface_id: SURFACE_ID, revision: 1,
       transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: BOT_ID },
+      identity: { stream_id: "telegram:bot:#{BOT_ID}" },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -60,7 +60,7 @@ class CallbackAckCrashTest < Minitest::Test
       text: 'hello', observed_time: now
     ).wire
     store.admit_and_enqueue(
-      envelope, surface_id: SURFACE_ID, bot_id: BOT_ID,
+      envelope, surface_id: SURFACE_ID, stream_id: "telegram:bot:#{BOT_ID}",
                 thread: THREAD_ID, profile_id: 'ops', reservation: 1, now:
     )
   end

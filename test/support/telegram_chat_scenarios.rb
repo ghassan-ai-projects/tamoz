@@ -33,7 +33,7 @@ module TelegramChatScenarios
     channel = written[:channel]
     eval.check('setup', 'the documented command exited 0', written[:status].zero?, written[:err])
     eval.check('setup', 'it pinned the authenticated bot id',
-               channel['expected_bot_id'] == eval.fake.bot_id, channel['expected_bot_id'].inspect)
+               channel['stream_id'] == "telegram:bot:#{eval.fake.bot_id}", channel['stream_id'].inspect)
   end
 
   def check_setup_pairing(eval, written)

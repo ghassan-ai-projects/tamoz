@@ -208,7 +208,7 @@ class CliStartTest < Minitest::Test
   def test_a_channel_another_run_holds_is_refused_naming_it
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT)
-      hold_poller(runtime, 'telegram', BOT.fetch('id'))
+      hold_poller(runtime, 'telegram', "telegram:bot:#{BOT.fetch('id')}")
       status, _out, err, = start(runtime)
 
       assert_equal 1, status
@@ -220,7 +220,7 @@ class CliStartTest < Minitest::Test
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
       hold_poller(runtime, 'talk',
-                  Psych.safe_load_file(config_path(runtime)).dig('channels', 'talk', 'expected_bot_id'))
+                  Psych.safe_load_file(config_path(runtime)).dig('channels', 'talk', 'stream_id'))
 
       assert_includes start(runtime)[2], "already running for this channel (pid #{Process.pid})"
     end
@@ -344,10 +344,10 @@ class CliStartTest < Minitest::Test
     spawned
   end
 
-  def hold_poller(runtime, surface, bot_id)
+  def hold_poller(runtime, surface, stream)
     Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
                      .send(:with_comms_runtime, { runtime_dir: runtime }) do |_directory, _adapter, store, _checkpoints|
-      store.acquire_poller_lease(surface_id: surface, bot_id:, owner: "gateway:#{Process.pid}", fence: 1, ttl_s: 60,
+      store.acquire_poller_lease(surface_id: surface, stream_id: stream, owner: "gateway:#{Process.pid}", fence: 1, ttl_s: 60,
                                  now: Time.now.utc)
     end
   end

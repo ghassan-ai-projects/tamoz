@@ -24,19 +24,17 @@ module Tamoz
       module_function
 
       # @param text [String] envelope text (already SafeText-normalized).
-      # @param bot_username [String, nil] the authenticated bot's username.
       # @return [Command, nil] the parsed known command, or nil when the text
-      #   is not a known command (not a slash, unknown, or a wrong-username
-      #   suffix).
-      # :reek:ControlParameter, :reek:TooManyStatements -- the parse branches
-      # ARE the command grammar (suffix rule, argument split).
-      def parse(text, bot_username: nil)
+      #   is not a known command (not a slash, unknown, or an `@name` suffix
+      #   the channel's normalizer did not strip as its own).
+      # :reek:TooManyStatements -- the parse branches ARE the command grammar.
+      def parse(text)
         return nil unless text.start_with?('/')
 
         command_word, _, remainder = text.delete_prefix('/').partition(/\s/)
         word, _, suffix = command_word.partition('@')
         normalized = word.downcase
-        return nil unless KNOWN.include?(normalized) && matching_suffix?(suffix, bot_username)
+        return nil unless KNOWN.include?(normalized) && suffix.empty?
 
         Command.new(command: normalized, arguments: clean(remainder))
       end
@@ -45,12 +43,6 @@ module Tamoz
 
       def looks_like_command?(text) = text.start_with?('/')
 
-      # Telegram's optional @bot_username suffix is accepted only when it
-      # matches the authenticated bot; without one, any suffix is refused.
-      def matching_suffix?(suffix, bot_username)
-        suffix.empty? || suffix == bot_username
-      end
-
       # :reek:NilCheck -- nil is the legitimate "no arguments" state.
       def clean(arguments)
         return nil if arguments.nil?
@@ -58,7 +50,7 @@ module Tamoz
         stripped = arguments.strip
         stripped.empty? ? nil : stripped
       end
-      private_class_method :clean, :matching_suffix?
+      private_class_method :clean
     end
   end
 end

@@ -11,7 +11,7 @@ module Tamoz
       # monotonic-ordering assertions in test/sqlite_approval_stores_test.rb,
       # test/cancellation_visibility_test.rb, and test/memory_store_test.rb.
       # Each migration's own history is documented beside its constant.
-      CURRENT_VERSION = 25
+      CURRENT_VERSION = 26
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1425,6 +1425,247 @@ module Tamoz
 
       MIGRATION_25_CHECKSUM = migration_checksum(MIGRATION_25)
 
+      # Channels as one abstraction: 25 -> 26 through MIGRATION_26. Every comms table is recreated empty (ADR-059:
+      # no row is carried): an update stream is a `<kind>:...` string, and a decision's actor and source name one kind.
+      MIGRATION_26 = [
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_approval_prompts
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_bindings
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_conversations
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_decisions
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_delivery_pacing
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_gaps
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_inbound
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_outbox
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_pairing_challenges
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_poll_state
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_requests
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_surfaces
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_approval_prompts (
+            reference_digest TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT,
+            surface_revision INTEGER CHECK (surface_revision IS NULL OR surface_revision > 0),
+            thread_id TEXT NOT NULL,
+            occurrence_id TEXT NOT NULL,
+            interrupt_digest TEXT NOT NULL,
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            prompt_receipt TEXT,
+            status TEXT NOT NULL CHECK (status IN ('inactive', 'active', 'consumed')),
+            created_at_ms INTEGER NOT NULL,
+            activated_at_ms INTEGER,
+            consumed_at_ms INTEGER,
+            expires_at_ms INTEGER NOT NULL
+          , required_evidence TEXT) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_bindings (
+            surface_id TEXT NOT NULL,
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+            bound_by TEXT NOT NULL,
+            bound_at_ms INTEGER NOT NULL,
+            version INTEGER NOT NULL CHECK (version > 0),
+            revocation_reason TEXT,
+            PRIMARY KEY (surface_id, correspondent_id, version)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_conversations (
+            surface_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            thread_id TEXT NOT NULL,
+            profile_id TEXT NOT NULL,
+            threading TEXT NOT NULL CHECK (threading IN ('conversation', 'per_message')),
+            bound_at_ms INTEGER NOT NULL,
+            version INTEGER NOT NULL CHECK (version > 0),
+            generation INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (surface_id, conversation_id)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_decisions (
+            decision_id TEXT NOT NULL PRIMARY KEY,
+            thread_id TEXT NOT NULL,
+            occurrence_id TEXT NOT NULL,
+            interrupt_digest TEXT NOT NULL,
+            direction TEXT NOT NULL CHECK (direction IN ('approve', 'deny')),
+            actor_kind TEXT NOT NULL,
+            actor_id TEXT NOT NULL,
+            source TEXT NOT NULL,
+            decided_at_ms INTEGER NOT NULL,
+            expires_at_ms INTEGER NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('pending', 'claimed', 'consumed')),
+            claim_owner TEXT,
+            claim_fence INTEGER CHECK (claim_fence IS NULL OR claim_fence > 0),
+            claim_expires_at_ms INTEGER,
+            consumed_at_ms INTEGER,
+            evidence TEXT,
+            reason TEXT,
+            CHECK ((actor_kind = 'os_user' AND source = 'cli') OR
+                   (source NOT IN ('cli', 'os') AND length(source) BETWEEN 2 AND 32 AND
+                    source NOT GLOB '*[^a-z0-9_]*' AND substr(source, 1, 1) BETWEEN 'a' AND 'z' AND
+                    actor_kind = source || '_user'))
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_delivery_pacing (
+            surface_id TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            next_allowed_at_ms INTEGER NOT NULL CHECK (next_allowed_at_ms >= 0),
+            PRIMARY KEY (surface_id, scope)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_gaps (
+            gap_id TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (
+              kind IN ('expired_control', 'coalesced_control', 'capacity_refused')
+            ),
+            reason TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_inbound (
+            surface_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            stream_id TEXT NOT NULL CHECK (length(stream_id) BETWEEN 3 AND 256),
+            update_id INTEGER NOT NULL CHECK (update_id >= 0),
+            raw_payload_hash TEXT NOT NULL,
+            parser_version INTEGER NOT NULL CHECK (parser_version > 0),
+            kind TEXT NOT NULL CHECK (
+              kind IN ('text', 'command', 'callback', 'membership', 'attachment', 'unsupported')
+            ),
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            disposition TEXT NOT NULL CHECK (
+              disposition IN ('request', 'decision', 'ignored', 'rejected', 'quarantined')
+            ),
+            reason TEXT NOT NULL,
+            request_id TEXT,
+            decision_id TEXT,
+            observed_at_ms INTEGER NOT NULL,
+            ingested_at_ms INTEGER NOT NULL,
+            conflict_count INTEGER NOT NULL DEFAULT 0,
+            last_conflict_digest TEXT,
+            PRIMARY KEY (surface_id, stream_id, update_id, raw_payload_hash)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_outbox (
+            delivery_id TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (
+              kind IN ('accepted', 'answer', 'approval_request', 'failed',
+                       'stopped', 'blocked', 'control')
+            ),
+            operation TEXT NOT NULL CHECK (operation IN ('send_message', 'edit_message')),
+            text TEXT NOT NULL,
+            part_index INTEGER NOT NULL CHECK (part_index >= 0),
+            part_count INTEGER NOT NULL CHECK (part_count > 0),
+            markup TEXT,
+            reply_to INTEGER,
+            journaled INTEGER NOT NULL CHECK (journaled IN (0, 1)),
+            content_digest TEXT NOT NULL,
+            render_version INTEGER NOT NULL CHECK (render_version > 0),
+            expires_at_ms INTEGER,
+            status TEXT NOT NULL CHECK (
+              status IN ('pending', 'claimed', 'succeeded', 'failed', 'unknown')
+            ),
+            claim_owner TEXT,
+            claim_fence INTEGER CHECK (claim_fence IS NULL OR claim_fence > 0),
+            claim_expires_at_ms INTEGER,
+            effect_key TEXT,
+            effect_execution_id TEXT,
+            receipt TEXT,
+            send_started_at_ms INTEGER,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          , request_id TEXT) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_pairing_challenges (
+            challenge_digest TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT NOT NULL,
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('pending', 'approved', 'consumed')),
+            attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+            expires_at_ms INTEGER NOT NULL,
+            created_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_poll_state (
+            stream_id TEXT NOT NULL PRIMARY KEY CHECK (length(stream_id) BETWEEN 3 AND 256),
+            surface_id TEXT NOT NULL,
+            next_offset INTEGER CHECK (next_offset IS NULL OR next_offset >= 0),
+            poller_owner_id TEXT,
+            poller_fence INTEGER CHECK (poller_fence IS NULL OR poller_fence > 0),
+            poller_expires_at_ms INTEGER,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_requests (
+            request_id TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            conversation_id TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            profile_id TEXT NOT NULL,
+            reservation INTEGER NOT NULL CHECK (reservation > 0),
+            projection_state TEXT NOT NULL,
+            cancellation_requested_at_ms INTEGER,
+            cancellation_observed_at_ms INTEGER,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_surfaces (
+            surface_id TEXT NOT NULL PRIMARY KEY,
+            revision INTEGER NOT NULL CHECK (revision > 0),
+            definition_digest TEXT NOT NULL,
+            descriptor_json TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_26_CHECKSUM = migration_checksum(MIGRATION_26)
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1452,7 +1693,8 @@ module Tamoz
         22 => [MIGRATION_22, MIGRATION_22_CHECKSUM],
         23 => [MIGRATION_23, MIGRATION_23_CHECKSUM],
         24 => [MIGRATION_24, MIGRATION_24_CHECKSUM],
-        25 => [MIGRATION_25, MIGRATION_25_CHECKSUM]
+        25 => [MIGRATION_25, MIGRATION_25_CHECKSUM],
+        26 => [MIGRATION_26, MIGRATION_26_CHECKSUM]
       }.freeze
 
       def self.verify_connection!(connection)

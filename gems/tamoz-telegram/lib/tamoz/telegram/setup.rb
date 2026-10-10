@@ -50,7 +50,7 @@ module Tamoz
         end
 
         client = @channel.client(env.fetch(name), env)
-        [["token #{name}", true], ['bot id', bot_id_check(client, descriptor)], ['webhook', webhook_check(client)]]
+        [["token #{name}", true], ['bot id', stream_check(client, descriptor)], ['webhook', webhook_check(client)]]
       rescue Comms::AuthenticationError
         [["token #{name}", REFUSED]]
       rescue Comms::ValidationError => e
@@ -98,10 +98,11 @@ module Tamoz
       end
 
       def refuse_other_bot(existing, bot)
-        pinned = existing.to_h['expected_bot_id'].to_i
-        return if pinned.zero? || pinned == bot.fetch('id')
+        pinned = existing.to_h['stream_id']
+        return if pinned.nil? || pinned == Channel.stream(bot.fetch('id'))
 
-        raise Comms::SetupError, "this runtime already serves @#{existing['bot_username']}; one bot per runtime"
+        raise Comms::SetupError, "this runtime already serves @#{existing.dig('settings', 'bot_username')}; one bot " \
+                                 'per runtime'
       end
 
       # The first private message proves who the owner is; the operator confirms it at the terminal.
@@ -147,19 +148,19 @@ module Tamoz
       def entry(existing, bot, owner)
         allowed = Array(existing&.dig('admission', 'correspondents')) | ["telegram:user:#{owner}"]
         { 'kind' => 'telegram', 'enabled' => true, 'credential_ref' => { 'kind' => 'env', 'name' => TOKEN },
-          'expected_bot_id' => bot.fetch('id'), 'bot_username' => bot.fetch('username'),
+          'stream_id' => Channel.stream(bot.fetch('id')), 'settings' => { 'bot_username' => bot.fetch('username') },
           # A short poll lets Ctrl-C stop the gateway quickly.
           'transport' => { 'poll_timeout_s' => 10 },
           'admission' => { 'direct' => 'allowlist', 'correspondents' => allowed },
           'approvals' => { 'mode' => 'deny_only', 'prompt_ttl_s' => 900 } }
       end
 
-      def bot_id_check(client, descriptor)
-        actual = client.call('getMe', {}, idempotent: true).fetch('id')
-        expected = descriptor.identity.fetch(:expected_bot_id)
+      def stream_check(client, descriptor)
+        actual = Channel.stream(client.call('getMe', {}, idempotent: true).fetch('id'))
+        expected = descriptor.identity.fetch(:stream_id)
         return true if actual == expected
 
-        "token authenticates bot #{actual}, config expects #{expected} (a token swap is a different surface)"
+        "token authenticates #{actual}, config expects #{expected} (a token swap is a different surface)"
       end
 
       def webhook_check(client)

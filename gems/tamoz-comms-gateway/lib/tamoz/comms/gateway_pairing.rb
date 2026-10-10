@@ -13,7 +13,7 @@ module Tamoz
         # Pairing first contact names one live challenge and reuses its plaintext
         # while the durable challenge remains pending.
         def handle_pairing_contact(envelope, now:)
-          parsed = Comms::Commands.parse(envelope.fetch('text').to_s, bot_username:)
+          parsed = Comms::Commands.parse(envelope.fetch('text').to_s)
           if parsed&.command == 'start'
             append_control(pairing_start_reply(parsed.arguments, envelope, now:), envelope, now:)
             return

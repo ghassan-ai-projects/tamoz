@@ -8,11 +8,9 @@ class ChannelKindContainmentTest < Minitest::Test
   NAMED = %i[on_ident on_const on_tstring_content on_label on_ivar on_cvar on_gvar].freeze
   OWNERS = %w[gems/tamoz-telegram/ gems/tamoz-talk/ gems/tamoz-agent-cli/lib/tamoz/agent/channel_kinds.rb].freeze
 
-  # Each count only falls, in the commit that removes the mention. The last five files are frozen by design:
-  # checksummed migrations, benchmark-protocol code (ADR-058), and the stream's escalation default.
+  # Only frozen files remain: checksummed migrations, benchmark-protocol code (ADR-058), and the stream's
+  # escalation default. A new mention anywhere fails.
   EXPECTED = {
-    'gems/tamoz-comms/lib/tamoz/comms/decision_record.rb' => 4,
-    'gems/tamoz-comms/lib/tamoz/comms/parties.rb' => 18,
     'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb' => 18,
     'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb' => 11,
     'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/readiness.rb' => 1,

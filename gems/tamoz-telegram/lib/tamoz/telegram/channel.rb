@@ -7,6 +7,9 @@ module Tamoz
       include Comms::Channel
 
       ORIGIN = 'TAMOZ_TELEGRAM_API_ORIGIN'
+      SETTINGS = %i[bot_username].freeze
+
+      def self.stream(bot_id) = "telegram:bot:#{bot_id}"
 
       # Nothing to open or close: the Bot API is reached per call.
       class Connection
@@ -24,15 +27,18 @@ module Tamoz
 
       def validate!(descriptor)
         raise Comms::ValidationError, 'a Telegram surface cannot speak its replies' if descriptor.speech?
-        return if descriptor.settings.empty?
 
-        raise Comms::ValidationError, "a Telegram surface has no setting #{descriptor.settings.keys.first}"
+        unknown = descriptor.settings.keys - SETTINGS
+        raise Comms::ValidationError, "a Telegram surface has no setting #{unknown.first}" unless unknown.empty?
+        return if descriptor.settings.fetch(:bot_username, '').is_a?(String)
+
+        raise Comms::ValidationError, 'bot_username must be a string'
       end
 
       def connect(descriptor, env:, voice: nil) # rubocop:disable Lint/UnusedMethodArgument
         token = env.fetch(descriptor.transport.fetch(:credential_ref).fetch(:name))
         normalizer = Normalizer.new(surface_id: descriptor.surface_id, surface_revision: descriptor.revision,
-                                    bot_username: descriptor.identity[:bot_username])
+                                    bot_username: descriptor.settings[:bot_username])
         Connection.new(Transport.new(client: client(token, env, descriptor.transport[:max_response_bytes]),
                                      normalizer:))
       end

@@ -324,7 +324,7 @@ class StreamApprovalRelayTest < Minitest::Test
     descriptor = Tamoz::Comms::SurfaceDescriptor.build(
       kind: "telegram",
       surface_id: "tel-1", revision: 2, transport: {credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},
-      identity: {expected_bot_id: 123},
+      identity: {stream_id: 'telegram:bot:123'},
       admission: {direct: "allowlist", correspondents: ["c1"]},
       threading: "conversation", profile_id: "p1",
       approvals: {mode: "affirmative", prompt_ttl_s: 900, approver_roles: ["technician"]},
@@ -340,7 +340,7 @@ class StreamApprovalRelayTest < Minitest::Test
       Tamoz::Comms::SurfaceDescriptor.build(
         kind: "telegram",
         surface_id: "tel-1", revision: 2, transport: {credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},
-        identity: {expected_bot_id: 123},
+        identity: {stream_id: 'telegram:bot:123'},
         admission: {direct: "allowlist", correspondents: ["c1"]},
         threading: "conversation", profile_id: "p1",
         approvals: {mode: "affirmative", prompt_ttl_s: 900},

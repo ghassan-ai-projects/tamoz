@@ -533,7 +533,7 @@ class CancellationVisibilityTest < Minitest::Test
                                                                'credential_ref' => {
                                                                  'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN'
                                                                },
-                                                               'expected_bot_id' => BOT_ID,
+                                                               'stream_id' => "telegram:bot:#{BOT_ID}",
                                                                'admission' => { 'direct' => 'pairing',
                                                                                 'correspondents' => [] }
                                                              }

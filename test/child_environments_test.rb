@@ -34,7 +34,7 @@ class ChildEnvironmentsTest < Minitest::Test
   CHANNEL_NAMES = (TELEGRAM + TALK + %w[FUTURE_CHANNEL_API_KEY]).freeze
 
   def channel(kind, bot_id, **extra)
-    { 'kind' => kind, 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'expected_bot_id' => bot_id,
+    { 'kind' => kind, 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'stream_id' => "#{kind}:#{bot_id}",
       'credential_ref' => { 'kind' => 'env', 'name' => TOKENS.fetch(kind) },
       **extra }
   end

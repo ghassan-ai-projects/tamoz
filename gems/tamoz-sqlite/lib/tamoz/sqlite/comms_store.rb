@@ -120,14 +120,14 @@ module Tamoz
       # thread's context, not with one message alone.
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
+      def admit_and_enqueue(envelope_wire, surface_id:, stream_id:, thread:, profile_id:, reservation:, now:,
                             history: [], research: nil, attachment: nil)
         transaction('comms.admit.enqueue') do |txn|
-          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          anchor = inbound_anchor(txn, envelope_wire, stream_id)
           if anchor
             next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
 
-            record_inbound_conflict!(txn, envelope_wire, bot_id)
+            record_inbound_conflict!(txn, envelope_wire, stream_id)
             next :integrity_conflict
           end
 
@@ -139,8 +139,8 @@ module Tamoz
           next :capacity_refused if capacity_saturated?(txn, surface_id, reservation,
                                                         limits.fetch('outbox_capacity'))
 
-          insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'request', reason: 'accepted', now:)
-          request_id = request_id_for(envelope_wire, bot_id)
+          insert_inbound!(txn, envelope_wire, stream_id:, disposition: 'request', reason: 'accepted', now:)
+          request_id = request_id_for(envelope_wire, stream_id)
           insert_admitted_request!(txn, request_id, envelope_wire,
                                    surface_id:, thread:, profile_id:, reservation:, now:)
           payload_bytes, payload_digest, input_digest = encode_request(
@@ -159,13 +159,13 @@ module Tamoz
 
       # Admit one clarification answer and enqueue its resume without a crash
       # window between the inbound anchor and the request inbox row.
-      def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+      def admit_and_enqueue_answer(envelope_wire, surface_id:, stream_id:, thread:, request_id:, payload:, now:)
         transaction('comms.admit.answer') do |txn|
-          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          anchor = inbound_anchor(txn, envelope_wire, stream_id)
           if anchor
             next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
 
-            record_inbound_conflict!(txn, envelope_wire, bot_id)
+            record_inbound_conflict!(txn, envelope_wire, stream_id)
             next :integrity_conflict
           end
 
@@ -177,14 +177,14 @@ module Tamoz
                  operation_text: 'resume', delivery_text: REQUEST_DELIVERY,
                  payload_bytes:, payload_digest:, input_digest:
           )
-          insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'ignored',
+          insert_inbound!(txn, envelope_wire, stream_id:, disposition: 'ignored',
                                               reason: 'clarification_answer', now:, request_id:)
           :enqueued
         end
       end
 
-      def inbound_observed?(envelope_wire, bot_id:)
-        read('comms.admit.inbound.observed') { |txn| !inbound_anchor(txn, envelope_wire, bot_id).nil? }
+      def inbound_observed?(envelope_wire, stream_id:)
+        read('comms.admit.inbound.observed') { |txn| !inbound_anchor(txn, envelope_wire, stream_id).nil? }
       end
 
       # Record a non-request disposition (ignored/rejected/quarantined)
@@ -194,20 +194,20 @@ module Tamoz
       # returns :conflict_recorded — one row per update_id forever.
       # rubocop:disable Lint/UnusedMethodArgument -- `surface_id` keeps the §13
       # contract signature; the inbound row carries its own surface.
-      def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
+      def disposition_only(envelope_wire, surface_id:, stream_id:, disposition:, reason:, now:)
         transaction('comms.admit.disposition') do |txn|
-          next :duplicate if identical_inbound_row?(txn, envelope_wire, bot_id)
+          next :duplicate if identical_inbound_row?(txn, envelope_wire, stream_id)
 
-          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          anchor = inbound_anchor(txn, envelope_wire, stream_id)
           if anchor
             next :duplicate if anchor[1] == envelope_wire.fetch('raw_payload_hash') &&
                                anchor[2] == disposition && anchor[3] == reason
 
-            record_inbound_conflict!(txn, envelope_wire, bot_id, disposition:, reason:)
+            record_inbound_conflict!(txn, envelope_wire, stream_id, disposition:, reason:)
             next :conflict_recorded
           end
 
-          insert_inbound!(txn, envelope_wire, bot_id:, disposition:, reason:, now:)
+          insert_inbound!(txn, envelope_wire, stream_id:, disposition:, reason:, now:)
           :recorded
         end
       end
@@ -250,17 +250,18 @@ module Tamoz
 
       # ===== poll state =====
 
-      # One fenced poller per authenticated bot (design §13): a live lease is
+      # One fenced poller per update stream (design §13): a live lease is
       # not claimable by a second poller; an expired lease is recoverable.
-      def acquire_poller_lease(surface_id:, bot_id:, owner:, fence:, ttl_s:, now:)
+      def acquire_poller_lease(surface_id:, stream_id:, owner:, fence:, ttl_s:, now:)
         transaction('comms.poll.lease') do |txn|
-          current = txn.first('comms.poll.lease.current', <<~SQL, [bot_id])
+          current = txn.first('comms.poll.lease.current', <<~SQL, [stream_id])
             SELECT poller_owner_id, poller_fence, poller_expires_at_ms
-            FROM tamoz_comms_poll_state WHERE bot_id = ?
+            FROM tamoz_comms_poll_state WHERE stream_id = ?
           SQL
           next :not_acquirable if current && current[2] && current[2] > now_ms(now) && current[0] != owner
 
-          upsert_poller!(txn, surface_id:, bot_id:, owner:, fence:, expires_at_ms: now_ms(now) + (ttl_s * 1000), now:)
+          upsert_poller!(txn, surface_id:, stream_id:, owner:, fence:, expires_at_ms: now_ms(now) + (ttl_s * 1000),
+                              now:)
           :acquired
         end
       end
@@ -269,43 +270,43 @@ module Tamoz
       # durable. Never regresses: an offset behind the stored one is :behind,
       # and a nil candidate (an empty poll prefix) is :unchanged — it must
       # never clobber the durable offset.
-      def persist_next_offset(surface_id:, bot_id:, next_offset:, now:)
+      def persist_next_offset(surface_id:, stream_id:, next_offset:, now:)
         transaction('comms.poll.offset') do |txn|
           next :unchanged if next_offset.nil?
 
-          stored = txn.first('comms.poll.offset.stored', <<~SQL, [bot_id])
-            SELECT next_offset FROM tamoz_comms_poll_state WHERE bot_id = ?
+          stored = txn.first('comms.poll.offset.stored', <<~SQL, [stream_id])
+            SELECT next_offset FROM tamoz_comms_poll_state WHERE stream_id = ?
           SQL
           next :behind if stored && !stored[0].nil? && stored[0] >= next_offset
 
-          txn.execute('comms.poll.offset.upsert', <<~SQL, [bot_id, surface_id, next_offset, now_ms(now)])
+          txn.execute('comms.poll.offset.upsert', <<~SQL, [stream_id, surface_id, next_offset, now_ms(now)])
             INSERT INTO tamoz_comms_poll_state (
-              bot_id, surface_id, next_offset, updated_at_ms
+              stream_id, surface_id, next_offset, updated_at_ms
             ) VALUES (?, ?, ?, ?)
-            ON CONFLICT(bot_id) DO UPDATE SET
+            ON CONFLICT(stream_id) DO UPDATE SET
               next_offset = excluded.next_offset, updated_at_ms = excluded.updated_at_ms
           SQL
           :persisted
         end
       end
 
-      # The durable next_offset for one bot (nil when never persisted).
-      def poll_offset(bot_id:)
+      # The durable next_offset for one update stream (nil when never persisted).
+      def poll_offset(stream_id:)
         read('comms.poll.offset.read') do |txn|
-          txn.scalar('comms.poll.offset.read', <<~SQL, [bot_id])
-            SELECT next_offset FROM tamoz_comms_poll_state WHERE bot_id = ?
+          txn.scalar('comms.poll.offset.read', <<~SQL, [stream_id])
+            SELECT next_offset FROM tamoz_comms_poll_state WHERE stream_id = ?
           SQL
         end
       end
 
       # Release this gateway's poller lease (idempotent — only releases when
       # the fence is ours, so a crashed gateway's lease expires on its own).
-      def release_poller_lease(bot_id:, owner:, fence:)
+      def release_poller_lease(stream_id:, owner:, fence:)
         transaction('comms.poll.release') do |txn|
-          txn.execute('comms.poll.release', <<~SQL, [bot_id, owner, fence])
+          txn.execute('comms.poll.release', <<~SQL, [stream_id, owner, fence])
             UPDATE tamoz_comms_poll_state
             SET poller_owner_id = NULL, poller_fence = NULL, poller_expires_at_ms = NULL
-            WHERE bot_id = ? AND poller_owner_id = ? AND poller_fence = ?
+            WHERE stream_id = ? AND poller_owner_id = ? AND poller_fence = ?
           SQL
           :released
         end
@@ -1075,11 +1076,11 @@ module Tamoz
         end
       end
 
-      def poll_state(bot_id:)
+      def poll_state(stream_id:)
         read('comms.poll.state') do |txn|
-          row = txn.first('comms.poll.state', <<~SQL, [bot_id])
+          row = txn.first('comms.poll.state', <<~SQL, [stream_id])
             SELECT #{POLL_COLUMNS.join(', ')} FROM tamoz_comms_poll_state
-            WHERE bot_id = ?
+            WHERE stream_id = ?
           SQL
           row && POLL_COLUMNS.zip(row).to_h
         end

@@ -24,9 +24,10 @@ module Tamoz
         @normalizer = normalizer
       end
 
-      # @return [Hash] the authenticated surface identity (getMe result).
-      def authenticate(_descriptor, _credential)
-        @client.call('getMe', {}, idempotent: true)
+      # @return [Hash] the getMe result and the bot's update stream.
+      def authenticate
+        me = @client.call('getMe', {}, idempotent: true)
+        me.merge('stream_id' => Channel.stream(me.fetch('id')))
       rescue Comms::ResponseTooLargeError => e
         raise Comms::TransientTransportError, "getMe response did not complete (#{e.class})"
       end

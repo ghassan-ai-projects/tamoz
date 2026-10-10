@@ -68,8 +68,9 @@ module Tamoz
       def validate!(fields)
         Shapes.require_string!(fields.fetch(:surface_id), 'surface_id', max_bytes: MAX_ID_BYTES)
         Shapes.require_positive!(fields.fetch(:surface_revision), 'surface_revision')
-        Shapes.require_prefixed!(fields.fetch(:conversation_id), Parties.bindable_prefixes,
-                                 'conversation_id must be a bound chat id', max_bytes: MAX_ID_BYTES)
+        raise ValidationError, 'conversation_id must be a bound chat id' unless
+          Parties.bindable?(fields.fetch(:conversation_id))
+
         Shapes.require_string!(fields.fetch(:thread_id), 'thread_id', max_bytes: MAX_ID_BYTES)
         Shapes.require_string!(fields.fetch(:profile_id), 'profile_id', max_bytes: MAX_ID_BYTES)
         Shapes.require_member!(fields.fetch(:threading), SurfaceDescriptor::THREADING_MODES, 'threading')

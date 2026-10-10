@@ -13,7 +13,7 @@ module CommsApprovalFixture
       surface_id: 'telegram-ops', revision: 1,
       transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990, bot_username: 'ops_bot' },
+      identity: { stream_id: 'telegram:bot:7463512990' }, settings: { bot_username: 'ops_bot' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },

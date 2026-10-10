@@ -40,10 +40,6 @@ module Tamoz
       def require_member!(value, set, name)
         raise ValidationError, "#{name} must be one of #{set.join(', ')}" unless member?(value, set)
       end
-
-      def require_prefixed!(value, prefixes, message, max_bytes:)
-        raise ValidationError, message unless bounded_string?(value, max_bytes:) && value.start_with?(*prefixes)
-      end
     end
   end
 end

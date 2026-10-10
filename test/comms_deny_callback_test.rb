@@ -26,7 +26,7 @@ class CommsDenyCallbackTest < Minitest::Test
 
       reference, prompt = Comms::ApprovalPrompt.build(
         surface_id: 'telegram-ops', surface_revision: 1,
-        thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+        thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         required_evidence: :filesystem_operator,
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -55,7 +55,7 @@ class CommsDenyCallbackTest < Minitest::Test
 
       decision = adapter.bind_comms_decision_store
                         .pending_decision_for(
-                          thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+                          thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
                           interrupt_digest: prompt.interrupt_digest, now: Time.utc(2026, 8, 10, 12, 0, 3)
                         )
 
@@ -86,7 +86,7 @@ class CommsDenyCallbackTest < Minitest::Test
       transport.batch([callback_update(reference, 101)])
       gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 3))
 
-      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'telegram.ops.abc')
 
       assert_equal 1, decisions.length, 'the replayed reference is consumed exactly once'
     end
@@ -104,7 +104,7 @@ class CommsDenyCallbackTest < Minitest::Test
 
       _reference, prompt = Comms::ApprovalPrompt.build(
         surface_id: 'telegram-ops', surface_revision: 1,
-        thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+        thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         required_evidence: :filesystem_operator,
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -119,7 +119,7 @@ class CommsDenyCallbackTest < Minitest::Test
       transport.receipt = { 'message_id' => 1, 'date' => 1 }
       gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
 
-      assert_empty adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc'),
+      assert_empty adapter.bind_comms_decision_store.each_decision(thread_id: 'telegram.ops.abc'),
                    'an expired prompt never yields a decision'
     end
   end
@@ -129,7 +129,7 @@ class CommsDenyCallbackTest < Minitest::Test
   def prompt_for(_reference, digest)
     Comms::ApprovalPrompt.new(
       reference_digest: digest, surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupt_digest: 'c' * 64, correspondent_id: 'telegram:user:11111111',
       conversation_id: 'telegram:chat:22222222', required_evidence: 'filesystem_operator',
       created_at: Time.utc(2026, 8, 10, 12, 0, 0),

@@ -78,7 +78,7 @@ class TalkGatewayTest < Minitest::Test
       threads = requests(store).flatten
 
       assert_equal 1, threads.uniq.length
-      assert_match(/\Atk\.talk\.\h{16}\z/, threads.first)
+      assert_match(/\Atalk\.talk\.\h{16}\z/, threads.first)
       assert_empty rows(store, 'SELECT * FROM tamoz_comms_decisions')
     ensure
       gateway&.stop
@@ -97,7 +97,7 @@ class TalkGatewayTest < Minitest::Test
       gateway.stop
 
       assert_equal :stopping, waiting.value, 'the page was never told it was admitted'
-      second = hub(floor: store.poll_offset(bot_id: 123_456_789_012))
+      second = hub(floor: store.poll_offset(stream_id: 'talk:page'))
       resend = send_async(second, wire, audio: wav(1))
       restarted = gateway_for.call(second)
       restarted.start(now: NOW)
@@ -137,7 +137,7 @@ class TalkGatewayTest < Minitest::Test
     with_runtime do |gateway_for, store|
       talk = hub
       reference, prompt = Comms::ApprovalPrompt.build(
-        surface_id: 'talk', surface_revision: 1, thread_id: 'tk.talk.abc', occurrence_id: 'req-1',
+        surface_id: 'talk', surface_revision: 1, thread_id: 'talk.talk.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         required_evidence: :chat_bound, correspondent_id: 'talk:user:1', conversation_id: 'talk:chat:1',
         prompt_ttl_s: 900, created_at: Time.now.utc
@@ -171,7 +171,7 @@ class TalkGatewayTest < Minitest::Test
     with_runtime do |gateway_for, store|
       first = hub
       reference, prompt = Comms::ApprovalPrompt.build(
-        surface_id: 'talk', surface_revision: 1, thread_id: 'tk.talk.abc', occurrence_id: 'req-1',
+        surface_id: 'talk', surface_revision: 1, thread_id: 'talk.talk.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         required_evidence: :chat_bound, correspondent_id: 'talk:user:1', conversation_id: 'talk:chat:1',
         prompt_ttl_s: 900, created_at: Time.now.utc

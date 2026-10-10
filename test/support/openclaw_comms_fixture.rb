@@ -216,7 +216,7 @@ module Tamoz
             surface_id: SURFACE_ID, revision: SURFACE_REVISION,
             transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                          poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-            identity: { expected_bot_id: BOT_ID, bot_username: BOT_USERNAME },
+            identity: { stream_id: "telegram:bot:#{BOT_ID}" }, settings: { bot_username: BOT_USERNAME },
             admission: admission_spec(mode),
             threading: 'conversation', profile_id: PROFILE_ID,
             profile_digest: @runtime.profile(PROFILE_ID).canonical_digest,

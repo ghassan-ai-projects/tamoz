@@ -20,12 +20,9 @@ class CommsSeamsTest < Minitest::Test
     assert_nil parsed.arguments
   end
 
-  def test_commands_accept_only_the_matching_bot_suffix
-    assert_equal 'cancel', Comms::Commands.parse('/cancel@ops_bot now', bot_username: 'ops_bot').command
-    assert_nil Comms::Commands.parse('/cancel@other_bot now', bot_username: 'ops_bot'),
-               'a wrong bot suffix is not our command'
-    assert_nil Comms::Commands.parse('/cancel@ops_bot', bot_username: nil),
-               'an @suffix without an authenticated bot matches nothing'
+  def test_a_command_with_an_at_suffix_is_not_ours
+    assert_nil Comms::Commands.parse('/cancel@other_bot now'),
+               'a suffix the channel did not strip as its own names another bot'
   end
 
   def test_commands_reject_unknown_and_non_commands
@@ -45,7 +42,7 @@ class CommsSeamsTest < Minitest::Test
   def test_transport_contract_is_structural
     transport = Object.new.extend(Comms::Transport)
 
-    assert_raises(NotImplementedError) { transport.authenticate(nil, nil) }
+    assert_raises(NotImplementedError) { transport.authenticate }
     assert_raises(NotImplementedError) { transport.poll(next_offset: nil, limit: 1, timeout_s: 1) }
     assert_raises(NotImplementedError) { transport.deliver(nil) }
     assert_raises(NotImplementedError) { transport.signal(:typing) }
@@ -64,9 +61,9 @@ class CommsSeamsTest < Minitest::Test
     store = Object.new.extend(Comms::CommsStore)
 
     assert_equal 3, Comms::CommsStore::CONTRACT_VERSION
-    assert_raises(NotImplementedError) { store.inbound_observed?({}, bot_id: 1) }
+    assert_raises(NotImplementedError) { store.inbound_observed?({}, stream_id: 'telegram:bot:1') }
     assert_raises(NotImplementedError) do
-      store.persist_next_offset(surface_id: 's', bot_id: 1, next_offset: 2, now: Time.now)
+      store.persist_next_offset(surface_id: 's', stream_id: 'telegram:bot:1', next_offset: 2, now: Time.now)
     end
     assert_raises(NotImplementedError) { store.append_delivery(nil, surface_id: 's', capacity: 10, now: Time.now) }
     assert_raises(NotImplementedError) do

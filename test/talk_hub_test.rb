@@ -23,7 +23,7 @@ class TalkHubTest < Minitest::Test
       transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TALK_TOKEN' }, poll_timeout_s: 10,
                    batch: 50, max_response_bytes: nil },
       settings: { port: 8787 },
-      identity: { expected_bot_id: 123_456_789_012 }, admission: { direct: 'allowlist', correspondents: ['talk:user:1'] },
+      identity: { stream_id: 'talk:page' }, admission: { direct: 'allowlist', correspondents: ['talk:user:1'] },
       threading: 'conversation', profile_id: 'talk', approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
       rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate', speech: true },
       limits: LIMITS
@@ -47,7 +47,7 @@ class TalkHubTest < Minitest::Test
       @update_id = 0
     end
 
-    def identity = descriptor.identity.fetch(:expected_bot_id)
+    def identity = descriptor.identity.fetch(:stream_id)
     def credential = TOKEN
     def conversation_id = 'talk:chat:1'
     def stage_nothing = nil
@@ -110,7 +110,7 @@ class TalkHubTest < Minitest::Test
 
     refute_same poller, drainer
     assert_equal([receipt.fetch('message_id')], page['events'].map { |event| event['message_id'] })
-    assert_equal({ 'id' => 123_456_789_012 }, poller.authenticate(nil, nil))
+    assert_equal({ 'stream_id' => 'talk:page' }, poller.authenticate)
   end
 
   def test_only_the_first_part_of_a_spoken_kind_is_spoken

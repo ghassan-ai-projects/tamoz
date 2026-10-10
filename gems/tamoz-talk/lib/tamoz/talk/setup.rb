@@ -14,6 +14,8 @@ module Tamoz
       TOKEN_FILE = 'token'
       TOKEN_MIN = 32
       DEFAULT_PORT = 8787
+      # One talk page per runtime, so its update stream needs no other name.
+      STREAM = 'talk:page'
 
       def summary = 'Add the browser talk page and its private link'
 
@@ -89,8 +91,7 @@ module Tamoz
       def entry(existing, port:, hosts:, host:)
         settings = existing&.fetch('settings', nil) || {}
         { 'kind' => 'talk', 'enabled' => true, 'credential_ref' => { 'kind' => 'env', 'name' => TOKEN },
-          'expected_bot_id' => existing&.fetch('expected_bot_id') ||
-            (SecureRandom.random_number(9 * (10**11)) + (10**11)),
+          'stream_id' => STREAM,
           'transport' => { 'poll_timeout_s' => 10 },
           'settings' => { 'port' => port || settings['port'] || DEFAULT_PORT,
                           'allow_hosts' => Array(settings['allow_hosts']) | hosts,

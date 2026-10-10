@@ -30,7 +30,7 @@ module Tamoz
       end
 
       def lease_state(store, descriptor)
-        store.poll_state(bot_id: descriptor.identity.fetch(:expected_bot_id)) || {}
+        store.poll_state(stream_id: descriptor.identity.fetch(:stream_id)) || {}
       end
 
       def alive?(pid)
