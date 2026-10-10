@@ -10,7 +10,7 @@ module Tamoz
         @hub = hub
       end
 
-      def authenticate(_descriptor, _credential) = { 'id' => @hub.identity_id }
+      def authenticate = { 'stream_id' => @hub.stream_id }
 
       def poll(next_offset:, limit:, timeout_s:) = @hub.inbox.poll(next_offset:, limit:, timeout_s:)
 

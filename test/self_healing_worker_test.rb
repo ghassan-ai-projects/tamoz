@@ -26,7 +26,7 @@ class SelfHealingWorkerTest < Minitest::Test
 
   def view(status, reason, observations: [], satisfied: false)
     Tamoz::Agent::SessionView.new(
-      thread_id: 'tg.thread', checkpoint_id: 'c1', sequence: 1, execution_id: 'e1', request_id: 'r1', status:,
+      thread_id: 'telegram.thread', checkpoint_id: 'c1', sequence: 1, execution_id: 'e1', request_id: 'r1', status:,
       phase: 'terminal', accepted_plan: nil, approvals: [], effect_receipts: [], blocked: nil,
       terminal: { 'reason' => reason, 'satisfied' => satisfied }, provider_ambiguity: nil, interrupts: [],
       state: { terminal_reason: reason, observations:, verification: { 'answer' => 'Hi.', 'satisfied' => satisfied } }
@@ -34,7 +34,7 @@ class SelfHealingWorkerTest < Minitest::Test
   end
 
   def settle(view)
-    @worker.send(:settle_view, view, 'tg.thread', 'r1', 5)
+    @worker.send(:settle_view, view, 'telegram.thread', 'r1', 5)
     @events.find { |document| document['event'] == 'healing.assessment' }&.fetch('assessment')
   end
 
@@ -72,13 +72,13 @@ class SelfHealingWorkerTest < Minitest::Test
     healing = Object.new
     healing.define_singleton_method(:assess_turn) { |*, **| remediable }
     worker = Tamoz::Agent::Worker.new(runtime: @runtime, session_builder: ->(_thread) {}, emitter: ->(_) {}, healing:)
-    worker.send(:settle_view, view(:completed, 'work_failed'), 'tg.thread', 'r1', 5)
+    worker.send(:settle_view, view(:completed, 'work_failed'), 'telegram.thread', 'r1', 5)
 
     assert_empty notices
   end
 
   def test_a_crashed_request_is_told_to_its_channel
-    entry = { thread_id: 'tg.thread', head_request_id: 'r1', head_status: :queued }
+    entry = { thread_id: 'telegram.thread', head_request_id: 'r1', head_status: :queued }
     @worker.send(:handle_thread_failure, entry, Tamoz::CheckpointConflictError.new('lease'))
 
     assert_equal(%w[request.failed healing.escalated], @runtime.delivered.map { |push| push[:kind] })
@@ -111,7 +111,7 @@ class SelfHealingWorkerTest < Minitest::Test
   end
 
   def test_a_crashed_request_is_assessed
-    entry = { thread_id: 'tg.thread', head_request_id: 'r1', head_status: :queued }
+    entry = { thread_id: 'telegram.thread', head_request_id: 'r1', head_status: :queued }
     @worker.send(:handle_thread_failure, entry, Tamoz::CheckpointConflictError.new('lease'))
 
     assessment = @events.find { |document| document['event'] == 'healing.assessment' }.fetch('assessment')
@@ -121,7 +121,7 @@ class SelfHealingWorkerTest < Minitest::Test
   end
 
   def test_a_recovery_retry_is_not_assessed
-    entry = { thread_id: 'tg.thread', head_request_id: 'r1', head_status: :running }
+    entry = { thread_id: 'telegram.thread', head_request_id: 'r1', head_status: :running }
     @worker.send(:handle_thread_failure, entry, Tamoz::CheckpointConflictError.new('lease'))
 
     assert_nil(@events.find { |document| document['event'] == 'healing.assessment' })

@@ -17,7 +17,7 @@ class CommsGatewayTest < Minitest::Test
 
   def test_start_rejects_a_transport_identity_mismatch
     with_gateway do |gateway, transport, *|
-      transport.authenticated_id = 99
+      transport.authenticated_id = 'telegram:bot:99'
 
       assert_equal :auth_failed, gateway.start
       assert_equal 1, transport.authentication_calls
@@ -46,11 +46,9 @@ class CommsGatewayTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor(limits:).wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
         transport = ScriptedTransport.new
-        gateway = Tamoz::Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
-          poller_owner: 'gateway:test', controls:,
-          attachments: attachments && Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
-        )
+        spool = attachments && Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
+        gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor: descriptor(limits:),
+                                            poller_owner: 'gateway:test', controls:, attachments: spool)
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
         adapter&.close
@@ -60,12 +58,12 @@ class CommsGatewayTest < Minitest::Test
 
   def descriptor(limits: {}, profile_digest: nil)
     Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       profile_digest:,
       surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990, bot_username: 'ops_bot' },
+      identity: { stream_id: 'telegram:bot:7463512990' }, settings: { bot_username: 'ops_bot' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -90,7 +88,8 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal Tamoz::Comms::Gateway::UNADMITTABLE_REPLY, appended.last.fetch('text')
       assert_includes err, 'could not admit update 1'
-      assert_operator store.poll_offset(bot_id: 7_463_512_990), :>, 1, 'the offset moves past the message'
+      assert_operator store.poll_offset(stream_id: 'telegram:bot:7463512990'), :>, 1,
+                      'the offset moves past the message'
     end
   end
 
@@ -230,7 +229,7 @@ class CommsGatewayTest < Minitest::Test
         assert_match(/couldn't download/, appended.first.fetch('text'), failure.class.name)
         assert_includes err, failure.class.name
         assert_equal 'still here?', enqueued_payload(checkpoints).fetch('task'), failure.class.name
-        assert_equal 3, store.poll_offset(bot_id: 7_463_512_990), failure.class.name
+        assert_equal 3, store.poll_offset(stream_id: 'telegram:bot:7463512990'), failure.class.name
       end
     end
   end
@@ -256,7 +255,7 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([document_update(1)])
 
       assert_equal :throttled, gateway.serve_once(drain: false)
-      assert_nil store.poll_offset(bot_id: 7_463_512_990)
+      assert_nil store.poll_offset(stream_id: 'telegram:bot:7463512990')
       assert_nil enqueued_payload(checkpoints)
     end
   end
@@ -317,7 +316,7 @@ class CommsGatewayTest < Minitest::Test
       gateway.serve_once(drain: false)
       old_thread = store.conversation(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
                         .fetch('thread_id')
-      changed = Tamoz::Comms::Gateway.new(adapter:, checkpoints:, transport:, poller_owner: 'gateway:test',
+      changed = Tamoz::Comms::Gateway.new(checkpoints:, transport:, poller_owner: 'gateway:test',
                                           descriptor: descriptor(profile_digest: "sha256:#{'b' * 64}"))
 
       transport.batch([update(2, text: 'second')])
@@ -397,7 +396,7 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal :served, gateway.serve_once
 
-      assert_equal 102, store.poll_offset(bot_id: 7_463_512_990)
+      assert_equal 102, store.poll_offset(stream_id: 'telegram:bot:7463512990')
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       route = store.request_conversation(thread_id: thread)
 
@@ -462,16 +461,15 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_replayed_update_does_not_create_a_second_request
-    with_gateway do |gateway, transport, store, adapter, checkpoints|
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       transport.batch([update(101, text: 'first'), update(102, text: 'second')])
 
       assert_equal :served, gateway.serve_once(drain: false)
 
       transport.batch([update(101, text: 'first')])
-      restarted_gateway = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:restarted'
-      )
+      restarted_gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor:,
+                                                    poller_owner: 'gateway:restarted')
       assert_equal :served, restarted_gateway.serve_once(drain: false)
 
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
@@ -500,11 +498,11 @@ class CommsGatewayTest < Minitest::Test
                   reserved_request_id: request_id, now:
       )
       assert_equal :claimed, store.claim_delivery(
-        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
         claim_expires_at: now + 30, now:
       )
       assert_equal :marked, store.mark_delivery(
-        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
         status: 'succeeded', receipt: { 'message_id' => 42 }, now:
       )
 
@@ -527,11 +525,11 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal :transient, gateway.serve_once
       assert_equal :transient, gateway.serve_once
-      assert_nil store.poll_offset(bot_id: 7_463_512_990),
+      assert_nil store.poll_offset(stream_id: 'telegram:bot:7463512990'),
                  'a read that observed nothing must not move the durable offset'
 
       assert_equal :served, gateway.serve_once
-      assert_equal 102, store.poll_offset(bot_id: 7_463_512_990)
+      assert_equal 102, store.poll_offset(stream_id: 'telegram:bot:7463512990')
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
 
       refute_nil store.request_conversation(thread_id: thread),
@@ -560,7 +558,7 @@ class CommsGatewayTest < Minitest::Test
       later = Time.utc(2026, 8, 11, 12, 1, 10)
 
       assert_equal :served, gateway.serve_once(now: later)
-      state = store.poll_state(bot_id: 7_463_512_990)
+      state = store.poll_state(stream_id: 'telegram:bot:7463512990')
 
       assert_operator state.fetch('poller_expires_at_ms'), :>, later.to_f * 1000
     ensure
@@ -577,13 +575,15 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([])
 
       runner = Thread.new { gateway.serve_loop(interval_s: 0.01) }
-      Timeout.timeout(5) { sleep 0.05 until store.poll_state(bot_id: 7_463_512_990)&.fetch('poller_owner_id') }
+      Timeout.timeout(5) do
+        sleep 0.05 until store.poll_state(stream_id: 'telegram:bot:7463512990')&.fetch('poller_owner_id')
+      end
 
       gateway.stop
       outcome = Timeout.timeout(5) { runner.value }
 
       assert_equal :stopped, outcome, 'the serve loop must end when asked'
-      assert_nil store.poll_state(bot_id: 7_463_512_990).fetch('poller_owner_id'),
+      assert_nil store.poll_state(stream_id: 'telegram:bot:7463512990').fetch('poller_owner_id'),
                  'a stopped gateway must not keep the poller lease'
     end
   end
@@ -825,13 +825,24 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal :started, gateway.start
 
-      second = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints: build_checkpoints(adapter),
-        transport:, descriptor:, poller_owner: 'gateway:other'
-      )
+      second = Tamoz::Comms::Gateway.new(checkpoints: build_checkpoints(adapter),
+                                         transport:, descriptor:, poller_owner: 'gateway:other')
 
       assert_equal :poller_busy, second.start,
                    'a live fenced poller lease is not claimable by a second gateway'
+    ensure
+      gateway&.stop
+    end
+  end
+
+  def test_two_surfaces_on_one_bot_share_one_stream_and_one_lease
+    with_gateway do |gateway, transport, _store, adapter|
+      assert_equal :started, gateway.start
+      other_surface = Comms::SurfaceDescriptor.from_wire(descriptor.wire.merge('surface_id' => 'telegram-other'))
+      second = Tamoz::Comms::Gateway.new(checkpoints: build_checkpoints(adapter), transport:,
+                                         descriptor: other_surface, poller_owner: 'gateway:other')
+
+      assert_equal :poller_busy, second.start
     ensure
       gateway&.stop
     end
@@ -878,8 +889,10 @@ class CommsGatewayTest < Minitest::Test
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       admit = lambda do |wire|
         store.admit_and_enqueue(
-          wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                thread:, profile_id: 'ops', reservation: 9, now: Time.utc(2026, 8, 10, 12, 0, 0)
+          wire,
+          stream_id: 'telegram:bot:7463512990',
+          turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 9).wire,
+          now: Time.utc(2026, 8, 10, 12, 0, 0)
         )
       end
 
@@ -1278,9 +1291,9 @@ class CommsGatewayTest < Minitest::Test
 
     attr_reader :authentication_calls, :poll_calls
 
-    def authenticate(descriptor, _credential)
+    def authenticate
       @authentication_calls += 1
-      { 'id' => @authenticated_id || descriptor.identity.fetch(:expected_bot_id) }
+      { 'stream_id' => @authenticated_id || 'telegram:bot:7463512990' }
     end
 
     def batch(updates)

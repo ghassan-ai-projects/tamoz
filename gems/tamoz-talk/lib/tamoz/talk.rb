@@ -14,6 +14,8 @@ require_relative 'talk/http'
 require_relative 'talk/api'
 require_relative 'talk/server'
 require_relative 'talk/hub'
+require_relative 'talk/channel'
+require_relative 'talk/setup'
 
 module Tamoz
   # The browser talk channel: a Tamoz::Comms::Transport over a hardened stdlib HTTP server and the talk page.

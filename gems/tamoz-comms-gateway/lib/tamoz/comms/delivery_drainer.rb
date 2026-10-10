@@ -8,22 +8,25 @@ module Tamoz
     # Drains durable outbound rows independently from inbound polling. Claims,
     # pacing reservations, effect bindings, receipts, and ambiguous-send
     # handling all remain on the shared SQLite contract.
-    # rubocop:disable Metrics/ParameterLists, Metrics/AbcSize, Metrics/MethodLength, Naming/PredicateMethod
     class DeliveryDrainer
       CLAIM_TTL_S = 30.0
       # Telegram shows "typing" for about five seconds per signal.
       TYPING_EVERY_S = 4.0
 
-      def initialize(store:, transport:, descriptor:, owner:, batch_size: 50,
-                     clock: -> { Time.now.utc }, sleeper: ->(seconds) { sleep seconds })
+      # The drainer's clock and its wait, injectable so a test never pays real time.
+      Timing = Data.define(:clock, :sleeper) do
+        def initialize(clock: -> { Time.now.utc }, sleeper: ->(seconds) { sleep seconds }) = super
+      end
+
+      def initialize(store:, transport:, descriptor:, owner:, **timing)
+        timing = Timing.new(**timing)
         @store = store
         @transport = transport
         @descriptor = descriptor
         @owner = owner
-        @batch_size = batch_size
-        @clock = clock
-        @sleeper = sleeper
-        @fence = 0
+        @clock = timing.clock
+        @sleeper = timing.sleeper
+        @lease = nil
         @stopping = false
         @typed_at = {}
       end
@@ -47,9 +50,9 @@ module Tamoz
 
       def drain_once(now: @clock.call)
         @store.reconcile_expired_deliveries(now:)
-        rows = @store.outbox_rows(surface_id:, statuses: %w[pending], limit: @batch_size)
+        rows = @store.outbox_rows(surface_id:, statuses: %w[pending], limit: @descriptor.transport.fetch(:batch))
         rows.each do |row|
-          next unless claim(row, now:)
+          next unless claim(row, now:) == :claimed
 
           return :authentication_refused if send_row(row, now:) == :authentication_refused
         end
@@ -77,72 +80,59 @@ module Tamoz
       end
 
       def claim(row, now:)
-        @store.claim_delivery(
-          delivery_id: row.fetch('delivery_id'),
-          owner: @owner,
-          fence: next_fence,
-          claim_expires_at: now + CLAIM_TTL_S,
-          now:
-        ) == :claimed
+        @lease = Comms::Lease.new(owner: @owner, fence: Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond))
+        @store.claim_delivery(delivery_id: row.fetch('delivery_id'), lease: @lease.wire,
+                              claim_expires_at: now + CLAIM_TTL_S, now:)
       end
 
+      # A lost fence bars the external send absolutely: a stale owner takes no
+      # external action and records nothing on a row it no longer holds.
       def send_row(row, now:)
-        wait = @store.reserve_delivery_slot(
-          surface_id:,
-          conversation_id: row.fetch('conversation_id'),
-          per_chat_messages_per_s: @descriptor.limits.fetch(:per_chat_messages_per_s),
-          global_messages_per_s: @descriptor.limits.fetch(:global_messages_per_s),
-          now:
-        )
-        scheduled_at = now + wait
-        @sleeper.call(wait) if wait.positive?
-        @store.bind_journal_effect(
-          delivery_id: row.fetch('delivery_id'),
-          effect_key: effect_key(row.fetch('delivery_id')),
-          execution_id: "comms:#{row.fetch('delivery_id')}",
-          now: scheduled_at
-        )
-        send_started = @store.mark_delivery_send_started(
-          delivery_id: row.fetch('delivery_id'), owner: @owner, fence: @fence, now: scheduled_at
-        )
-        # A lost fence bars the external send absolutely: a stale owner takes
-        # no external action and records nothing on a row it no longer holds.
-        return nil unless send_started == :marked
+        scheduled_at = now + pace(row, now)
+        delivery_id = row.fetch('delivery_id')
+        @store.bind_journal_effect(delivery_id:, effect_key: effect_key(delivery_id),
+                                   execution_id: "comms:#{delivery_id}", now: scheduled_at)
+        return nil unless @store.mark_delivery_send_started(delivery_id:, lease: @lease.wire,
+                                                            now: scheduled_at) == :marked
 
-        outcome = send_delivery(row)
-        marked = @store.mark_delivery(
-          delivery_id: row.fetch('delivery_id'),
-          owner: @owner,
-          fence: @fence,
-          status: outcome.fetch(:status),
-          receipt: outcome[:receipt],
-          now: scheduled_at
+        deliver_and_record(row, scheduled_at)
+      rescue Comms::ThrottledError => e
+        defer(row, e.retry_after, scheduled_at, now)
+        raise
+      end
+
+      def pace(row, now)
+        limits = @descriptor.limits
+        wait = @store.reserve_delivery_slot(
+          surface_id:, conversation_id: row.fetch('conversation_id'), now:,
+          per_chat_messages_per_s: limits.fetch(:per_chat_messages_per_s),
+          global_messages_per_s: limits.fetch(:global_messages_per_s)
         )
+        @sleeper.call(wait) if wait.positive?
+        wait
+      end
+
+      def deliver_and_record(row, now)
+        outcome = send_delivery(row)
+        marked = mark(row, outcome.fetch(:status), outcome[:receipt], now)
         if marked == :marked && outcome.fetch(:status) == 'succeeded'
-          activate_after_receipt(row, receipt: outcome[:receipt], now: scheduled_at)
+          activate_after_receipt(row, receipt: outcome[:receipt],
+                                      now:)
         end
         nil
       rescue Comms::AuthenticationError
-        @store.mark_delivery(
-          delivery_id: row.fetch('delivery_id'),
-          owner: @owner,
-          fence: @fence,
-          status: 'failed',
-          receipt: { 'reason_code' => 'authentication_refused' },
-          now: scheduled_at
-        )
+        mark(row, 'failed', { 'reason_code' => 'authentication_refused' }, now)
         :authentication_refused
-      rescue Comms::ThrottledError => e
-        @store.defer_delivery(
-          surface_id:,
-          conversation_id: row.fetch('conversation_id'),
-          not_before: scheduled_at + e.retry_after,
-          now: scheduled_at
-        )
-        @store.release_delivery_claim(
-          delivery_id: row.fetch('delivery_id'), owner: @owner, fence: @fence, now:
-        )
-        raise
+      end
+
+      def mark(row, status, receipt, now)
+        @store.mark_delivery(delivery_id: row.fetch('delivery_id'), lease: @lease.wire, status:, receipt:, now:)
+      end
+
+      def defer(row, retry_after, scheduled_at, now)
+        @store.defer_delivery(surface_id:, conversation_id: row.fetch('conversation_id'),
+                              not_before: scheduled_at + retry_after, now: scheduled_at)
+        @store.release_delivery_claim(delivery_id: row.fetch('delivery_id'), lease: @lease.wire, now:)
       end
 
       # The receipt comes from the send outcome directly — the outbox row is
@@ -172,12 +162,7 @@ module Tamoz
         "sha256:#{Comms::Canonical.hexdigest('tamoz.comms.delivery.effect', delivery_id)}"
       end
 
-      def next_fence
-        @fence = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
-      end
-
       def surface_id = @descriptor.surface_id
     end
-    # rubocop:enable Metrics/ParameterLists, Metrics/AbcSize, Metrics/MethodLength, Naming/PredicateMethod
   end
 end

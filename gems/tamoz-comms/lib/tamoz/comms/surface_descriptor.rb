@@ -3,32 +3,24 @@
 require_relative 'canonical'
 require_relative 'errors'
 require_relative 'shapes'
+require_relative 'surface_rules'
 
 module Tamoz
   module Comms
+    SurfaceDescriptor = Data.define(:surface_id, :revision, :kind, :transport, :identity, :settings,
+                                    :admission, :threading, :profile_id, :profile_digest, :approvals,
+                                    :rendering, :limits, :classification, :definition_digest)
+
     # Content-addressed operator configuration for one deployed channel
     # (design §6.1). Every field is validated and frozen, the digest binds the
     # deployed contract, and a revision bump is required for ANY change —
     # durable records name the revision they were admitted under, so "who was
     # allowed to do what, when" is answerable without consulting the file.
-    #
-    # The Telegram API origin is deliberately NOT configurable (design §6.1):
-    # a configurable origin is a bot-token exfiltration primitive. Test
-    # fixtures are injected as clients, never enabled by production config.
-    #
-    # The descriptor's fields ARE the value and its validation is the
-    # per-field rule set; splitting either would fragment the deployed
-    # contract.
-    # rubocop:disable Metrics/ParameterLists
-    # The descriptor is one validated value; the smells below are the
-    # per-field rule set and the fifteen facts the digest binds — splitting
-    # them would fragment the deployed contract (design §6.1).
-    # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyConstants
-    # :reek:TooManyInstanceVariables, :reek:TooManyStatements
-    # :reek:DuplicateMethodCall, :reek:FeatureEnvy
     class SurfaceDescriptor
-      KINDS = %w[telegram talk].freeze
-      POLL_MODES = %w[long_poll].freeze
+      KIND_NAME = /\A[a-z][a-z0-9_]{1,31}\z/
+      RESERVED_KINDS = %w[os cli].freeze
+      MAX_SETTINGS_BYTES = 4096
+      STREAM = /\A[a-z][a-z0-9_]{1,31}:[!-~]{1,200}\z/
       ADMISSION_MODES = %w[disabled allowlist pairing].freeze
       THREADING_MODES = %w[conversation per_message].freeze
       APPROVAL_MODES = %w[none deny_only affirmative].freeze
@@ -37,27 +29,13 @@ module Tamoz
       RENDER_OVERFLOWS = %w[truncate].freeze
       CLASSIFICATIONS = %w[restricted].freeze
       DIGEST_DOMAIN = 'tamoz.comms.surface.v1'
-      HOST = /\A(?=.{1,253}\z)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*\z/i
       MAX_IDS = 1024
-      STRUCTURED_FIELDS = %i[transport identity admission approvals rendering limits].freeze
+      STRUCTURED_FIELDS = %i[transport identity settings admission approvals rendering limits].freeze
       private_constant :STRUCTURED_FIELDS
 
-      attr_reader :surface_id, :revision, :kind, :transport, :identity,
-                  :admission, :threading, :profile_id, :profile_digest, :approvals, :rendering,
-                  :limits, :classification, :definition_digest
-
-      def initialize(
-        surface_id:, revision:, kind:, transport:, identity:, admission:,
-        threading:, profile_id:, approvals:, rendering:, limits:,
-        classification:, definition_digest:, profile_digest: nil
-      )
-        fields = {
-          surface_id:, revision:, kind:, transport:, identity:, admission:, threading:, profile_id:,
-          profile_digest:, approvals:, rendering:, limits:, classification:, definition_digest:
-        }
-        validate!(fields)
-        fields.each { |name, value| instance_variable_set(:"@#{name}", stored(name, value)) }
-        freeze
+      def initialize(profile_digest: nil, **fields)
+        super(profile_digest:, **fields.to_h { |name, value| [name, stored(name, value)] })
+        SurfaceRules.validate!(self)
       end
 
       # Builds the descriptor and computes its content-address (the digest
@@ -65,55 +43,21 @@ module Tamoz
       # `profile_digest` is the authority the deployed surface pins; a surface
       # deployed without one cannot execute a bound thread (the worker refuses
       # an unpinned binding) — see `Gateway::AdmissionBinding`.
-      # @return [SurfaceDescriptor]
-      def self.build(surface_id:, revision:, transport:, identity:, admission:, threading:, profile_id:, approvals:,
-                     rendering:, limits:, kind: 'telegram', classification: 'restricted', profile_digest: nil)
-        digest = Canonical.hexdigest(
-          DIGEST_DOMAIN,
-          [surface_id, revision, kind, transport, identity, admission,
-           threading, profile_id, profile_digest, approvals, rendering, limits, classification]
-        )
-        new(surface_id:, revision:, kind:, transport:, identity:, admission:,
-            threading:, profile_id:, profile_digest:, approvals:, rendering:, limits:,
-            classification:, definition_digest: digest)
+      def self.build(settings: {}, classification: 'restricted', profile_digest: nil, **fields)
+        fields = fields.merge(settings:, classification:, profile_digest:)
+        digest = Canonical.hexdigest(DIGEST_DOMAIN, (members - [:definition_digest]).map { |name| fields.fetch(name) })
+        new(**fields, definition_digest: digest)
       end
 
       def wire
-        {
-          'surface_id' => @surface_id,
-          'revision' => @revision,
-          'kind' => @kind,
-          'transport' => self.class.symbol_keys_to_strings(@transport),
-          'identity' => self.class.symbol_keys_to_strings(@identity),
-          'admission' => self.class.symbol_keys_to_strings(@admission),
-          'threading' => @threading,
-          'profile_id' => @profile_id,
-          'profile_digest' => @profile_digest,
-          'approvals' => self.class.symbol_keys_to_strings(@approvals),
-          'rendering' => self.class.symbol_keys_to_strings(@rendering),
-          'limits' => self.class.symbol_keys_to_strings(@limits),
-          'classification' => @classification,
-          'definition_digest' => @definition_digest
-        }
+        to_h.to_h { |name, value| [name.to_s, STRUCTURED_FIELDS.include?(name) ? value.transform_keys(&:to_s) : value] }
       end
 
       def self.from_wire(wire)
-        new(
-          surface_id: wire.fetch('surface_id'),
-          revision: wire.fetch('revision'),
-          kind: wire.fetch('kind'),
-          transport: symbolized_field(wire, 'transport'),
-          identity: symbolized_field(wire, 'identity'),
-          admission: symbolized_field(wire, 'admission'),
-          threading: wire.fetch('threading'),
-          profile_id: wire.fetch('profile_id'),
-          profile_digest: wire['profile_digest'],
-          approvals: symbolized_field(wire, 'approvals'),
-          rendering: symbolized_field(wire, 'rendering'),
-          limits: symbolized_field(wire, 'limits'),
-          classification: wire.fetch('classification'),
-          definition_digest: wire.fetch('definition_digest')
-        )
+        new(**members.to_h do |name|
+          value = name == :profile_digest ? wire[name.to_s] : wire.fetch(name.to_s)
+          [name, STRUCTURED_FIELDS.include?(name) ? value.transform_keys(&:to_sym) : value]
+        end)
       end
 
       def allowlist? = admission.fetch(:direct) == 'allowlist'
@@ -122,164 +66,21 @@ module Tamoz
 
       def disabled? = admission.fetch(:direct) == 'disabled'
 
-      class << self
-        # Wire-key conversion helpers shared by `wire` and `from_wire`.
-        def symbol_keys_to_strings(value)
-          value.transform_keys(&:to_s)
-        end
+      def speech? = rendering.fetch(:speech, false)
 
-        def strings_to_symbol_keys(value)
-          value.transform_keys(&:to_sym)
+      def self.valid_kind?(kind) = kind.is_a?(String) && kind.match?(KIND_NAME) && !RESERVED_KINDS.include?(kind)
+
+      def self.frozen_copy(value)
+        case value
+        when Hash then value.to_h { |key, entry| [key, frozen_copy(entry)] }.freeze
+        when Array then value.map { |entry| frozen_copy(entry) }.freeze
+        else value.freeze
         end
       end
-
-      def self.symbolized_field(wire, name)
-        strings_to_symbol_keys(wire.fetch(name))
-      end
-      private_class_method :symbolized_field
 
       private
 
-      def stored(name, value)
-        STRUCTURED_FIELDS.include?(name) ? deep_freeze(value) : value
-      end
-
-      def validate!(fields)
-        validate_classification!(fields)
-        validate_references!(fields)
-        validate_transport!(fields.fetch(:transport))
-        validate_talk!(fields.fetch(:transport)) if fields.fetch(:kind) == 'talk'
-        validate_identity!(fields.fetch(:identity))
-        validate_admission!(fields.fetch(:admission))
-        validate_approvals!(fields.fetch(:approvals))
-        validate_rendering!(fields.fetch(:rendering))
-        validate_limits!(fields.fetch(:limits))
-      end
-
-      def validate_classification!(fields)
-        Shapes.require_string!(fields.fetch(:surface_id), 'surface_id', max_bytes: MAX_IDS)
-        Shapes.require_positive!(fields.fetch(:revision), 'revision')
-        Shapes.require_member!(fields.fetch(:kind), KINDS, 'kind')
-        Shapes.require_member!(fields.fetch(:threading), THREADING_MODES, 'threading')
-        Shapes.require_member!(fields.fetch(:classification), CLASSIFICATIONS, 'classification')
-      end
-
-      def validate_references!(fields)
-        Shapes.require_string!(fields.fetch(:profile_id), 'profile_id', max_bytes: MAX_IDS)
-        profile_digest = fields.fetch(:profile_digest)
-        unless profile_digest.nil? || profile_digest.to_s.start_with?('sha256:')
-          raise ValidationError, 'profile_digest must be a sha256: digest'
-        end
-        return if Shapes.hex?(fields.fetch(:definition_digest).to_s)
-
-        raise ValidationError, 'definition_digest must be a 64-char hex digest'
-      end
-
-      def validate_transport!(transport)
-        raise ValidationError, 'transport mode must be long_poll in v1' unless Shapes.member?(transport.fetch(:mode),
-                                                                                              POLL_MODES)
-        raise ValidationError, 'transport needs a credential_ref' unless transport.fetch(:credential_ref).is_a?(Hash)
-        raise ValidationError, 'poll_timeout_s must be positive' unless Shapes.bounded_integer?(
-          transport.fetch(:poll_timeout_s), max: 600
-        )
-        raise ValidationError, 'batch must be between 1 and 100' unless (1..100).cover?(transport.fetch(:batch))
-        cap = transport.fetch(:max_response_bytes)
-        return if cap.nil? || Shapes.bounded_integer?(cap, max: 10_000_000)
-        raise ValidationError, 'max_response_bytes must be positive'
-      end
-
-      def validate_talk!(transport)
-        port = transport[:port]
-        raise ValidationError, 'a talk surface needs a port' unless port.is_a?(Integer) && (1..65_535).cover?(port)
-
-        hosts = transport.fetch(:allow_hosts, [])
-        valid = hosts.is_a?(Array) && hosts.length <= 16
-        valid &&= hosts.uniq.length == hosts.length && hosts.all? { |host| host.is_a?(String) && host.match?(HOST) }
-        raise ValidationError, 'allow_hosts must be at most 16 host names' unless valid
-      end
-
-      def validate_identity!(identity)
-        bot_id = identity.fetch(:expected_bot_id)
-        return if Shapes.bounded_integer?(bot_id, max: 9_999_999_999_999)
-
-        raise ValidationError, 'expected_bot_id must be a bounded integer'
-      end
-
-      def validate_admission!(admission)
-        direct = admission.fetch(:direct)
-        unless Shapes.member?(direct, ADMISSION_MODES)
-          raise ValidationError, "admission must be one of #{ADMISSION_MODES.join(', ')}"
-        end
-        return unless direct == 'allowlist' && Array(admission[:correspondents]).empty?
-
-        raise ValidationError, 'an empty allowlist is a configuration error, not allow-everything'
-      end
-
-      def validate_approvals!(approvals)
-        raise ValidationError, "approval mode must be one of #{APPROVAL_MODES.join(', ')}" unless Shapes.member?(
-          approvals.fetch(:mode), APPROVAL_MODES
-        )
-        # T7.1 (PLAN_TAMOZ_STREAM_BUILD T7.1): affirmative approval is a
-        # material security-boundary change (PROTOCOL §5.3/§10) — a human's
-        # answer travels a trust boundary, so the descriptor must name who may
-        # approve. An empty approver list is a configuration error, exactly
-        # like an empty admission allowlist: affirmative approval with nobody
-        # allowed to approve is not a deployment. The list must be an actual
-        # array (a bare string is a configuration error, not a one-element
-        # list) and is bounded.
-        validate_approver_roles!(approvals[:approver_roles]) if approvals.fetch(:mode) == 'affirmative'
-        return if approvals.fetch(:prompt_ttl_s).is_a?(Integer) && approvals.fetch(:prompt_ttl_s).positive?
-
-        raise ValidationError, 'prompt_ttl_s must be positive'
-      end
-
-      def validate_approver_roles!(roles)
-        return if roles.is_a?(Array) && !roles.empty? && roles.length <= MAX_APPROVER_ROLES &&
-                  roles.all? { |role| Shapes.bounded_string?(role, max_bytes: MAX_IDS) }
-
-        raise ValidationError,
-              "affirmative approval requires a non-empty approver_roles array with at most #{MAX_APPROVER_ROLES} " \
-              'bounded entries'
-      end
-
-      def validate_rendering!(rendering)
-        unless Shapes.member?(rendering.fetch(:format), RENDER_FORMATS)
-          raise ValidationError, "render format must be one of #{RENDER_FORMATS.join(', ')}"
-        end
-        unless rendering.fetch(:max_parts).is_a?(Integer) && rendering.fetch(:max_parts).positive?
-          raise ValidationError, 'max_parts must be positive'
-        end
-        unless rendering.fetch(:part_characters).is_a?(Integer) && rendering.fetch(:part_characters).positive?
-          raise ValidationError, 'part_characters must be positive'
-        end
-        raise ValidationError, 'overflow must be truncate in v1' unless Shapes.member?(rendering.fetch(:overflow),
-                                                                                       RENDER_OVERFLOWS)
-      end
-
-      def validate_limits!(limits)
-        %i[max_inbound_bytes max_open_requests max_denial_prompts_per_request
-           outbox_capacity control_capacity].each do |key|
-          unless limits.fetch(key).is_a?(Integer) && limits.fetch(key).positive?
-            raise ValidationError, "#{key} must be positive"
-          end
-        end
-        %i[per_chat_messages_per_s global_messages_per_s].each do |key|
-          rate = limits.fetch(key)
-          raise ValidationError, "#{key} must be a positive number" unless rate.is_a?(Numeric) && rate.positive?
-        end
-      end
-
-      def deep_freeze(value)
-        case value
-        when Hash
-          value.each_with_object({}) { |(key, entry), memo| memo[key] = deep_freeze(entry) }.freeze
-        when Array
-          value.map { |entry| deep_freeze(entry) }.freeze
-        else
-          value.freeze
-        end
-      end
+      def stored(name, value) = STRUCTURED_FIELDS.include?(name) ? self.class.frozen_copy(value) : value
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists

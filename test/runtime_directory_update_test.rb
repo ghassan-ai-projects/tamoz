@@ -25,7 +25,7 @@ class RuntimeDirectoryUpdateTest < Minitest::Test
   def channel(profile)
     { 'kind' => 'talk', 'revision' => 1, 'enabled' => true, 'profile' => profile,
       'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TALK_TOKEN' },
-      'expected_bot_id' => 123_456_789_012, 'talk' => { 'port' => 8787 } }
+      'stream_id' => 'talk:page', 'settings' => { 'port' => 8787 } }
   end
 
   def test_an_edit_is_written_with_a_backup_of_the_old_file

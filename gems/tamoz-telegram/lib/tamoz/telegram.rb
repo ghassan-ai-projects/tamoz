@@ -6,6 +6,8 @@ require_relative 'telegram/client'
 require_relative 'telegram/markup'
 require_relative 'telegram/normalizer'
 require_relative 'telegram/transport'
+require_relative 'telegram/channel'
+require_relative 'telegram/setup'
 
 module Tamoz
   # Telegram transport adapter (ADR-041): one gem implementing the

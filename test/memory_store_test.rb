@@ -13,27 +13,6 @@ class MemoryStoreTest < Minitest::Test
     compatibility_behavior: "tamoz.agent.session/1"
   }.freeze
 
-  # Build a GENUINE legacy database by executing the real MIGRATION_1..N
-  # constants and recording their real checksums — no drop-and-carve of a
-  # current-shape file, so the forward migration exercises exactly what an
-  # old database contains.
-  def build_legacy_database(path, through:)
-    database = SQLite3::Database.new(path)
-    (1..through).each do |ordinal|
-      statements = Tamoz::SQLite::Migrator.const_get(:"MIGRATION_#{ordinal}")
-      statements.each { |statement| database.execute(statement) }
-      checksum = Digest::SHA256.hexdigest(statements.join("\n-- tamoz migration boundary --\n"))
-      database.execute(
-        "INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms) VALUES (?, ?, ?)",
-        [ordinal, checksum, 1]
-      )
-    end
-    database.execute("PRAGMA application_id = #{Tamoz::SQLite::Migrator.const_get(:APPLICATION_ID)}")
-    database.execute("PRAGMA user_version = #{through}")
-    File.chmod(0o600, path)
-    database
-  end
-
   class CountingProtection
     attr_reader :decrypts, :encrypts
 
@@ -104,10 +83,7 @@ class MemoryStoreTest < Minitest::Test
     )
   end
 
-  def test_migration_2_creates_the_index_table_and_ordinals_are_monotonic
-    assert_equal (1..Tamoz::SQLite::Migrator::CURRENT_VERSION).to_a,
-                 Tamoz::SQLite::Migrator.migration_ordinals
-
+  def test_the_schema_creates_the_index_tables
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
     assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
@@ -134,74 +110,22 @@ class MemoryStoreTest < Minitest::Test
       reconciled_at learnable
     ], verification_columns
     database.close
-
-    old = File.join(@directory, "old.db")
-    database = build_legacy_database(old, through: 1)
-    bytes = Tamoz::StateCodec.new.dump({ "value" => 1 })
-    body = "tamoz.sqlite.store_value\0v1\0".b
-    digest = "sha256:#{Digest::SHA256.hexdigest(body + bytes.b)}"
-    database.execute(<<~SQL, [SQLite3::Blob.new(bytes.b), digest])
-      INSERT INTO tamoz_store_versions(
-        namespace, key, version, deleted, sensitive,
-        format_version, payload, payload_digest, created_at_ms
-      ) VALUES ('tamoz.plain', 'key', 1, 0, 0, 1, ?, ?, 1)
-    SQL
-    database.execute(<<~SQL)
-      INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms)
-      VALUES ('tamoz.plain', 'key', 1, 0, 0, 1)
-    SQL
-    database.close
-    upgraded = Tamoz::SQLite::Adapter.new(path: old)
-    assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, upgraded.integrity_check.fetch("schema_version")
-    upgraded.close
   end
 
-  def test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows
-    path = File.join(@directory, "cutover.db")
-    database = build_legacy_database(path, through: 10)
-    database.execute(
-      "INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms) VALUES (?, ?, 1, 0, 0, 1)",
-      ["tamoz.circuit.test", "sha256:#{"b" * 64}"]
-    )
-    database.execute(<<~SQL)
-      INSERT INTO tamoz_memory_index(
-        store_namespace, memory_id, record_version, layer, class, state,
-        scopes_tenant, scopes_user, scopes_project, sensitivity,
-        valid_until_ms, compatibility_graph, compatibility_behavior,
-        statement_search, searchable
-      ) VALUES ('tamoz.memory.acme', 'm-pre12', 1, 'experience', 'runbook', 'active',
-                'acme', 'u', 'p', 'public', NULL, '1', 'tamoz.agent.session/1',
-                'retained', 1)
-    SQL
-    database.close
-
-    upgraded = Tamoz::SQLite::Adapter.new(path:)
-    database = SQLite3::Database.new(path)
+  def test_the_schema_registers_the_digest_epoch_and_has_no_old_stream_tables
+    database = SQLite3::Database.new(File.join(@directory, "memory.db"))
     assert_equal 1, database.get_first_value("SELECT epoch FROM tamoz_digest_epoch")
-    assert_equal 0, database.get_first_value(
-      "SELECT COUNT(*) FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'"
-    )
     stream_tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name LIKE 'tamoz_stream_%' " \
       "AND name != 'tamoz_stream_verifications'"
     )
-    assert_empty stream_tables, "MIGRATION_13 must drop every old stream table"
-    # The pre-12 row survives the rebuild with NULL situation scopes, and the
-    # scope indexes are recreated.
-    preserved = database.get_first_value(
-      "SELECT statement_search FROM tamoz_memory_index WHERE memory_id = 'm-pre12'"
-    )
-    assert_equal "retained", preserved
-    situation_columns = %w[scopes_situation_type scopes_entity_type scopes_entity_id]
+    assert_empty stream_tables
     columns = database.execute("PRAGMA table_info(tamoz_memory_index)").map { |row| row.fetch(1) }
-    assert_empty situation_columns - columns
+    assert_empty %w[scopes_situation_type scopes_entity_type scopes_entity_id] - columns
     indexes = database.execute("SELECT name FROM sqlite_schema WHERE type = 'index'").flatten
     assert_includes indexes, "idx_tamoz_memory_index_scope"
     assert_includes indexes, "idx_tamoz_memory_index_situation"
     database.close
-    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, upgraded.integrity_check.fetch("schema_version")
-    upgraded.close
   end
 
   def test_situation_scoped_records_are_bound_by_entity_type
@@ -397,7 +321,7 @@ class MemoryStoreTest < Minitest::Test
     assert_equal ["mine"], result.candidate_ids
   end
 
-  def test_migration_23_full_text_row_follows_the_head
+  def test_the_full_text_row_follows_the_head
     admit(memory_id: "m1", statement_search: "deployment rollout")
     fts = -> { @repo.fts_row_count(NAMESPACE, "m1") }
     assert_equal 1, fts.call

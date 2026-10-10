@@ -98,9 +98,9 @@ Work an operator runs against the runtime directory.
 |---|---|---|
 | `setup` | Create or update the runtime: its workspace, models and chat profile | `--workspace PATH`, `--chat`, `--transcription`, `--vision PROVIDER/MODEL`, `--<role>-credential NAME`, `--<role>-api-base URL` |
 | `channel add telegram` | Pair a Telegram bot with you; the channel serves the runtime's chat profile | `--owner TELEGRAM_USER_ID`, `--env-file PATH` |
-| `start` | Check every channel and model with one real call, then run one gateway per channel and one worker together; print the talk link | `--env-file PATH`, `--host ADDRESS` |
+| `start` | Check every channel and model with one real call, then run one gateway per channel and one worker together; print the talk link | `--env-file PATH` |
 | `service install` / `status` / `uninstall` | Run the runtime's gateways and worker as launchd jobs (macOS); install runs `start`'s checks, writes 0600 plists and moves earlier ones to `<runtime>/service-backups/` | `--env-file PATH` (install) |
-| `channel add talk` | Add the talk page and its private access token; the channel serves the runtime's chat profile | `--port N`, `--allow-host NAME` (repeatable), `--rotate-token` |
+| `channel add talk` | Add the talk page and its private access token; the channel serves the runtime's chat profile | `--port N`, `--host ADDRESS`, `--allow-host NAME` (repeatable), `--rotate-token` |
 | `queue` | Submit a task durably, or list pending work | verbs below |
 | `worker` | Run the foreground worker that executes queued and scheduled work | `--once`, `--concurrency N`, `--poll-interval SECONDS` |
 | `status` | Report pending work, capability sources and safety counters | `--json` |
@@ -164,22 +164,22 @@ ordinary request inbox — there is one execution path, not two.
 |---|---|---|
 | `comms serve` | Run the long-polling gateway (one per bot) | `--surface ID`, `--once` |
 | `comms list` | Show surfaces, bindings, conversation-to-thread map, outbox state | `--surface ID` |
-| `comms doctor` | Named channel checks; `--bootstrap` before a surface exists | `--bootstrap`, `--credential-ref NAME` |
+| `comms doctor` | Named checks for every surface: its channel kind's own (token, bot id, webhook; token file, port), the adapter, the poller lease | |
 | `comms pair list` | Show pending pairing codes and active bindings | |
 | `comms pair approve CODE` | Approve one pairing code | |
 | `comms pair revoke ID` | Revoke a correspondent binding | |
 | `comms delivery resolve ID STATUS` | Resolve an `:unknown` delivery | `STATUS` = `succeeded` or `failed` |
 
 `comms serve --once` does a single poll/drain pass and reports each surface's
-outcome as JSON. `comms doctor` checks runtime permissions, token presence,
-adapter presence, TLS, token validity, the exact bot id, the webhook/poller
-conflict and the poller lease — each failure named, exit 1.
+outcome as JSON. `comms doctor` checks runtime permissions, then for each
+surface its adapter, its channel kind's own checks (Telegram: token, bot id,
+webhook; talk: token file, port) and the poller lease — each failure named,
+exit 1.
 
 ### Config verbs
 
 | Verb | Purpose |
 |---|---|
-| `config migrate` | Migrate runtime configuration schema 1 to schema 2 (`channels:`), with a backup and atomic rename |
 
 ## Exit codes
 

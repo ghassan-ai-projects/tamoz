@@ -23,19 +23,28 @@ module Tamoz
       DOWNLOAD_DEADLINE_S = 40.0
       DOWNLOAD_READ_TIMEOUT_S = 15.0
       FILE_PATH = %r{\A(?!/)(?!.*(?:\A|/)\.\.(?:/|\z))[A-Za-z0-9_.\-/]{1,256}\z}
+      # A stand-in Bot API on this machine (the evals) is the only origin besides Telegram's own.
+      LOOPBACK_ORIGIN = %r{\Ahttp://(?:127\.0\.0\.1|localhost|\[::1\])(?::\d{1,5})?\z}
+
+      # How long the client waits: to connect, to read a reply, and for a whole download.
+      Timeouts = Data.define(:open_timeout, :read_timeout, :download_deadline) do
+        def initialize(open_timeout: DEFAULT_OPEN_TIMEOUT, read_timeout: DEFAULT_READ_TIMEOUT,
+                       download_deadline: DOWNLOAD_DEADLINE_S)
+          super
+        end
+      end
 
       attr_reader :token, :origin, :max_response_bytes
 
-      def initialize(token, origin: DEFAULT_ORIGIN, open_timeout: DEFAULT_OPEN_TIMEOUT,
-                     read_timeout: DEFAULT_READ_TIMEOUT, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES,
-                     download_deadline: DOWNLOAD_DEADLINE_S)
+      # An undeclared response cap IS the declared default: the client's own limit is the one source of truth.
+      def initialize(token, origin: DEFAULT_ORIGIN, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES, **timeouts)
+        unless origin == DEFAULT_ORIGIN || origin.match?(LOOPBACK_ORIGIN)
+          raise Comms::ValidationError, 'the Bot API origin must be Telegram or a loopback stand-in'
+        end
+
         @token = token
         @origin = origin
-        @open_timeout = open_timeout
-        @read_timeout = read_timeout
-        @download_deadline = download_deadline
-        # An undeclared cap IS the declared default: the client's own limit is
-        # the one source of truth for it.
+        @timeouts = Timeouts.new(**timeouts)
         @max_response_bytes = max_response_bytes || DEFAULT_MAX_RESPONSE_BYTES
       end
 
@@ -43,7 +52,7 @@ module Tamoz
       # One bounded API call. `idempotent` distinguishes reads (safe to
       # retry) from sends (a timeout must never be retried blindly).
       # @return [Hash] the parsed `ok` payload.
-      def call(method, params, idempotent: false, read_timeout: @read_timeout)
+      def call(method, params, idempotent: false, read_timeout: @timeouts.read_timeout)
         response, body = post(method, params, read_timeout)
         interpret(response, body, method:, idempotent:)
       rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT, JSON::ParserError => e
@@ -60,15 +69,9 @@ module Tamoz
       def download(file_path, max_bytes:)
         raise Comms::ValidationError, 'file path is not a Telegram file path' unless FILE_PATH.match?(file_path.to_s)
 
-        response = nil
         body = (+'').b
-        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @download_deadline
-        http = build_http
-        http.read_timeout = DOWNLOAD_READ_TIMEOUT_S
-        http.request(Net::HTTP::Get.new("/file/bot#{@token}/#{file_path}")) do |partial|
-          response = partial
-          read_bounded(partial, body, max_bytes, deadline:)
-        end
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + @timeouts.download_deadline
+        response = get_file(file_path) { |partial| read_bounded(partial, body, max_bytes, deadline:) }
         raise Comms::TransientTransportError, "file download failed (#{response.code})" unless
           response.is_a?(Net::HTTPSuccess)
 
@@ -80,6 +83,18 @@ module Tamoz
       end
 
       private
+
+      # Yields the streaming response and returns it.
+      def get_file(file_path)
+        http = build_http
+        http.read_timeout = DOWNLOAD_READ_TIMEOUT_S
+        response = nil
+        http.request(Net::HTTP::Get.new("/file/bot#{@token}/#{file_path}")) do |partial|
+          response = partial
+          yield partial
+        end
+        response
+      end
 
       def post(method, params, read_timeout)
         http = build_http
@@ -193,8 +208,8 @@ module Tamoz
         uri = URI(@origin)
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = uri.scheme == 'https'
-        http.open_timeout = @open_timeout
-        http.read_timeout = @read_timeout
+        http.open_timeout = @timeouts.open_timeout
+        http.read_timeout = @timeouts.read_timeout
         http
       end
     end

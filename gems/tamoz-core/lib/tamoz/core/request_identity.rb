@@ -15,10 +15,10 @@ module Tamoz
 
       module_function
 
-      def request_id(surface_id:, surface_revision:, bot_id:, update_id:, raw_payload_hash:)
+      def request_id(surface_id:, surface_revision:, stream_id:, update_id:, raw_payload_hash:)
         ::Digest::SHA256.hexdigest(
           "#{DOMAIN}\n" +
-          JSON.generate([surface_id, surface_revision, bot_id, update_id, raw_payload_hash])
+          JSON.generate([surface_id, surface_revision, stream_id, update_id, raw_payload_hash])
         )
       end
     end

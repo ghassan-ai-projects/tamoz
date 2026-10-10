@@ -22,12 +22,10 @@ module Tamoz
     # :reek:UnusedParameters -- contract signatures; the bodies raise because
     # a seam has nothing to implement (dependency rule 9).
     module Transport
-      # @param descriptor [SurfaceDescriptor] the deployed surface.
-      # @param credential [Tamoz::Secret] the bot token.
-      # @return [Identity] authenticated surface identity (Telegram: getMe).
+      # @return [Hash] the authenticated identity; its `'stream_id'` must equal the surface's exactly.
       # @raise [AuthenticationError] wrong or revoked credential; the gateway
       #   records it and stops — this is not a retry condition.
-      def authenticate(descriptor, credential)
+      def authenticate
         raise NotImplementedError
       end
 

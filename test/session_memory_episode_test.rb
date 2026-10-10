@@ -14,7 +14,7 @@ class SessionMemoryEpisodeTest < Minitest::Test
 
   def record(reason, satisfied: false)
     access = AccessDouble.new
-    state = { terminal_reason: reason, task: 'Hello', session: { 'session_id' => 'tg.thread' } }
+    state = { terminal_reason: reason, task: 'Hello', session: { 'session_id' => 'telegram.thread' } }
     Tamoz::Agent::SessionMemory.new(configuration: Configuration.new(Object.new, access))
                                .record_episode_memory(state, { 'satisfied' => satisfied, 'evidence' => [] })
     access.episodes.map { |episode| episode.fetch(:statement) }

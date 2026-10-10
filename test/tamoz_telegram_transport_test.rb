@@ -2,10 +2,66 @@
 
 require_relative 'test_helper'
 require_relative 'support/telegram_fixture_server'
+require_relative 'support/transport_conformance'
 
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class TamozTelegramTransportTest < Minitest::Test
+  include TransportConformance
+
   Comms = Tamoz::Comms
+
+  # Stages Telegram Bot API responses for the shared transport conformance suite.
+  class ConformanceDriver
+    BOT_ID = 7_463_512_990
+
+    def initialize(server, test)
+      @server = server
+      @test = test
+    end
+
+    def identity = "telegram:bot:#{BOT_ID}"
+    def descriptor = nil
+    def credential = 'test-token'
+    def conversation_id = 'telegram:chat:22222222'
+
+    def stage_nothing = @server.script('getUpdates', body: { 'ok' => true, 'result' => [] }, times: 1)
+
+    # Telegram redelivers what no offset confirmed; the fixture plays that part.
+    def stage_text(text, deliveries: 1)
+      @server.script('getUpdates', body: { 'ok' => true, 'result' => [@test.update(100, text:)] }, times: deliveries)
+    end
+
+    # An offset confirms every update below it.
+    def released?(ids, cursor)
+      offset = JSON.parse(@server.requests.last.fetch(:body))['offset']
+      offset == cursor && ids.all? { |id| id < offset }
+    end
+
+    def stage_receipt
+      @server.script('sendMessage', body: { 'ok' => true, 'result' => { 'message_id' => 42, 'date' => 1 } }, times: 1)
+    end
+
+    def stage_typing = @server.script('sendChatAction', body: { 'ok' => true, 'result' => true }, times: 1)
+
+    def stage_attachment(bytes)
+      file = { 'file_id' => 'D1', 'file_size' => bytes.bytesize, 'file_path' => 'documents/d1.bin' }
+      @server.script('getFile', body: { 'ok' => true, 'result' => file }, times: 2)
+      @server.script('d1.bin', raw: bytes, times: 1)
+      'D1'
+    end
+
+    def delivery(text)
+      Comms::Delivery.build(conversation_id:, kind: 'answer', text:, part_index: 0, part_count: 1, journaled: true,
+                            render_version: 1, content_digest: 'b' * 64)
+    end
+  end
+
+  def with_conformance
+    with_transport do |transport, server|
+      server.script('getMe', body: { 'ok' => true, 'result' => { 'id' => ConformanceDriver::BOT_ID } }, times: 1)
+      yield transport, ConformanceDriver.new(server, self)
+    end
+  end
 
   def with_transport(max_response_bytes: Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES, read_timeout: 1.0)
     server = TelegramFixtureServer.new
@@ -37,10 +93,21 @@ class TamozTelegramTransportTest < Minitest::Test
     with_transport do |transport, server|
       server.script('getMe', body: { 'ok' => true, 'result' => { 'id' => 7_463_512_990,
                                                                  'username' => 'ops_bot' } }, times: 1)
-      result = transport.authenticate(nil, nil)
+      result = transport.authenticate
 
       assert_equal 7_463_512_990, result.fetch('id')
+      assert_equal 'telegram:bot:7463512990', result.fetch('stream_id')
       assert_equal 'ops_bot', result.fetch('username')
+    end
+  end
+
+  def test_the_bot_api_origin_is_telegram_or_a_loopback_stand_in
+    assert_equal Tamoz::Telegram::Client::DEFAULT_ORIGIN, Tamoz::Telegram::Client.new('t').origin
+    %w[http://127.0.0.1:9 http://localhost:80 http://[::1]:8443].each do |origin|
+      assert_equal origin, Tamoz::Telegram::Client.new('t', origin:).origin
+    end
+    %w[http://api.telegram.org https://evil.example http://127.0.0.1.evil.example].each do |origin|
+      assert_raises(Comms::ValidationError, origin) { Tamoz::Telegram::Client.new('t', origin:) }
     end
   end
 
@@ -48,7 +115,7 @@ class TamozTelegramTransportTest < Minitest::Test
     with_transport do |transport, server|
       server.script('getMe', status: 401, body: { 'ok' => false, 'description' => 'Unauthorized' }, times: 1)
 
-      assert_raises(Comms::AuthenticationError) { transport.authenticate(nil, nil) }
+      assert_raises(Comms::AuthenticationError) { transport.authenticate }
     end
   end
 

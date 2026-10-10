@@ -149,7 +149,7 @@ class DocumentationTreeTest < Minitest::Test
     assert_includes text(DOC_ROOT.join("design", "README.md")), "61-clause"
     assert_includes text(DOC_ROOT.join("architecture", "invariants.md")), "61"
     assert_includes text(DOC_ROOT.join("overview", "compatibility.md")), "61"
-    assert_includes text(DOC_ROOT.join("operations", "operations.md")), "thirteen"
-    assert_includes text(DOC_ROOT.join("architecture", "data-model.md")), "13 checksummed"
+    assert_includes text(DOC_ROOT.join("operations", "operations.md")), "One checksummed migration"
+    assert_includes text(DOC_ROOT.join("architecture", "data-model.md")), "one checksummed migration builds the whole schema"
   end
 end

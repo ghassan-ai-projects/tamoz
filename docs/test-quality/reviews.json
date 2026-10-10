@@ -599,11 +599,6 @@
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
-  "test/cli_telegram_test.rb": {
-    "status": "done",
-    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
-    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
-  },
   "test/comms_admission_test.rb": {
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
@@ -980,11 +975,6 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   "test/lane_config_test.rb": {
-    "status": "done",
-    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
-    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
-  },
-  "test/legacy_session_resume_test.rb": {
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."

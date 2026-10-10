@@ -110,7 +110,7 @@ module AutonomyCase
         out:, err:, input: StringIO.new(input),
         env:,
         model_factory: factory,
-        comms_client_factory: comms_factory || (@client && ->(_token) { @client })
+        channel_kinds: ChannelKindsFixture.telegram(comms_factory || (@client && ->(_token) { @client }))
       )
       @out = out.string
       @err = err.string
@@ -245,7 +245,7 @@ module AutonomyCase
 
   def write_config(runtime_dir, workspace, channels: nil, approval_profile: nil, approval_ask: nil)
     document = {
-      "runtime" => {"schema_version" => channels ? 2 : 1},
+      "runtime" => {"schema_version" => 2},
       "workspace" => {"root" => workspace},
       "sources" => {}
     }
@@ -335,7 +335,7 @@ module AutonomyCase
         end
         @sent << params
         {"message_id" => @sent.length, "date" => 1_752_700_800}
-      when "answerCallbackQuery" then true
+      when "answerCallbackQuery", "editMessageReplyMarkup" then true
       when "getWebhookInfo" then {"url" => @webhook_url}
       else
         raise ArgumentError, "unexpected method #{method}"

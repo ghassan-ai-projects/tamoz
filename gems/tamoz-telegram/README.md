@@ -1,12 +1,21 @@
 # tamoz-telegram
 
-The Telegram transport adapter for Tamoz (ADR-041): one gem implementing the
-`Tamoz::Comms::Transport` seam over the Telegram Bot API. Depends only on
-`tamoz-comms` and the standard library — no HTTP client gem.
+The Telegram channel for Tamoz (ADR-041): every line of Telegram code, behind the
+`tamoz-comms` interfaces. Depends only on `tamoz-comms` and the standard library — no
+HTTP client gem.
+
+- `Tamoz::Telegram::Transport` — the `Comms::Transport` over the Bot API
+- `Tamoz::Telegram::Channel` — validates a descriptor (no speech; only `bot_username` in
+  `settings`) and connects one transport that the gateway and its drainer share; its update
+  stream is `telegram:bot:<id>`
+- `Tamoz::Telegram::Setup` — `tamoz channel add telegram` (pairing by message, then confirming
+  Telegram's whole backlog), the token, bot-id and webhook checks that `start` and
+  `comms doctor` run, and the variables its gateway holds (`TAMOZ_TELEGRAM_BOT_TOKEN`, and
+  `TAMOZ_TELEGRAM_API_ORIGIN`, accepted only as a loopback stand-in)
 
 ## What it does
 
-- `authenticate` — `getMe` (wrong token → `AuthenticationError`, never a retry)
+- `authenticate` — `getMe`, returned with its `stream_id` (wrong token → `AuthenticationError`, never a retry)
 - `poll` — `getUpdates` with the candidate `next_offset` confirming the prior
   durable prefix remotely; `allowed_updates` is always supplied explicitly
 - `deliver` — exactly one `sendMessage`/`editMessageText` per `Delivery`; a

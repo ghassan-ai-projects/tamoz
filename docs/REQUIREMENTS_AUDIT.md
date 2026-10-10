@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 591 | 326 | 14 | **no** |
+| 566 | 297 | 14 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 563 |
+| pass | 538 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -486,7 +486,6 @@ generating run.
 | `CLI-code` | cli_command | yes | pass | `test/cli_code_test.rb#test_code_runs_the_work_loop_and_exits_zero_on_a_verified_change` |
 | `CLI-comms` | cli_command | yes | pass | `test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly` |
 | `CLI-compact` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards` |
-| `CLI-config` | cli_command | yes | pass | `test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup` |
 | `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-deep-research` | cli_command | yes | pass | `test/agent_cli_research_test.rb#test_deep_research_asks_the_plan_on_the_terminal_and_saves_the_report_in_the_workspace` |
@@ -536,11 +535,11 @@ generating run.
 | `INV-15` | invariant | yes | pass | `test/graph_stream_test.rb#test_stopping_at_every_event_boundary_never_commits_late_state` |
 | `INV-16` | invariant | yes | pass | `test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it` |
 | `INV-17` | invariant | yes | pass | `test/agent_tool_error_recovery_test.rb#test_taxonomy_marks_only_argument_failures_repairable` |
-| `INV-18` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read` |
+| `INV-18` | invariant | yes | pass | `test/agent_session_records_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read` |
 | `INV-19` | invariant | yes | pass | `test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state` |
 | `INV-20` | invariant | yes | pass | `test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover` |
 | `INV-21` | invariant | yes | pass | `test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once` |
-| `INV-22` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_current_build_reads_the_old_database` |
+| `INV-22` | invariant | yes | pass | `test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code` |
 | `INV-23` | invariant | yes | pass | `test/sqlite_request_inbox_test.rb#test_duplicate_delivery_returns_one_completed_turn_and_conflicts_on_change` |
 | `INV-24` | invariant | yes | pass | `test/agent_session_records_test.rb#test_sensitive_values_are_rejected_at_every_depth` |
 | `INV-25` | invariant | yes | pass | `test/agent_runtime_test.rb#test_never_executes_when_no_plan_passes_review` |
@@ -572,31 +571,7 @@ generating run.
 | `INV-59` | invariant | yes | missing | `—` |
 | `INV-60` | invariant | yes | missing | `—` |
 | `INV-61` | invariant | yes | missing | `—` |
-| `MIG-1` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
-| `MIG-10` | migration | yes | pass | `test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store` |
-| `MIG-11` | migration | yes | pass | `test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
-| `MIG-12` | migration | yes | pass | `test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
-| `MIG-13` | migration | yes | pass | `test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
-| `MIG-14` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
-| `MIG-15` | migration | yes | pass | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
-| `MIG-16` | migration | yes | pass | `test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it` |
-| `MIG-17` | migration | yes | pass | `test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies` |
-| `MIG-18` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
-| `MIG-19` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise` |
-| `MIG-2` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
-| `MIG-20` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
-| `MIG-21` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows` |
-| `MIG-22` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22` |
-| `MIG-23` | migration | yes | pass | `test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head` |
-| `MIG-24` | migration | yes | pass | `test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle` |
-| `MIG-25` | migration | yes | pass | `test/sqlite_talk_migration_test.rb#test_an_upgrade_to_25_keeps_every_decision_and_admits_talk_actors` |
-| `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
-| `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
-| `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
-| `MIG-6` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
-| `MIG-7` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
-| `MIG-8` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
-| `MIG-9` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store` |
+| `MIG-27` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |

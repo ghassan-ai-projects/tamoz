@@ -4,45 +4,35 @@ require_relative 'errors'
 
 module Tamoz
   module Comms
-    # What differs per surface kind: identity prefixes, the thread prefix, and whether the surface speaks its
-    # replies aloud (which turns on the Heard notice and the worker's echo guard). Telegram's entry is byte-identical to the literals it replaced.
+    # One grammar for every channel's party ids: a correspondent is `<kind>:user:<id>`, a conversation
+    # `<kind>:<space>:<id>`. Only a `chat` binds; every other space is a group chat, which admission refuses.
     module Parties
-      Kind = Data.define(:name, :correspondent, :admissible, :bindable, :refused_groups, :thread_prefix,
-                         :speaks)
-
-      KINDS = {
-        'telegram' => Kind.new(
-          name: 'telegram', correspondent: 'telegram:user:',
-          admissible: %w[telegram:chat: telegram:group: telegram:supergroup: telegram:channel:],
-          bindable: %w[telegram:chat:], refused_groups: %w[telegram:supergroup: telegram:channel: telegram:group:],
-          thread_prefix: 'tg.', speaks: false
-        ),
-        'talk' => Kind.new(
-          name: 'talk', correspondent: 'talk:user:', admissible: %w[talk:chat:], bindable: %w[talk:chat:],
-          refused_groups: [], thread_prefix: 'tk.', speaks: true
-        )
-      }.freeze
+      PARTY = /\A([a-z][a-z0-9_]{1,31}):(user|chat|group|supergroup|channel):(-?[0-9]{1,20})\z/
+      Party = Data.define(:kind, :space, :id)
 
       module_function
 
-      def of_correspondent(id) = KINDS.values.find { |kind| id.to_s.start_with?(kind.correspondent) }
+      def parse(id)
+        match = PARTY.match(id.to_s)
+        return unless match && SurfaceDescriptor.valid_kind?(match[1])
 
-      def of_conversation(id) = KINDS.values.find { |kind| id.to_s.start_with?(*kind.admissible) }
-
-      def correspondent_prefixes = KINDS.values.map(&:correspondent)
-
-      def admissible_prefixes = KINDS.values.flat_map(&:admissible)
-
-      def bindable_prefixes = KINDS.values.flat_map(&:bindable)
-
-      def group_chat?(conversation_id)
-        kind = of_conversation(conversation_id)
-        kind ? conversation_id.start_with?(*kind.refused_groups) : false
+        Party.new(kind: match[1], space: match[2], id: match[3])
       end
+
+      def correspondent?(id) = parse(id)&.space == 'user'
+
+      def conversation?(id) = !parse(id).nil? && !correspondent?(id)
+
+      def bindable?(id) = parse(id)&.space == 'chat'
+
+      def group_chat?(id) = conversation?(id) && !bindable?(id)
+
+      def kind_of(id) = parse(id)&.kind
 
       # Both parties belong to one kind, and it is the surface's.
       def same_kind?(correspondent_id, conversation_id, surface_kind)
-        of_correspondent(correspondent_id)&.name == surface_kind && of_conversation(conversation_id)&.name == surface_kind
+        correspondent?(correspondent_id) && conversation?(conversation_id) &&
+          kind_of(correspondent_id) == surface_kind && kind_of(conversation_id) == surface_kind
       end
     end
   end

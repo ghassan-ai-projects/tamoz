@@ -14,12 +14,11 @@ module Tamoz
     # consumption inserts its decision in the same transaction (ADR-043).
     #
     # The signatures below ARE the contract — the bodies raise because a
-    # contract module has nothing to implement.
-    # :reek:UnusedParameters, :reek:LongParameterList
-    # rubocop:disable Metrics/ParameterLists -- the signatures ARE the §13
-    #   contract; every field is mandatory at the seam.
+    # contract module has nothing to implement. An inbound row names its own
+    # surface (`envelope_wire['surface_id']`); a fenced write takes `Lease#wire`; values cross as wire hashes.
+    # :reek:UnusedParameters
     module CommsStore
-      CONTRACT_VERSION = 3
+      CONTRACT_VERSION = 4
 
       # Deploy one surface revision (upsert, digest-addressed).
       # @return [:deployed, :duplicate]
@@ -28,7 +27,7 @@ module Tamoz
       end
 
       # Admit ONE inbound update AND enqueue its turn in one transaction.
-      # `bot_id` is the authenticated surface identity the update arrived on;
+      # `stream_id` is the authenticated surface identity the update arrived on;
       # `reservation` is the terminal capacity reserved at admission
       # (invariant 57). Intake limits — max_open_requests, max_inbound_bytes,
       # and outbox_capacity — are enforced from the DEPLOYED surface row:
@@ -39,27 +38,25 @@ module Tamoz
       # :duplicate, and the SAME identity under a DIFFERENT payload digest is
       # a durable integrity conflict recorded on the ONE anchor row — its
       # conflict counter advances, nothing is enqueued (invariant 1).
-      # `history` is the conversation so far; `research` (TurnContext::RESEARCH_INPUT, or nil) rides in the payload and
-      # makes the turn a deep-research turn; `attachment` (the stored file's kind, digest and labels, or nil) rides
-      # the same way and is read by the worker, never by the gateway.
+      # `turn` is `Turn#wire`: its research input makes it a deep-research turn.
       # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
-                            history: [], research: nil, attachment: nil)
+      def admit_and_enqueue(envelope_wire, stream_id:, turn:, now:)
         raise NotImplementedError
       end
 
       # Admit one clarification answer and enqueue its durable resume in the
       # same transaction. The request id includes the exact target request,
       # allowing the worker to reject a stale answer after the pause changes.
+      # `resume` is `Resume#wire`.
       # @return [:enqueued, :duplicate, :integrity_conflict]
-      def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+      def admit_and_enqueue_answer(envelope_wire, stream_id:, resume:, now:)
         raise NotImplementedError
       end
 
       # Whether this update identity already has a durable disposition — read before work that a
       # redelivery must not repeat (an attachment download).
       # @return [Boolean]
-      def inbound_observed?(envelope_wire, bot_id:)
+      def inbound_observed?(envelope_wire, stream_id:)
         raise NotImplementedError
       end
 
@@ -67,7 +64,7 @@ module Tamoz
       # KNOWN update identity updates that identity's single anchor row and
       # returns :conflict_recorded.
       # @return [:recorded, :conflict_recorded, :duplicate]
-      def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
+      def disposition_only(envelope_wire, stream_id:, disposition:, reason:, now:)
         raise NotImplementedError
       end
 
@@ -109,23 +106,23 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # One fenced poller per authenticated bot; an expired lease is
+      # One fenced poller per update stream; an expired lease is
       # recoverable.
       # @return [:acquired, :not_acquirable]
-      def acquire_poller_lease(surface_id:, bot_id:, owner:, fence:, ttl_s:, now:)
+      def acquire_poller_lease(surface_id:, stream_id:, lease:, ttl_s:, now:)
         raise NotImplementedError
       end
 
       # Persist the candidate next_offset ONLY after the returned prefix is
       # durable. Never regresses.
       # @return [:persisted, :behind]
-      def persist_next_offset(surface_id:, bot_id:, next_offset:, now:)
+      def persist_next_offset(surface_id:, stream_id:, next_offset:, now:)
         raise NotImplementedError
       end
 
       # Claim one outbox row under a fenced lease for a transport attempt.
       # @return [:claimed, :not_claimable, :missing]
-      def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
+      def claim_delivery(delivery_id:, lease:, claim_expires_at:, now:)
         raise NotImplementedError
       end
 
@@ -137,22 +134,22 @@ module Tamoz
 
       # Return a claimed row to pending only for a typed, proven-not-sent
       # transport refusal such as a server throttle.
-      def release_delivery_claim(delivery_id:, owner:, fence:, now:)
+      def release_delivery_claim(delivery_id:, lease:, now:)
         raise NotImplementedError
       end
 
       # Mark an attempt immediately before crossing the transport boundary.
       # An expired row with this marker is resolved to unknown, never retried.
-      def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+      def mark_delivery_send_started(delivery_id:, lease:, now:)
         raise NotImplementedError
       end
 
       # Record a transport outcome for a CLAIMED row — fenced (invariant 4):
-      # the update must match the claim's owner AND fence, so a stale caller
+      # the update must match the claim's lease, so a stale caller
       # records nothing and takes no external action. `succeeded` carries the
       # receipt; `unknown` is the honest ambiguity state.
       # @return [:marked, :not_claimable]
-      def mark_delivery(delivery_id:, owner:, fence:, status:, now:, receipt: nil)
+      def mark_delivery(delivery_id:, lease:, status:, now:, receipt: nil)
         raise NotImplementedError
       end
 
@@ -225,4 +222,3 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/ParameterLists

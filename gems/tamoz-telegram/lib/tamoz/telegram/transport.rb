@@ -24,9 +24,10 @@ module Tamoz
         @normalizer = normalizer
       end
 
-      # @return [Hash] the authenticated surface identity (getMe result).
-      def authenticate(_descriptor, _credential)
-        @client.call('getMe', {}, idempotent: true)
+      # @return [Hash] the getMe result and the bot's update stream.
+      def authenticate
+        me = @client.call('getMe', {}, idempotent: true)
+        me.merge('stream_id' => Channel.stream(me.fetch('id')))
       rescue Comms::ResponseTooLargeError => e
         raise Comms::TransientTransportError, "getMe response did not complete (#{e.class})"
       end
@@ -50,23 +51,21 @@ module Tamoz
       # :reek:FeatureEnvy, :reek:TooManyStatements -- the send maps one
       #   Delivery to one API effect.
       def deliver(delivery)
-        params = { 'chat_id' => chat_id(delivery.conversation_id), 'text' => Markup.html(delivery.text),
-                   'parse_mode' => 'HTML' }
         editing = delivery.operation == 'edit_message'
-        if editing
-          params['message_id'] = delivery.reply_to
-        elsif delivery.reply_to
-          params['reply_to_message_id'] = delivery.reply_to
-        end
-        attach_markup(params, delivery) if delivery.markup
-        result = @client.call(editing ? 'editMessageText' : 'sendMessage', params)
-        {
-          'message_id' => result.fetch('message_id'),
-          'platform_time' => Time.at(result.fetch('date')).utc.iso8601(6)
-        }
+        result = @client.call(editing ? 'editMessageText' : 'sendMessage', send_params(delivery, editing))
+        { 'message_id' => result.fetch('message_id'), 'platform_time' => Time.at(result.fetch('date')).utc.iso8601(6) }
       rescue Comms::ResponseTooLargeError => e
         raise Comms::AmbiguousDeliveryError,
               "send may or may not have happened (response exceeded the configured limit: #{e.class})"
+      end
+
+      def send_params(delivery, editing)
+        params = { 'chat_id' => chat_id(delivery.conversation_id), 'text' => Markup.html(delivery.text),
+                   'parse_mode' => 'HTML' }
+        reply_to = delivery.reply_to
+        params[editing ? 'message_id' : 'reply_to_message_id'] = reply_to if editing || reply_to
+        attach_markup(params, delivery) if delivery.markup
+        params
       end
 
       # An announced size over the limit is refused before any byte is read.

@@ -110,7 +110,7 @@ module Agenteval
     def runtime_dir(chain, arm)
       dir = chain.runtime_dir
       sources = arm == "memory-on" ? { "memory" => { "enabled" => true, "tenant" => "eval", "owner" => "eval-user" } } : {}
-      config = { "runtime" => { "schema_version" => 1 }, "workspace" => { "root" => chain.root }, "sources" => sources }
+      config = { "runtime" => { "schema_version" => 2 }, "workspace" => { "root" => chain.root }, "sources" => sources }
       File.write(File.join(dir, "config.yaml"), Psych.dump(config))
       File.chmod(0o600, File.join(dir, "config.yaml"))
       dir

@@ -11,12 +11,14 @@ module TalkFixtures
   def talk_descriptor(allow_hosts: ['mac.tail.ts.net'], revision: 1)
     Tamoz::Comms::SurfaceDescriptor.build(
       surface_id: 'talk', revision:, kind: 'talk',
-      transport: { mode: 'long_poll', credential_ref: { kind: 'env', name: 'TAMOZ_TALK_TOKEN' }, poll_timeout_s: 1,
-                   batch: 50, max_response_bytes: nil, port: 8787, allow_hosts: },
-      identity: { expected_bot_id: 123_456_789_012 },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TALK_TOKEN' }, poll_timeout_s: 1,
+                   batch: 50, max_response_bytes: nil },
+      settings: { port: 8787, allow_hosts: },
+      identity: { stream_id: 'talk:page' },
       admission: { direct: 'allowlist', correspondents: ['talk:user:1'] }, threading: 'conversation',
       profile_id: 'talk', approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' }, limits: LIMITS
+      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate', speech: true },
+      limits: LIMITS
     )
   end
 

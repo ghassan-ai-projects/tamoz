@@ -1,21 +1,20 @@
 # frozen_string_literal: true
 
-require "json"
-require "optparse"
-require "securerandom"
-require "fileutils"
+require 'json'
+require 'optparse'
+require 'securerandom'
+require 'fileutils'
 
 module Tamoz
   module Agent
+    # The `tamoz` command line: parses arguments and dispatches each subcommand to its command module.
     class CLI
       USAGE_ERROR = 64
       EXIT_PAUSED = 3
-      EXIT_SIGINT = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigint")
-      EXIT_SIGTERM = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigterm")
+      EXIT_SIGINT = Tamoz::Cancellation::Trap::EXIT_CODES.fetch('sigint')
+      EXIT_SIGTERM = Tamoz::Cancellation::Trap::EXIT_CODES.fetch('sigterm')
 
-      # The unattended surface (`queue`, `worker`, `status`) lives in its
-      # own file; it is the same CLI object, split only so neither half becomes
-      # unreadable.
+      # One CLI object; each command family lives in its own module file.
       include CLIWorkerCommands
       include CLIProbeCommands
       include CLISkillsCommands
@@ -29,13 +28,10 @@ module Tamoz
       include CLICommsCommands
       include CLICommsDoctor
       include CLICommsOps
-      include CLITelegramCommands
-      include CLITalkCommands
-      include CLITalkGateway
-      include CLITelegramPairing
       include CLISetupCommands
       include CLIChannelCommands
       include CLIChildProcesses
+      include CLIChannelProcesses
       include CLIStartChecks
       include CLIStartCommands
       include CLIServiceCommands
@@ -45,48 +41,47 @@ module Tamoz
       # Every subcommand dispatches to exactly one same-shaped cmd_* method
       # (three spellings share follow_up); `list` alone takes no argv.
       SUBCOMMAND_HANDLERS = {
-        "ask" => :cmd_ask,
-        "code" => :cmd_code,
-        "investigate" => :cmd_investigate,
-        "deep-research" => :cmd_deep_research,
-        "probes" => :cmd_probes,
-        "skills" => :cmd_skills,
-        "memory" => :cmd_memory,
-        "resume" => :cmd_resume,
-        "continue" => :cmd_continue,
-        "list" => :cmd_list,
-        "show" => :cmd_show,
-        "follow-up" => :cmd_follow_up,
-        "follow_up" => :cmd_follow_up,
-        "followup" => :cmd_follow_up,
-        "redirect" => :cmd_redirect,
-        "cancel" => :cmd_cancel,
-        "resolve" => :cmd_resolve,
-        "reset" => :cmd_reset,
-        "compact" => :cmd_compact,
-        "usage" => :cmd_usage,
-        "context" => :cmd_context,
-        "think" => :cmd_think,
-        "verbose" => :cmd_verbose,
-        "profile" => :cmd_profile,
-        "comms" => :cmd_comms,
-        "start" => :cmd_start,
-        "service" => :cmd_service,
-        "channel" => :cmd_channel,
-        "config" => :cmd_config,
-        "setup" => :cmd_setup,
-        "queue" => :cmd_queue,
-        "worker" => :cmd_worker,
-        "improve" => :cmd_improve,
-        "status" => :cmd_status,
-        "schedule" => :cmd_schedule,
-        "approve" => :cmd_approve,
-        "observe" => :cmd_observe,
-        "trace" => :cmd_trace,
-        "diagnose" => :cmd_diagnose,
-        "explain" => :cmd_explain,
-        "postmortem" => :cmd_postmortem,
-        "mcp" => :cmd_mcp
+        'ask' => :cmd_ask,
+        'code' => :cmd_code,
+        'investigate' => :cmd_investigate,
+        'deep-research' => :cmd_deep_research,
+        'probes' => :cmd_probes,
+        'skills' => :cmd_skills,
+        'memory' => :cmd_memory,
+        'resume' => :cmd_resume,
+        'continue' => :cmd_continue,
+        'list' => :cmd_list,
+        'show' => :cmd_show,
+        'follow-up' => :cmd_follow_up,
+        'follow_up' => :cmd_follow_up,
+        'followup' => :cmd_follow_up,
+        'redirect' => :cmd_redirect,
+        'cancel' => :cmd_cancel,
+        'resolve' => :cmd_resolve,
+        'reset' => :cmd_reset,
+        'compact' => :cmd_compact,
+        'usage' => :cmd_usage,
+        'context' => :cmd_context,
+        'think' => :cmd_think,
+        'verbose' => :cmd_verbose,
+        'profile' => :cmd_profile,
+        'comms' => :cmd_comms,
+        'start' => :cmd_start,
+        'service' => :cmd_service,
+        'channel' => :cmd_channel,
+        'setup' => :cmd_setup,
+        'queue' => :cmd_queue,
+        'worker' => :cmd_worker,
+        'improve' => :cmd_improve,
+        'status' => :cmd_status,
+        'schedule' => :cmd_schedule,
+        'approve' => :cmd_approve,
+        'observe' => :cmd_observe,
+        'trace' => :cmd_trace,
+        'diagnose' => :cmd_diagnose,
+        'explain' => :cmd_explain,
+        'postmortem' => :cmd_postmortem,
+        'mcp' => :cmd_mcp
       }.freeze
 
       SUBCOMMANDS = SUBCOMMAND_HANDLERS.keys.freeze
@@ -97,28 +92,31 @@ module Tamoz
       # and stops there, without opening a runtime directory it was never
       # asked to touch.
       NEEDS_HELP_CATCH = %w[
-        comms channel config setup start service queue worker status schedule approve observe trace
+        comms channel setup start service queue worker status schedule approve observe trace
         diagnose explain postmortem mcp
       ].freeze
 
-      THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
+      THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-.]{1,64}\z/
 
-      def self.run(argv = ARGV, out: $stdout, err: $stderr, input: $stdin, env: ENV, model_factory: nil,
-                   comms_client_factory: nil)
-        new(out:, err:, input:, env:, model_factory:, comms_client_factory:).run(argv)
+      # What a test may put in place of the real thing: the model factory and the channel registry.
+      Seams = Data.define(:model_factory, :channel_kinds) do
+        def initialize(model_factory: nil, channel_kinds: nil) = super
       end
 
-      def initialize(out:, err:, input:, env:, model_factory: nil, comms_client_factory: nil)
+      def self.run(argv = ARGV, **) = new(**).run(argv)
+
+      def initialize(out: $stdout, err: $stderr, input: $stdin, env: ENV, **seams)
+        seams = Seams.new(**seams)
         @out = out
         @err = err
         @input = input
         @env = env
         @cancellation = nil
-        @model_factory = model_factory
-        @comms_client_factory = comms_client_factory
+        @model_factory = seams.model_factory
+        @channel_kinds = seams.channel_kinds
         @prompts = PromptAdapter.new(input:, err:)
         @events = EventRenderer.new(out:, err:)
-        @models = ModelBuilder.new(env:, factory: model_factory)
+        @models = ModelBuilder.new(env:, factory: @model_factory)
         @sessions = SessionBuilder.new(env:, models: @models)
         @parser = ArgumentParser.new(out:, subcommands: SUBCOMMANDS)
         @policy = OptionPolicy.new
@@ -133,24 +131,13 @@ module Tamoz
         else
           run_one_shot(options, sub_argv)
         end
-      rescue OptionParser::ParseError, ArgumentError => error
-        handle_usage_error(error)
-      rescue Tamoz::Agent::Error => error
-        handle_fatal_error(error)
-      # P16: the D-7 taxonomy moved to tamoz-core (`Tamoz::Core::ToolError` family),
-      # so it no longer subclasses `Tamoz::Agent::Error`. Catch it EXPLICITLY here —
-      # never widen to `Tamoz::Error`, which would also swallow StoreError,
-      # LeaseLostError, ConfigurationError, and the Checkpoint* classes, converting
-      # their backtraces into clean "tamoz: …" exit-1 output.
-      rescue Tamoz::Core::ToolError => error
-        handle_fatal_error(error)
-      # P0-D: the parse helpers moved to tamoz-core, re-parenting ProtocolError
-      # from Agent::Error to a sibling of it (`Tamoz::Error`). Catch explicitly,
-      # same rule as the ToolError family above.
-      rescue Tamoz::Core::ProtocolError => error
-        handle_fatal_error(error)
-      rescue Tamoz::CheckpointConflictError => error
-        handle_fatal_error(error)
+      rescue OptionParser::ParseError, ArgumentError => e
+        handle_usage_error(e)
+      # Named, never widened to Tamoz::Error: StoreError, LeaseLostError and ConfigurationError keep their
+      # backtraces instead of becoming a clean exit-1 line.
+      rescue Tamoz::Agent::Error, Tamoz::Core::ToolError, Tamoz::Core::ProtocolError,
+             Tamoz::CheckpointConflictError => e
+        handle_fatal_error(e)
       end
 
       private
@@ -185,19 +172,19 @@ module Tamoz
       end
 
       def run_one_shot(options, argv)
-        raise ArgumentError, "--adaptive-routing requires --session" if options[:adaptive_routing]
-        raise ArgumentError, "--work-routing needs a durable session; use tamoz code" if options[:work_routing]
+        raise ArgumentError, '--adaptive-routing requires --session' if options[:adaptive_routing]
+        raise ArgumentError, '--work-routing needs a durable session; use tamoz code' if options[:work_routing]
 
         if options[:session]
-          @policy.validate_profile_usage(options, "ask")
+          @policy.validate_profile_usage(options, 'ask')
           options[:explicit_session] = options[:session]
           return cmd_ask(options, argv)
         end
 
-        @policy.validate_profile_usage(options, "one-shot")
+        @policy.validate_profile_usage(options, 'one-shot')
         @policy.validate_check_config(options)
-        task = argv.join(" ").strip
-        raise OptionParser::MissingArgument, "TASK" if task.empty?
+        task = argv.join(' ').strip
+        raise OptionParser::MissingArgument, 'TASK' if task.empty?
 
         OneShot.new(out: @out, err: @err, input: @input, events: @events, models: @models).run(task, options)
       end
@@ -221,10 +208,10 @@ module Tamoz
           memory: -> { open_memory(options) } }
       end
 
-      def install_signal_handlers
+      def install_signal_handlers(&)
         @cancellation = Tamoz::CancellationToken.new
         cancel = ->(reason) { @cancellation&.cancel!(reason) }
-        Cancellation::Trap.install(int: cancel, term: cancel) { yield }
+        Cancellation::Trap.install(int: cancel, term: cancel, &)
       ensure
         @cancellation = nil
       end
@@ -243,7 +230,7 @@ module Tamoz
 
       def extract_thread!(argv)
         thread_id = argv.shift
-        raise OptionParser::MissingArgument, "THREAD" if thread_id.to_s.empty?
+        raise OptionParser::MissingArgument, 'THREAD' if thread_id.to_s.empty?
 
         validate_thread_id!(thread_id)
         thread_id

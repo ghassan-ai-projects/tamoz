@@ -54,7 +54,7 @@ class TalkChatEval
     tamoz!('channel', 'add', 'talk', '--port', @port.to_s)
 
     tighten_approvals if @approval_profile
-    @token = File.read(File.join(@runtime, 'talk', 'token')).strip
+    @token = File.read(File.join(@runtime, 'channels', 'talk', 'token')).strip
     @log = File.join(@root, 'start.log')
     @pid = Process.spawn(child_env, RbConfig.ruby, EXE, '--runtime-dir', @runtime, 'start', *args,
                          out: @log, err: @log, pgroup: true)

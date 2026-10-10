@@ -140,7 +140,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
                  descriptor: { 'kind' => 'approve_tool', 'decision' => { 'required_evidence' => 'chat_bound' } } }]
     reference, prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1', interrupts: hostile,
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1', interrupts: hostile,
       required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
@@ -206,7 +206,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       press(harness, "approve:#{'0' * 32}", update_id: 90)
 
       decision_store = adapter.bind_comms_decision_store
-      rows = decision_store.each_decision(thread_id: 'tg.ops.abc')
+      rows = decision_store.each_decision(thread_id: 'telegram.ops.abc')
 
       assert_empty rows, 'no prompt, no evidence, no decision (ADR-049 INV-E)'
     end
@@ -285,7 +285,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       harness.transport.receipt = { 'message_id' => 1, 'date' => 1 }
       harness.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
 
-      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'telegram.ops.abc')
 
       assert_equal 1, decisions.length,
                    'the single-use CAS yields at most one decision (bar C5)'
@@ -308,7 +308,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       harness.transport.receipt = { 'message_id' => 1, 'date' => 1 }
       harness.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
 
-      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'telegram.ops.abc')
 
       assert_equal 1, decisions.length,
                    'the approve+deny race yields at most one decision (bar C5)'
@@ -336,16 +336,14 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
     transport = ScriptedTransport.new
     transport.batch([])
-    gateway = Tamoz::Comms::Gateway.new(
-      adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
-    )
+    gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test')
     [store, Harness.new(gateway:, transport:)]
   end
 
   def active_prompt(store, ttl_s: 900, required_evidence: :filesystem_operator)
     reference, prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence:,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -369,7 +367,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
 
   def pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 3))
     adapter.bind_comms_decision_store.pending_decision_for(
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupt_digest: prompt.interrupt_digest, now:
     )
   end

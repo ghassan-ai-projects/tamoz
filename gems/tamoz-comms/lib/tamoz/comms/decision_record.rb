@@ -4,11 +4,19 @@ require 'time'
 
 require_relative 'canonical'
 require_relative 'errors'
+require_relative 'shapes'
 require_relative 'interrupt_digest'
 require_relative 'authority_evidence'
+require_relative 'decision_rules'
 
 module Tamoz
   module Comms
+    DecisionRecord = Data.define(:decision_id, :thread_id, :occurrence_id, :interrupt_digest,
+                                 :direction, :actor_kind, :actor_id, :source,
+                                 :decided_at, :expires_at, :status,
+                                 :claim_owner, :claim_fence, :claim_expires_at, :consumed_at,
+                                 :evidence, :reason)
+
     # Immutable, exact operator decision about one paused occurrence (design §9).
     #
     # A decision answers ONE interrupt set: it carries the canonical digest of
@@ -22,114 +30,41 @@ module Tamoz
     # The durable wire form is a string-keyed hash (`wire` / `from_wire`); the
     # SQLite decision store implements its contract over that form without
     # referencing this constant (dependency rule 9).
-    #
-    # The class-level structure is the design §9 contract itself: seventeen
-    # fields, seven vocabulary constants, bang validators, and one row per
-    # record. Splitting them would fragment the record the store persists as a
-    # single wire hash.
-    # :reek:TooManyConstants, :reek:TooManyInstanceVariables, :reek:TooManyMethods
-    # :reek:MissingSafeMethod -- every `validate_*!` raises by construction;
-    #   a "safe" variant would be a lie.
-    # :reek:LongParameterList -- the seventeen fields ARE the record (see above).
-    # :reek:FeatureEnvy -- `==` and the field validators necessarily read the
-    #   other value/wire being compared.
-    # :reek:ControlParameter -- `interrupt_digest:` on `build` lets the
-    #   gateway bind the prompt's pre-computed digest to the deny decision it
-    #   records for the same interrupt set (ADR-043); deriving it again from
-    #   an empty interrupt list would forge a different question.
+    # :reek:MissingSafeMethod -- every `validate_*!` raises by construction.
     class DecisionRecord
       DIRECTIONS = %w[approve deny].freeze
-      ACTOR_KINDS = %w[os_user telegram_user talk_user].freeze
-      SOURCES = %w[cli telegram talk].freeze
       STATUSES = %w[pending claimed consumed].freeze
       DEFAULT_TTL_S = 900
       ID_DOMAIN = 'tamoz.comms.decision.v1'
       WIRE_TIME = '%Y-%m-%dT%H:%M:%S.%6NZ'
+      TIMES = %i[decided_at expires_at claim_expires_at consumed_at].freeze
+      OPTIONAL = { claim_owner: nil, claim_fence: nil, claim_expires_at: nil, consumed_at: nil,
+                   evidence: nil, reason: nil }.freeze
+      ID_FIELDS = %i[thread_id occurrence_id interrupt_digest direction actor_kind actor_id source decided_at].freeze
 
-      attr_reader :decision_id, :thread_id, :occurrence_id, :interrupt_digest,
-                  :direction, :actor_kind, :actor_id, :source,
-                  :decided_at, :expires_at, :status,
-                  :claim_owner, :claim_fence, :claim_expires_at, :consumed_at,
-                  :evidence, :reason
-
-      # The decision's seventeen fields ARE the value: design §9 binds every
-      # one of them into the record the store persists as one row, so splitting
-      # them into sub-values would fragment the contract rather than simplify
-      # it. `evidence` and `reason` are the ADR-049 audit trail (contract
-      # §7.1): the stronger operator path records the evidence level that made
-      # the approve legal, and why.
-      # rubocop:disable Metrics/ParameterLists
-      def initialize(
-        decision_id:, thread_id:, occurrence_id:, interrupt_digest:,
-        direction:, actor_kind:, actor_id:, source:,
-        decided_at:, expires_at:, status:,
-        claim_owner: nil, claim_fence: nil, claim_expires_at: nil, consumed_at: nil,
-        evidence: nil, reason: nil
-      )
-        validate_identity!(thread_id:, occurrence_id:, interrupt_digest:)
-        validate_direction!(direction)
-        validate_actor!(actor_kind:, actor_id:, source:)
-        validate_audit!(evidence:, reason:)
-        validate_times!(decided_at:, expires_at:)
-        validate_status!(status)
-        validate_claim!(status:, claim_owner:, claim_fence:, claim_expires_at:)
-        validate_consumption!(status:, consumed_at:)
-        validate_id!(decision_id:)
-        assign_identity(decision_id:, thread_id:, occurrence_id:, interrupt_digest:)
-        @direction = direction
-        assign_actor(actor_kind:, actor_id:, source:)
-        assign_window(decided_at:, expires_at:, status:)
-        assign_claim(claim_owner:, claim_fence:, claim_expires_at:, consumed_at:)
-        @evidence = evidence
-        @reason = reason
-        freeze
+      def initialize(**fields)
+        super(**OPTIONAL, **fields.to_h { |name, value| [name, TIMES.include?(name) ? Shapes.utc(value) : value] })
+        DecisionRules.validate!(self)
       end
-      # rubocop:enable Metrics/ParameterLists
 
       # Builds a pending decision from a live interrupt set, deriving the
       # interrupt digest and the decision id. `decided_at` defaults to now and
       # is part of the id: a later re-decision of the SAME question is a NEW
       # decision (single-use consumption), never a duplicate of a consumed one.
-      # @return [DecisionRecord]
-      # rubocop:disable Metrics/ParameterLists -- the same seventeen-field value
-      # contract as initialize: every bound fact is part of the record.
-      def self.build(
-        thread_id:, occurrence_id:, interrupts:, direction:,
-        actor_kind:, actor_id:, source:, decided_at: Time.now.utc, ttl_s: DEFAULT_TTL_S,
-        interrupt_digest: nil, evidence: nil, reason: nil
-      )
-        digest = interrupt_digest || InterruptDigest.of(interrupts)
-        direction_text = direction.to_s
-        decided = decided_at.utc
-        expires = decided + ttl_s
-        new(
-          decision_id: decision_id_for(
-            thread_id:, occurrence_id:, digest:,
-            direction: direction_text, actor_kind:, actor_id:, source:, decided_at: decided
-          ),
-          thread_id:, occurrence_id:, interrupt_digest: digest,
-          direction: direction_text, actor_kind:, actor_id:, source:,
-          decided_at: decided, expires_at: expires, status: 'pending',
-          evidence:, reason:
-        )
+      # `interrupt_digest:` in `fields` binds a prompt's pre-computed digest (ADR-043).
+      def self.build(interrupts:, decided_at: Time.now.utc, ttl_s: DEFAULT_TTL_S, **fields)
+        fields = fields.merge(direction: fields.fetch(:direction).to_s, decided_at: decided_at.getutc)
+        fields[:interrupt_digest] ||= InterruptDigest.of(interrupts)
+        new(**fields, decision_id: decision_id_for(fields), expires_at: fields.fetch(:decided_at) + ttl_s,
+                      status: 'pending')
       end
-      # rubocop:enable Metrics/ParameterLists
 
-      # Same seventeen-field value contract as initialize: every bound fact is
-      # part of the derived id.
-      # rubocop:disable Metrics/ParameterLists
-      def self.decision_id_for(
-        thread_id:, occurrence_id:, digest:, direction:,
-        actor_kind:, actor_id:, source:, decided_at:
-      )
+      def self.decision_id_for(fields)
+        direction = fields.fetch(:direction)
         raise ValidationError, "direction must be one of #{DIRECTIONS.join(', ')}" unless DIRECTIONS.include?(direction)
 
-        Canonical.hexdigest(
-          ID_DOMAIN,
-          [thread_id, occurrence_id, digest, direction, actor_kind, actor_id, source, decided_at]
-        )
+        Canonical.hexdigest(ID_DOMAIN, fields.values_at(*ID_FIELDS))
       end
-      # rubocop:enable Metrics/ParameterLists
 
       def granted? = direction == 'approve'
       def denied? = direction == 'deny'
@@ -146,7 +81,7 @@ module Tamoz
       # inbox deduplicates (invariant 23).
       def resume_request_id = "decision-#{decision_id}"
 
-      def expired?(now) = now >= @expires_at
+      def expired?(now) = now >= expires_at
 
       def pending? = status == 'pending'
 
@@ -156,174 +91,15 @@ module Tamoz
 
       # @return [Hash] the durable string-keyed wire form.
       def wire
-        {
-          'decision_id' => @decision_id,
-          'thread_id' => @thread_id,
-          'occurrence_id' => @occurrence_id,
-          'interrupt_digest' => @interrupt_digest,
-          'direction' => @direction,
-          'actor_kind' => @actor_kind,
-          'actor_id' => @actor_id,
-          'source' => @source,
-          'decided_at' => @decided_at.strftime(WIRE_TIME),
-          'expires_at' => @expires_at.strftime(WIRE_TIME),
-          'status' => @status,
-          'claim_owner' => @claim_owner,
-          'claim_fence' => @claim_fence,
-          'claim_expires_at' => @claim_expires_at&.strftime(WIRE_TIME),
-          'consumed_at' => @consumed_at&.strftime(WIRE_TIME),
-          'evidence' => @evidence,
-          'reason' => @reason
-        }
+        to_h.to_h { |name, value| [name.to_s, TIMES.include?(name) ? value&.strftime(WIRE_TIME) : value] }
       end
 
       # @param wire [Hash] a hash produced by `wire` (or an equivalent writer).
-      # @return [DecisionRecord]
       def self.from_wire(wire)
-        new(
-          decision_id: wire.fetch('decision_id'),
-          thread_id: wire.fetch('thread_id'),
-          occurrence_id: wire.fetch('occurrence_id'),
-          interrupt_digest: wire.fetch('interrupt_digest'),
-          direction: wire.fetch('direction'),
-          actor_kind: wire.fetch('actor_kind'),
-          actor_id: wire.fetch('actor_id'),
-          source: wire.fetch('source'),
-          decided_at: Time.parse(wire.fetch('decided_at')),
-          expires_at: Time.parse(wire.fetch('expires_at')),
-          status: wire.fetch('status'),
-          claim_owner: wire['claim_owner'],
-          claim_fence: wire['claim_fence'],
-          claim_expires_at: wire_time(wire, 'claim_expires_at'),
-          consumed_at: wire_time(wire, 'consumed_at'),
-          evidence: wire['evidence'],
-          reason: wire['reason']
-        )
-      end
-
-      def self.wire_time(wire, key)
-        value = wire[key]
-        value && Time.parse(value)
-      end
-
-      private
-
-      def assign_identity(decision_id:, thread_id:, occurrence_id:, interrupt_digest:)
-        @decision_id = decision_id
-        @thread_id = thread_id
-        @occurrence_id = occurrence_id
-        @interrupt_digest = interrupt_digest
-      end
-
-      def assign_actor(actor_kind:, actor_id:, source:)
-        @actor_kind = actor_kind
-        @actor_id = actor_id
-        @source = source
-      end
-
-      def assign_window(decided_at:, expires_at:, status:)
-        @decided_at = decided_at.utc
-        @expires_at = expires_at.utc
-        @status = status
-      end
-
-      def assign_claim(claim_owner:, claim_fence:, claim_expires_at:, consumed_at:)
-        @claim_owner = claim_owner
-        @claim_fence = claim_fence
-        @claim_expires_at = claim_expires_at&.utc
-        @consumed_at = consumed_at&.utc
-      end
-
-      def validate_identity!(thread_id:, occurrence_id:, interrupt_digest:)
-        unless bounded_string?(thread_id) && bounded_string?(occurrence_id)
-          raise ValidationError, 'decision identity fields must be bounded strings'
-        end
-
-        validate_hex!(interrupt_digest, 'interrupt_digest')
-      end
-
-      # A pure field-shape predicate shared by the identity/actor validators;
-      # the alternative would be duplicating the bound in three places.
-      # :reek:UtilityFunction
-      def bounded_string?(value)
-        value.is_a?(String) && !value.empty? && value.bytesize <= 128
-      end
-
-      def validate_hex!(value, label)
-        return if value.is_a?(String) && value.match?(/\A[0-9a-f]{64}\z/)
-
-        raise ValidationError, "#{label} must be a 64-char hex digest"
-      end
-
-      def validate_direction!(direction)
-        return if DIRECTIONS.include?(direction)
-
-        raise ValidationError, "direction must be one of #{DIRECTIONS.join(', ')}"
-      end
-
-      def validate_actor!(actor_kind:, actor_id:, source:)
-        unless ACTOR_KINDS.include?(actor_kind)
-          raise ValidationError, "actor_kind must be one of #{ACTOR_KINDS.join(', ')}"
-        end
-        raise ValidationError, 'actor_id must be a bounded string' unless bounded_string?(actor_id)
-        return if SOURCES.include?(source)
-
-        raise ValidationError, "source must be one of #{SOURCES.join(', ')}"
-      end
-
-      # The audit trail (ADR-049, contract §7.1): an evidence level, when
-      # recorded, must be a lattice member — a non-member is rejected, never
-      # coerced — and a reason is a bounded string.
-      def validate_audit!(evidence:, reason:)
-        AuthorityEvidence.from(evidence) unless evidence.nil?
-        return if reason.nil? || bounded_string?(reason)
-
-        raise ValidationError, 'reason must be a bounded string'
-      end
-
-      def validate_times!(decided_at:, expires_at:)
-        unless decided_at.is_a?(Time) && expires_at.is_a?(Time)
-          raise ValidationError, 'decided_at and expires_at must be Time values'
-        end
-        raise ValidationError, 'expires_at must follow decided_at' unless expires_at > decided_at
-      end
-
-      def validate_status!(status)
-        return if STATUSES.include?(status)
-
-        raise ValidationError, "status must be one of #{STATUSES.join(', ')}"
-      end
-
-      # The lifecycle constraints are parametric on status: each status owns a
-      # different field requirement, and the validation IS that dispatch.
-      # :reek:ControlParameter, :reek:NilCheck
-      def validate_claim!(status:, claim_owner:, claim_fence:, claim_expires_at:)
-        fields = [claim_owner, claim_fence, claim_expires_at]
-        if status == 'claimed' && fields.any?(&:nil?)
-          raise ValidationError, 'a claimed decision needs claim_owner, claim_fence and claim_expires_at'
-        end
-        return unless status == 'pending' && fields.any? { |field| !field.nil? }
-
-        raise ValidationError, 'a pending decision carries no claim fields'
-      end
-
-      # The lifecycle constraints are parametric on status: each status owns a
-      # different field requirement, and the validation IS that dispatch.
-      # :reek:ControlParameter, :reek:NilCheck
-      def validate_consumption!(status:, consumed_at:)
-        consumed = !consumed_at.nil?
-        consumed_status = status == 'consumed'
-        error =
-          if consumed_status && !consumed
-            'a consumed decision needs consumed_at'
-          elsif consumed && !consumed_status
-            'a non-consumed decision carries no consumed_at'
-          end
-        raise ValidationError, error if error
-      end
-
-      def validate_id!(decision_id:)
-        validate_hex!(decision_id, 'decision_id')
+        new(**members.to_h do |name|
+          value = wire[name.to_s]
+          [name, TIMES.include?(name) && value ? Time.parse(value) : value]
+        end)
       end
     end
   end

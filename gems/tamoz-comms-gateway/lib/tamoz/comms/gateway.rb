@@ -11,12 +11,14 @@ require_relative 'gateway_admission_binding'
 require_relative 'gateway_answers'
 require_relative 'gateway_attachments'
 require_relative 'gateway_callbacks'
+require_relative 'gateway_clarifications'
 require_relative 'gateway_commands'
 require_relative 'gateway_conversation_commands'
 require_relative 'gateway_context_controls'
 require_relative 'gateway_pairing'
 require_relative 'gateway_status'
 require_relative 'gateway_delivery'
+require_relative 'gateway_replies'
 
 module Tamoz
   module Comms
@@ -35,95 +37,22 @@ module Tamoz
       TRANSIENT_BACKOFF_BASE_S = 1.0
       TRANSIENT_BACKOFF_MAX_S = 30.0
       STOP_OUTCOMES = %i[auth_failed poller_lost].freeze
-
-      HELP_REPLY = "Just send me a message. /new starts a fresh conversation, /status shows what I'm doing, " \
-                   '/cancel stops it. /help more lists every command.'
-      HELP_MORE_REPLY = 'Commands: /help [more], /status [r<reference>] [--diagnostic], /new, ' \
-                        '/cancel [r<reference>], /redirect r<reference> <new task>, /whoami, ' \
-                        '/start <pairing code>, /answer r<reference> <answer>, /reset, /compact, /usage, ' \
-                        '/context, /think <low|medium|high>, /verbose <quiet|normal|detailed>, ' \
-                        '/research <question> (a cited report; you see the plan first). ' \
-                        'Commands are controls, not task text.'
-      HELP_USAGE_REPLY = 'Usage: /help [more]'
-      RESEARCH_USAGE_REPLY = 'Usage: /research <question>. I show you a research plan first, then write a cited report.'
-      NO_WORK_REPLY = 'Nothing is running right now.'
-      STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
-      UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
-      AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
-      NEW_CONVERSATION_REPLY = "New conversation started. I won't use earlier messages."
-      UNADMITTABLE_REPLY = "Sorry, I couldn't take that message in. Please send it again, or /new to start fresh."
-      SETTINGS_CHANGED_REPLY = "My settings changed since we last talked, so I've started a fresh conversation."
-      NEW_CONVERSATION_UNBOUND_REPLY =
-        'No conversation is bound for this channel yet; send a message first.'
-      REDIRECT_USAGE_REPLY = 'Usage: /redirect r<reference> <new task>'
-      ANSWER_USAGE_REPLY = 'Usage: /answer r<reference> <answer>'
-      ANSWER_QUEUED_REPLY = 'Answer received; resuming the paused request.'
-      ANSWER_STALE_REPLY = 'That request is no longer waiting for a clarification answer.'
-      ANSWER_WRONG_CORRESPONDENT_REPLY = 'That clarification answer cannot be used from this correspondent.'
-      ANSWER_UNQUEUED_REPLY = 'Answer could not be queued; try again while the request is paused.'
-      START_USAGE_REPLY = 'Usage: /start <pairing code>'
-      START_WAITING_REPLY =
-        'That code matches a pending pairing request. Waiting for operator approval.'
-      START_NO_MATCH_REPLY = "That code doesn't match a pending pairing request."
-      START_PAIRED_REPLY = "Hi! I'm Tamoz. Just send me a message; /help lists the commands.\n" \
-                           'أهلاً! أنا تاموز. أرسل لي رسالة، و/help يعرض الأوامر.'
-      PAIRING_PENDING_REPLY =
-        "This chat isn't paired yet. Read this code to your operator for approval: "
-      PAIRING_CODE_TTL_S = 86_400.0
-      REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'
-      FINISHED_REQUEST_REPLY = 'That request has already finished.'
-      CANCEL_NO_WORK_REPLY = "There's nothing to stop right now."
-      CANCEL_REPLY = 'Stopping…'
-      CANCEL_USAGE_REPLY = 'Usage: /cancel [r<reference>]'
-      CANCEL_STALE_REF_REPLY = 'That request is no longer open on this conversation.'
-
       CONTEXT_CONTROL_COMMANDS = %w[reset compact usage context think verbose].freeze
-      CONTROLS_UNAVAILABLE_REPLY = 'Context controls are not available on this channel.'
-      CONTROLS_NO_SESSION_REPLY =
-        'No session state exists for this conversation yet; send a task first.'
-      CONTROLS_CONFLICT_REPLY =
-        'Context controls are busy right now; another writer holds this conversation. Try again.'
       STATELESS_THREAD_MESSAGE = 'has no checkpoint'
-
-      CONTROL_ARGUMENT_REFUSALS = {
-        'think' => 'Reasoning depth must be low, medium, or high.',
-        'verbose' => 'Answer verbosity must be quiet, normal, or detailed.'
-      }.freeze
-
       TASK_WORD_PRETRANSLATIONS = {
         'not_started' => 'admitted',
         'claimed' => 'running',
         'redirecting' => 'waiting'
       }.freeze
-
       REFERENCE_PATTERN = /\Ar[0-9a-f]{#{Lifecycle::REQUEST_REF_WIDTH}}\z/
       FULL_REFERENCE_PATTERN = /\Ar?[0-9a-f]{64}\z/i
-
-      ADMISSION_REFUSALS = {
-        integrity_conflict: ['quarantined',
-                             'This update conflicts with an earlier message carrying the same identity. ' \
-                             'An operator can review it.'],
-        open_request_limit: ['rejected', 'This channel has too much open work right now; try again later.'],
-        inbound_too_large: ['rejected', "That message exceeds this channel's size limit."],
-        capacity_refused: ['rejected', 'The channel is at capacity; try again later.'],
-        attachment_too_large: ['rejected',
-                               "That file is too large for me; the limit is #{Attachments::MAX_ATTACHMENT_BYTES / 1_000_000} MB."],
-        image_too_large: ['rejected',
-                          "That image is too large for me; the limit is #{Attachments::MAX_IMAGE_BYTES / 1_000_000} MB."],
-        audio_too_large: ['rejected',
-                          "That recording is too large for me; the limit is #{Attachments::MAX_AUDIO_BYTES / 1_000_000} MB."],
-        voice_too_long: ['rejected',
-                         "That voice message is too long for me; the limit is #{Attachments::MAX_VOICE_SECONDS / 60} minutes."],
-        attachment_empty: ['rejected', 'That file is empty.'],
-        attachment_unavailable: ['rejected', "I couldn't download that file. Please send it again."],
-        attachments_unavailable: ['rejected', "This channel isn't set up to receive files."]
-      }.freeze
 
       include Admission
       include AdmissionBinding
       include Answers
       include Attachments
       include Callbacks
+      include Clarifications
       include Commands
       include ConversationCommands
       include ContextControls
@@ -131,43 +60,40 @@ module Tamoz
       include StatusProjection
       include Delivery
 
-      # The constructor is a public seam; retain its established collaborator
-      # list while the lifecycle is split into intent-specific modules.
-      # rubocop:disable Metrics/ParameterLists
-      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil,
-                     controls: nil, credential: nil, attachments: nil)
-        @adapter = adapter
+      # What a gateway may be handed beyond its surface: a drainer serving in its own thread (else it
+      # drains with one of its own), the context controls its commands read, and the attachment spool.
+      Extras = Data.define(:drainer, :controls, :attachments) do
+        def initialize(drainer: nil, controls: nil, attachments: nil) = super
+      end
+
+      def initialize(checkpoints:, transport:, descriptor:, poller_owner:, **extras)
+        extras = Extras.new(**extras)
+        @adapter = checkpoints.adapter
         @checkpoints = checkpoints
-        @store = adapter.bind_comms_store(checkpoints)
+        @store = @adapter.bind_comms_store(checkpoints)
         @transport = transport
         @descriptor = descriptor
         @poller_owner = poller_owner
-        @batch_size = batch_size
-        @controls = controls
-        @credential = credential
-        @attachments = attachments
-        @fence = 0
+        @controls = extras.controls
+        @attachments = extras.attachments
+        @lease = nil
         @stopping = false
         # The store keeps only challenge digests; plaintext codes live here so
         # a repeat contact can name the same code again.
         @issued_pairing_codes = {}
-        @drainer = drainer || DeliveryDrainer.new(
-          store: @store,
-          transport:,
-          descriptor:,
-          owner: "#{poller_owner}:drainer",
-          batch_size:
-        )
-        @owns_drainer = drainer.nil?
+        @drainer = extras.drainer || DeliveryDrainer.new(store: @store, transport:, descriptor:,
+                                                         owner: "#{poller_owner}:drainer")
+        @owns_drainer = extras.drainer.nil?
       end
-      # rubocop:enable Metrics/ParameterLists
 
-      # Acquire the poller lease and enter the serve loop. A fatal transport
-      # error exits through ensure; INT/TERM ask through stop.
+      # Acquire the poller lease and enter the serve loop. `on_started` runs once the lease is held, before the
+      # first pass. A fatal transport error exits through ensure; INT/TERM ask through stop.
       def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0, drain: true,
-                     sleeper: ->(seconds) { sleep seconds })
+                     sleeper: ->(seconds) { sleep seconds }, on_started: nil)
         start_outcome = start(now: now_provider.call)
         return start_outcome unless start_outcome == :started
+
+        on_started&.call
 
         outcome = :stopped
         until @stopping
@@ -185,10 +111,11 @@ module Tamoz
 
       # Acquire the fenced poller lease, then authenticate before polling.
       def start(now: Time.now.utc)
-        acquired = @store.acquire_poller_lease(
-          surface_id:, bot_id:, owner: @poller_owner, fence: next_fence,
-          ttl_s: poller_ttl_s, now:
-        )
+        @lease = Comms::Lease.new(owner: @poller_owner,
+                                  fence: Process.clock_gettime(
+                                    Process::CLOCK_MONOTONIC, :microsecond
+                                  ))
+        acquired = @store.acquire_poller_lease(surface_id:, stream_id:, lease: @lease.wire, ttl_s: poller_ttl_s, now:)
         return :poller_busy unless acquired == :acquired
 
         authenticate_transport
@@ -209,13 +136,13 @@ module Tamoz
       def serve_once(now: Time.now.utc, drain: true)
         return :poller_lost unless renew_poller(now)
 
-        next_offset = @store.poll_offset(bot_id:)
+        next_offset = @store.poll_offset(stream_id:)
         batch = poll_batch(next_offset)
         return :transient unless batch
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
         sweep_handoffs
-        @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
+        @store.persist_next_offset(surface_id:, stream_id:, next_offset: batch[:next_offset], now:)
         return :auth_failed if drain && drain_outbox(now:) == :authentication_refused
 
         :served
@@ -234,7 +161,7 @@ module Tamoz
       # The transport read is idempotent; a transient read observes and persists
       # nothing, so the next pass retries from the same durable offset.
       def poll_batch(next_offset)
-        @transport.poll(next_offset:, limit: @batch_size, timeout_s: poll_timeout_s)
+        @transport.poll(next_offset:, limit: @descriptor.transport.fetch(:batch), timeout_s: poll_timeout_s)
       rescue Comms::TransientTransportError
         nil
       end
@@ -243,12 +170,9 @@ module Tamoz
       # not a side-effect-free predicate.
       # rubocop:disable Naming/PredicateMethod
       def renew_poller(now)
-        return true if @fence.zero?
+        return true unless @lease
 
-        @store.acquire_poller_lease(
-          surface_id:, bot_id:, owner: @poller_owner, fence: @fence,
-          ttl_s: poller_ttl_s, now:
-        ) == :acquired
+        @store.acquire_poller_lease(surface_id:, stream_id:, lease: @lease.wire, ttl_s: poller_ttl_s, now:) == :acquired
       end
       # rubocop:enable Naming/PredicateMethod
 
@@ -283,35 +207,27 @@ module Tamoz
       end
 
       def release_poller
-        @store.release_poller_lease(bot_id:, owner: @poller_owner, fence: @fence)
+        @store.release_poller_lease(stream_id:, lease: @lease.wire) if @lease
       end
 
       def authenticate_transport
-        return true unless @transport.respond_to?(:authenticate)
+        identity = @transport.authenticate
+        return true if identity.is_a?(Hash) && identity['stream_id'] == stream_id
 
-        identity = @transport.authenticate(@descriptor, @credential)
-        return true if identity.is_a?(Hash) && identity['id'].to_i == bot_id
-
-        raise Comms::AuthenticationError, 'authenticated bot does not match the configured surface identity'
+        raise Comms::AuthenticationError, 'the authenticated stream does not match the configured surface identity'
       end
 
       def latest_binding(envelope)
         @store.binding(correspondent_id: envelope.fetch('correspondent_id'), surface_id:)
       end
 
-      def next_fence
-        @fence = Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond)
-      end
-
       def surface_id = @descriptor.surface_id
 
-      def bot_id = @descriptor.identity.fetch(:expected_bot_id)
+      def stream_id = @descriptor.identity.fetch(:stream_id)
 
       def decision_actor_kind = "#{@descriptor.kind}_user"
 
       def decision_source = @descriptor.kind
-
-      def bot_username = @descriptor.identity[:bot_username]
 
       def poll_timeout_s = @descriptor.transport.fetch(:poll_timeout_s)
 

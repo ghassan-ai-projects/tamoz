@@ -808,7 +808,7 @@
       "named_test": "test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work",
       "supporting_tests": [
         "test/comms_parties_test.rb#test_a_party_must_belong_to_its_surfaces_kind",
-        "test/comms_parties_test.rb#test_telegram_bytes_are_unchanged_from_head",
+        "test/comms_parties_test.rb#test_telegram_ids_are_pinned",
         "test/chat_attachment_test.rb#test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo",
         "test/core_spoken_text_test.rb#test_paths_digests_references_and_timestamps_are_not_read_out",
         "test/talk_gateway_test.rb#test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing",
@@ -6361,21 +6361,6 @@
       "promotion_exclusion": null
     },
     {
-      "id": "CLI-config",
-      "category": "cli_command",
-      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
-      "title": "tamoz config",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
-      "supporting_tests": [
-        "test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
       "id": "CLI-context",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -7099,7 +7084,7 @@
       "title": "Versioned, allowlisted records",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read",
+      "named_test": "test/agent_session_records_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read",
       "supporting_tests": [
         "test/core_state_codec_test.rb#test_unknown_registration_is_rejected_before_any_decoder_runs",
         "test/graph_checkpoint_codec_test.rb#test_unknown_persisted_node_is_rejected_without_symbol_interning",
@@ -7167,12 +7152,9 @@
       "title": "Graph compatibility before resume",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/legacy_session_resume_test.rb#test_a_current_build_reads_the_old_database",
+      "named_test": "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
       "supporting_tests": [
-        "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
         "test/graph_checkpoint_codec_test.rb#test_rejects_graph_identity_before_decoding_user_values",
-        "test/legacy_session_resume_test.rb#test_every_resume_guard_stops_the_old_thread_typed",
-        "test/legacy_session_resume_test.rb#test_an_old_thread_stops_typed_against_a_capability_it_never_had",
         "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",
         "test/sqlite_stale_request_test.rb#test_a_stale_request_does_not_poison_an_unrelated_thread"
       ],
@@ -7679,356 +7661,20 @@
       "promotion_exclusion": null
     },
     {
-      "id": "MIG-1",
+      "id": "MIG-27",
       "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_1",
+      "source": "gems/tamoz-sqlite/migrations/0027.sql",
+      "title": "migration 27",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
       "supporting_tests": [
-        "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected"
+        "test/sqlite_kernel_test.rb#test_a_database_at_another_schema_version_is_refused_with_a_reset_instruction",
+        "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected",
+        "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
+        "test/memory_store_test.rb#test_the_schema_registers_the_digest_epoch_and_has_no_old_stream_tables",
+        "test/sqlite_channels_migration_test.rb#test_a_decision_names_one_kind_on_both_sides"
       ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-10",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_10",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-11",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_11",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
-      "supporting_tests": [
-        "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-12",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_12",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type",
-      "supporting_tests": [
-        "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-13",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_13",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-14",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_14",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-15",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_15",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
-      "supporting_tests": [
-        "test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-16",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_16",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it",
-      "supporting_tests": [
-        "test/effect_identity_test.rb#test_logical_identity_is_stable_for_same_checkpointed_operation"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-17",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_17",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies",
-      "supporting_tests": [
-        "test/sqlite_approval_stores_test.rb#test_grant_lookup_matches_rev_scope_and_session_exactly"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-18",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_18",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
-      "supporting_tests": [
-        "test/comms_gateway_test.rb#test_an_integrity_conflict_quarantines_with_a_bounded_reply_and_no_turn"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-19",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_19",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise",
-      "supporting_tests": [
-        "test/sqlite_comms_store_test.rb#test_reply_to_round_trips_from_append_to_transport_wire"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-2",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_2",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-20",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_20",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-21",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_21",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows",
-      "supporting_tests": [
-        "test/sqlite_comms_store_test.rb#test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue",
-        "test/sqlite_comms_store_test.rb#test_cancellation_observed_stamp_lands_once_and_requires_a_request",
-        "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-22",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_22",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22",
-      "supporting_tests": [
-        "test/sqlite_effect_journal_test.rb#test_effect_census_preserves_request_association_separately_from_effect_identity",
-        "test/experience_harness_test.rb#test_request_status_is_request_local_for_two_delivery_outcomes"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-23",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_23",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head",
-      "supporting_tests": [
-        "test/memory_spec_test.rb#test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
-        "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-24",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_24",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle",
-      "supporting_tests": [
-        "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-25",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_25",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_talk_migration_test.rb#test_an_upgrade_to_25_keeps_every_decision_and_admits_talk_actors",
-      "supporting_tests": [
-        "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-3",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_3",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-4",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_4",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-5",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_5",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-6",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_6",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-7",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_7",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-8",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_8",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null
-    },
-    {
-      "id": "MIG-9",
-      "category": "migration",
-      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-      "title": "MIGRATION_9",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store",
-      "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null

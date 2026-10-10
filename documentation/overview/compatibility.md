@@ -17,7 +17,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | gRPC | `grpc` `~> 1.83`, `google-protobuf` `~> 4.35` | The supervised EpisodeWorker for the stream runtime |
 | Telegram | Telegram Bot API, stdlib-only HTTP | `tamoz-telegram` implements the `Tamoz::Comms::Transport` seam |
 | JSON | canonical digesting | RFC-8785 canonical JSON serialization (JCS) with a stored digest epoch |
-| Database migrations | 13 checksummed, monotonic | Schema `CURRENT_VERSION = 13`; ordinals 1–13 are consumed monotonically and never reused |
+| Database migrations | One checksummed migration builds the schema; no upgrade path | Schema `CURRENT_VERSION = 27`; ordinals are never reused, and a database at another version is refused |
 
 ### Gems and their runtime dependencies
 
@@ -65,7 +65,7 @@ These are gaps, not claims. Where a gap is measured by the release audit, keep r
 - **Skill installation and update are partial (invariant 43).** Skills compile from operator-configured directories into immutable, content-addressed snapshots; there is no install/update/self-improvement pipeline. You place skill trees on disk yourself, out of band.
 - **No exactly-once for arbitrary external effects.** Replay-safe effects require idempotency, atomic participation, or reconciliation; ambiguous work stops as `:unknown`.
 - **No real physical actuation.** The only effector is the simulator; connecting a real actuator requires an explicit owner decision and a separate safety review.
-- **No streaming-input engine.** The P14 engine was retired by `MIGRATION_13`; Tamoz runs one sealed, digest-verified Situation snapshot per episode. The continuous plane belongs to the stream runtime.
+- **No streaming-input engine.** The P14 engine is retired; Tamoz runs one sealed, digest-verified Situation snapshot per episode. The continuous plane belongs to the stream runtime.
 - **Observability is partial.** The closed signal catalog, journal, and metrics/trace projection ship; the authoritative SQLite read-only telemetry adapter and durable model-usage persistence do not yet.
 
 ## Versioning policy

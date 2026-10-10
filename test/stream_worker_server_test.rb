@@ -163,7 +163,7 @@ class StreamWorkerServerTest < Minitest::Test
                 "probes" => [{ "name" => "probe_pond_log", "description" => "Echo the pond stream.",
                                "backing" => { "server" => "logs", "tool" => "echo_constant" },
                                "arguments" => { "value" => "{target.stream}" } }] }
-    config = { "runtime" => { "schema_version" => 1 }, "workspace" => { "root" => directory },
+    config = { "runtime" => { "schema_version" => 2 }, "workspace" => { "root" => directory },
                "sources" => { "mcp" => { "enabled" => true, "servers" => [server] } } }
     config["sources"]["probes"] = catalog if probes
     File.write(File.join(runtime_dir, "config.yaml"), Psych.dump(config))

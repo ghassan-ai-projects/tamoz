@@ -487,7 +487,7 @@ class AutonomyScorecardTest < Minitest::Test
       "kind" => "telegram", "revision" => 1, "enabled" => true,
       "profile" => "trusted",
       "credential_ref" => {"kind" => "env", "name" => "TAMOZ_TELEGRAM_BOT_TOKEN"},
-      "expected_bot_id" => 7_463_512_990,
+      "stream_id" => "telegram:bot:7463512990",
       "admission" => {"direct" => "allowlist", "correspondents" => ["telegram:user:11111111"]},
       "approvals" => {"mode" => "none", "prompt_ttl_s" => 900}
     }

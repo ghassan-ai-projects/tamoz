@@ -8,7 +8,7 @@ class CallbackAckCrashTest < Minitest::Test
   include AutonomyCase
 
   Comms = Tamoz::Comms
-  THREAD_ID = 'tg.ops.abc'
+  THREAD_ID = 'telegram.ops.abc'
   SURFACE_ID = 'telegram-ops'
   CONVERSATION_ID = 'telegram:chat:22222222'
   BOT_ID = 7_463_512_990
@@ -17,11 +17,11 @@ class CallbackAckCrashTest < Minitest::Test
 
   def descriptor
     @descriptor ||= Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: SURFACE_ID, revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: BOT_ID },
+      identity: { stream_id: "telegram:bot:#{BOT_ID}" },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -60,8 +60,8 @@ class CallbackAckCrashTest < Minitest::Test
       text: 'hello', observed_time: now
     ).wire
     store.admit_and_enqueue(
-      envelope, surface_id: SURFACE_ID, bot_id: BOT_ID,
-                thread: THREAD_ID, profile_id: 'ops', reservation: 1, now:
+      envelope, stream_id: "telegram:bot:#{BOT_ID}",
+                turn: Tamoz::Comms::Turn.new(thread: THREAD_ID, profile_id: 'ops', reservation: 1).wire, now:
     )
   end
 
@@ -104,6 +104,7 @@ class CallbackAckCrashTest < Minitest::Test
   def pending_prompt_row(store)
     row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
                .find { |candidate| candidate.fetch('kind') == 'approval_request' }
+
     refute_nil row, 'the pause projects its actionable prompt'
     JSON.parse(row.fetch('markup')).fetch('reference')
   end
@@ -111,10 +112,12 @@ class CallbackAckCrashTest < Minitest::Test
   def activate_prompt(store, transport, reference, now:)
     drainer = Comms::DeliveryDrainer.new(store:, transport:, descriptor:, owner: 'test:drainer',
                                          sleeper: ->(_seconds) {})
+
     assert_equal :drained, drainer.drain_once(now:)
 
     digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
     prompt = store.prompt(reference_digest: digest)
+
     assert_equal 'active', prompt.fetch('status'), 'the delivered card activates the prompt durably'
     [digest, prompt]
   end
@@ -162,7 +165,7 @@ class CallbackAckCrashTest < Minitest::Test
       { updates: @updates, next_offset: ids.max && (ids.max + 1) }
     end
 
-    def deliver(delivery)
+    def deliver(_delivery)
       raise Comms::CommsError, 'fixture drain crash' if @crash_deliveries
 
       @last_message_id += 1
@@ -194,7 +197,7 @@ class CallbackAckCrashTest < Minitest::Test
         bind_thread_to_conversation(store, now: base - 120)
         runtime.bind_thread_profile(THREAD_ID, 'trusted')
 
-        rt.cli(%W[queue add --task Fix\ note.txt --thread #{THREAD_ID} --profile trusted],
+        rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--thread', "#{THREAD_ID}", '--profile', 'trusted'],
                factory: edit_factory)
 
         worker = new_worker(runtime)
@@ -209,7 +212,7 @@ class CallbackAckCrashTest < Minitest::Test
         requests_before_ack = request_count(runtime.adapter, THREAD_ID)
         transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-77', reference: reference,
                                        callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
-        gateway = Comms::Gateway.new(adapter: runtime.adapter, checkpoints: runtime.checkpoints,
+        gateway = Comms::Gateway.new(checkpoints: runtime.checkpoints,
                                      transport:, descriptor:, poller_owner: 'gateway:test')
 
         assert_equal :served, gateway.serve_once(now: base, drain: false)
@@ -260,6 +263,7 @@ class CallbackAckCrashTest < Minitest::Test
         bind_thread_to_conversation(store, now: base - 120)
 
         sink = Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
+
         assert_equal :accepted, sink.push(
           thread_id: THREAD_ID, kind: 'request.approval_request', text: 'Approval requested.',
           request_id: 'occurrence-1', interrupts: approval_interrupts
@@ -283,7 +287,7 @@ class CallbackAckCrashTest < Minitest::Test
         )
         transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-88', reference: reference,
                                        callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
-        gateway = Comms::Gateway.new(adapter:, checkpoints:, transport:, descriptor:,
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:,
                                      poller_owner: 'gateway:test', drainer:)
 
         assert_equal :transient, gateway.serve_once(now: base),

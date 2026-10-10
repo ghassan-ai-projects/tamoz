@@ -119,6 +119,16 @@ module AtomicWrites
   end
 end
 
+# The shipped channel kinds, with Telegram's Bot API answered by a fixture client.
+module ChannelKindsFixture
+  module_function
+
+  def telegram(client_factory)
+    telegram = Tamoz::Agent::CHANNEL_KINDS.fetch('telegram').with(options: { client_factory: })
+    Tamoz::Agent::CHANNEL_KINDS.merge('telegram' => telegram)
+  end
+end
+
 class Minitest::Test
   include ArtifactHelpers
   include AtomicWrites

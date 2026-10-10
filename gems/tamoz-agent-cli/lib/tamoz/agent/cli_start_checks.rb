@@ -6,16 +6,16 @@ module Tamoz
     module CLIStartChecks
       REFUSALS = { 401 => 'the API key was rejected', 403 => 'the API key was rejected',
                    402 => 'the account is out of credit', 429 => 'the key is rate-limited right now' }.freeze
-      NO_HEARING = 'the talk page needs a speech-to-text model; set one with ' \
+      NO_HEARING = 'a channel that speaks needs a speech-to-text model; set one with ' \
                    '`tamoz setup --transcription PROVIDER/MODEL`'
 
       private
 
       # A second gateway on the same channel loses the poller race and exits; name the run that owns it instead.
       # A lease left by a run that crashed expires within a minute, so that case waits it out.
-      def already_running(options, entry)
+      def already_running(options, descriptor)
         with_comms_runtime(options) do |_directory, _adapter, store, _checkpoints|
-          state = store.poll_state(bot_id: entry.fetch('expected_bot_id')) || {}
+          state = lease_state(store, descriptor)
           remaining = (state['poller_expires_at_ms'].to_i / 1000.0) - Time.now.to_f
           pid = state['poller_owner_id'].to_s[/\A#{CLICommsShared::GATEWAY_POLLER_PREFIX}:(\d+)\z/o, 1]&.to_i
           next unless remaining.positive? && pid
@@ -27,6 +27,10 @@ module Tamoz
           sleep(remaining)
           nil
         end
+      end
+
+      def lease_state(store, descriptor)
+        store.poll_state(stream_id: descriptor.identity.fetch(:stream_id)) || {}
       end
 
       def alive?(pid)
@@ -59,7 +63,7 @@ module Tamoz
         "the provider could not be reached (#{e.class})"
       end
 
-      # The talk gateway holds the voice key, so the voice key must never be the chat model's (ADR-042).
+      # A speaking surface's gateway holds the voice key, so the voice key must never be the chat model's.
       def voice_key_problem(directory, base)
         voice = directory.models['voice']
         return unless voice
@@ -71,10 +75,20 @@ module Tamoz
         "the voice key (#{voice_key}) must not be the chat model's key (#{chat_key}); give speech its own key"
       end
 
-      def talk_models_problem(directory, base)
+      def speech_models_problem(directory, base)
         return NO_HEARING unless directory.models['transcription']
 
         voice_key_problem(directory, base)
+      end
+
+      # The worker drops every channel variable, so a model whose key is named like one would fail without a word.
+      def channel_named_model_key(directory)
+        names = channel_names(directory)
+        role = %w[chat transcription vision voice].find do |name|
+          model = directory.models[name]
+          model && names.include?(model.credential || Providers::ENV_KEYS[model.provider.to_sym])
+        end
+        "the #{role} model's key is named like a channel variable; give it its own name" if role
       end
 
       def warn_voice(directory, base)

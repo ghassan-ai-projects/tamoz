@@ -71,7 +71,7 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz channel add talk --allow-hos
 Restart Tamoz so it reads the name: Ctrl-C a running `start` and run it again, or, for the service,
 `tamoz --runtime-dir ~/.tamoz service uninstall` then `service install --env-file "$PWD/.env"`. `start` now
 also prints `https://my-mac.tail1234.ts.net/#token=…`. The port is the talk page's (`8787` unless you chose
-`channel add talk --port N`); `--host 0.0.0.0` is never needed and is refused unless an allowed name is set.
+`channel add talk --port N`); `channel add talk --host 0.0.0.0` is never needed and is refused unless an allowed name is set.
 
 **Getting the link onto the phone**
 
@@ -79,7 +79,7 @@ The link is a key: whoever has it can talk to Tamoz and approve its changes. Do 
 or email. Under the service, build it from the token file and copy it:
 
 ```bash
-printf 'https://my-mac.tail1234.ts.net/#token=%s' "$(cat ~/.tamoz/talk/token)" | pbcopy
+printf 'https://my-mac.tail1234.ts.net/#token=%s' "$(cat ~/.tamoz/channels/talk/token)" | pbcopy
 ```
 
 - **iPhone:** with the same Apple ID the copy reaches the phone (Universal Clipboard), or AirDrop it. Paste

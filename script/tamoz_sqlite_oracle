@@ -9,101 +9,12 @@ require "tmpdir"
 module TamozSQLiteOracle
   VERSION = 1
   APPLICATION_ID = 1_413_565_786
-  # P11: the schema moved 1 -> 2 through the checksummed MIGRATION_2 (the
-  # lexical memory index). P13: 2 -> 3 through MIGRATION_3 (scheduler tables).
-  # P14: 3 -> 4 through MIGRATION_4 (stream tables). Comms: 5 -> 6 through
-  # MIGRATION_6 (channel tables). Delivery pacing moved 7 -> 8 through
-  # MIGRATION_8. ADR-049: 8 -> 9 (prompt required_evidence) and 9 -> 10
-  # (decision audit evidence/reason).
-  # The approval-policy redesign collapsed the tail of the registry into
-  # MIGRATION_17 (fresh-schema convention): 15 -> 16 gives the effect journal
-  # its logical-key identity columns, and 16 -> 17 carries the final approval
-  # schema. OpenClaw comms: 17 -> 18 extends the inbound identity with the
-  # raw payload digest, 18 -> 19 adds the conversation generation counter and
-  # the outbox reply_to column, 19 -> 20 bounds conflict amplification to
-  # one anchor row per update_id, and 20 -> 21 rebuilds tamoz_comms_requests
-  # with the cancellation timeline stamps (Phase 2 visible cancellation).
-  # 21 -> 22 adds the request-local ownership columns (tamoz_comms_outbox,
-  # tamoz_effects). 22 -> 23 adds the memory full-text table. 23 -> 24 rebuilds
-  # tamoz_comms_inbound so its kind admits Telegram attachments. 24 -> 25 rebuilds tamoz_comms_decisions so a
-  # talk-channel actor and source are admitted. The oracle is a second, independent read-only verifier: it
-  # must agree with the migrated schema or every scenario database is
-  # schema_invalid.
-  SCHEMA_VERSION = 25
-  MIGRATION_1_CHECKSUM =
-    "d27658b46031e0484dac3ab1a37364b125b01c4a2dbc8a72f3be71e2771c8814"
-  MIGRATION_2_CHECKSUM =
-    "1fa635c75408f2d75d7c9a026d25ae1fc10948152b84e07ed144f20c8c0d837f"
-  MIGRATION_3_CHECKSUM =
-    "6ff111a2b929f06beeb3a0d446d0e73ad4e2945610672ed0b5b4c9ecd6848e91"
-  MIGRATION_4_CHECKSUM =
-    "a7f78a37cd6d15b16489bf9f67580589d778f2a3100e0c5f8f50827acee425ba"
-  MIGRATION_5_CHECKSUM =
-    "be5abbc58052d5d5c596dfe96b227b4f7eb0ed53b3a58d6cf550a6bde87b2fff"
-  # Comms (COMMS_DESIGN §13): 5 -> 6 through MIGRATION_6, the channel-store
-  # tables (surfaces, bindings, pairing challenges, routes, inbound ledger,
-  # requests, poll state, outbox, prompts, decisions, gaps).
-  MIGRATION_6_CHECKSUM =
-    "b351a297958689ef65d744d82e1f6973c6cf45e8b661f148115d6293f05203e5"
-  # Comms (COMMS_DESIGN §10): 6 -> 7 — the outbox gains its receipt column.
-  MIGRATION_7_CHECKSUM =
-    "4646a74aaf093face3b371a5e5dc7b0dead7c8967f21dd6f0c965ce57b89d055"
-  MIGRATION_8_CHECKSUM =
-    "58a81f647cff8be4b952c8dc75ec0ce41c0a0018744997360a515f62cd873da1"
-  # ADR-049 (PLAN_ADR049 Phase 2): 8 -> 9 — the approval prompt pins
-  # required_evidence (INV-C).
-  MIGRATION_9_CHECKSUM =
-    "8605de5469129ba1a4dc3a9a8c74b39dd10a05bc5c1269d16a57e22756c32991"
-  # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 — the decision audit records the
-  # evidence level that made an approve legal and why (contract §7.1).
-  MIGRATION_10_CHECKSUM =
-    "b97f0a8181fab69f4f36a51009574184e8ad45b4f735dbbec82d39f035522dcc"
-  # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1): 10 -> 11 — the
-  # digest epoch marker plus the pre-JCS canonical-digest row clear.
-  MIGRATION_11_CHECKSUM =
-    "73de39e7283bc6d562f03ae8747c47bef104357e022833bd2e963c7a6c079af0"
-  # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 — the
-  # situation/entity scope columns on the memory index (table rebuild with the
-  # all-or-none CHECK).
-  MIGRATION_12_CHECKSUM =
-    "d455430d1d2423fd604a43e6c1c12598bbde5600e38bc09105ea089ce073fec2"
-  # T8.3 (PLAN_TAMOZ_STREAM_BUILD T8.3): 12 -> 13 — the old P14 stream engine
-  # is retired; MIGRATION_13 drops its eight tables.
-  MIGRATION_13_CHECKSUM =
-    "d0d5556d510bccb1792cfe05a4f293885b7ee28cb7b56e3468d34e926619160d"
-  # MIGRATION_14 adds the tamoz_stream_verifications table; MIGRATION_15
-  # (P3, verified artifact store) adds tamoz_artifacts.
-  MIGRATION_14_CHECKSUM =
-    "140fec98900d15bb2b94d2dc21cd05c1fd83fdcc9162117d866f0530b48c8d48"
-  MIGRATION_15_CHECKSUM =
-    "bf62f82543551681ca6e3796cf5df76a9a3e3972aae7e9e587e19c2f81ad90e7"
-  # MIGRATION_16 adds the effect journal's logical-key identity columns;
-  # MIGRATION_17 carries the final approval schema (fresh-schema convention).
-  MIGRATION_16_CHECKSUM =
-    "d4411481bdc8d42633564195bd3306e2b5bbc4654dc7ce5de575c873cac74701"
-  MIGRATION_17_CHECKSUM =
-    "b416ee56b38eb9559301cd2084299dabeee1470e61ed5f36d208f5adf865dd60"
-  # MIGRATION_18 extends the inbound identity with raw_payload_hash;
-  # MIGRATION_19 adds the conversation generation counter and the outbox
-  # reply_to column; MIGRATION_20 bounds conflict amplification with the
-  # anchor-row conflict counter; MIGRATION_21 rebuilds tamoz_comms_requests
-  # with the cancellation timeline stamps.
-  MIGRATION_18_CHECKSUM =
-    "aebc34bf0617647395c1a2a6fa48d69fb5f15d051dfd54fb00d0875c8492c8e9"
-  MIGRATION_19_CHECKSUM =
-    "ba9e2f18ab2ef2ddcf2bae57ccfc85483a4d2cfc3c48ccfbf86b4ec2b97e1c31"
-  MIGRATION_20_CHECKSUM =
-    "82e37eac8f412d313a7bf25269bdb1491e9d17756f2fe96130a90a84c0938da5"
-  MIGRATION_21_CHECKSUM =
-    "4e707e99afae10d1d28cf47b3bef6194299b7f75e344ad8b0b99ff3f9ed1471c"
-  MIGRATION_22_CHECKSUM =
-    "d1880639971be7acc487bebdebfde4b4d527accfed71fa2953a7e67fe4971386"
-  MIGRATION_23_CHECKSUM =
-    "55224e33e6eb2ee7ba5e7cdc96aa7b1311e81277b728fc5ba4ce3bf5cf2d9292"
-  MIGRATION_24_CHECKSUM =
-    "e6a55c53229dc7265d83104f486b6df326c89d0890a099195ec6bf3584c4a4c0"
-  MIGRATION_25_CHECKSUM =
-    "20738ee418d5d326ba9c6595c53038870350ae1838bee16f9e91421bb0109b55"
+  # The oracle is a second, independent read-only verifier: the schema it accepts is pinned here, by version
+  # and by the checksum of the one migration that builds it (gems/tamoz-sqlite/migrations/0027.sql), not read
+  # from the migrator. It must agree with the migrated schema or every scenario database is schema_invalid.
+  SCHEMA_VERSION = 27
+  SCHEMA_CHECKSUM =
+    "69a5bb2bd2818af08c8d85e67da922c906cf2c23f22a2b09e0dbaf7d217941b8"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -817,33 +728,7 @@ module TamozSQLiteOracle
              scalar("PRAGMA user_version") == SCHEMA_VERSION
         raise OracleError, "schema_invalid"
       end
-      expected = [
-        [1, MIGRATION_1_CHECKSUM],
-        [2, MIGRATION_2_CHECKSUM],
-        [3, MIGRATION_3_CHECKSUM],
-        [4, MIGRATION_4_CHECKSUM],
-        [5, MIGRATION_5_CHECKSUM],
-        [6, MIGRATION_6_CHECKSUM],
-        [7, MIGRATION_7_CHECKSUM],
-        [8, MIGRATION_8_CHECKSUM],
-        [9, MIGRATION_9_CHECKSUM],
-        [10, MIGRATION_10_CHECKSUM],
-        [11, MIGRATION_11_CHECKSUM],
-        [12, MIGRATION_12_CHECKSUM],
-        [13, MIGRATION_13_CHECKSUM],
-        [14, MIGRATION_14_CHECKSUM],
-        [15, MIGRATION_15_CHECKSUM],
-        [16, MIGRATION_16_CHECKSUM],
-        [17, MIGRATION_17_CHECKSUM],
-        [18, MIGRATION_18_CHECKSUM],
-        [19, MIGRATION_19_CHECKSUM],
-        [20, MIGRATION_20_CHECKSUM],
-        [21, MIGRATION_21_CHECKSUM],
-        [22, MIGRATION_22_CHECKSUM],
-        [23, MIGRATION_23_CHECKSUM],
-        [24, MIGRATION_24_CHECKSUM],
-        [25, MIGRATION_25_CHECKSUM]
-      ]
+      expected = [[SCHEMA_VERSION, SCHEMA_CHECKSUM]]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"
       )

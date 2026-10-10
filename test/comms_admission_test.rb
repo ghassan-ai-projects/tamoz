@@ -8,11 +8,11 @@ class CommsAdmissionTest < Minitest::Test
 
   def surface(direct: 'allowlist', approvals: 'deny_only')
     Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990 },
+      identity: { stream_id: 'telegram:bot:7463512990' },
       admission: { direct:, correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: approvals, prompt_ttl_s: 900 },
@@ -41,12 +41,12 @@ class CommsAdmissionTest < Minitest::Test
   def test_an_active_binding_requests_a_turn_on_the_conversation_thread
     decision = Comms::Admission.decide(
       envelope, surface: surface, binding: active_binding,
-                conversation: { 'thread_id' => 'tg.ops.abc', 'profile_id' => 'ops' }
+                conversation: { 'thread_id' => 'telegram.ops.abc', 'profile_id' => 'ops' }
     )
 
     assert_equal :request, decision.disposition
     assert_equal :bound, decision.reason
-    assert_equal 'tg.ops.abc', decision.thread_id
+    assert_equal 'telegram.ops.abc', decision.thread_id
   end
 
   def test_a_first_request_derives_the_deterministic_thread
@@ -56,7 +56,7 @@ class CommsAdmissionTest < Minitest::Test
 
     assert_equal :request, decision.disposition
     assert_equal :first_request, decision.reason
-    assert_match(/\Atg\.telegram-ops\.[0-9a-f]{16}\z/, decision.thread_id)
+    assert_match(/\Atelegram\.telegram-ops\.[0-9a-f]{16}\z/, decision.thread_id)
     assert_equal decision.thread_id,
                  Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
   end
@@ -69,14 +69,14 @@ class CommsAdmissionTest < Minitest::Test
 
     assert_equal base, Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222'),
                  'deterministic at a fixed generation'
-    assert_match(/\Atg\.telegram-ops\.[0-9a-f]{16}\z/, base)
+    assert_match(/\Atelegram\.telegram-ops\.[0-9a-f]{16}\z/, base)
 
     generations = [0, 1, 2].map do |generation|
       Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222', generation:)
     end
 
     assert_equal generations.length, generations.uniq.length, 'each generation derives its own thread'
-    generations.each { |thread| assert_match(/\Atg\.telegram-ops\.[0-9a-f]{16}\z/, thread) }
+    generations.each { |thread| assert_match(/\Atelegram\.telegram-ops\.[0-9a-f]{16}\z/, thread) }
   end
 
   def test_the_thread_domain_is_v2_because_the_digest_input_changed

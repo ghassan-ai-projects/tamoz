@@ -178,4 +178,12 @@ class AgentSessionRecordsTest < Minitest::Test
     assert_equal "work", record.fetch("profile_id")
     assert_equal "sha256:#{"c" * 64}", record.fetch("profile_digest")
   end
+
+  def test_a_newer_record_version_is_refused_before_any_field_is_read
+    error = assert_raises(Tamoz::Error) do
+      Tamoz::Agent::SessionRecords.load!({ 'record' => 'session', 'record_version' => 99, 'session_id' => 's' })
+    end
+
+    refute_empty error.message
+  end
 end

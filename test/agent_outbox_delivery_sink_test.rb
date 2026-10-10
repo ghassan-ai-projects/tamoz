@@ -32,11 +32,11 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
 
   def descriptor(**overrides)
     Comms::SurfaceDescriptor.build(
+      kind: 'telegram',
       surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990 },
+      identity: { stream_id: 'telegram:bot:7463512990' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -49,7 +49,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     )
   end
 
-  def bind_thread_to_conversation(store, thread: 'tg.ops.abc', surface: descriptor)
+  def bind_thread_to_conversation(store, thread: 'telegram.ops.abc', surface: descriptor)
     now = Time.utc(2026, 8, 10, 12, 0, 0)
     store.deploy_surface(surface.wire, now:)
     store.bind_correspondent(binding_wire(now), now:)
@@ -61,8 +61,8 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       text: 'hello', observed_time: now
     ).wire
     store.admit_and_enqueue(
-      envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                thread:, profile_id: 'ops', reservation: 1, now:
+      envelope, stream_id: 'telegram:bot:7463512990',
+                turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1).wire, now:
     )
   end
 
@@ -80,7 +80,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
 
-      result = sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'here is the answer')
+      result = sink.push(thread_id: 'telegram.ops.abc', kind: 'request.completed', text: 'here is the answer')
 
       assert_equal :accepted, result
       rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
@@ -97,7 +97,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       bind_thread_to_conversation(store)
 
       %w[request.completed request.approved request.denied request.failed].each_with_index do |kind, index|
-        sink.push(thread_id: 'tg.ops.abc', kind:, text: 'result text', request_id: "terminal-#{index}")
+        sink.push(thread_id: 'telegram.ops.abc', kind:, text: 'result text', request_id: "terminal-#{index}")
 
         assert_equal 'result text',
                      store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).last.fetch('text')
@@ -111,7 +111,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       bind_thread_to_conversation(store)
 
       %w[request.accepted request.claimed request.running request.waiting request.recovered].each do |kind|
-        assert_nil sink.push(thread_id: 'tg.ops.abc', kind:, text: 'working', request_id: 'occurrence-1')
+        assert_nil sink.push(thread_id: 'telegram.ops.abc', kind:, text: 'working', request_id: 'occurrence-1')
       end
       assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
     end
@@ -122,7 +122,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
 
-      sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'x' * 250)
+      sink.push(thread_id: 'telegram.ops.abc', kind: 'request.completed', text: 'x' * 250)
 
       rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
 
@@ -142,7 +142,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
         rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' }
       ))
 
-      assert_equal :accepted, sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'نعم ☀️ ' * 900)
+      assert_equal :accepted, sink.push(thread_id: 'telegram.ops.abc', kind: 'request.completed', text: 'نعم ☀️ ' * 900)
       rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
 
       assert_equal 2, rows.length
@@ -160,7 +160,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
 
       2.times do |index|
         result = sink.push(
-          thread_id: 'tg.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
+          thread_id: 'telegram.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
           request_id: "occurrence-#{index + 1}", interrupts:
         )
 
@@ -175,7 +175,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
   end
 
   def approval_event(request_id, required_evidence: 'filesystem_operator', tool: 'apply_patch')
-    { thread_id: 'tg.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
+    { thread_id: 'telegram.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
       request_id:,
       interrupts: [{ task_id: 'task', call_index: 0,
                      descriptor: { 'kind' => 'approve_tool',
@@ -338,7 +338,8 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
-      event = { thread_id: 'tg.ops.abc', kind: 'healing.escalated', text: 'it needs you', request_id: 'occurrence-1' }
+      event = { thread_id: 'telegram.ops.abc', kind: 'healing.escalated', text: 'it needs you',
+                request_id: 'occurrence-1' }
 
       assert_equal :accepted, sink.push(event)
       sink.push(event)
@@ -360,7 +361,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
                       descriptor: { 'kind' => 'clarify', 'question' => 'Which file?' } }]
 
       result = sink.push(
-        thread_id: 'tg.ops.abc', kind: 'request.clarification_request', request_id: 'occurrence-1',
+        thread_id: 'telegram.ops.abc', kind: 'request.clarification_request', request_id: 'occurrence-1',
         interrupts:
       )
 
@@ -378,7 +379,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       bind_thread_to_conversation(store)
 
       2.times do |index|
-        sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'hello',
+        sink.push(thread_id: 'telegram.ops.abc', kind: 'request.completed', text: 'hello',
                   request_id: "occurrence-#{index + 1}")
       end
 
@@ -392,7 +393,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
-      event = { thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'done', request_id: 'occurrence-1' }
+      event = { thread_id: 'telegram.ops.abc', kind: 'request.completed', text: 'done', request_id: 'occurrence-1' }
 
       assert_equal :accepted, sink.push(event)
       restarted_sink = Tamoz::Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
@@ -414,7 +415,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
 
   def test_an_unbound_thread_delivers_nothing
     with_engine do |sink, adapter, checkpoints|
-      result = sink.push(thread_id: 'tg.unbound', kind: 'request.completed', text: 'hi')
+      result = sink.push(thread_id: 'telegram.unbound', kind: 'request.completed', text: 'hi')
 
       assert_nil result
       assert_empty store_for(adapter, checkpoints)
@@ -427,7 +428,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
 
-      assert_nil sink.push(thread_id: 'tg.ops.abc', kind: 'internal.step', text: 'x')
+      assert_nil sink.push(thread_id: 'telegram.ops.abc', kind: 'internal.step', text: 'x')
 
       assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
     end
@@ -438,7 +439,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       store = adapter.bind_comms_store(checkpoints)
       sink = Tamoz::Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
 
-      assert_nil sink.push(thread_id: 'tg.x', kind: 'request.completed', text: '')
+      assert_nil sink.push(thread_id: 'telegram.x', kind: 'request.completed', text: '')
       assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
     end
   end

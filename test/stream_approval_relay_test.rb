@@ -322,8 +322,9 @@ class StreamApprovalRelayTest < Minitest::Test
 
   def test_the_surface_descriptor_accepts_affirmative_approval
     descriptor = Tamoz::Comms::SurfaceDescriptor.build(
-      surface_id: "tel-1", revision: 2, transport: {mode: "long_poll", credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},
-      identity: {expected_bot_id: 123},
+      kind: "telegram",
+      surface_id: "tel-1", revision: 2, transport: {credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},
+      identity: {stream_id: 'telegram:bot:123'},
       admission: {direct: "allowlist", correspondents: ["c1"]},
       threading: "conversation", profile_id: "p1",
       approvals: {mode: "affirmative", prompt_ttl_s: 900, approver_roles: ["technician"]},
@@ -337,8 +338,9 @@ class StreamApprovalRelayTest < Minitest::Test
   def test_affirmative_approval_without_an_approver_allowlist_is_refused
     error = assert_raises(Tamoz::Comms::ValidationError) do
       Tamoz::Comms::SurfaceDescriptor.build(
-        surface_id: "tel-1", revision: 2, transport: {mode: "long_poll", credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},
-        identity: {expected_bot_id: 123},
+        kind: "telegram",
+        surface_id: "tel-1", revision: 2, transport: {credential_ref: {ref: "t"}, poll_timeout_s: 30, batch: 1, max_response_bytes: 1000},
+        identity: {stream_id: 'telegram:bot:123'},
         admission: {direct: "allowlist", correspondents: ["c1"]},
         threading: "conversation", profile_id: "p1",
         approvals: {mode: "affirmative", prompt_ttl_s: 900},

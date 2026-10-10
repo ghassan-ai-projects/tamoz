@@ -4,7 +4,7 @@
 **Date:** 2026-07-30
 **Tier:** F
 **Implementation:** Complete
-**Relates to:** [ADR-030](./adr-030-one-local-capability-catalog-governs-all-sources.md) (capability admission), [ADR-041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md), [ADR-044](./adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md) (channel and telemetry adapters)
+**Relates to:** [ADR-030](./adr-030-one-local-capability-catalog-governs-all-sources.md) (capability admission), [ADR-041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) (the channel kinds' closed registry, `CHANNEL_KINDS`), [ADR-044](./adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md) (channel and telemetry adapters)
 
 Users add skills and external MCP tools. Code loaded into Tamoz as a new adapter must be reviewed,
 tested and shipped in a Tamoz release. Writing code does not automatically enable it as a tool.

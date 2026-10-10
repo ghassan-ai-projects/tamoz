@@ -73,7 +73,7 @@ module InvestigationEval
                'env_allowlist' => ENV_ALLOWLIST, 'read_only_tools' => ['query'] }
     probe = corpus.fetch('probe').merge('backing' => { 'server' => 'ponds', 'tool' => 'query' })
     targets = cells.product(seeds.to_a).to_h { |cell, seed| [pond_id(cell, seed), { 'stream' => pond_id(cell, seed) }] }
-    { 'runtime' => { 'schema_version' => 1 }, 'workspace' => { 'root' => directory },
+    { 'runtime' => { 'schema_version' => 2 }, 'workspace' => { 'root' => directory },
       'sources' => { 'mcp' => { 'enabled' => true, 'servers' => [server] },
                      'probes' => { 'enabled' => true, 'targets' => targets, 'probes' => [probe] } } }
   end

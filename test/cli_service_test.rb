@@ -25,7 +25,9 @@ class CliServiceTest < Minitest::Test
 
   # launchctl list reports the labels in loaded; bootstrap exits with bootstrap_exit.
   def fake_cli(io, agents, loaded, calls, bootstrap_exit: 0)
-    cli = Tamoz::Agent::CLI.new(**io, input: StringIO.new, env: {}, comms_client_factory: ->(_) { Bot.new([]) },
+    cli = Tamoz::Agent::CLI.new(**io, input: StringIO.new, env: {}, channel_kinds: ChannelKindsFixture.telegram(lambda { |_|
+      Bot.new([])
+    }),
                                       model_factory: lambda { |**|
                                         Object.new.tap do |model|
                                           model.define_singleton_method(:generate) do |**|

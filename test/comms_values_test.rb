@@ -9,10 +9,9 @@ class CommsValuesTest < Minitest::Test
   def surface_fields
     {
       surface_id: 'telegram-ops', revision: 3, kind: 'telegram',
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      transport: { credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                    poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: 7_463_512_990 },
+      identity: { stream_id: 'telegram:bot:7463512990' },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
       approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
@@ -56,7 +55,10 @@ class CommsValuesTest < Minitest::Test
   end
 
   def test_surface_rejects_open_modes_and_unknown_kinds
-    assert_raises(Comms::ValidationError) { surface(kind: 'slack') }
+    assert_raises(Comms::ValidationError) { surface(kind: 'talk', identity: { stream_id: 'telegram:bot:7' }) }
+    ['Slack', 'os', 'cli', '', 'a', 'tele-gram'].each do |kind|
+      assert_raises(Comms::ValidationError, kind) { surface(kind:) }
+    end
     assert_raises(Comms::ValidationError) { surface(threading: 'by_thread') }
     assert_raises(Comms::ValidationError) { surface(admission: { direct: 'open' }) }
     assert_raises(Comms::ValidationError) { surface(approvals: { mode: 'grant', prompt_ttl_s: 900 }) }
@@ -92,7 +94,7 @@ class CommsValuesTest < Minitest::Test
   def test_envelope_validates_ids_text_and_kinds
     assert_raises(Comms::ValidationError) { envelope(update_id: 'abc') }
     assert_raises(Comms::ValidationError) { envelope(correspondent_id: 'telegram:chat:1') }
-    assert_raises(Comms::ValidationError) { envelope(conversation_id: 'tg:chat:2') }
+    assert_raises(Comms::ValidationError) { envelope(conversation_id: 'telegram:room:2') }
     assert_raises(Comms::ValidationError) { envelope(kind: 'media') }
     assert_raises(Comms::ValidationError) { envelope(text: 'x' * 9000) }
     assert_raises(Comms::ValidationError) { envelope(command: 'help', arguments: nil, text: '/help') }
@@ -203,15 +205,15 @@ class CommsValuesTest < Minitest::Test
   def test_conversation_validates_route
     conversation = Comms::Conversation.new(
       surface_id: 'telegram-ops', surface_revision: 3,
-      conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.abc',
+      conversation_id: 'telegram:chat:22222222', thread_id: 'telegram.ops.abc',
       profile_id: 'ops', bound_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
 
-    assert_equal 'tg.ops.abc', conversation.thread_id
+    assert_equal 'telegram.ops.abc', conversation.thread_id
     assert_equal conversation.wire, Comms::Conversation.from_wire(conversation.wire).wire
     assert_raises(Comms::ValidationError) do
       Comms::Conversation.new(surface_id: 'telegram-ops', surface_revision: 3,
-                              conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.abc',
+                              conversation_id: 'telegram:chat:22222222', thread_id: 'telegram.ops.abc',
                               profile_id: 'ops', threading: 'by_message',
                               bound_at: Time.utc(2026, 8, 10, 12, 0, 0))
     end
@@ -220,7 +222,7 @@ class CommsValuesTest < Minitest::Test
   def test_prompt_reference_is_single_use_and_digest_only
     reference_a, prompt_a = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -228,7 +230,7 @@ class CommsValuesTest < Minitest::Test
     )
     reference_b, prompt_b = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -246,7 +248,7 @@ class CommsValuesTest < Minitest::Test
   def test_prompt_pins_the_evidence_symbol_the_decision_carries
     _reference, prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -262,7 +264,7 @@ class CommsValuesTest < Minitest::Test
     error = assert_raises(Comms::ValidationError) do
       Comms::ApprovalPrompt.build(
         surface_id: 'telegram-ops', surface_revision: 1,
-        thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+        thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         required_evidence: :root,
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -273,7 +275,7 @@ class CommsValuesTest < Minitest::Test
 
     prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence: :chat_bound,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -288,7 +290,7 @@ class CommsValuesTest < Minitest::Test
   def test_prompt_validates_lifecycle_fields
     prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',

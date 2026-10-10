@@ -196,7 +196,6 @@ request inboxes and the checkpoints.
 | `postmortem` | Write a Markdown + JSON postmortem of a window, optionally with a model analysis |
 | `mcp` | Serve Tamoz's read-only stdio MCP server (`observe_diagnose`, `observe_timeline`, `observe_explain_turn`) for probes |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
-| `config` | Explicit configuration migration (`migrate`) |
 | `improve` | Mine an operator trajectory corpus for one candidate heuristic (generation only; never promotes) |
 
 ```bash
@@ -300,13 +299,7 @@ Memory is evidence the agent may read; it never alters policy.
 ### Telegram channel setup
 
 Channels are a sibling of `sources:` — they are user surfaces, not capabilities
-the model can call. Schema 2 config carries a strict `channels:` mapping; a
-schema 1 directory loads unchanged as "no channels", and `tamoz config migrate`
-performs the explicit, backup-and-atomic-rename migration:
-
-```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
-```
+the model can call. The config carries a strict `channels:` mapping.
 
 The short path is `tamoz --runtime-dir ~/.tamoz setup --workspace PATH` and
 `tamoz --runtime-dir ~/.tamoz channel add telegram --env-file .env` once, then

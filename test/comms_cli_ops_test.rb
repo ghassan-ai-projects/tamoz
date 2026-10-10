@@ -4,7 +4,7 @@ require_relative 'test_helper'
 require_relative 'support/comms_cli_fixture'
 
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
-# rubocop:disable Metrics/BlockLength, Metrics/CyclomaticComplexity
+# rubocop:disable Metrics/CyclomaticComplexity
 # rubocop:disable Lint/UnusedMethodArgument, Metrics/ParameterLists
 class CommsCliOpsTest < Minitest::Test
   include CommsCliFixture
@@ -17,7 +17,7 @@ class CommsCliOpsTest < Minitest::Test
       'kind' => 'telegram', 'revision' => 1, 'enabled' => true,
       'profile' => 'ops',
       'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-      'expected_bot_id' => BOT_ID,
+      'stream_id' => "telegram:bot:#{BOT_ID}",
       'admission' => { 'direct' => admission, 'correspondents' => [] }
     }
   end
@@ -52,12 +52,7 @@ class CommsCliOpsTest < Minitest::Test
         now: Time.now.utc
       )
       with_store(rt) do |store|
-        store.insert_pairing_challenge(
-          digest: challenge.digest, surface_id: 'telegram-ops',
-          correspondent_id: 'telegram:user:11111111',
-          conversation_id: 'telegram:chat:22222222',
-          expires_at: challenge.expires_at, now: Time.now.utc
-        )
+        store.insert_pairing_challenge(challenge.wire, now: Time.now.utc)
       end
 
       status, out, err = rt.cli(%w[comms pair approve], env: {}, code: challenge.challenge)
@@ -78,7 +73,7 @@ class CommsCliOpsTest < Minitest::Test
 
       assert_equal 0, rt.cli(%w[comms serve --once]).first
       with_store(rt) do |store|
-        assert_equal 71, store.poll_state(bot_id: BOT_ID).fetch('next_offset')
+        assert_equal 71, store.poll_state(stream_id: "telegram:bot:#{BOT_ID}").fetch('next_offset')
       end
     end
   end
@@ -92,12 +87,7 @@ class CommsCliOpsTest < Minitest::Test
         now: Time.now.utc
       )
       with_store(rt) do |store|
-        store.insert_pairing_challenge(
-          digest: challenge.digest, surface_id: 'telegram-ops',
-          correspondent_id: 'telegram:user:11111111',
-          conversation_id: 'telegram:chat:22222222',
-          expires_at: Time.now.utc + 300, now: Time.now.utc
-        )
+        store.insert_pairing_challenge(challenge.wire, now: Time.now.utc)
       end
 
       status, _out, err = rt.cli(%w[comms pair approve], code: 'wrong-code')
@@ -118,12 +108,7 @@ class CommsCliOpsTest < Minitest::Test
         now: Time.now.utc - 120
       )
       with_store(rt) do |store|
-        store.insert_pairing_challenge(
-          digest: challenge.digest, surface_id: 'telegram-ops',
-          correspondent_id: 'telegram:user:11111111',
-          conversation_id: 'telegram:chat:22222222',
-          expires_at: Time.now.utc - 60, now: Time.now.utc - 120
-        )
+        store.insert_pairing_challenge(challenge.wire, now: Time.now.utc - 120)
       end
 
       status, _out, err = rt.cli(%w[comms pair approve], code: challenge.challenge)
@@ -149,12 +134,7 @@ class CommsCliOpsTest < Minitest::Test
         now: Time.now.utc
       )
       with_store(rt) do |store|
-        store.insert_pairing_challenge(
-          digest: challenge.digest, surface_id: 'telegram-ops',
-          correspondent_id: 'telegram:user:11111111',
-          conversation_id: 'telegram:chat:22222222',
-          expires_at: challenge.expires_at, now: Time.now.utc
-        )
+        store.insert_pairing_challenge(challenge.wire, now: Time.now.utc)
       end
 
       status, out, err = rt.cli(%w[comms pair list])
@@ -201,9 +181,9 @@ class CommsCliOpsTest < Minitest::Test
         store.append_delivery(delivery_wire, surface_id: 'telegram-ops', capacity: 500,
                                              now: Time.now.utc)
         delivery_id = delivery_wire.fetch('delivery_id')
-        store.claim_delivery(delivery_id:, owner: 'gateway:test', fence: 1,
+        store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:test', fence: 1).wire,
                              claim_expires_at: Time.now.utc + 60, now: Time.now.utc)
-        store.mark_delivery(delivery_id:, owner: 'gateway:test', fence: 1,
+        store.mark_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:test', fence: 1).wire,
                             status: 'unknown', now: Time.now.utc)
       end
 
@@ -236,20 +216,6 @@ class CommsCliOpsTest < Minitest::Test
     end
   end
 
-  # Context controls are worker-owned (7638961): the CLI's controls seam is
-  # model-free and answers nil, so every gateway control command takes the
-  # bounded CONTROLS_UNAVAILABLE_REPLY path by construction.
-  def test_the_cli_controls_seam_is_model_free_and_answers_nil
-    with_rt do |rt|
-      cli = Tamoz::Agent::CLI.new(
-        out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {}
-      )
-
-      assert_nil cli.send(:comms_controls_source, rt.dir, nil, {}),
-                 'the CLI wires no controls source; controls belong to the worker'
-    end
-  end
-
   private
 
   def message_update(id, text:, user_id: 111_111_11)
@@ -278,7 +244,7 @@ class CommsCliOpsTest < Minitest::Test
         args,
         out:, err:, input: StringIO.new,
         env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' }.merge(env),
-        comms_client_factory: factory || ->(_token) { client }
+        channel_kinds: ChannelKindsFixture.telegram(factory || ->(_token) { client })
       )
       [exit_code, out.string, err.string]
     end
@@ -313,5 +279,5 @@ class CommsCliOpsTest < Minitest::Test
   end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
-# rubocop:enable Metrics/BlockLength, Metrics/CyclomaticComplexity
+# rubocop:enable Metrics/CyclomaticComplexity
 # rubocop:enable Lint/UnusedMethodArgument, Metrics/ParameterLists

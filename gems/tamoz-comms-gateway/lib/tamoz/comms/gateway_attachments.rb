@@ -19,7 +19,7 @@ module Tamoz
         def admit_attachment(envelope, now:)
           attachment = envelope.fetch('attachment')
           labelled = envelope.merge('text' => attachment_task(attachment, envelope['text']))
-          return admit_request(labelled, now:) if @store.inbound_observed?(envelope, bot_id:)
+          return admit_request(labelled, now:) if @store.inbound_observed?(envelope, stream_id:)
 
           refusal = attachment_refusal(attachment)
           return refuse_admission(envelope, refusal, now:) if refusal
@@ -79,7 +79,7 @@ module Tamoz
           attachment.slice('kind', 'media_type', 'name', 'duration_s')
                     .merge('handoff' => handoff, 'digest' => @attachments.put(handoff,
                                                                               bytes), 'size_bytes' => bytes.bytesize)
-                    .merge(Comms::Parties::KINDS.fetch(@descriptor.kind).speaks ? { 'spoken_back' => true } : {})
+                    .merge(@descriptor.speech? ? { 'spoken_back' => true } : {})
         end
 
         def assert_poller_held

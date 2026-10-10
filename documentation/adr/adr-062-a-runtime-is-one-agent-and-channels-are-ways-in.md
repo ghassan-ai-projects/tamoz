@@ -54,7 +54,7 @@ used by every channel (`docs/one-setup-2026-10-09/PLAN.md`, owner decisions OD1â
 |---|---|
 | A key is written into the config | `models.<role>.credential` must name an `*_API_KEY` variable; a provider must look like a provider name; refusals never echo the value |
 | The talk gateway gets the chat key | Its environment holds only the voice role's key; `start` refuses a voice key that equals the chat key by name or by value |
-| A source names a channel token or the env file | The worker drops channel tokens and `TAMOZ_ENV_FILE` from source variables; the runtime's own keys are set last |
+| A source names a channel token or the env file | The worker drops every variable any installed channel kind declares or any entry names, enabled or not, and `TAMOZ_ENV_FILE`, after its model keys are merged; `start` refuses a model key named like a channel variable |
 | Secrets leak through the service | Plists and their backups are written 0600 through `AtomicFile`; a `.env` others can read is refused; `service status` never runs `launchctl print` |
 | A second run fights the first for a channel | `start` refuses a channel whose lease a live run holds, and a runtime a loaded job serves |
 
@@ -63,3 +63,6 @@ used by every channel (`docs/one-setup-2026-10-09/PLAN.md`, owner decisions OD1â
 ## History
 
 - 2026-10-10: accepted with phases P1â€“P5 of the one-setup plan.
+- 2026-10-10 (owner): `start --host` and `TAMOZ_TALK_HOST` removed â€” the talk page's address is its channel's
+  `settings.host` (`tamoz channel add talk --host`); child environments come from each kind's declared
+  variables (`docs/channels-abstraction-2026-10-10/`).

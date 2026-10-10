@@ -48,7 +48,9 @@ class CliStartTest < Minitest::Test
 
   def start_cli(out, err, env, served, stubs)
     bot = stubs.fetch(:bot) { Bot.new([]) }
-    cli = Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:, comms_client_factory: ->(_token) { bot },
+    cli = Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:, channel_kinds: ChannelKindsFixture.telegram(lambda { |_token|
+      bot
+    }),
                                 model_factory: ->(**) { stubs.fetch(:chat) { Model.new } })
     stub_launch(cli, served, stubs)
   end
@@ -78,11 +80,12 @@ class CliStartTest < Minitest::Test
   def test_the_talk_link_is_printed_and_the_token_goes_to_the_talk_gateway
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
-      _status, out, _err, (_directory, base) = start(runtime)
-      token = File.read(File.join(runtime, 'talk', 'token')).strip
+      _status, out, = start(runtime)
+      token = File.read(File.join(runtime, 'channels', 'talk', 'token')).strip
+      spawned = spawn_children_of(Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {}))
 
       assert_includes out, "/#token=#{token}"
-      assert_equal token, base.fetch('TAMOZ_TALK_TOKEN')
+      assert_equal token, spawned.dig('talk-gateway', 0, 'TAMOZ_TALK_TOKEN')
     end
   end
 
@@ -128,6 +131,24 @@ class CliStartTest < Minitest::Test
 
       assert_equal 0, status, err
       assert_equal %w[talk-gateway worker], spawn_children_of(directory).keys
+    end
+  end
+
+  def test_the_worker_never_gets_a_variable_a_disabled_channel_names
+    with_dirs do |runtime, workspace|
+      runtime_with(runtime, workspace, *CHAT)
+      document = Psych.safe_load_file(config_path(runtime))
+      document['channels']['telegram'].merge!('enabled' => false,
+                                              'credential_ref' => { 'kind' => 'env', 'name' => 'OLD_BOT_TOKEN' })
+      document['sources'] = { 'websearch' => { 'enabled' => true, 'command' => '/opt/websearch',
+                                               'credential_refs' => %w[OLD_BOT_TOKEN] } }
+      File.write(config_path(runtime), Psych.dump(document))
+      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {})
+      cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: KEYS)
+
+      worker, = cli.send(:child_plan, directory, KEYS.merge('OLD_BOT_TOKEN' => 'old')).fetch('worker')
+
+      refute worker.key?('OLD_BOT_TOKEN')
     end
   end
 
@@ -187,7 +208,7 @@ class CliStartTest < Minitest::Test
   def test_a_channel_another_run_holds_is_refused_naming_it
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT)
-      hold_poller(runtime, 'telegram', BOT.fetch('id'))
+      hold_poller(runtime, 'telegram', "telegram:bot:#{BOT.fetch('id')}")
       status, _out, err, = start(runtime)
 
       assert_equal 1, status
@@ -199,7 +220,7 @@ class CliStartTest < Minitest::Test
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
       hold_poller(runtime, 'talk',
-                  Psych.safe_load_file(config_path(runtime)).dig('channels', 'talk', 'expected_bot_id'))
+                  Psych.safe_load_file(config_path(runtime)).dig('channels', 'talk', 'stream_id'))
 
       assert_includes start(runtime)[2], "already running for this channel (pid #{Process.pid})"
     end
@@ -266,15 +287,15 @@ class CliStartTest < Minitest::Test
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
 
-      assert_includes start(runtime, '--host', '0.0.0.0')[2], '--allow-host'
+      assert_includes cli(runtime, %w[channel add talk --host 0.0.0.0], bot: Bot.new([]))[2], '--allow-host'
     end
   end
 
   def test_an_allowed_host_warns_of_clear_text_and_links_by_its_name
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
-      cli(runtime, %w[channel add talk --allow-host mac.tail.ts.net], bot: Bot.new([]))
-      status, out, err, = start(runtime, '--host', '0.0.0.0')
+      cli(runtime, %w[channel add talk --allow-host mac.tail.ts.net --host 0.0.0.0], bot: Bot.new([]))
+      status, out, err, = start(runtime)
 
       assert_equal 0, status, err
       assert_includes err, 'clear text'
@@ -285,7 +306,7 @@ class CliStartTest < Minitest::Test
   def test_a_damaged_talk_token_is_named
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
-      File.write(File.join(runtime, 'talk', 'token'), "short\n")
+      File.write(File.join(runtime, 'channels', 'talk', 'token'), "short\n")
 
       assert_includes start(runtime)[2], 'the talk token is missing or damaged'
     end
@@ -294,7 +315,7 @@ class CliStartTest < Minitest::Test
   def test_a_taken_talk_port_is_named_before_the_link_is_printed
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
-      port = Psych.safe_load_file(config_path(runtime)).dig('channels', 'talk', 'talk', 'port')
+      port = Psych.safe_load_file(config_path(runtime)).dig('channels', 'talk', 'settings', 'port')
       TCPServer.open('127.0.0.1', port) do
         _status, out, err, = start(runtime)
 
@@ -323,10 +344,12 @@ class CliStartTest < Minitest::Test
     spawned
   end
 
-  def hold_poller(runtime, surface, bot_id)
+  def hold_poller(runtime, surface, stream)
     Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
                      .send(:with_comms_runtime, { runtime_dir: runtime }) do |_directory, _adapter, store, _checkpoints|
-      store.acquire_poller_lease(surface_id: surface, bot_id:, owner: "gateway:#{Process.pid}", fence: 1, ttl_s: 60,
+      store.acquire_poller_lease(surface_id: surface, stream_id: stream,
+                                 lease: Tamoz::Comms::Lease.new(owner: "gateway:#{Process.pid}", fence: 1).wire,
+                                 ttl_s: 60,
                                  now: Time.now.utc)
     end
   end

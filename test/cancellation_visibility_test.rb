@@ -24,11 +24,6 @@ class CancellationVisibilityTest < Minitest::Test
   THREAD = Comms::Admission.thread_id(CommsGatewayHarness::SURFACE_ID, CONVERSATION).freeze
   CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }.freeze
 
-  def test_migration_pins_schema_version_22
-    assert_operator Tamoz::SQLite::Migrator::CURRENT_VERSION, :>=, 22
-    assert_includes Tamoz::SQLite::Migrator.migration_ordinals, 22
-  end
-
   # Clean cancel: requested -> observed -> terminal stopped, all three points
   # rendered distinctly by `/status r<ref>`.
   def test_a_clean_cancel_renders_requested_observed_and_stopped_distinctly
@@ -444,8 +439,7 @@ class CancellationVisibilityTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         transport = CommsGatewayHarness::ScriptedTransport.new
-        gateway = Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
         )
         yield store, checkpoints, gateway, transport
       ensure
@@ -533,7 +527,7 @@ class CancellationVisibilityTest < Minitest::Test
                                                                'credential_ref' => {
                                                                  'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN'
                                                                },
-                                                               'expected_bot_id' => BOT_ID,
+                                                               'stream_id' => "telegram:bot:#{BOT_ID}",
                                                                'admission' => { 'direct' => 'pairing',
                                                                                 'correspondents' => [] }
                                                              }
