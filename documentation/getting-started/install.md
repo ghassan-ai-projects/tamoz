@@ -183,6 +183,7 @@ request inboxes and the checkpoints.
 | `setup` | Create or update the runtime: its workspace, models and chat profile |
 | `channel` | `channel add telegram` pairs a bot; `channel add talk` adds the browser talk page and its private link. Every channel serves the runtime's one chat profile |
 | `start` | Checks every channel and model with one real call, then runs one gateway per channel and one worker, supervised; prints the talk link |
+| `service` | `install --env-file F` writes and loads one launchd job per gateway and one for the worker (macOS); `status` and `uninstall` |
 | `queue` | Submit a task durably (`add`), or list pending work (`list`) |
 | `worker` | Run the foreground worker that executes queued and scheduled work |
 | `status` | Report pending work, capability sources and safety counters |

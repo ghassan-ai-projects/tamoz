@@ -48,7 +48,7 @@ module Tamoz
       end
 
       def start_problem(options, directory, base)
-        runtime_problem(directory) ||
+        runtime_problem(directory) || service_problem(directory) ||
           enabled_channels(directory).each_value.lazy.filter_map do |entry|
             channel_problem(options, directory, entry, base)
           end.first ||

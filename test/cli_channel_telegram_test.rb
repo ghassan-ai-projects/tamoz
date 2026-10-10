@@ -192,10 +192,23 @@ class CliChannelTelegramTest < Minitest::Test
       set_up_runtime(runtime, workspace)
       env_file = File.join(workspace, '.env')
       File.write(env_file, "export TAMOZ_TELEGRAM_BOT_TOKEN='123:from-file'\n")
+      File.chmod(0o600, env_file)
       status, _out, err = cli(runtime, %W[channel add telegram --owner #{OWNER} --env-file #{env_file}],
                               bot: Bot.new([]), env: {})
 
       assert_equal 0, status, err
+    end
+  end
+
+  def test_an_env_file_others_can_read_is_refused
+    with_dirs do |runtime, workspace|
+      set_up_runtime(runtime, workspace)
+      File.write(env_file = File.join(workspace, '.env'), "TAMOZ_TELEGRAM_BOT_TOKEN=123:x\n")
+      File.chmod(0o644, env_file)
+      status, _out, err = cli(runtime, %W[channel add telegram --env-file #{env_file}], bot: Bot.new([]), env: {})
+
+      assert_equal 1, status
+      assert_includes err, 'chmod 600'
     end
   end
 

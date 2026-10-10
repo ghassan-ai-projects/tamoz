@@ -58,7 +58,7 @@ module Tamoz
 
               Interactive:  ask, code, investigate, deep-research, resume, continue, list, show,
                             follow-up, redirect, cancel, resolve, profile, probes
-              Unattended:   setup, channel, start, queue, worker, status, schedule, approve, observe,
+              Unattended:   setup, channel, start, service, queue, worker, status, schedule, approve, observe,
                             trace, improve
               Self-diagnosis: diagnose, explain, postmortem
               MCP server:   mcp

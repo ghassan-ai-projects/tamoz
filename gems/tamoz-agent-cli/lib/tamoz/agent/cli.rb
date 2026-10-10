@@ -38,6 +38,8 @@ module Tamoz
       include CLIChildProcesses
       include CLIStartChecks
       include CLIStartCommands
+      include CLIServiceCommands
+      include CLILaunchd
       include CLISelfObservationCommands
 
       # Every subcommand dispatches to exactly one same-shaped cmd_* method
@@ -69,6 +71,7 @@ module Tamoz
         "profile" => :cmd_profile,
         "comms" => :cmd_comms,
         "start" => :cmd_start,
+        "service" => :cmd_service,
         "channel" => :cmd_channel,
         "config" => :cmd_config,
         "setup" => :cmd_setup,
@@ -94,7 +97,7 @@ module Tamoz
       # and stops there, without opening a runtime directory it was never
       # asked to touch.
       NEEDS_HELP_CATCH = %w[
-        comms channel config setup start queue worker status schedule approve observe trace
+        comms channel config setup start service queue worker status schedule approve observe trace
         diagnose explain postmortem mcp
       ].freeze
 

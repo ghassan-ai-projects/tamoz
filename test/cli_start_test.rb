@@ -48,12 +48,17 @@ class CliStartTest < Minitest::Test
 
   def start_cli(out, err, env, served, stubs)
     bot = stubs.fetch(:bot) { Bot.new([]) }
-    chat = stubs.fetch(:chat) { Model.new }
     cli = Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:, comms_client_factory: ->(_token) { bot },
-                                model_factory: ->(**) { chat })
+                                model_factory: ->(**) { stubs.fetch(:chat) { Model.new } })
+    stub_launch(cli, served, stubs)
+  end
+
+  def stub_launch(cli, served, stubs)
     speech = stubs.fetch(:speech) { ->(_role) { Model.new } }
     cli.define_singleton_method(:role_model) { |_base, role, _directory| speech.call(role) }
     cli.define_singleton_method(:serve) { |directory, base| (served << [directory, base]) && 0 }
+    cli.define_singleton_method(:launch_agents) { stubs.fetch(:agents) { Dir.tmpdir } }
+    cli.define_singleton_method(:launchctl) { |*| ['', nil] }
     cli
   end
 

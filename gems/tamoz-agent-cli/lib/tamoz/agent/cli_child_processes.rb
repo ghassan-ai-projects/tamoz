@@ -13,7 +13,12 @@ module Tamoz
       def env_with_file(env_file) = @env.to_h.merge(env_file ? read_env_file(env_file) : {})
 
       def env_file_problem(env_file)
-        "cannot read --env-file #{env_file}" if env_file && !File.readable?(env_file)
+        return unless env_file
+        return "cannot read --env-file #{env_file}" unless File.readable?(env_file)
+
+        return unless File.stat(env_file).mode.anybits?(0o077)
+
+        "#{env_file} holds secrets and others can read it; run chmod 600 on it"
       end
 
       def read_env_file(path)
