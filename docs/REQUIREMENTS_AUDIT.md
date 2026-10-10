@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 583 | 308 | 14 | **no** |
+| 589 | 320 | 14 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 555 |
+| pass | 561 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -90,6 +90,7 @@ generating run.
 | `ADR-057` | adr | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
 | `ADR-058` | adr | yes | pass | `test/stream_episode_intent_authority_test.rb#test_gate4_a_novel_domain_produces_a_decision_with_zero_new_ruby` |
 | `ADR-059` | adr | yes | pass | `test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected` |
+| `ADR-061` | adr | yes | pass | `test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -464,6 +465,9 @@ generating run.
 | `API-tamoz-stream-Tamoz::Stream::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-stream-Tamoz::Stream::VerificationStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-stream-Tamoz::Stream::WorkerServer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-talk-Tamoz::Talk::Hub` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-talk-Tamoz::Talk::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-talk-Tamoz::Talk::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-telegram-Tamoz::Telegram::Client` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-telegram-Tamoz::Telegram::Normalizer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-telegram-Tamoz::Telegram::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -506,6 +510,7 @@ generating run.
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
 | `CLI-skills` | cli_command | yes | pass | `test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections` |
 | `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |
+| `CLI-talk` | cli_command | yes | pass | `test/talk_cli_test.rb#test_setup_writes_the_channel_profile_and_a_private_token` |
 | `CLI-telegram` | cli_command | yes | pass | `test/cli_telegram_test.rb#test_setup_pairs_the_first_private_sender_and_writes_a_runnable_channel` |
 | `CLI-think` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-trace` | cli_command | yes | pass | `test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal` |
@@ -582,6 +587,7 @@ generating run.
 | `MIG-22` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22` |
 | `MIG-23` | migration | yes | pass | `test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head` |
 | `MIG-24` | migration | yes | pass | `test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle` |
+| `MIG-25` | migration | yes | pass | `test/sqlite_talk_migration_test.rb#test_an_upgrade_to_25_keeps_every_decision_and_admits_talk_actors` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
