@@ -11,8 +11,6 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 | Variable | Meaning |
 |---|---|
-| `TAMOZ_MODEL` | OpenAI-compatible model identifier (e.g. `gpt-5-mini`) |
-| `TAMOZ_PROVIDER` | Model provider (default: `openai`) |
 | `OPENAI_API_KEY` | Credential for the default provider |
 | `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, ... | Credentials for other providers — the provider's own standard variable |
 | `TAMOZ_TELEGRAM_BOT_TOKEN` | Telegram bot token, referenced by NAME in channel config |
@@ -24,8 +22,9 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | `TAMOZ_CONTEXT_WINDOW` | Context window in tokens for the work loop, overriding the route's recorded window (a profile role's `normalized_settings.context_window` wins over it) |
 | `TAMOZ_WEBSEARCH_GRANT` / `TAMOZ_WEBSEARCH_EGRESS` / `TAMOZ_WEBSEARCH_PROVIDER` | Governed websearch gates |
 
-Model precedence is CLI flag > `TAMOZ_MODEL`/`TAMOZ_PROVIDER` > the profile's
-`primary` role. A profile role may reference a credential by NAME via
+Model precedence is `--provider`/`--model` (one run) > the runtime's `models.chat`
+> the profile's `primary` role. Models are never read from the environment; `.env`
+holds keys and endpoints only. A profile role may reference a credential by NAME via
 `credential_ref`; a referenced variable that is not set fails typed at session
 start rather than silently falling back.
 

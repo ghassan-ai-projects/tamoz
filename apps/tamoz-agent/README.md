@@ -3,11 +3,9 @@
 Tamoz Agent now has a working reviewed-change CLI:
 
 ```sh
-OPENAI_API_KEY="..." TAMOZ_MODEL="gpt-5-mini" \
-  bundle exec tamoz --root . "Summarize this project"
+OPENAI_API_KEY="..." bundle exec tamoz --model gpt-5-mini --root . "Summarize this project"
 
-OPENAI_API_KEY="..." TAMOZ_MODEL="gpt-5-mini" \
-  bundle exec tamoz --root . --allow-changes \
+OPENAI_API_KEY="..." bundle exec tamoz --model gpt-5-mini --root . --allow-changes \
   --check 'test=bundle exec rake test' "Fix the failing test"
 ```
 

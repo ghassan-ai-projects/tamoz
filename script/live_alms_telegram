@@ -66,8 +66,6 @@ class LiveAlmsTelegram
   def initialize(argv)
     @options = parse(argv)
     @env = SANITIZED_ENVIRONMENT_LOADER.call
-    @env['TAMOZ_PROVIDER'] = @env.fetch('TAMOZ_PROVIDER', 'deepseek')
-    @env['TAMOZ_MODEL'] = @env.fetch('TAMOZ_MODEL', 'deepseek-chat')
     @run_id = "alms-live-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(4)}"
     @runtime_dir = File.expand_path(@options.fetch(:runtime_dir))
     @cli = Shellwords.split(@env.fetch('TAMOZ_CLI', 'bundle exec tamoz'))
@@ -190,13 +188,10 @@ class LiveAlmsTelegram
 
   def validate_model_credentials
     require 'tamoz/agent'
-    provider = @env.fetch('TAMOZ_PROVIDER')
-    model = @env['TAMOZ_MODEL']
-    raise ArgumentError, 'TAMOZ_MODEL is not set' if model.to_s.empty?
+    chat = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env).models['chat']
+    raise ArgumentError, 'models.chat is not set; run `tamoz setup --chat PROVIDER/MODEL`' unless chat
 
-    Tamoz::Agent::ModelClientFactory.credential_reference(
-      provider:, profile_role: nil, environment: @env
-    )
+    Tamoz::Agent::ModelClientFactory.credential_reference(provider: chat.provider, profile_role: nil, environment: @env)
   rescue Tamoz::Agent::ModelCallError => e
     raise ArgumentError, "model configuration unavailable: #{e.code}"
   end

@@ -218,7 +218,7 @@ module Agenteval
         thread = "audit-#{scenario.id.downcase}"
         argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", workspace, "--session-dir", sessions,
                 "--session", thread, "--allow-changes", "--check", "verify=ruby #{VERIFIER} audit/findings.json",
-                *arm_flags(arm, root, skill_dir), "code", PROMPT]
+                *model_flags, *arm_flags(arm, root, skill_dir), "code", PROMPT]
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         output, status = MemoryPack.capture(env, argv, workspace, budget)
         run = { "exit_code" => status, "answer_tail" => output.to_s.lines.last(3).join.strip[0, 300],
@@ -235,10 +235,10 @@ module Agenteval
 
     def model_route = [ENV.fetch("AGENTEVAL_PROVIDER", PROVIDER), ENV.fetch("AGENTEVAL_MODEL", MODEL)]
 
+    def model_flags = ["--provider", model_route.first, "--model", model_route.last]
+
     def model_env(tamoz_root)
-      provider, model = model_route
-      { "TAMOZ_PROVIDER" => provider, "TAMOZ_MODEL" => model,
-        "ZAI_API_KEY" => TamozCode.credential(tamoz_root, "ZAI_API_KEY"), "ZAI_API_BASE" => ZAI_BASE }.compact
+      { "ZAI_API_KEY" => TamozCode.credential(tamoz_root, "ZAI_API_KEY"), "ZAI_API_BASE" => ZAI_BASE }.compact
     end
 
     def metrics(store)

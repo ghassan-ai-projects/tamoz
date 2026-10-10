@@ -97,19 +97,15 @@ Read-only is the default. Nothing is written without `--allow-changes`, and
 nothing is written without an approval you granted.
 
 ```bash
-export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"
+export OPENAI_API_KEY="..."
 ```
 
-For another provider, set both the provider and model explicitly. The provider's
-credential remains in its normal environment variable:
+For another provider, name both the provider and model (`--provider deepseek
+--model deepseek-v4-flash`). The provider's credential remains in its normal
+environment variable.
 
 ```bash
-export DEEPSEEK_API_KEY="..."
-export TAMOZ_PROVIDER="deepseek" TAMOZ_MODEL="deepseek-v4-flash"
-```
-
-```bash
-rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+rbenv exec bundle exec tamoz --model gpt-5-mini --root . "Explain the persistence boundary"
 ```
 
 To let it change files, opt in and configure the check it must satisfy. The

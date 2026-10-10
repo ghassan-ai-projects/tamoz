@@ -28,7 +28,9 @@ spec = TalkChecks.spec
 suite = spec.fetch('suite')
 TURN_SCENARIOS = %w[heard_end_to_end ask_workspace_fact parity spoken_reply ask_followup spoken_correction
                     approval_by_voice injection_by_voice self_echo stop_by_button silence_and_noise].freeze
-options = { runs: suite.fetch('safety_runs'), only: nil, provider: 'zai', model: 'glm-5.3-flash', noisy: true }
+options = { runs: suite.fetch('safety_runs'), only: nil, provider: 'zai', model: 'glm-5.3-flash', noisy: true,
+            transcription: 'openrouter/openai/gpt-4o-mini-transcribe', voice: 'openrouter/hexgrad/kokoro-82m',
+            voice_name: 'af_heart', speech_credential: 'OPENROUTER_SPEECH_API_KEY' }
 OptionParser.new do |parser|
   parser.on('--runs N', Integer, 'Safety runs (others use their stated runs, capped by this)') do |n|
     options[:runs] = n
@@ -36,6 +38,12 @@ OptionParser.new do |parser|
   parser.on('--only LIST') { |list| options[:only] = list.split(',') }
   parser.on('--provider NAME') { |name| options[:provider] = name }
   parser.on('--model NAME') { |name| options[:model] = name }
+  parser.on('--transcription PROVIDER/MODEL') { |name| options[:transcription] = name }
+  parser.on('--voice PROVIDER/MODEL') { |name| options[:voice] = name }
+  parser.on('--voice-name NAME') { |name| options[:voice_name] = name }
+  parser.on('--speech-credential NAME', 'The *_API_KEY variable that holds the speech key') do |name|
+    options[:speech_credential] = name
+  end
   parser.on('--skip-noisy') { options[:noisy] = false }
   parser.on('--canary', 'Also run the headless Chrome canary (3 scenarios x 3 runs)') { options[:canary] = true }
 end.parse!
@@ -47,19 +55,13 @@ if File.exist?(File.join(ROOT, '.env'))
     env[name] = value if value && name.match?(/\A[A-Z][A-Z0-9_]*\z/)
   end
 end
-ENV.each { |name, value| env[name] = value if name.match?(/\A(TAMOZ_|ZAI_|OPENROUTER_|DEEPSEEK_)/) }
+ENV.each { |name, value| env[name] = value if name.match?(/\A(ZAI_|OPENROUTER_|DEEPSEEK_)/) }
 env['ZAI_API_BASE'] ||= 'https://api.z.ai/api/coding/paas/v4' if options[:provider] == 'zai'
 
-models = ['--chat', "#{options[:provider]}/#{options[:model]}"]
-%w[transcription voice].each do |role|
-  name = ->(part) { env["TAMOZ_#{role.upcase}_#{part}"] }
-  next if name.call('PROVIDER').to_s.empty?
-
-  models += ["--#{role}", "#{name.call('PROVIDER')}/#{name.call('MODEL')}"]
-  models += ["--#{role}-credential", name.call('CREDENTIAL')] if name.call('CREDENTIAL')
-  models += ["--#{role}-api-base", name.call('API_BASE')] if name.call('API_BASE')
-end
-models += ['--voice-name', env['TAMOZ_VOICE_NAME']] if env['TAMOZ_VOICE_NAME']
+models = ['--chat', "#{options[:provider]}/#{options[:model]}",
+          '--transcription', options[:transcription], '--transcription-credential', options[:speech_credential],
+          '--voice', options[:voice], '--voice-name', options[:voice_name],
+          '--voice-credential', options[:speech_credential]]
 
 stamp = Time.now.strftime('%Y%m%d-%H%M%S')
 out = File.join(ROOT, 'tmp/talk-eval', stamp)
@@ -70,10 +72,7 @@ selected = ->(name) { options[:only].nil? || options[:only].include?(name) }
 blocked = TalkAudio.missing_tools + TalkAudio.missing_voices(suite.fetch('voices'))
 blocked << 'sqlite3' unless system('which', 'sqlite3', out: File::NULL)
 blocked << 'corpus (run script/generate_talk_fixtures)' unless File.exist?(File.join(corpus, 'manifest.json'))
-%w[TAMOZ_TRANSCRIPTION_PROVIDER TAMOZ_TRANSCRIPTION_MODEL TAMOZ_VOICE_PROVIDER TAMOZ_VOICE_MODEL TAMOZ_VOICE_NAME]
-  .each { |name| blocked << name if env[name].to_s.empty? }
-speech_key_name = env['TAMOZ_TRANSCRIPTION_CREDENTIAL'] || 'OPENROUTER_API_KEY'
-speech_key = env[speech_key_name].to_s
+speech_key = env[options[:speech_credential]].to_s
 
 credit = lambda do
   uri = URI('https://openrouter.ai/api/v1/key')
@@ -92,10 +91,10 @@ end
 
 transcriber = ->(wav) {}
 if blocked.empty?
+  transcription_provider, transcription_model = options[:transcription].split('/', 2)
   model = Tamoz::Agent::ModelClientFactory.build(
-    provider: env.fetch('TAMOZ_TRANSCRIPTION_PROVIDER'), model: env.fetch('TAMOZ_TRANSCRIPTION_MODEL'), profile_role: nil,
-    environment: env, explicit_api_base: env['TAMOZ_TRANSCRIPTION_API_BASE'], safety: :idempotent,
-    credential_name: Tamoz::Agent::ChildEnvironments.role_credential(env, 'TRANSCRIPTION')
+    provider: transcription_provider, model: transcription_model, profile_role: nil, environment: env,
+    safety: :idempotent, credential_name: options[:speech_credential]
   )
   transcriber = lambda do |wav|
     result = model.transcribe(audio: wav, filename: 'clip.wav', media_type: 'audio/wav').to_h
@@ -301,8 +300,9 @@ spoken_turns = latency[:answer_voice].length
 direct = heard.values.sum { |summary| summary[:rows].length }
 reduced = options[:runs] < suite.fetch('safety_runs') || options[:only] || !options[:noisy]
 report = { stamp:, commit: `git -C #{ROOT} rev-parse --short HEAD`.strip, chat: "#{options[:provider]}/#{options[:model]}",
-           transcription: env['TAMOZ_TRANSCRIPTION_MODEL'], voice: "#{env['TAMOZ_VOICE_MODEL']} (#{env['TAMOZ_VOICE_NAME']})",
-           versions: TalkAudio.versions, blocked:, runs: run, reduced: reduced ? true : false, options: options.except(:provider, :model),
+           transcription: options[:transcription], voice: "#{options[:voice]} (#{options[:voice_name]})",
+           versions: TalkAudio.versions, blocked:, runs: run, reduced: reduced ? true : false,
+           options: options.except(:provider, :model, :transcription, :voice, :voice_name, :speech_credential),
            credit_before: credit_before['limit_remaining'], speech_spent_usd: spent, direct_transcriptions: direct,
            heard: heard.transform_values { |summary| summary.except(:rows) }, scenarios: rows, latency_s: timing,
            voice_overhead_s: voice_overhead, canary: canary.transform_values do |runs|

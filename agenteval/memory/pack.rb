@@ -102,7 +102,7 @@ module Agenteval
         thread = "#{scenario.id.downcase}-s#{index + 1}"
         workspace = chain.workspace(session.project)
         argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", workspace.dir, "--session-dir", chain.session_dir,
-                "--runtime-dir", SessionChain.runtime_dir(chain, arm), "--session", thread,
+                "--runtime-dir", SessionChain.runtime_dir(chain, arm), "--session", thread, *TamozCode.model_flags,
                 "--allow-changes", "--check", "test=#{Shellwords.join(scenario.check)}", "code", session.prompt]
         started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
         output, status = capture(env, argv, workspace.dir, budget)

@@ -105,11 +105,11 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
 ## Quick start
 
 ```bash
-export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"
+export OPENAI_API_KEY="..."
 ```
 
 ```bash
-rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+rbenv exec bundle exec tamoz --model gpt-5-mini --root . "Explain the persistence boundary"
 ```
 
 ```bash

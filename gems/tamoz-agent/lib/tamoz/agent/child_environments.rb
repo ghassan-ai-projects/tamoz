@@ -57,15 +57,6 @@ module Tamoz
                                               credential_name: model.credential)
       end
 
-      def self.role_credential(base, role)
-        name = base["TAMOZ_#{role}_CREDENTIAL"]
-        return nil if name.to_s.empty?
-
-        return name if ModelClientFactory.role_credential?(name)
-
-        raise ArgumentError, "TAMOZ_#{role}_CREDENTIAL must name an *_API_KEY variable, never a runtime or channel one"
-      end
-
       def self.queue_status_env(base, runtime_dir:)
         standard_env(base).merge('TAMOZ_RUNTIME_DIR' => runtime_dir)
       end

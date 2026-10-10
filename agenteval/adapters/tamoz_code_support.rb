@@ -35,13 +35,13 @@ module Agenteval
 
     def provider_model = ENV.fetch("AGENTEVAL_MODEL", DEFAULT_MODEL)
 
+    def model_flags = ["--provider", provider, "--model", provider_model]
+
     def environment(tamoz_root, window)
       base = {
         # Both credentials travel: the run's provider decides which one the route needs.
         "DEEPSEEK_API_KEY" => credential(tamoz_root, "DEEPSEEK_API_KEY"),
         "OPENROUTER_API_KEY" => credential(tamoz_root, "OPENROUTER_API_KEY"),
-        "TAMOZ_PROVIDER" => provider,
-        "TAMOZ_MODEL" => provider_model,
         "PATH" => ENV.fetch("PATH"), "HOME" => ENV.fetch("HOME"),
         "BUNDLE_GEMFILE" => File.join(tamoz_root, "Gemfile"),
         "RBENV_VERSION" => File.read(File.join(tamoz_root, ".ruby-version")).strip
@@ -66,6 +66,7 @@ module Agenteval
       session_dir = File.expand_path(File.join(ENV.fetch("AGENTEVAL_SESSION_DIR", Agenteval::ROOT), "sessions"))
       FileUtils.mkdir_p(session_dir, mode: 0o700)
       argv = ["rbenv", "exec", "bundle", "exec", "tamoz", "--root", dir, "--session-dir", session_dir,
+              *model_flags,
               "--allow-changes", "--check", "test=#{scenario.notes.fetch('check_command')}"]
       argv += ["--guidance", "AGENTS.md"] if guidance
       argv + ["code", scenario.prompt]

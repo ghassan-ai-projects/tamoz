@@ -6,7 +6,7 @@
 # docs/openclaw-chat-study-refresh/implementation-plan/05-experience-harness.md.
 #
 # Usage:
-#   export DEEPSEEK_API_KEY=... TAMOZ_PROVIDER=deepseek TAMOZ_MODEL=deepseek-chat
+#   export DEEPSEEK_API_KEY=... AGENTEVAL_PROVIDER=deepseek AGENTEVAL_MODEL=deepseek-chat
 #   export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 #   bundle exec ruby bin/tamoz-chat-sim
 #
@@ -25,7 +25,7 @@ require 'json'
 require 'experience_harness'
 
 def preflight!
-  provider = ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
+  provider = ENV.fetch('AGENTEVAL_PROVIDER', 'deepseek')
   cred = "#{provider.upcase}_API_KEY"
   if ENV[cred].to_s.empty?
     abort "Missing #{cred}. Export it (the repo keeps DEEPSEEK_API_KEY in .env):\n  " \

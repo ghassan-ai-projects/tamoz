@@ -8,8 +8,8 @@
 #
 #   bundle exec ruby script/telegram_attachment_eval [--runs 5] [--only document,pdf] [--provider NAME --model NAME]
 #
-# Models per role come from the environment or .env: TAMOZ_VISION_* reads images (else the chat model),
-# TAMOZ_TRANSCRIPTION_* transcribes voice; PDFs need poppler's pdftotext. Report: tmp/telegram-attachment-eval/<stamp>/.
+# The attachment models are `tamoz setup` flags (--roles; default: OpenRouter's gpt-4o-mini-transcribe for voice,
+# the chat model for images); PDFs need poppler's pdftotext. Report: tmp/telegram-attachment-eval/<stamp>/.
 
 require 'bundler/setup'
 require 'optparse'
@@ -21,13 +21,18 @@ require 'telegram_chat_scenarios'
 
 spec = TelegramChatScenarios.attachment_spec
 suite = spec.fetch('suite')
-options = { provider: ENV.fetch('TAMOZ_PROVIDER', nil), model: ENV.fetch('TAMOZ_MODEL', nil),
-            runs: suite.fetch('runs'), only: TelegramChatScenarios.attachments }
+options = { provider: ENV.fetch('AGENTEVAL_PROVIDER', nil), model: ENV.fetch('AGENTEVAL_MODEL', nil),
+            runs: suite.fetch('runs'), only: TelegramChatScenarios.attachments,
+            roles: %w[--transcription openrouter/openai/gpt-4o-mini-transcribe
+                      --transcription-credential OPENROUTER_SPEECH_API_KEY] }
 OptionParser.new do |parser|
   parser.on('--runs N', Integer) { |runs| options[:runs] = runs }
   parser.on('--only LIST') { |list| options[:only] = list.split(',') }
   parser.on('--provider NAME') { |name| options[:provider] = name }
   parser.on('--model NAME') { |name| options[:model] = name }
+  parser.on('--roles FLAGS', '`tamoz setup` flags for the attachment models, as one quoted string') do |flags|
+    options[:roles] = flags.split
+  end
 end.parse!
 
 unknown = options[:only] - TelegramChatScenarios.attachments
@@ -42,7 +47,7 @@ capabilities = nil
 options[:runs].times do |index|
   evaluation = nil
   begin
-    evaluation = TelegramChatEval.new(provider: options[:provider], model: options[:model])
+    evaluation = TelegramChatEval.new(provider: options[:provider], model: options[:model], roles: options[:roles])
     evaluation.start
     capabilities ||= evaluation.capabilities
     puts "run #{index + 1}/#{options[:runs]} — #{evaluation.label}"

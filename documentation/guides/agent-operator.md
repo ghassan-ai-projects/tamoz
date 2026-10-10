@@ -18,12 +18,13 @@ Current version: `0.1.0.alpha.1` (pre-release).
 From the Tamoz checkout:
 
 ```bash
-export TAMOZ_PROVIDER=deepseek
-export TAMOZ_MODEL=deepseek-v4-flash
 export DEEPSEEK_API_KEY='...'
 
 rbenv exec bundle install
 ```
+
+The runtime names its model once (`tamoz setup --chat deepseek/deepseek-v4-flash`);
+a single command may name another with `--provider` and `--model` together.
 
 Use the credential and model names for the provider you actually selected. Do
 not put API-key values in YAML, profiles, tasks, prompts, or MCP arguments.

@@ -12,7 +12,7 @@
 #   bundle exec ruby bin/tamoz-chat-probe OF-3       # one finding
 #
 # Model-dependent findings (OF-1 latency/CheckpointConflictError) need a real
-# provider — use bin/tamoz-chat-sim with TAMOZ_PROVIDER set (see the doc).
+# provider — use bin/tamoz-chat-sim with AGENTEVAL_PROVIDER set (see the doc).
 
 require 'bundler/setup'
 $LOAD_PATH.unshift(File.expand_path('../test/support', __dir__))

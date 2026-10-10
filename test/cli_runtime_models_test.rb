@@ -45,9 +45,8 @@ class CLIRuntimeModelsTest < Minitest::Test
     with_runtime(CHAT) do |path|
       flagged = builder('DEEPSEEK_API_KEY' => 'd').build({ runtime_dir: path, provider: 'deepseek',
                                                            model: 'deepseek-chat' })
-      named = builder('TAMOZ_PROVIDER' => 'zai', 'TAMOZ_MODEL' => 'glm-4.6').build({ runtime_dir: path })
 
-      assert_equal [%w[deepseek deepseek-chat], %w[zai glm-4.6]], [pair(flagged), pair(named)]
+      assert_equal %w[deepseek deepseek-chat], pair(flagged)
     end
   end
 
@@ -62,16 +61,16 @@ class CLIRuntimeModelsTest < Minitest::Test
   def test_naming_only_the_provider_over_a_runtime_model_is_refused
     with_runtime(CHAT) do |path|
       error = assert_raises(OptionParser::MissingArgument) do
-        builder('TAMOZ_PROVIDER' => 'deepseek').build({ runtime_dir: path })
+        builder.build({ runtime_dir: path, provider: 'deepseek' })
       end
 
       assert_match(/--provider and --model together/, error.message)
     end
   end
 
-  def test_an_empty_variable_does_not_hide_the_runtime_model
+  def test_an_empty_flag_does_not_hide_the_runtime_model
     with_runtime(CHAT) do |path|
-      built = builder('TAMOZ_MODEL' => '', 'TAMOZ_PROVIDER' => '').build({ runtime_dir: path })
+      built = builder.build({ runtime_dir: path, model: '', provider: '' })
 
       assert_equal %w[zai glm-5.3-flash], pair(built)
     end
@@ -90,7 +89,7 @@ class CLIRuntimeModelsTest < Minitest::Test
   MISSING_RUNTIME = { 'TAMOZ_RUNTIME_DIR' => '/no/such/runtime' }.freeze
 
   def test_a_named_model_does_not_read_the_runtime
-    named = builder(MISSING_RUNTIME.merge('TAMOZ_PROVIDER' => 'zai', 'TAMOZ_MODEL' => 'glm-5.3-flash')).build({})
+    named = builder(MISSING_RUNTIME).build({ provider: 'zai', model: 'glm-5.3-flash' })
 
     assert_equal %w[zai glm-5.3-flash], pair(named)
   end

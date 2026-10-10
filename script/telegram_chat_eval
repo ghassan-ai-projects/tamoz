@@ -20,7 +20,7 @@ require 'tamoz/agent'
 require 'telegram_chat_eval'
 require 'telegram_chat_scenarios'
 
-options = { provider: ENV.fetch('TAMOZ_PROVIDER', nil), model: ENV.fetch('TAMOZ_MODEL', nil),
+options = { provider: ENV.fetch('AGENTEVAL_PROVIDER', nil), model: ENV.fetch('AGENTEVAL_MODEL', nil),
             runtime_from: nil, only: TelegramChatScenarios.all }
 OptionParser.new do |parser|
   parser.on('--only LIST') { |list| options[:only] = list.split(',') }

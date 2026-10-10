@@ -64,7 +64,7 @@ hostile profile, endpoint, or provider response.
 | Credential leaks into a digest, receipt, or error | Digest binds configuration, never credential values; failures are redacted |
 | A profile points a role at an unexpected provider | Factory rejects a model or provider that does not match the profile role |
 | A generic env var supplies the wrong key | No generic fallback; only the profile-named credential |
-| A role names a channel secret or runtime variable as its key | `ChildEnvironments.role_credential` refuses gateway-only, forbidden, standard and `TAMOZ_*` names; the factory refuses a malformed name or the provider's `_API_BASE` |
+| A role names a channel secret or runtime variable as its key | The runtime config's `models.<role>.credential` must name an `*_API_KEY` variable outside `TAMOZ_*` (`RuntimeModels`, `ModelClientFactory.role_credential?`); the factory refuses a malformed name or the provider's `_API_BASE` |
 | A received failure is retried and double-billed | The transport does not retry a received failure |
 | A malformed response becomes a fake success | Typed failed model call |
 

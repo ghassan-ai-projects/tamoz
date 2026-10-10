@@ -64,29 +64,24 @@ class AgentProfileMachineryTest < Minitest::Test
       "writer" => {"provider" => "openai", "model" => "role-writer"}
     )
     matrix = [
-      # [cli model, cli provider, TAMOZ_MODEL, TAMOZ_PROVIDER, expected primary]
-      [nil, nil, nil, nil, ["role-primary", "ollama"]],
-      ["cli-model", nil, nil, nil, ["cli-model", "ollama"]],
-      [nil, nil, "env-model", nil, ["env-model", "ollama"]],
-      ["cli-model", nil, "env-model", nil, ["cli-model", "ollama"]],
-      [nil, "cli-provider", nil, nil, ["role-primary", "cli-provider"]],
-      [nil, nil, nil, "env-provider", ["role-primary", "env-provider"]],
-      ["cli-model", "cli-provider", "env-model", "env-provider",
-       ["cli-model", "cli-provider"]]
+      # [cli model, cli provider, expected primary]
+      [nil, nil, ["role-primary", "ollama"]],
+      ["cli-model", nil, ["cli-model", "ollama"]],
+      [nil, "cli-provider", ["role-primary", "cli-provider"]],
+      ["cli-model", "cli-provider", ["cli-model", "cli-provider"]]
     ]
 
     capture = []
     stub_model_factory(capture) do
-      matrix.each do |cli_model, cli_provider, env_model, env_provider, expected|
+      matrix.each do |cli_model, cli_provider, expected|
         options = {model: cli_model, provider: cli_provider}
-        env = {"TAMOZ_MODEL" => env_model, "TAMOZ_PROVIDER" => env_provider}.compact
-        models = model_builder(env:)
+        models = model_builder(env: {})
 
         resolved = models.resolve_profile_roles(profile, options)
         primary = resolved.fetch("primary")
         writer = resolved.fetch("writer")
         assert_equal({"provider" => expected[1], "model" => expected[0]}, primary,
-                     "primary cell #{[cli_model, cli_provider, env_model, env_provider].inspect}")
+                     "primary cell #{[cli_model, cli_provider].inspect}")
         # Non-primary roles keep their file values: build_model only ever resolves
         # :primary, so f(model_roles, overrides) leaves them untouched.
         assert_equal({"provider" => "openai", "model" => "role-writer"}, writer)
@@ -99,7 +94,7 @@ class AgentProfileMachineryTest < Minitest::Test
     end
     # The model that was actually constructed matches the recorded tuples for
     # every cell.
-    assert_equal 7, capture.length
+    assert_equal matrix.length, capture.length
   end
 
   def test_the_runtime_chat_model_is_recorded_as_the_primary_it_builds
@@ -143,9 +138,8 @@ class AgentProfileMachineryTest < Minitest::Test
       out = StringIO.new
       err = StringIO.new
       status = run_cli(
-        ["--profile", path, "ask", "read note.txt"],
+        ["--profile", path, "--model", "cli-picked-model", "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out:, err:,
-        env_overrides: {"TAMOZ_MODEL" => "cli-picked-model"},
         factory: read_factory, session: "th"
       )
       assert_equal 0, status, err.string
@@ -153,7 +147,7 @@ class AgentProfileMachineryTest < Minitest::Test
       record = session_record(session_dir, "th")
       assert_equal "test-profile", record.fetch("profile_id")
       assert_equal digest, record.fetch("profile_digest")
-      # Override precedence applied: TAMOZ_MODEL beats the role's model; the
+      # Override precedence applied: --model beats the role's model; the
       # provider comes from the role (no provider override supplied).
       assert_equal(
         {"primary" => {"provider" => "ollama", "model" => "cli-picked-model"}},
@@ -176,7 +170,7 @@ class AgentProfileMachineryTest < Minitest::Test
     end
     assert_match(/primary/, error.message)
 
-    # End-to-end: an env-supplied secret-shaped model id refuses the session
+    # End-to-end: a flag-supplied secret-shaped model id refuses the session
     # before any session record is created (the gate trips inside build_model,
     # before the adapter exists).
     with_profile_env do |workspace, session_dir, config_home|
@@ -187,9 +181,8 @@ class AgentProfileMachineryTest < Minitest::Test
       ))
       err = StringIO.new
       status = run_cli(
-        ["--profile", path, "ask", "read note.txt"],
+        ["--profile", path, "--model", "sk-ant-abcdefghijklmnopqrstuvwxyz123456", "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err:,
-        env_overrides: {"TAMOZ_MODEL" => "sk-ant-abcdefghijklmnopqrstuvwxyz123456"},
         factory: nil, session: "th"
       )
       assert_equal 1, status

@@ -6,7 +6,7 @@ module Tamoz
       # The model client a command runs with.
       class ModelBuilder
         DEFAULT_PROVIDER = 'openai'
-        MISSING_MODEL = '--model, TAMOZ_MODEL, or models.chat in the runtime config'
+        MISSING_MODEL = '--model, or models.chat in the runtime config'
         PAIRED_OVERRIDE = "pass --provider and --model together to run another model than the runtime's chat model"
 
         def initialize(env:, factory: nil)
@@ -52,8 +52,8 @@ module Tamoz
 
         def named_model(options)
           {
-            model: non_empty(options[:model]) || non_empty(@env['TAMOZ_MODEL']),
-            provider: non_empty(options[:provider]) || non_empty(@env['TAMOZ_PROVIDER'])
+            model: non_empty(options[:model]),
+            provider: non_empty(options[:provider])
           }
         end
 

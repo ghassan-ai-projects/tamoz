@@ -101,10 +101,11 @@ Each rule's reasoning and evidence live in the ADR named; the line here is the r
 - **Never stored.** A received file is a temporary handoff (`<runtime>/attachments/`, deleted once the turn
   has read it) — never a database row, never kept, unless a future user request or policy says so
   (owner, 2026-10-09). Only what was read from it stays, like a typed message.
-- **One model per role.** The chat model answers. `TAMOZ_VISION_PROVIDER` / `_MODEL` / `_API_BASE` names the
-  image-reading (OCR) model (unset: the chat model reads images). `TAMOZ_TRANSCRIPTION_*` names the
-  speech-to-text model (unset: voice is "not set up"). PDFs need poppler's `pdftotext`, no model. Each
-  role's key comes from its provider's usual variable; the worker gets only the roles configured.
+- **One model per role.** The chat model answers. `tamoz setup --vision PROVIDER/MODEL` names the
+  image-reading (OCR) model (unset: the chat model reads images); `--transcription` names the speech-to-text
+  model (unset: voice is "not set up"); both live in the runtime config's `models`. PDFs need poppler's
+  `pdftotext`, no model. Each role's key comes from the variable it names (else its provider's usual one);
+  the worker gets only the roles configured.
 - **Strong eval, before and after any change here.** `script/telegram_attachment_eval [--runs 5]` plays
   every scenario in `test/fixtures/telegram_attachments/scenarios.json` (English; facts, traps, injections,
   "nothing kept", time budgets) on a fresh runtime per run with the real model, and reports each

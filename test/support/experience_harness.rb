@@ -75,8 +75,8 @@ module Tamoz
       # deterministic plumbing test — such a run is never intelligence evidence.
       def initialize(provider: nil, model: nil, model_factory: nil,
                      admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil)
-        @provider = provider || ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
-        @model = model || ENV.fetch('TAMOZ_MODEL', 'deepseek-chat')
+        @provider = provider || ENV.fetch('AGENTEVAL_PROVIDER', 'deepseek')
+        @model = model || ENV.fetch('AGENTEVAL_MODEL', 'deepseek-chat')
         @update_seq = 1_000
         @message_seq = 500
         @seen_out = 0

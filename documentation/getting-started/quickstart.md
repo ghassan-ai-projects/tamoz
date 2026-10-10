@@ -34,16 +34,18 @@ variables:
 
 ```bash
 export OPENAI_API_KEY="..."
-export TAMOZ_MODEL="gpt-5-mini"
 ```
 
-For another provider, set the provider and model explicitly; the credential
-stays in the provider's normal environment variable:
+and name the model on each command (`--model gpt-5-mini`). For another provider,
+name the provider and model together; the credential stays in the provider's
+normal environment variable:
 
 ```bash
 export DEEPSEEK_API_KEY="..."
-export TAMOZ_PROVIDER="deepseek" TAMOZ_MODEL="deepseek-v4-flash"
+rbenv exec bundle exec tamoz --provider deepseek --model deepseek-v4-flash --root . "..."
 ```
+
+With a runtime (`--runtime-dir`), the model comes from its config (`tamoz setup --chat PROVIDER/MODEL`).
 
 ## 4. Ask a read-only question
 
