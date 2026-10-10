@@ -48,6 +48,8 @@ test that would prove it, and what it waits on. None is built.
   `pair` step in the setup contract could serve both plus future kinds.
 - **Waits on:** a third channel that needs pairing; two instances are not yet a pattern worth a seam.
 
+## F7. (Adopted in plan revision 5: the string `stream_id`.)
+
 ## F8. File credentials
 
 - **Sketch:** `credential_ref: {kind: file, path:}` — relative, no `..`, opened with `O_NOFOLLOW`, a regular file

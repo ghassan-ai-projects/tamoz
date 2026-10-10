@@ -105,3 +105,33 @@ Both reviewers agreed with PLAN §8: the CLI should not become a channel.
 - **Every interface method has a named caller**; default bodies keep Telegram's setup small.
 - **Fewer owner decisions**: thread prefix, `--once`, `start --host`, `--bootstrap` and the upgrade are settled by
   "no backward compatibility". OD-G now recommends removing the configurable Telegram origin.
+
+## Revision 5 reviews (2026-10-10) → revision 6
+
+| Lens | c / h / m / l | Score |
+|---|---|---|
+| Architecture and interfaces | 0 / 3 / 8 / 6 | 7/10 |
+| Safety, simplicity and delivery | 0 / 4 / 5 / 7 | 7/10 |
+
+| Finding | Resolution in rev 6 |
+|---|---|
+| Loopback cannot pass end to end at C2b (grammar, integer identity and SQL CHECKs still in place) | C2b: add and checks; full gateway pass at the end of C3 |
+| Lease-first serving: a second `serve` would leave its drainer delivering into a talk hub with no server | Connection **and drainer** start from `on_started`; `:poller_busy` exits 1; B7 asserts no outbox claim |
+| The "dependency" proof was a second name test | Wider reference regex, registry counted exactly, and the loopback pass in a subprocess without the adapters on the load path (B8b) |
+| OD-G would break the Telegram evals, which run real processes against a fake Bot API through `TAMOZ_TELEGRAM_API_ORIGIN` | The origin stays, accepted only as loopback `http://` (A14); eval row C1 added |
+| Runbook: queued work runs unseen; token rotated after install; pairing does not confirm the backlog | Wait on `tamoz status`, `service uninstall`; rotate first; `Telegram::Setup#add` confirms through the newest update (B11) |
+| "Unchanged assertions" was false | §5 lists every intended test change by phase; B2 reviews each by word diff |
+| `runtime_path:` exposed the runtime root to adapters | `state_dir:` per surface (A15) |
+| ChildEnvironments contract under-specified; union loaded every adapter | Exact signature and key set (A2); union of loadable kinds; `start` refuses a model key named like a channel variable (A16) |
+| Credential check repeated per adapter | One kind-blind check in `build_descriptor` (A4) |
+| Decision rule weaker than HEAD | Actor and source must name the same kind (A12) |
+| Recreating `tamoz_comms_decisions` erases CLI approval records | Stated in §1, OD-K |
+| Cross-gem interface changes not listed | OD-L |
+| Lows: `authenticate` shape; floor/history staleness; settings bound; `summary` default; registry client hook; records (ADR-061, ADR-062:57, guides); readiness.rb; E8 threshold; missing section C | All folded in |
+
+### C0–C1 code review (before commit `a1c8c207`)
+
+High: the conformance suite lacked the redelivery/cursor property, so dropping `+ 1` from either transport's
+cursor passed — added; both mutations now fail. Medium: the dependency regex missed bare `Telegram::`, subpaths
+and `const_get` — widened; `readiness.rb` was frozen without a §3.7 entry — added. Lows fixed: the Telegram
+driver's nil credential; redundant `sort`.

@@ -1,7 +1,7 @@
 # Channels as one abstraction — quality bar
 
 **Task:** all channel code lives in its adapter gem; everything else holds interfaces · **Owner:** Ghassan ·
-**Size:** L · **Set:** 2026-10-10 (before the change; revised with plan revision 5, still before any code)
+**Size:** L · **Set:** 2026-10-10 (before the change; revised with plan revision 6 after C0–C1)
 **Plan:** [`PLAN.md`](PLAN.md) · **Governing ADRs / invariants:** 014, 041, 042, 052, 059, 061, 062 ·
 **Branch:** `improve-channels`
 
@@ -12,14 +12,14 @@ Status values: `PASS` (evidence named) · `FAIL` · `OPEN` · `BLOCKED` · `WAIV
 **Outcome:** every Telegram and talk code path lives in `tamoz-telegram` / `tamoz-talk` behind `Comms::Transport`,
 `Comms::Channel` and `Comms::ChannelSetup`; three tests prove it — names (containment), dependencies, and a
 test-only third channel that works end to end with only its own code and one injected registry entry; Telegram
-and talk keep every behavior test green with unchanged assertions (one named exception, PLAN §4.3).
+and talk keep every behavior test green; the only test changes are PLAN §5's listed renames, moves and deletions.
 
 **Done when:** every row is PASS or WAIVED, the review log has no open critical/high finding, and the last loop
 iteration changed nothing. A plan review round that finds a high finding is followed by another round.
 
 **Not in scope:** PLAN §9 / [`FUTURE_PLAN.md`](FUTURE_PLAN.md). No upgrade path, no row carried (ADR-059).
 
-**Owner decisions needed:** OD-A, OD-G, OD-J, OD-K (PLAN §7), before C2a.
+**Owner decisions:** PLAN §7 — accepted 2026-10-10; OD-J is the owner's action.
 
 ## 1. Seam
 
@@ -35,9 +35,9 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | # | Property | Check (mutation) | Status |
 |---|---|---|---|
 | A1 | The worker's environment holds no channel variable of any enabled, disabled or registry-only kind, even when a model credential is named like a channel token | `child_environments` test whose fixture names a disabled kind's and a registry-only kind's token; mutations: denylist from enabled entries only; denylist before the model merge | OPEN |
-| A2 | A gateway holds only its kind's `env_names`, `TAMOZ_RUNTIME_DIR` and, if speaking, the voice key; `start` refuses a voice key equal to the chat key by name or value | test; mutations: a setup whose `gateway_env` returns `env` whole; every role handed to the gateway; the equality refusal dropped | OPEN |
+| A2 | A gateway's environment is exactly: the standard variables, `TAMOZ_RUNTIME_DIR`, `child_runtime_env`, its kind's `gateway_env`, and — if speaking — the voice keys; `start` refuses a voice key equal to the chat key by name or value | `child_environments_test` asserting the exact key set; mutations: a setup whose `gateway_env` returns `env` whole; every role handed to the gateway; the equality refusal dropped | OPEN |
 | A3 | Setup methods and `connect` receive only `env.slice(*env_names)` | spy setup; mutation: pass the whole environment | OPEN |
-| A4 | A `credential_ref` naming a variable outside the kind's `env_names` (e.g. the chat key) is refused by `validate!` | `Channel#validate!` tests; mutation: skip the check | OPEN |
+| A4 | A `credential_ref` naming a variable outside the kind's `env_names` (e.g. the chat key) is refused, kind-blind, by `build_descriptor` | CLI test; mutation: skip the check | OPEN |
 | A5 | Two surfaces on one Telegram bot share one `stream_id` and cannot both hold the lease; a `stream_id` must start with its kind, so a talk surface cannot take a Telegram stream | `comms_gateway_test`, descriptor test; mutations: key the lease by `surface_id`; drop the prefix rule | OPEN |
 | A6 | `authenticate` returning another `stream_id` stops the gateway as `auth_failed` (exact string compare) | gateway test; mutation: compare after `to_i` / skip | OPEN |
 | A7 | Party ids of another kind are refused; non-`chat` spaces are refused groups; negative ids parse; `os`/`cli` are reserved kind names | `comms_parties_test`, `comms_admission_test`, `comms_decision_record_test`; mutation: accept any space | OPEN |
@@ -45,7 +45,10 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | A9 | An unknown kind is refused by `channel add`, `start`, `serve`, `doctor`, `service` (ADR-014) | CLI test; mutation: fall back to a constant lookup | OPEN |
 | A10 | `rendering.speech` refused on a kind that cannot speak; a non-loopback talk host without `allow_hosts` refused by `comms serve`, not only `start` | `validate!` tests; mutation: skip `validate!` in `build_descriptor` | OPEN |
 | A11 | `channel add` of any kind refuses a runtime folder inside the workspace, and an `--env-file` with group/other bits | CLI tests for both kinds; mutation: run the workspace check only for talk | OPEN |
-| A12 | Approvals unchanged: deny-only, evidence-gated, actor/source recorded per kind | `comms_evidence_gated_approval_test`, `comms_decision_record_test`, unchanged assertions | OPEN |
+| A12 | Approvals unchanged: deny-only, evidence-gated; a decision's actor and source name the same kind (`telegram_user` with source `talk` refused, in Ruby and SQL) | `comms_evidence_gated_approval_test`, `comms_decision_record_test`, `sqlite_comms_store_test`; mutation: drop the pairing check | OPEN |
+| A14 | The Telegram API origin is accepted only as a loopback `http://` origin | `Telegram::Channel` test; mutation: accept any origin | OPEN |
+| A15 | A setup touches only its `state_dir` (0700, created by the CLI); the talk token lives there | CLI test; mutation: pass the runtime root | OPEN |
+| A16 | `start` refuses a model credential named like a channel variable | CLI test; mutation: drop the refusal | OPEN |
 | A13 | Neither adapter requires beyond `tamoz/core`, `tamoz/comms` and the standard library, nor names `Tamoz::Agent`/`Tamoz::SQLite` | `talk_boundary_test`, new `telegram_boundary_test`; mutation: add `require 'tamoz/agent'` | OPEN |
 
 ## B. Function
@@ -53,15 +56,24 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | # | Property | Check | Status |
 |---|---|---|---|
 | B1 | Every transport passes the shared conformance suite (Telegram, talk, loopback), no skips | `test/support/transport_conformance.rb`; mutation: break a transport's cursor or size check | OPEN |
-| B2 | Telegram and talk end-to-end behavior unchanged (plumbing, fixture transports) | `talk_end_to_end_test`, `talk_gateway_test`, `comms_gateway_test`, `cli_channel_*_test`, `cli_start_test`, `cli_service_test`, `comms_serve_supervision_test`, `comms_cli_test` — assertions unchanged except PLAN §4.3's one | OPEN |
+| B2 | Telegram and talk end-to-end behavior unchanged (plumbing, fixture transports); the only test diffs are PLAN §5's listed renames, moves and deletions | the named tests; `git diff --word-diff` on each changed test file reviewed against the list | OPEN |
 | B3 | Talk restart replays from its durable cursor; a delivered approval card still binds | `talk_gateway_test` restart cases | OPEN |
 | B4 | The new migration recreates the comms tables empty on a fresh schema and on a version-25 database, and touches no other table | migration test (row counts of memory/checkpoint tables unchanged) | OPEN |
 | B5 | A missing adapter gem is a named `MissingAdapterError` at every entry point | CLI test | OPEN |
 | B6 | Voice still works on talk: Heard notice, echo guard, spoken replies, driven by `rendering.speech` | `talk_gateway_test#test_a_heard_notice_*`, `talk_hub_test`, `talk_speaker_test` | OPEN |
-| B7 | `comms serve` takes the lease before starting a connection: a second run is `:poller_busy`, not `EADDRINUSE` | serve test | OPEN |
-| B8 | A third kind needs only its own code: the loopback channel, added by one injected registry entry, runs `channel add`, `start`'s checks and a gateway pass (admit → enqueue → deliver) | `channel_loopback_test` | OPEN |
-| B9 | Old config is refused with a message that names the fix | `runtime_config` test | OPEN |
+| B7 | `comms serve` starts a surface's connection and drainer only once the lease is held: a second run is `:poller_busy`, exits 1 and claims no outbox row | serve test; mutation: start the drainer before the lease | OPEN |
+| B8 | A third kind needs only its own code: the loopback channel, added through `CLI.new(channel_kinds:)`, runs `channel add` and `start`'s checks (C2b) and a full gateway pass, admit → enqueue → deliver (C3) | `channel_loopback_test` | OPEN |
+| B8b | The same pass works in a subprocess with both adapter gems' `lib` off the load path, and no adapter file is in `$LOADED_FEATURES` | `channel_loopback_test` subprocess case; mutation: a stray `require 'tamoz/telegram'` in the CLI | OPEN |
+| B11 | `channel add telegram` confirms Telegram's backlog after pairing, so no older update is answered later | `cli_channel_telegram_test` with three queued updates; mutation: confirm only to the pairing message | OPEN |
+| B12 | `channel add talk --host NAME` records `settings.host`, and the talk gateway listens there | `cli_channel_talk_test` | OPEN |
+| B9 | A config with a removed key (`expected_bot_id`, `talk:`) fails loudly, naming the key | `runtime_directory_config_test` | OPEN |
 | B10 | Real-model smoke after §6 on the live runtime (evidence only, not a gate): one Telegram text turn and one talk voice turn | reported as real-model plumbing, not a quality claim | OPEN |
+
+## C. Evaluation
+
+| # | Property | Check | Status |
+|---|---|---|---|
+| C1 | `script/telegram_attachment_eval` and `script/talk_eval` run before C2a and after C3 on the same real model; both results reported; BLOCKED or SHORT is reported, never a pass; safety scenarios pass every run | eval reports in `docs/channels-abstraction-2026-10-10/` | OPEN |
 
 ## D. Gates
 
@@ -85,7 +97,7 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | E5 | Nothing kept for compatibility: no `expected_bot_id`, `bot_id` in the comms contract, `tg.`, `transport.mode`, `TAMOZ_TALK_HOST`, `TAMOZ_TELEGRAM_SURFACE`, `start --host`, `--bootstrap`, `comms_client_factory:`; no row-carrying code | grep | OPEN |
 | E6 | No new gem; no new runtime dependency | gemspec diff | OPEN |
 | E7 | Comments per AGENTS.md; files 644 | review, `git ls-files -s` | OPEN |
-| E8 | Net lines in `gems/*/lib` do not grow beyond the two interfaces and the two `Channel` classes | `git diff --stat` | OPEN |
+| E8 | Net growth of `gems/*/lib` is at most 300 lines (the interfaces, two `Channel` classes, the registry; moved code nets zero) | `git diff --stat <plan commit>..HEAD -- 'gems/*/lib'` | OPEN |
 
 ## F. Honesty and records
 
@@ -104,10 +116,13 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | Plan rev 1 — simplicity/safety | 0 / 3 / 8 / 3 | resolved in rev 2 | — |
 | Plan rev 3 — architecture/interfaces | 0 / 2 / 6 / 7 | resolved in rev 4 | — |
 | Plan rev 3 — safety/simplicity | 0 / 3 / 5 / 3 | resolved in rev 4 | — |
-| Plan rev 5 — two lenses | pending | | — |
+| Plan rev 5 — architecture | 0 / 3 / 8 / 6 | resolved in rev 6 | — |
+| Plan rev 5 — safety | 0 / 4 / 5 / 7 | resolved in rev 6 | — |
+| C0–C1 code | 0 / 1 / 2 / 4 | high (redelivery property) and both mediums fixed before commit | `a1c8c207` |
 
 ## Loop log
 
 | Iteration | Rows changed | Notes |
 |---|---|---|
-| 0 (plan) | — | Bar set before code; revised with plan revs 3, 4, 5 |
+| 0 (plan) | — | Bar set before code; revised with plan revs 3–6 |
+| 1 | E1, E2, B1 started | C0–C1 committed; rows stay OPEN until the outcome they measure is reached |

@@ -1,8 +1,8 @@
-# Channels as one abstraction — analysis and plan (revision 5)
+# Channels as one abstraction — analysis and plan (revision 6)
 
 **Owner:** Ghassan · **Set:** 2026-10-10 · **History:** rev 1 → two reviews → rev 2; owner: all channel code in
 its adapter gem → rev 3 → two reviews → rev 4; owner: no migration path, no backward compatibility (ADR-059) →
-rev 5 ([`REVIEW.md`](REVIEW.md)) · **Branch:** `improve-channels` · **Bar:** [`QUALITY_BAR.md`](QUALITY_BAR.md) ·
+rev 5 → two reviews → rev 6 ([`REVIEW.md`](REVIEW.md)) · **Branch:** `improve-channels` · **Bar:** [`QUALITY_BAR.md`](QUALITY_BAR.md) ·
 **Deferred work:** [`FUTURE_PLAN.md`](FUTURE_PLAN.md)
 **Governing ADRs:** 014 (adapters are a closed, first-party set), 041 (contract gem plus adapter gems), 042 (the
 gateway is its own process, holding only its credential), 052 (facades), 059 (no compatibility before 1.0),
@@ -19,13 +19,17 @@ same approvals, same admission, same credential isolation, same voice.
 
 1. **Names** — no channel kind is named in `gems/*/lib` outside the adapter gems and the registry
    (`channel_kind_containment_test`, exact counts per file).
-2. **Dependencies** — no gem outside the adapters requires `tamoz/telegram` or `tamoz/talk` or references
-   `Tamoz::Telegram`/`Tamoz::Talk`, except the registry's one lazy load; no gemspec depends on an adapter
-   (`channel_dependency_test`). Names can be renamed away; dependencies cannot.
+2. **Dependencies** — `channel_dependency_test` counts every line outside the adapters that loads or names one
+   (any `'tamoz/telegram…'` string, `Telegram::`/`Talk::` with or without `Tamoz::`, `const_get`), and no gemspec
+   may depend on an adapter; the registry file is counted exactly, not exempted. Because a line count can still be
+   dodged, the loopback test below also runs **in a subprocess with both adapter gems' `lib` removed from the load
+   path** and asserts no adapter file is in `$LOADED_FEATURES` — the core and the CLI work without the adapters
+   present, which no renaming can fake.
 3. **Behavior** — a third, test-only channel kind (`test/support/loopback_channel.rb`: an in-memory `Transport`,
-   `Channel` and `Setup`) is added by a test with one injected registry entry, runs `channel add`, `start`'s checks
-   and a gateway pass end to end, and passes the transport conformance suite — with no other file changed. This
-   is the third example the interfaces are checked against, so they are not two-channel-shaped.
+   `Channel` and `Setup`) is added by a test through `CLI.new(channel_kinds:)`, runs `channel add` and `start`'s
+   checks (from C2b) and a full gateway pass — admit, enqueue, deliver (from C3, once the grammar admits a new
+   kind) — and passes the transport conformance suite, with no other file changed. It is the third example the
+   interfaces are checked against, so they are not two-channel-shaped.
 
 **The measure.** Today a third channel touches about 17 code files in four gems outside its adapter, plus a schema
 change (§3.6). After this plan it touches its own gem and the registry line, plus the new-gem registration every
@@ -33,8 +37,11 @@ gem needs (`Gemfile`, test load path, requirements/public-API/dependency manifes
 
 **No upgrade path** (owner, 2026-10-10; ADR-059). The schema changes through one new migration ordinal, because
 ordinals are monotonic and checksummed (AGENTS.md); it **recreates the comms tables empty** and carries nothing.
-Memory, checkpoints and the effect journal live in the same database file and are untouched. Channels are
-re-added with `tamoz channel add` (§6).
+Memory, checkpoints and the effect journal live in the same database file and are untouched. What is lost, by
+decision (OD-K): channel bindings, routes and the outbox; every chat restarts as after `/new` (long-term memory
+carries over, because it is keyed by tenant, `memory/surface.rb:36`); and `tamoz_comms_decisions`, which also
+holds the CLI's own `tamoz approve` records (`cli_worker_commands.rb:433-450`), so the approval audit restarts.
+Channels are re-added with `tamoz channel add` (§6).
 
 ## 2. What is already right — keep it
 
@@ -118,7 +125,8 @@ These name a channel and stay; the containment test freezes their exact counts r
 a new mention in them still fails: checksummed past migrations in `migrator.rb` (`:754,756,1394,1396`); benchmark
 protocol code (`tamoz-evals-runner/.../openclaw_durable_cli_adapter.rb`, `openclaw_comms_oracles.rb`; ADR-058
 reviewed updates only); the stream's approval escalation default (`tamoz-stream/.../approval_relay.rb:247`, where
-Agentic Stream escalates — the Go repo's contract). `bin/` and `script/` are outside the scan.
+Agentic Stream escalates — the Go repo's contract); benchmark readiness (`tamoz-evals-runner/.../readiness.rb:20`,
+`MISSION_SURFACES`, ADR-058). `bin/` and `script/` are outside the scan.
 
 ## 4. Target design
 
@@ -145,10 +153,15 @@ Agentic Stream escalates — the Go repo's contract). `bin/` and `script/` are o
 - **Commands** — `Commands.parse(text)` loses `bot_username:`. The Telegram normalizer, which already knows its bot
   (`normalizer.rb:26-29`), strips a `@<own bot>` suffix; any other `@suffix` stays and fails to parse, as today.
   `bot_username` leaves the core identity for Telegram's `settings`.
-- **Decision actor and source** — `actor_kind ∈ {os_user, <kind>_user}`, `source ∈ {cli, <kind>}`, checked by the
-  same name rule in Ruby and by shape `CHECK`s in SQL.
+- **Decision actor and source** — either `os_user` with `cli`, or `<kind>_user` with source `<kind>` — the same kind
+  on both sides, checked in Ruby and by a SQL `CHECK` (`actor_kind = source || '_user'`). Stricter than HEAD,
+  which accepts `telegram_user` with source `talk`.
+- **`authenticate(descriptor)`** returns `{'stream_id' => String}`, compared exactly with the descriptor; the unused
+  `credential` argument goes (neither transport reads it, `gateway.rb:292`), and so does the gateway's
+  `respond_to?(:authenticate)` escape (`gateway.rb:291`): every transport authenticates.
 - **Thread ids** — `"<kind>.<surface_id>.<digest>"` (was `tg.`/`tk.`).
-- **Descriptor fields** — kind-specific `settings` (opaque to the core, digest-bound); `rendering.speech`
+- **Descriptor fields** — kind-specific `settings` (opaque to the core, digest-bound, a flat JSON object of at most
+  4096 bytes); `rendering.speech`
   (boolean, replaces `Parties::KINDS[kind].speaks`); `transport` keeps `credential_ref`, `poll_timeout_s`, `batch`,
   `max_response_bytes` and drops `mode` (one allowed value carries no information).
 - **The transport contract's prose** describes the contract; Telegram and talk are examples.
@@ -161,31 +174,34 @@ bound (both kinds fit it). A channel that needs either changes them then (FUTURE
 
 ```ruby
 module Tamoz::Comms::Channel
-  def validate!(descriptor) = raise NotImplementedError   # refuses settings, rendering, credential options it cannot serve
-  def connect(descriptor, env:, floor:, history:, voice: nil) = raise NotImplementedError   # → Connection
+  def validate!(descriptor) = raise NotImplementedError   # refuses settings or rendering options it cannot serve
+  def connect(descriptor, env:, voice: nil) = raise NotImplementedError   # → Connection, nothing started yet
 end
-# Connection: #transport, #start, #stop, #interval_s.  #start raises Comms::ConnectionError with its own message.
+# Connection: #transport, #start(floor:, history:), #stop, #interval_s
+#   #start raises Comms::ConnectionError with its own message (e.g. the talk port is taken)
 ```
 
 | Argument | Why every kind gets it |
 |---|---|
-| `env` | the kind's declared variables only (§4.3): Telegram's token and API origin (OD-G), talk's token and trace flag |
-| `floor`, `history` | the durable cursor and delivered rows, as data — talk seeds its page; Telegram ignores them; neither touches the store |
+| `env` | the kind's declared variables only (§4.3): Telegram's token and its loopback-only API origin (OD-G), talk's token path is in `state_dir`, its trace flag in `env` |
 | `voice` | the synthesizer lambda, built by the CLI only when `rendering.speech` is on — the adapter holds no model code |
+| `floor`, `history` (to `start`) | the durable cursor and delivered rows, as data, read **after** the lease is held so they cannot be stale — talk seeds its page; Telegram ignores them; neither touches the store |
 
 - `Telegram::Channel#validate!` refuses `rendering.speech` and any `settings` key but `bot_username`; `#connect`
   builds client, normalizer and transport; `start`/`stop` are no-ops; `interval_s` 1.0. One transport serves the
-  poller and the drainer threads (today two are built); safe because `Telegram::Client` opens a fresh
-  `Net::HTTP` per call.
+  poller and the drainer (today two are built); safe because `Telegram::Client` opens a fresh `Net::HTTP` per call.
+  The API origin is accepted only when it is `http://` on `127.0.0.1`, `localhost` or `[::1]` — the fake Bot API
+  the evals run, never a remote host (OD-G).
 - `Talk::Channel#validate!` holds today's port and `allow_hosts` rule and the "a non-loopback host needs
   `allow_hosts`" rule, which today only `start` enforces (`cli_talk_commands.rb:93`); `#connect` builds the hub;
   `start`/`stop` run the HTTP server; `interval_s` 0.1.
-- Every `validate!` refuses a `credential_ref.name` outside its setup's `env_names`, so a config cannot point a
-  gateway at the chat key.
-- `validate!` is called in one place: the CLI's `build_descriptor`, used by `serve`, `start`, `doctor` and `add`.
-- `comms serve` is kind-blind and starts each connection only after the gateway holds the lease, so a second run
-  is `:poller_busy`, not `EADDRINUSE`. One gateway seam makes that possible, because `serve_loop` calls `start` on
-  its own thread (`gateway.rb:167-170`): `Gateway#serve_loop(on_started:)`. `--once` works for every kind.
+- The credential check is kind-blind and in one place: the CLI's `build_descriptor` refuses a `credential_ref.name`
+  outside the setup's `env_names`, and calls `validate!`. `serve`, `start`, `doctor` and `add` all use it.
+- `comms serve` is kind-blind. A surface's connection **and its drainer** start only from the gateway's
+  `on_started` callback, once the lease is held — `Gateway#serve_loop(on_started:)` is the one gateway seam
+  (`serve_loop` calls `start` on its own thread, `gateway.rb:167-170`). A second run therefore ends as
+  `:poller_busy`, claims no outbox row and exits 1; today the drainer runs without a lease
+  (`delivery_drainer.rb:79`, built at `cli_comms_commands.rb:213`). `--once` works for every kind.
 
 ### 4.3 The operator half: `Tamoz::<Kind>::Setup`; the registry
 
@@ -195,51 +211,62 @@ A setup never sees `RuntimeDirectory`, the store or a model (ADR-052: adapters d
 | Method | Caller | Today |
 |---|---|---|
 | `summary` → one line | `tamoz channel` usage | `CHANNELS` (`cli_channel_commands.rb:9-10`) |
-| `env_names` → names | the CLI's env slice; `ChildEnvironments`' denylist; `validate!`'s credential check | `CHANNEL_TOKENS` + extras (`child_environments.rb:19,30-41`) |
-| `add(entries:, argv:, env:, runtime_path:, terminal:)` → `[surface_id, entry]` | `tamoz channel add <kind>` | `channel_add_telegram` + pairing; `channel_add_talk` + token file |
-| `check(descriptor:, env:, runtime_path:, poller_free:)` → `[[name, true \| message], …]` | `start` (refuses on the first failure), `comms doctor` (prints all) | `telegram_problem`, `talk_problem`, `doctor_surface`'s Telegram body, `doctor_talk` |
-| `announce(descriptor:, env:, terminal:)` | `start`, after the checks | `announce_talk` (the link) |
-| `gateway_env(descriptor:, env:, runtime_path:)` → variables | `start`, `service install` | Telegram: its env slice; talk: token from its file, host, trace |
+| `env_names` → names | the CLI's env slice; `build_descriptor`'s credential check; the worker's denylist | `CHANNEL_TOKENS` + extras (`child_environments.rb:19,30-41`) |
+| `add(entries:, argv:, env:, state_dir:, terminal:)` → `[surface_id, entry]` | `tamoz channel add <kind>` | `channel_add_telegram` + pairing; `channel_add_talk` + token file |
+| `check(descriptor:, env:, state_dir:, poller_free:)` → `[[name, true \| message], …]` | `start` (refuses on the first failure), `comms doctor` (prints all) | `telegram_problem`, `talk_problem`, `doctor_surface`'s Telegram body, `doctor_talk` |
+| `announce(descriptor:, env:, terminal:)` | `start`, after the checks, with `env` already merged with `gateway_env` | `announce_talk` (the link with its token) |
+| `gateway_env(descriptor:, env:, state_dir:)` → variables | `start`, `service install` | Telegram: its env slice; talk: token from `state_dir`, trace |
 
-`Comms::ChannelSetup` gives `summary`, `announce` (silent) and `gateway_env` (`env.slice(*env_names)`) default
-bodies, so Telegram overrides only what differs. `terminal` has `say(text)` and `confirm(question)`, implemented
-by the CLI, so the owner confirmation in Telegram pairing is still the CLI's prompt.
+- `Comms::ChannelSetup` gives `announce` (silent) and `gateway_env` (`env.slice(*env_names)`) default bodies;
+  `summary` has none — every kind describes itself.
+- `add` fails by raising `Comms::SetupError` with a message the CLI prints; no return codes cross the interface.
+- `state_dir` is `<runtime>/channels/<surface_id>/`, created and secured (0700) by the CLI. It is the only folder a
+  setup may touch — not the runtime root, which holds the config, the database and other channels' state. Talk's
+  token moves there (no compatibility to keep).
+- `terminal` has `say(text)` and `confirm(question)`, implemented by the CLI, so the owner confirmation in
+  Telegram pairing is still the CLI's prompt.
+- `Telegram::Setup#add`, after the owner confirms, **confirms through the newest update** (`getUpdates
+  offset: -1`, then `offset: last + 1`), so nothing sent while the bot was unpaired is answered later
+  (`cli_telegram_pairing.rb:18-38` today confirms only up to the pairing message).
 
 **A setup sees only what it declares.** Every setup method and `connect` get `env.slice(*setup.env_names)` — never
 the whole environment, so adapter code cannot forward the chat key, another channel's token or `TAMOZ_ENV_FILE`.
-`ChildEnvironments` refuses any `gateway_env` key outside `env_names` + `TAMOZ_RUNTIME_DIR`, and any forbidden or
-model-role key.
 
 **What stays in the CLI, the same for every kind:** `--env-file` reading with its 0077 check; the "runtime folder
 inside the workspace" refusal, now run by `channel add` for every kind (today only talk's add and `start`,
 `cli_talk_commands.rb:24`, `cli_start_commands.rb:59`); `save_channel`'s revision bump and `build_descriptor`;
-the poller-lease checks, passed to `check` as `poller_free:`; and the model checks, keyed on `rendering.speech`,
-not on a kind (a speaking surface needs a transcription model and a voice key different from the chat key; the CLI
-builds `voice` and adds the voice key to that gateway's environment).
+securing `state_dir`; the poller-lease checks, passed to `check` as `poller_free:`; and the model checks, keyed on
+`rendering.speech`, not on a kind (a speaking surface needs a transcription model and a voice key different from
+the chat key; the CLI builds `voice`).
 
 ```ruby
 CHANNEL_KINDS = {               # the closed set (ADR-014); one line per first-party channel
   'telegram' => ChannelKind.new(gem: 'tamoz/telegram', namespace: 'Tamoz::Telegram'),
   'talk'     => ChannelKind.new(gem: 'tamoz/talk',     namespace: 'Tamoz::Talk')
 }.freeze
-# ChannelKind#channel(client_factory: nil) / #setup(client_factory: nil) build instances after one lazy require
+# ChannelKind#channel / #setup build instances after one lazy require; a test passes its own kind objects
 ```
 
 - `channel add`, `start`, `service`, `comms serve`, `comms doctor` iterate the registry; an unknown kind is refused
   there (`ConfigRules` in `tamoz-agent` checks only the name's shape; it cannot see the CLI).
-- `ChildEnvironments` (in `tamoz-agent`) takes explicit `gateway_vars:` and `channel_names:` from the CLI — the
-  union of every registry kind's `env_names` and every entry's `credential_ref.name`, enabled or not — and applies
-  the worker's denylist **after** the model keys are merged.
-- **Test seam:** `CLI.new(channel_kinds:)` replaces `comms_client_factory:`; a test passes `client_factory:` for one
-  kind, or adds the loopback kind. Tests change their setup line, not their assertions.
+- **Child environments** (`ChildEnvironments`, in `tamoz-agent`, which cannot see the registry):
+  `gateway_env(base, directory:, vars:, allowed:, voice_keys:)`. The CLI passes the setup's `gateway_env` result as
+  `vars` and the kind's `env_names` as `allowed`; anything outside `allowed` + `TAMOZ_RUNTIME_DIR` is refused; the
+  voice role's keys are merged after that check, only for a speaking surface. A gateway's environment is then
+  exactly: the standard variables (`PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB`), `TAMOZ_RUNTIME_DIR`,
+  `child_runtime_env`, its kind's `gateway_env`, and — if speaking — the voice keys. The worker's denylist is the
+  union of the **loadable** registry kinds' `env_names` and every configured entry's `credential_ref.name`, enabled
+  or not, applied after the model keys are merged. `start` refuses a model credential named like a channel
+  variable, so that drop is never silent.
+- **Test seam:** `CLI.new(channel_kinds:)` replaces `comms_client_factory:`; a test builds its own kind object (a
+  Telegram one over a fixture client, or the loopback). The generic registry has no client hook.
 - A missing adapter gem is `MissingAdapterError`, from the registry's one lazy `require`.
 - Moved, then simplified: `cli_telegram_commands.rb`, `cli_telegram_pairing.rb`, `cli_talk_commands.rb`,
   `cli_talk_gateway.rb`, their `include`s (`cli.rb:32-35`), and the per-kind bodies of `cli_comms_doctor.rb`. The
-  CLI ends with no per-kind file. `talk_boundary_test`'s list of `.speak(` callers changes from
-  `cli_talk_gateway.rb` to the CLI file that builds `voice` — the one expected assertion change.
+  CLI ends with no per-kind file.
 - Deleted (ADR-059): `comms doctor --bootstrap` (Telegram-only; `channel add telegram` records the stream),
   `TAMOZ_TELEGRAM_SURFACE` (read nowhere), `start --host`/`TAMOZ_TALK_HOST` (the address is talk's `settings.host`,
-  set by `channel add talk --host`).
+  set by the new `channel add talk --host`).
 
 ### 4.4 The descriptor
 
@@ -248,7 +275,7 @@ CHANNEL_KINDS = {               # the closed set (ADR-014); one line per first-p
 | `kind` | member of `KINDS` | a well-formed name; registry-checked at the CLI |
 | `identity` | `{expected_bot_id: Integer, bot_username:}` (talk: random number) | `{stream_id: "<kind>:…"}` |
 | `transport` | mode, credential, poll timeout, batch, response cap, **talk's port/hosts** | credential, poll timeout, batch, response cap |
-| `settings` | — | the kind's own section, checked by `Channel#validate!` (Telegram: `bot_username`; talk: `port`, `allow_hosts`, `host`) |
+| `settings` | — | the kind's own section (≤ 4096 bytes), checked by `Channel#validate!` (Telegram: `bot_username`; talk: `port`, `allow_hosts`, `host`) |
 | `rendering.speech` | `Parties::KINDS[kind].speaks` | a boolean; only a kind whose `validate!` allows it may set it |
 
 Credentials stay env-only (a `file` credential adds a mechanism without isolation — the worker runs as the same
@@ -257,26 +284,41 @@ OS user; FUTURE_PLAN F8).
 ### 4.5 The schema
 
 One new migration recreates every `tamoz_comms_*` table empty in the new shape — `stream_id TEXT` where `bot_id
-INTEGER` was, shape `CHECK`s for decision actor and source — and carries no row (ADR-059; it assumes a fresh
+INTEGER` was, the pairing `CHECK` for decision actor and source — and carries no row (ADR-059; it assumes a fresh
 schema). No other table is touched.
 
 ## 5. Phases
 
 Each phase is one commit or a short series, green on `rake ci`, reviewed by a fresh subagent against the bar
 before commit. No commit leaves a check weaker than at HEAD: `KINDS` and `validate_talk!` leave the core in the
-commit that adds the name rule, the registry and `Channel#validate!`.
+commit that adds the name rule, the registry and the CLI's credential check.
 
 | Phase | Change | Proves it |
 |---|---|---|
-| **C0** Measures | `channel_kind_containment_test` and `channel_dependency_test`, holding today's exact counts and references. Containment: Ripper tokens of `gems/*/lib/**/*.rb` (comments dropped); each string, symbol, constant and identifier split on `_`, punctuation and lower→upper case changes, downcased, parts equal to `telegram`/`talk`/`tg`/`tk` counted; exact count per file; its own unit cases (`talk_hub`, `CLITalkCommands`, `TAMOZ_TALK_TOKEN`, `'telegram_user'`, `:talk`, `"tg."` each count once). | Both pass at HEAD with today's numbers; every later phase lowers them in the same commit |
-| **C1** Conformance | `test/support/transport_conformance.rb`: properties every transport shares, no skips — `authenticate` returns the configured identity; `poll` returns well-formed envelopes and a cursor past the last update, and redelivers what was not confirmed; `deliver` returns a receipt with a message id; `fetch_attachment` over `max_bytes` raises `ResponseTooLargeError`; an unknown signal is `:unsupported`. | Telegram and talk pass; mutating either's cursor or size check fails |
-| **C2a** Interfaces and runtime half | `Comms::Channel`, `Comms::ChannelSetup` (as Ruby, reviewed before any implementation), the registry, `Telegram::Channel`, `Talk::Channel`, the kind-name rule, `settings` + `rendering.speech`, `validate!` in `build_descriptor`, `Gateway#serve_loop(on_started:)`, a kind-blind `comms serve`; `KINDS`, `validate_talk!`, `Parties::KINDS[].speaks` leave the core. | Serve-path tests with unchanged assertions (`comms_serve_supervision_test`, `talk_end_to_end_test`, `talk_comms_cli_test`, `talk_gateway_test`, `comms_gateway_test`); new: unknown kind refused; `speech` refused on Telegram; non-loopback talk host without `allow_hosts` refused by `serve`; second run is `:poller_busy` |
-| **C2b** Setup half | `Telegram::Setup`, `Talk::Setup` moved from the CLI modules; env slicing; `channel add`/`start`/`doctor`/`service` iterate the registry; the generic CLI checks; the loopback test channel; `telegram_boundary_test`. | `cli_channel_*`, `cli_start_test`, `cli_service_test`, `comms_cli_test` with unchanged assertions; loopback end to end; a spy setup receives only its `env_names` |
-| **C3** Grammar, identity, schema | §4.1 and §4.5: `Parties` parser, `stream_id` through descriptor, store contract, gateway, both transports and `Core::RequestIdentity`; command suffix to the Telegram normalizer; decision rule; thread prefix; the migration. | `comms_parties_test`, `comms_admission_test`, `comms_decision_record_test`, `sqlite_comms_store_test`, `comms_seams_test`; migration on a fresh schema; two Telegram surfaces on one bot conflict on the lease; a talk surface cannot hold a Telegram stream's lease; `/help@otherbot` is not a command |
-| **C4** Child environments | `gateway_vars:`/`channel_names:`; denylist after the model merge. | §A rows A1–A3 with their mutations |
-| **C5** Records | ADR-041 (grammar; `Channel`/`ChannelSetup` seams; closed set in the registry), ADR-062 (child env by declared names; `start --host` gone), ADR-042 (API-origin decision), ADR-014 Relates; READMEs of the three comms gems; `documentation/guides/adding-a-channel.md` (the gem, the registry line, the registration list, the conformance suite, the loopback example). | `rake adr:validate adr:verify`; the guide's steps match the loopback test |
+| **C0** Measures *(done, `a1c8c207`)* | `channel_kind_containment_test`, `channel_dependency_test` holding today's exact counts. | Pass at HEAD; each phase lowers them in the same commit |
+| **C1** Conformance *(done, `a1c8c207`)* | `test/support/transport_conformance.rb` run by both transport tests: identity; well-formed polls with an integer cursor; an unconfirmed batch redelivered and the cursor releasing exactly it; an empty poll with no cursor; receipts; attachment limits; typing and unknown signals. | Mutating either transport's cursor (`+ 1` dropped) or size check fails it |
+| **C2a** Interfaces and runtime half | `Comms::Channel`, `Comms::ChannelSetup` (reviewed as Ruby before any implementation), `Comms::SetupError`, `Comms::ConnectionError`, the registry, `Telegram::Channel`, `Talk::Channel`, the kind-name rule (also in `runtime_config_rules.rb:29-31`, which reads `KINDS`), `settings` + `rendering.speech`, `build_descriptor`'s credential check and `validate!`, `Gateway#serve_loop(on_started:)`, connection and drainer started from it, a kind-blind `comms serve`. | Serve-path tests (`comms_serve_supervision_test`, `talk_end_to_end_test`, `talk_comms_cli_test`, `talk_gateway_test`, `comms_gateway_test`); new: unknown kind refused; `speech` refused on Telegram; remote API origin refused; non-loopback talk host without `allow_hosts` refused by `serve`; a second run is `:poller_busy`, exits 1 and claims no delivery |
+| **C2b** Setup half and child environments | `Telegram::Setup`, `Talk::Setup` moved from the CLI modules (backlog confirmation added); `state_dir`; env slicing; `channel add`/`start`/`doctor`/`service` iterate the registry; the generic CLI checks; `ChildEnvironments` by `vars:`/`allowed:`/`voice_keys:`; the loopback channel (add and checks); `telegram_boundary_test`. | `cli_channel_*`, `cli_start_test`, `cli_service_test`, `comms_cli_test`, `child_environments_test`; bar A1–A4, A11; a spy setup receives only its `env_names`; pairing confirms the backlog (`TelegramBotApiFake` holding three older updates) |
+| **C3** Grammar, identity, schema | §4.1 and §4.5: `Parties` parser, `stream_id` through descriptor, `CommsStore` keywords, gateway, both transports, `Core::RequestIdentity` and the CLI readers (`cli_comms_commands.rb:247`, `cli_comms_doctor.rb:139`, `cli_comms_ops.rb:325`, `cli_start_checks.rb:18`); `authenticate(descriptor)`; the command suffix to the Telegram normalizer (`admission.rb:32-79`, `gateway_pairing.rb:16`, `gateway_admission.rb:28`); decision pairing rule; thread prefix; migration 26; the loopback channel's full gateway pass, in and out of a subprocess without the adapters. | `comms_parties_test`, `comms_admission_test`, `comms_decision_record_test`, `sqlite_comms_store_test`, `comms_seams_test`; migration on a fresh schema and on version 25; two Telegram surfaces on one bot conflict on the lease; a talk surface cannot hold a Telegram stream; `/help@otherbot` is not a command; `telegram_user` with source `talk` refused |
+| **C4** Records | ADR-041 (grammar; `Channel`/`ChannelSetup`; the closed set in the registry), ADR-042 (gateway env by declared names; loopback-only API origin), ADR-061 (its `Parties` table, `tg.`/`tk.` and "speaks" text, line 24), ADR-062 (child env; `start --host` gone; "the runtime's own keys are set last" at line 57 replaced by the declared-names rule), ADR-014 Relates; READMEs of the comms gems; `documentation/guides/telegram.md` (`--bootstrap` at 74-83, the origin at 280), `documentation/guides/talk.md` (`--host` at 74); `documentation/guides/adding-a-channel.md`. | `rake adr:validate adr:verify`; the guide's steps are the loopback test's |
+
+**Tests that change on purpose, and only these** (bar B2 — each diff is a rename, a move or a deletion of a removed
+feature, checked by `git diff --word-diff`):
+
+| Phase | Files | Why |
+|---|---|---|
+| C2a | `talk_comms_cli_test.rb:36` | the "port taken" wording comes from `Comms::ConnectionError` |
+| C2a | `talk_hub_test.rb`, `talk_fixtures.rb`, `comms_gateway_harness.rb` and other descriptor builders | `port`/`allow_hosts` move from `transport` to `settings`; `mode` dropped |
+| C2b | `cli_start_test.rb:269,277` | `start --host` cases move to `channel add talk --host` |
+| C2b | `comms_cli_test.rb:133` | `--bootstrap` deleted |
+| C2b | `child_environments_test.rb:79,87`; `cli_channel_*_test.rb`; `cli_service_test.rb`; `cli_start_test.rb`; `comms_cli_test.rb` | the new child-env signature; `channel_kinds:` replaces `comms_client_factory:`; the talk token in `state_dir`; `talk_boundary_test`'s `.speak(` caller list |
+| C3 | the 37 files naming `bot_id`/`expected_bot_id` (`cli_channel_telegram_test.rb:40,176,272`, `cli_start_test.rb:202`, …); `sqlite_comms_store_test.rb:212-287`, `comms_values_test.rb:210` | `stream_id`; the `telegram.`/`talk.` thread prefix |
 
 C0 and C1 come first: C0 measures the outcome, C1 pins the transport behavior every later phase must keep.
+
+**Real-model evaluation (AGENTS.md).** `script/telegram_attachment_eval` runs before C2a and after C3 on the same
+model; the report gives both, and a BLOCKED or SHORT run is reported, never counted as a pass (bar C1). The talk
+eval (`script/talk_eval`) likewise.
 
 **Wire and digests.** The descriptor's wire and `definition_digest` change; surfaces are re-added (§6). No pinned
 digest covers the surface descriptor (`grep` of `documentation/benchmark` and `test/fixtures` for
@@ -284,32 +326,36 @@ digest covers the surface descriptor (`grep` of `documentation/benchmark` and `t
 
 ## 6. Moving the live runtime (a runbook, not code)
 
-1. Stop `tamoz service` when no turn is running. (A turn still open when the comms tables are recreated loses its
-   route and its answer is dropped — accepted under ADR-059.)
-2. Pull, and delete the `channels:` block from `~/.tamoz/config.yaml`. The new config rules refuse old entries
-   with a message that says exactly this, so the step cannot be missed.
-3. `tamoz channel add telegram` — pairing by message, not `--owner`: the pairing poll confirms every update
-   before the pairing message, so the fresh comms tables never see Telegram's unconfirmed backlog.
+0. **Rotate the bot token** at @BotFather first and put the new one in the env file — the worker, which runs the
+   model's tools, has held the old one through the hand-edited plist, and the plists store values
+   (`cli_service_commands.rb:68-71`), so rotating later would leave the gateway on a revoked token.
+1. Run `tamoz status` until `pending_work` and `paused_approvals` are empty (deny what is waiting with
+   `tamoz approve ID --deny`), then `tamoz service uninstall`. Queued requests live in `tamoz_requests`, which the
+   migration keeps; a request run after the comms tables are recreated has no route, and its answer would go
+   nowhere (`outbox_delivery_sink.rb:57-58`).
+2. Delete **all** of `<runtime>/service-backups/` (`uninstall` adds the leaky worker plist there; older backups may
+   hold more copies), the old `<runtime>/talk/` folder, and the `channels:` block of `config.yaml` — the new config
+   rules refuse its removed keys by name.
+3. Pull, then `tamoz channel add telegram` (it confirms Telegram's backlog after pairing, §4.3) and
    `tamoz channel add talk --host …`.
-4. `tamoz start` once (the migration runs when the database opens, `adapter.rb:108`), then `tamoz service
-   install` — which also replaces today's hand-edited worker plist that gives the worker
-   `TAMOZ_TELEGRAM_BOT_TOKEN` (checked 2026-10-10).
-5. Rotate the bot token at @BotFather (the worker, which runs the model's tools, has held it) and delete that
-   plist's copy in `<runtime>/service-backups/`.
+4. `tamoz start` once (migration 26 runs when the database opens, `adapter.rb:108`), check both channels, stop it,
+   then `tamoz service install --env-file …`.
 
-Memory, history in checkpoints and the effect journal are kept; Telegram pairing and the talk link are re-made.
+Memory and the effect journal are kept; chats restart as after `/new`; Telegram pairing, the talk link and the
+approval audit are re-made.
 
 ## 7. Owner decisions
 
-| # | Question | Recommendation |
+| # | Decision | Status |
 |---|---|---|
-| OD-A | Accept ~17 files and a schema change for no user-visible feature | Yes — three tests make the gain permanent and checkable |
-| OD-G | `TAMOZ_TELEGRAM_API_ORIGIN` makes the Telegram origin configurable, contradicting `surface_descriptor.rb:15-17` ("a configurable origin is a bot-token exfiltration primitive"); `test/support/telegram_chat_eval.rb` uses it | Remove it; the eval injects a `client_factory:` like every other test. One less way to misdirect the token |
-| OD-J | Rotate the Telegram bot token, because the worker plist exposed it to the worker | Yes — whether or not this plan is built |
-| OD-K | Reset only the comms tables (keep memory) rather than the whole database | Yes — §4.5 |
+| OD-A | ~17 files and a schema change for no user-visible feature | Accepted (owner, "let us start implementing", 2026-10-10) |
+| OD-G | `TAMOZ_TELEGRAM_API_ORIGIN` stays — the Telegram evals run real `tamoz` processes against a fake Bot API through it (`test/support/telegram_chat_eval.rb:414`) — but only as a loopback `http://` origin, so it can no longer send the token to another host | Revised after review: removing it would break the evals AGENTS.md requires |
+| OD-J | Rotate the Telegram bot token | Owner action, §6 step 0 |
+| OD-K | Recreate only the comms tables (keep memory); lost: channel state, chat continuity, the approval audit (including CLI `approve` records) | Accepted |
+| OD-L | Cross-gem interface changes (AGENTS.md "ask before"): `Comms::Transport#authenticate(descriptor)` → `{'stream_id'}`; the `CommsStore` keywords (`bot_id:` → `stream_id:`); `Core::RequestIdentity`'s keyword; `Gateway.new` (no `credential:`) and `Gateway#serve_loop(on_started:)`; `ChildEnvironments.gateway_env`'s signature; new `Comms::Channel`, `Comms::ChannelSetup`, `SetupError`, `ConnectionError` | Part of the accepted plan; listed here so each is visible |
 
-Settled by the owner's "no backward compatibility" and no longer questions: thread prefix change, `--once` for
-talk, `start --host` removal, `--bootstrap` removal, no upgrade script.
+Settled by "no backward compatibility": thread prefix change, `--once` for talk, `start --host` removal,
+`--bootstrap` removal, no upgrade script.
 
 ## 8. The web page and the CLI
 
@@ -331,7 +377,7 @@ live stream. There is no duplicated code between the two paths to remove. There 
 gateway gets no context-controls source (`comms_controls_source` returns `nil`, `cli_comms_shared.rb:173-175`), so
 on Telegram and talk `/compact`, `/reset`, `/think`, `/verbose`, `/usage` and `/context` answer "not available"
 while the CLI's verbs work — FUTURE_PLAN F10. A terminal that attaches to the running runtime as a channel is
-FUTURE_PLAN F9; the loopback test channel (§1) already proves such a kind needs only its own code.
+FUTURE_PLAN F9; the loopback test channel (§1) proves such a kind needs only its own code.
 
 ## 9. Not in scope
 
