@@ -136,3 +136,8 @@
   failed on seeds 1 and 2 and passed on 3, but also failed alone under `-n`: two equal deadlines (the SDK's
   read timeout and `Exchange`'s `Timeout.timeout`) raced, and only one of them restarted the server. Run the
   same seed several times, and the case alone, before hunting for leaked state.
+
+- **KILLing a supervisor orphans its children; kill the process group.** The Telegram eval gave `tamoz start` 8 s
+  before KILL, but `start` stops its gateway and worker one after another with 8 s each, so a slow stop left the
+  worker running under PID 1 (two seen after one `--runs 5`). Spawn a child that has children with `pgroup: true`,
+  TERM it, and after the grace KILL `-pid` in an `ensure`; `telegram_chat_eval_cleanup_test` holds this.
