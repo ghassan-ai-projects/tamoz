@@ -61,8 +61,8 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       text: 'hello', observed_time: now
     ).wire
     store.admit_and_enqueue(
-      envelope, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
-                thread:, profile_id: 'ops', reservation: 1, now:
+      envelope, stream_id: 'telegram:bot:7463512990',
+                turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1), now:
     )
   end
 

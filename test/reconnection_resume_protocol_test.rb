@@ -105,8 +105,8 @@ class ReconnectionResumeProtocolTest < Minitest::Test
         ).wire, now: NOW
       )
       assert_equal :enqueued, store.admit_and_enqueue(
-        envelope(update_id: 401), surface_id: SURFACE_ID, stream_id: "telegram:bot:#{BOT_ID}",
-        thread: THREAD, profile_id: 'ops', reservation: 1, now: NOW
+        envelope(update_id: 401), stream_id: "telegram:bot:#{BOT_ID}",
+        turn: Tamoz::Comms::Turn.new(thread: THREAD, profile_id: 'ops', reservation: 1), now: NOW
       )
     end
   end

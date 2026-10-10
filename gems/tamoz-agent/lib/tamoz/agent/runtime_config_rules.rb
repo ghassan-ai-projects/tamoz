@@ -8,6 +8,18 @@ module Tamoz
         SURFACE_ID = /\A[a-z0-9][a-z0-9_-]{0,63}\z/
         CHANNEL_KEYS = %w[kind enabled revision profile credential_ref stream_id transport settings
                           admission approvals rendering limits threading].freeze
+        THREADING_MODES = Tamoz::Comms::SurfaceDescriptor::THREADING_MODES
+        CHANNEL_FIELD_RULES = {
+          'kind' => [lambda { |value|
+            Tamoz::Comms::SurfaceDescriptor.valid_kind?(value)
+          }, 'must be a lowercase channel name'],
+          'revision' => [->(value) { value.is_a?(Integer) && value.positive? }, 'must be a positive integer'],
+          'stream_id' => [->(value) { value.is_a?(String) && !value.empty? }, 'is mandatory and must be a string'],
+          'enabled' => [->(value) { [true, false].include?(value) }, 'must be a boolean'],
+          'profile' => [->(value) { value.is_a?(String) && !value.empty? }, 'must be a non-empty string'],
+          'threading' => [->(value) { value.nil? || THREADING_MODES.include?(value) },
+                          "must be one of #{THREADING_MODES.join(', ')}"]
+        }.freeze
 
         module_function
 
@@ -19,48 +31,29 @@ module Tamoz
           validate_models!(document['models'])
         end
 
-        # Strict per-entry validation (COMMS_DESIGN §14): the kind is a well-formed name (the closed set is the
-        # CLI's channel registry), the revision is mandatory and positive, and stream_id is mandatory.
-        # :reek:TooManyStatements -- one per-field validation sequence.
-        # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-        #   -- one validation sequence per field, checked in the design's order.
+        # Strict per-entry validation: the kind is a well-formed name (the closed set is the CLI's channel
+        # registry), and each field's rule is checked in this order.
         def validate_channel!(surface_id, entry)
           label = "channels.#{surface_id}"
           validate_channel_shape!(label, surface_id, entry)
-          unless Tamoz::Comms::SurfaceDescriptor.valid_kind?(entry['kind'])
-            raise Error, "#{label}.kind must be a lowercase channel name"
+          CHANNEL_FIELD_RULES.each do |key, (valid, message)|
+            raise Error, "#{label}.#{key} #{message}" unless valid.call(entry[key])
           end
-          unless entry['revision'].is_a?(Integer) && entry['revision'].positive?
-            raise Error, "#{label}.revision must be a positive integer"
-          end
-          unless entry['stream_id'].is_a?(String) && !entry['stream_id'].empty?
-            raise Error, "#{label}.stream_id is mandatory and must be a string"
-          end
-          raise Error, "#{label}.enabled must be a boolean" unless [true, false].include?(entry['enabled'])
-          unless entry['profile'].is_a?(String) && !entry['profile'].empty?
-            raise Error, "#{label}.profile must be a non-empty string"
-          end
-          unless entry['threading'].nil? ||
-                 Tamoz::Comms::SurfaceDescriptor::THREADING_MODES.include?(entry['threading'])
-            raise Error, "#{label}.threading must be one of " \
-                         "#{Tamoz::Comms::SurfaceDescriptor::THREADING_MODES.join(', ')}"
-          end
-
-          credential = entry['credential_ref']
-          unless credential.is_a?(Hash) && credential['kind'] == 'env' &&
-                 credential['name'].is_a?(String) && !credential['name'].empty?
-            raise Error, "#{label}.credential_ref must be {kind: env, name: ENV_NAME}"
-          end
-
+          validate_channel_credential!(label, entry['credential_ref'])
           direct = entry.dig('admission', 'direct')
-          unless direct.nil? ||
-                 Tamoz::Comms::SurfaceDescriptor::ADMISSION_MODES.include?(direct)
+          unless direct.nil? || Tamoz::Comms::SurfaceDescriptor::ADMISSION_MODES.include?(direct)
             raise Error, "#{label}.admission.direct must be one of " \
                          "#{Tamoz::Comms::SurfaceDescriptor::ADMISSION_MODES.join(', ')}"
           end
           entry.freeze
         end
-        # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        def validate_channel_credential!(label, credential)
+          return if credential.is_a?(Hash) && credential['kind'] == 'env' &&
+                    credential['name'].is_a?(String) && !credential['name'].empty?
+
+          raise Error, "#{label}.credential_ref must be {kind: env, name: ENV_NAME}"
+        end
 
         # A surface id names a folder under the runtime; a removed key fails by name, never silently.
         def validate_channel_shape!(label, surface_id, entry)

@@ -347,7 +347,7 @@ class CliStartTest < Minitest::Test
   def hold_poller(runtime, surface, stream)
     Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
                      .send(:with_comms_runtime, { runtime_dir: runtime }) do |_directory, _adapter, store, _checkpoints|
-      store.acquire_poller_lease(surface_id: surface, stream_id: stream, owner: "gateway:#{Process.pid}", fence: 1, ttl_s: 60,
+      store.acquire_poller_lease(surface_id: surface, stream_id: stream, lease: Tamoz::Comms::Lease.new(owner: "gateway:#{Process.pid}", fence: 1), ttl_s: 60,
                                  now: Time.now.utc)
     end
   end

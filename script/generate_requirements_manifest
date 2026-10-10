@@ -13,7 +13,7 @@
 #   phases       docs/PRODUCT_EXECUTION_ROADMAP.md §2   (exit criteria)
 #   public API   docs/public-api.json                   (every documented entry)
 #   CLI          gems/tamoz-agent/.../cli.rb            (SUBCOMMANDS)
-#   migrations   gems/tamoz-sqlite/.../migrator.rb      (MIGRATION_n)
+#   migrations   gems/tamoz-sqlite/migrations/NNNN.sql
 #   non-goals    the binding product non-goals (curated, each with its source)
 #
 # The EVIDENCE table below is the ONLY hand-authored input: it names the DIRECT
@@ -212,12 +212,9 @@ EVIDENCE = {
     ]
   },
   "INV-22" => {
-    test: "test/legacy_session_resume_test.rb#test_a_current_build_reads_the_old_database",
+    test: "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
     supporting: [
-      "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
       "test/graph_checkpoint_codec_test.rb#test_rejects_graph_identity_before_decoding_user_values",
-      "test/legacy_session_resume_test.rb#test_every_resume_guard_stops_the_old_thread_typed",
-      "test/legacy_session_resume_test.rb#test_an_old_thread_stops_typed_against_a_capability_it_never_had",
       "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",
       "test/sqlite_stale_request_test.rb#test_a_stale_request_does_not_poison_an_unrelated_thread"
     ]
@@ -232,7 +229,7 @@ EVIDENCE = {
     ]
   },
   "INV-18" => {
-    test: "test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read",
+    test: "test/agent_session_records_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read",
     supporting: [
       "test/core_state_codec_test.rb#test_unknown_registration_is_rejected_before_any_decoder_runs",
       "test/graph_checkpoint_codec_test.rb#test_unknown_persisted_node_is_rejected_without_symbol_interning",
@@ -770,49 +767,12 @@ EVIDENCE = {
   "CLI-skills" => {test: "test/cli_skills_command_test.rb#test_list_shows_skills_digests_and_rejections"},
 
   # ---- Migrations ---------------------------------------------------------
-  "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
-              supporting: ["test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected"]},
-  "MIG-2" => {test: "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
-  "MIG-3" => {test: "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic"},
-  "MIG-4" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
-  "MIG-5" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
-  "MIG-6" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
-  "MIG-7" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
-  "MIG-8" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
-  "MIG-9" => {test: "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store"},
-  "MIG-10" => {test: "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store"},
-  "MIG-11" => {test: "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
-               supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
-  "MIG-12" => {test: "test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type",
-               supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
-  "MIG-13" => {test: "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows"},
-  "MIG-14" => {test: "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
-  "MIG-15" => {test: "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
-               supporting: ["test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"]},
-  "MIG-16" => {test: "test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it",
-               supporting: ["test/effect_identity_test.rb#test_logical_identity_is_stable_for_same_checkpointed_operation"]},
-  "MIG-17" => {test: "test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies",
-               supporting: ["test/sqlite_approval_stores_test.rb#test_grant_lookup_matches_rev_scope_and_session_exactly"]},
-  "MIG-18" => {test: "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
-               supporting: ["test/comms_gateway_test.rb#test_an_integrity_conflict_quarantines_with_a_bounded_reply_and_no_turn"]},
-  "MIG-19" => {test: "test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise",
-               supporting: ["test/sqlite_comms_store_test.rb#test_reply_to_round_trips_from_append_to_transport_wire"]},
-  "MIG-20" => {test: "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters"},
-  "MIG-21" => {test: "test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows",
-               supporting: ["test/sqlite_comms_store_test.rb#test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue",
-                            "test/sqlite_comms_store_test.rb#test_cancellation_observed_stamp_lands_once_and_requires_a_request",
-                            "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
-  "MIG-22" => {test: "test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22",
-               supporting: ["test/sqlite_effect_journal_test.rb#test_effect_census_preserves_request_association_separately_from_effect_identity",
-                            "test/experience_harness_test.rb#test_request_status_is_request_local_for_two_delivery_outcomes"]},
-  "MIG-23" => {test: "test/memory_store_test.rb#test_migration_23_full_text_row_follows_the_head",
-               supporting: ["test/memory_spec_test.rb#test_inactive_records_are_never_returned_and_state_changes_drop_the_fts_row",
-                            "test/memory_retrieval_corpus_test.rb#test_the_real_retriever_meets_recall_and_precision_with_zero_violations"]},
-  "MIG-24" => {test: "test/comms_gateway_test.rb#test_an_admitted_attachment_is_handed_off_and_its_turn_carries_no_file_handle",
-               supporting: ["test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
-  "MIG-25" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
-  "MIG-26" => {test: "test/sqlite_channels_migration_test.rb#test_an_upgrade_from_25_empties_the_comms_tables_and_keeps_everything_else",
-               supporting: ["test/sqlite_channels_migration_test.rb#test_a_decision_names_one_kind_on_both_sides"]},
+  "MIG-27" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
+               supporting: ["test/sqlite_kernel_test.rb#test_a_database_at_another_schema_version_is_refused_with_a_reset_instruction",
+                            "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected",
+                            "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
+                            "test/memory_store_test.rb#test_the_schema_registers_the_digest_epoch_and_has_no_old_stream_tables",
+                            "test/sqlite_channels_migration_test.rb#test_a_decision_names_one_kind_on_both_sides"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",
@@ -947,15 +907,11 @@ def parse_cli_subcommands
 
   # follow_up/followup are aliases of follow-up; the verb is one requirement.
   aliases = {"follow_up" => "follow-up", "followup" => "follow-up"}
-  match[1].scan(/"([^"]+)"\s*=>/).flatten.map { |name| aliases.fetch(name, name) }.uniq
+  match[1].scan(/["']([^"']+)["']\s*=>/).flatten.map { |name| aliases.fetch(name, name) }.uniq
 end
 
 def parse_migrations
-  source = read_utf8(
-    File.join(ROOT, "gems", "tamoz-sqlite", "lib", "tamoz", "sqlite", "migrator.rb")
-  )
-  # MIGRATION_13 is a %w[] literal (T8.3) — both literal styles count.
-  source.scan(/^\s*MIGRATION_(\d+)\s*=\s*(?:\[|%w\[)/).flatten.map(&:to_i).sort.uniq
+  Dir[File.join(ROOT, "gems", "tamoz-sqlite", "migrations", "*.sql")].map { |path| File.basename(path, ".sql").to_i }.sort
 end
 
 NON_GOALS = [
@@ -1150,8 +1106,8 @@ end
 parse_migrations.each do |ordinal|
   requirements << row(
     id: "MIG-#{ordinal}",
-    source: "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
-    title: "MIGRATION_#{ordinal}",
+    source: format("gems/tamoz-sqlite/migrations/%04d.sql", ordinal),
+    title: "migration #{ordinal}",
     category: "migration",
     release_blocking: true
   )

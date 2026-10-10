@@ -73,7 +73,7 @@ module Tamoz
           conversation_id: chat_id(chat),
           message_id: message['message_id'],
           reply_to: message.dig('reply_to_message', 'message_id'),
-          observed_at: observed
+          observed_time: observed
         )
       end
 
@@ -88,7 +88,7 @@ module Tamoz
           conversation_id: chat_id(message.fetch('chat')),
           callback_message_id: message.fetch('message_id'),
           callback_query_id: callback['id'].to_s,
-          observed_at: observed
+          observed_time: observed
         )
       end
 
@@ -101,7 +101,7 @@ module Tamoz
           text: nil,
           correspondent_id: "telegram:user:#{from.fetch('id', 0)}",
           conversation_id: chat_id(chat),
-          observed_at: observed
+          observed_time: observed
         )
       end
 
@@ -109,7 +109,7 @@ module Tamoz
         envelope(
           update_id:, kind: 'unsupported', digest_fields: [update_id], text: nil,
           correspondent_id: 'telegram:user:0', conversation_id: 'telegram:chat:0',
-          observed_at: observed
+          observed_time: observed
         )
       end
 
@@ -124,18 +124,17 @@ module Tamoz
       # A GIF also carries `document`; a forwarded voice note is someone else's speech, so it is `audio`.
       def attachment(message)
         return nil if message['animation']
+        return document(message['document']) if message['document']
+        return attachment_fields('image', largest_photo(message['photo']), media_type: 'image/jpeg') if message['photo']
+        return attachment_fields(message['forward_origin'] ? 'audio' : 'voice', message['voice']) if message['voice']
 
-        if message['document']
-          file = message['document']
-          kind = file['mime_type'].to_s.start_with?('image/') ? 'image' : 'document'
-          attachment_fields(kind, file, name: file['file_name'])
-        elsif message['photo']
-          attachment_fields('image', largest_photo(message['photo']), media_type: 'image/jpeg')
-        elsif message['voice']
-          attachment_fields(message['forward_origin'] ? 'audio' : 'voice', message['voice'])
-        elsif message['audio']
-          attachment_fields('audio', message['audio'], name: message['audio']['file_name'])
-        end
+        audio = message['audio']
+        attachment_fields('audio', audio, name: audio['file_name']) if audio
+      end
+
+      def document(file)
+        kind = file['mime_type'].to_s.start_with?('image/') ? 'image' : 'document'
+        attachment_fields(kind, file, name: file['file_name'])
       end
 
       def attachment_fields(kind, file, name: nil, media_type: file['mime_type'])
@@ -152,21 +151,11 @@ module Tamoz
 
       def largest_photo(sizes) = sizes.max_by { |size| size['width'].to_i * size['height'].to_i }
 
-      # :reek:LongParameterList -- the normalized envelope binds every fact
-      #   design §6.2 makes durable.
-      # rubocop:disable Metrics/ParameterLists
-      def envelope(update_id:, kind:, digest_fields:, text:, correspondent_id:,
-                   conversation_id:, observed_at:, reply_to: nil,
-                   callback_message_id: nil, callback_query_id: nil, message_id: nil, attachment: nil)
-        Comms::InboundEnvelope.new(
-          surface_id: @surface_id, surface_revision: @surface_revision, update_id:,
-          raw_payload_hash: digest(digest_fields), parser_version: PARSER_VERSION,
-          kind:, correspondent_id:, conversation_id:, reply_to:, callback_message_id:,
-          callback_query_id:,
-          message_id:, text:, attachment:, observed_time: observed_at
-        )
+      # `fields` are the envelope's own; the payload digest covers `digest_fields`.
+      def envelope(digest_fields:, **fields)
+        Comms::InboundEnvelope.new(surface_id: @surface_id, surface_revision: @surface_revision,
+                                   raw_payload_hash: digest(digest_fields), parser_version: PARSER_VERSION, **fields)
       end
-      # rubocop:enable Metrics/ParameterLists
 
       # `/help@this_bot` addresses this bot, so the suffix is dropped; any other `@name` stays and is not a command.
       def own_command(text)

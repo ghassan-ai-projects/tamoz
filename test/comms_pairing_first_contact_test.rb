@@ -171,9 +171,7 @@ class CommsPairingFirstContactTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         transport = ScriptedTransport.new
-        gateway = Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'pairing:test'
-        )
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'pairing:test')
         @appended = appended
         yield gateway, transport, store, adapter, checkpoints
       ensure

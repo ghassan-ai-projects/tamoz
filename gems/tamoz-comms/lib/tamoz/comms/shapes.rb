@@ -37,6 +37,8 @@ module Tamoz
         raise ValidationError, "#{name} must be a Time value" unless value.is_a?(Time)
       end
 
+      def utc(value) = value.is_a?(Time) ? value.getutc : value
+
       def require_member!(value, set, name)
         raise ValidationError, "#{name} must be one of #{set.join(', ')}" unless member?(value, set)
       end

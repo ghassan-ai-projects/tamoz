@@ -339,14 +339,14 @@ class PackagingTest < Minitest::Test
         descriptor = Descriptor.new(
           surface_id: "injected",
           identity: {stream_id: 'telegram:bot:7'},
-          transport: {poll_timeout_s: 0},
+          transport: {poll_timeout_s: 0, batch: 50},
           limits: {
             control_capacity: 1, per_chat_messages_per_s: 1.0,
             global_messages_per_s: 25.0
           }
         )
         gateway = Tamoz::Comms::Gateway.new(
-          adapter: Adapter.new(store), checkpoints: Object.new, transport:, descriptor:,
+          checkpoints: Struct.new(:adapter).new(Adapter.new(store)), transport:, descriptor:,
           poller_owner: "installed"
         )
         raise "start failed" unless gateway.start == :started

@@ -10,36 +10,38 @@ module Tamoz
       MIN_TOKEN = 32
       FINAL_KINDS = %w[answer failed stopped blocked approval_request].freeze
 
-      attr_reader :inbox, :log, :speaker, :normalizer, :stream_id, :submit_timeout_s
+      attr_reader :inbox, :log, :speaker, :normalizer, :stream_id
 
-      # rubocop:disable Metrics/ParameterLists -- the surface's facts plus the two injected collaborators.
-      def initialize(descriptor:, token:, floor: 0, synthesize: nil, host: '127.0.0.1', port: nil, trace: false,
-                     submit_timeout_s: 20.0, deadlines: {})
+      # Where and how the page is served: the bound host and port (else the descriptor's), request
+      # tracing, how long a submit waits for its answer, and the server's read deadlines.
+      Serving = Data.define(:host, :port, :trace, :submit_timeout_s, :deadlines) do
+        def initialize(host: '127.0.0.1', port: nil, trace: false, submit_timeout_s: 20.0, deadlines: {}) = super
+      end
+
+      def initialize(descriptor:, token:, floor: 0, synthesize: nil, **serving)
         raise ArgumentError, 'the talk token must be at least 32 characters' if token.to_s.length < MIN_TOKEN
 
         @descriptor = descriptor
         @token_digest = Digest::SHA256.digest(token)
-        @host = host
-        @port = port || descriptor.settings.fetch(:port)
-        @trace = trace ? [] : nil
+        @serving = Serving.new(**serving)
+        @trace = @serving.trace ? [] : nil
         @stream_id = descriptor.identity.fetch(:stream_id)
         @clock = Clock.new(floor:)
         @inbox = Inbox.new(clock: @clock)
         @log = EventLog.new(clock: @clock)
         @speaker = Speaker.new(synthesize:)
         @normalizer = Normalizer.new(surface_id: descriptor.surface_id, surface_revision: descriptor.revision)
-        @submit_timeout_s = submit_timeout_s
-        @deadlines = deadlines
         @mutex = Mutex.new
       end
-      # rubocop:enable Metrics/ParameterLists
+
+      def submit_timeout_s = @serving.submit_timeout_s
 
       def transport = Transport.new(self)
 
       def start
-        @server = Server.new(hub: self, host: @host, port: @port, token_digest: @token_digest,
-                             allow_hosts: Array(@descriptor.settings[:allow_hosts]), trace: !@trace.nil?,
-                             deadlines: @deadlines).start
+        @server = Server.new(hub: self, host: @serving.host, port: @serving.port || @descriptor.settings.fetch(:port),
+                             token_digest: @token_digest, allow_hosts: Array(@descriptor.settings[:allow_hosts]),
+                             trace: !@trace.nil?, deadlines: @serving.deadlines).start
         self
       end
 
@@ -99,12 +101,9 @@ module Tamoz
         Core::SpokenText.project(delivery.text, kind: delivery.kind, more: delivery.part_count > 1)
       end
 
+      # The text registered to be spoken, or nil when the delivery is not spoken.
       def register_speech(event, delivery)
-        text = spoken_text(delivery)
-        return false unless text
-
-        @speaker.register(event['message_id'], text)
-        true
+        spoken_text(delivery)&.tap { |text| @speaker.register(event['message_id'], text) }
       end
 
       # Speech is presentation: a prefetch problem never fails the delivery it follows.

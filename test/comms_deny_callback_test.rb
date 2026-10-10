@@ -19,9 +19,7 @@ class CommsDenyCallbackTest < Minitest::Test
       store = adapter.bind_comms_store(checkpoints)
       store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
       transport = ScriptedTransport.new
-      gateway = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
-      )
+      gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test')
       transport.batch([])
 
       reference, prompt = Comms::ApprovalPrompt.build(
@@ -71,9 +69,7 @@ class CommsDenyCallbackTest < Minitest::Test
       store = adapter.bind_comms_store(checkpoints)
       store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
       transport = ScriptedTransport.new
-      gateway = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
-      )
+      gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test')
       transport.batch([])
 
       reference = 'fixed-reference'
@@ -97,9 +93,7 @@ class CommsDenyCallbackTest < Minitest::Test
       store = adapter.bind_comms_store(checkpoints)
       store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
       transport = ScriptedTransport.new
-      gateway = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
-      )
+      gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test')
       transport.batch([])
 
       _reference, prompt = Comms::ApprovalPrompt.build(

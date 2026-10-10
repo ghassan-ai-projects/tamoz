@@ -50,11 +50,13 @@ class SQLiteDeliveredMessagesTest < Minitest::Test
     wire = Comms::Delivery.build(conversation_id: 'talk:chat:1', kind:, text:, render_version: 1,
                                  content_digest: Digest::SHA256.hexdigest(text), markup:).wire
     store.append_delivery(wire, surface_id:, capacity: 50, reserved_request_id: nil, now: at)
-    claimed = store.claim_delivery(delivery_id: wire.fetch('delivery_id'), owner: 'test', fence: 1,
+    claimed = store.claim_delivery(delivery_id: wire.fetch('delivery_id'),
+                                   lease: Tamoz::Comms::Lease.new(owner: 'test', fence: 1),
                                    claim_expires_at: at + 30, now: at)
     raise "not claimed: #{claimed}" unless claimed == :claimed
 
-    store.mark_delivery(delivery_id: wire.fetch('delivery_id'), owner: 'test', fence: 1, status: 'succeeded', now: at,
+    store.mark_delivery(delivery_id: wire.fetch('delivery_id'),
+                        lease: Tamoz::Comms::Lease.new(owner: 'test', fence: 1), status: 'succeeded', now: at,
                         receipt: { 'message_id' => @id })
     @id
   end

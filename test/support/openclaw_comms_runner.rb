@@ -295,8 +295,8 @@ module Tamoz
             raise 'telegram turn was not admitted durably' unless telegram_request
 
             telegram_leg = leg_snapshot(fixture, conversation: conversation, thread_id: thread,
-                                                request_id: telegram_request,
-                                                delivery_baseline: telegram_base)
+                                                 request_id: telegram_request,
+                                                 delivery_baseline: telegram_base)
             cli_base = delivery_baseline(fixture)
             cli_request = fixture.submit_cli_task(thread_id: thread, purpose: 'parity_turn',
                                                   task: 'Answer the operator task.')
@@ -306,7 +306,7 @@ module Tamoz
               'driven_update_ids' => [101],
               'telegram_legs' => [telegram_leg],
               'cli_legs' => [leg_snapshot(fixture, conversation: conversation, thread_id: thread,
-                                                  request_id: cli_request, delivery_baseline: cli_base)]
+                                                   request_id: cli_request, delivery_baseline: cli_base)]
             )
           end
         end
@@ -371,15 +371,15 @@ module Tamoz
             raise 'telegram turn was not admitted durably' unless telegram_request
 
             telegram_legs = [leg_snapshot(fixture, conversation: conversation, thread_id: thread,
-                                                  request_id: telegram_request,
-                                                  delivery_baseline: telegram_base)]
+                                                   request_id: telegram_request,
+                                                   delivery_baseline: telegram_base)]
             cli_base = delivery_baseline(fixture)
             cli_request = fixture.submit_cli_task(thread_id: thread, purpose: 'parity_turn',
                                                   task: 'Answer the operator task.')
             fixture.work
             fixture.drain
             cli_legs = [leg_snapshot(fixture, conversation: conversation, thread_id: thread,
-                                             request_id: cli_request, delivery_baseline: cli_base)]
+                                              request_id: cli_request, delivery_baseline: cli_base)]
 
             cancellations = drive_cancellation_pair(
               fixture, conversation, telegram_update_id: 863, cli_purpose: 'c6_cancel_target'
@@ -511,7 +511,8 @@ module Tamoz
 
         def unknown_rows(fixture, delivery_id)
           fixture.outbox(statuses: %w[unknown]).select { |row| row['delivery_id'] == delivery_id }
-                 .map { |row| [row['delivery_id'], row['status'], row['receipt']] }
+                                               .map { |row| [
+row['delivery_id'], row['status'], row['receipt']] }
         end
 
         def stale_owner_refused?(fixture)
@@ -520,14 +521,15 @@ module Tamoz
 
           now = fixture.now
           claimed = fixture.store.claim_delivery(
-            delivery_id: row.fetch('delivery_id'), owner: 'owner-stale-a', fence: 11,
+            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'owner-stale-a', fence: 11),
             claim_expires_at: now + 30, now: now
           )
           return false unless claimed == :claimed
 
           fixture.store.reconcile_expired_deliveries(now: now + 60)
           result = fixture.store.mark_delivery_send_started(
-            delivery_id: row.fetch('delivery_id'), owner: 'owner-stale-a', fence: 11, now: now + 61
+            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'owner-stale-a', 
+                                                                                  fence: 11), now: now + 61
           )
           result != :marked
         end
@@ -591,7 +593,7 @@ module Tamoz
             fixture.work
             parity = drive_c5_controls_parity(fixture, conversation)
             fixture.submit([callback_update(511, data: "approve:r#{'0' * 10}",
-                                            callback_message_id: 9_999)])
+                                                 callback_message_id: 9_999)])
             fixture.snapshot(conversations: [conversation]).merge(
               'driven_update_ids' => [501, 502, 510],
               'driven_text_turns' => 3,
@@ -757,9 +759,9 @@ module Tamoz
                                 .find { |send| send[:kind] == 'approval_request' }
                                 &.fetch(:receipt_message_id)
             fixture.submit([callback_update(603, data: "deny:#{reference}",
-                                            callback_message_id: receipt_id)]) if reference && receipt_id
+                                                 callback_message_id: receipt_id)]) if reference && receipt_id
             prompt_consumed = reference && fixture.prompt(fixture.prompt_digest(reference))
-                                                              &.fetch('status') == 'consumed'
+                                                  &.fetch('status') == 'consumed'
             # A deny is observed by a worker pass the way production observes
             # it: a fresh worker process re-examines the paused occurrence.
             3.times do
@@ -845,7 +847,7 @@ module Tamoz
             fixture.drain
             timeline = cancellation_timeline(
               fixture, conversation, target, writer: 'engine',
-                                              settle_at_ms: first_terminal_settle_ms(fixture)
+                                             settle_at_ms: first_terminal_settle_ms(fixture)
             )
             reference = Tamoz::Comms::Lifecycle::RequestRef.for(target)
             snapshot = fixture.snapshot(conversations: [conversation])
@@ -968,7 +970,7 @@ module Tamoz
               fixture.work
               fixture.drain
               leg_snapshot(fixture, conversation: conversation, thread_id: thread,
-                                  request_id: request_id, delivery_baseline: baseline)
+                                    request_id: request_id, delivery_baseline: baseline)
             end
 
             snapshot = fixture.snapshot(conversations: [conversation_a, conversation_b])
@@ -999,7 +1001,7 @@ module Tamoz
           return nil unless request_id
 
           leg_snapshot(fixture, conversation: conversation, thread_id: fixture.thread_for(conversation),
-                              request_id: request_id, delivery_baseline: baseline)
+                                request_id: request_id, delivery_baseline: baseline)
         end
       end
     end

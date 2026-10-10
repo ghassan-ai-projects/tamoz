@@ -572,7 +572,7 @@ Checked 2026-10-01 (source inspection).
 |---|---|---|---|
 | Applied migrations cannot be edited | `tamoz-sqlite` kernel | `test/sqlite_kernel_test.rb` — `test_migration_checksum_tampering_is_rejected` | — |
 | No compatibility migration for session records | session records | `test/agent_session_records_test.rb` — `test_version_one_session_record_is_rejected_without_compatibility_migration` | — |
-| No legacy readers | — | contradicted by `test/legacy_session_resume_test.rb` — `test_a_current_build_reads_the_old_database` | Open: delete that tolerance or narrow this rule |
+| No upgrade path for the database | `tamoz-sqlite` migrator | `test/sqlite_kernel_test.rb` — `test_a_database_at_another_schema_version_is_refused_with_a_reset_instruction` | Session records still tolerate pre-P8 fields |
 
 ## ADR-060
 

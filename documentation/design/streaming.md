@@ -46,7 +46,7 @@ The terminal event carries an **artifact manifest** — prompt, skill-set, tool-
 
 ## The old continuous engine is retired
 
-The previous P14 streaming-input engine — the continuous input stream that fed a running agent — was **retired** by forward migration (MIGRATION_13). Tamoz now runs one sealed, digest-verified Situation snapshot per episode; the stream (the agentic-stream runtime) owns the continuous plane — event time, watermarks, windows, channels, replay — and hands Tamoz the snapshot. **Tamoz computes no watermark, no event time, no lateness, and no window membership**; the deterministic plane is the stream's. The old engine's channel vocabulary, backpressure declarations, connector contract, and replay runtime were deleted with it; nothing reads the old `queue_capacity` / `spool_capacity_bytes` / `overflow` vocabulary because the vocabulary is gone.
+The previous P14 streaming-input engine — the continuous input stream that fed a running agent — was **retired**. Tamoz now runs one sealed, digest-verified Situation snapshot per episode; the stream (the agentic-stream runtime) owns the continuous plane — event time, watermarks, windows, channels, replay — and hands Tamoz the snapshot. **Tamoz computes no watermark, no event time, no lateness, and no window membership**; the deterministic plane is the stream's. The old engine's channel vocabulary, backpressure declarations, connector contract, and replay runtime were deleted with it; nothing reads the old `queue_capacity` / `spool_capacity_bytes` / `overflow` vocabulary because the vocabulary is gone.
 
 ## Next reads
 

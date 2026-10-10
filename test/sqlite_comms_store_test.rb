@@ -101,7 +101,8 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def insert_request!(store, request_id:, conversation_id:, created_at_ms:, thread: 'telegram.ops.abc')
     store.__send__(:transaction, 'test.request.insert') do |tx|
-      binds = [request_id, 'telegram-ops', 1, conversation_id, thread, 'ops', 1, 'admitted', created_at_ms, created_at_ms]
+      binds = [request_id, 'telegram-ops', 1, conversation_id, thread, 'ops', 1, 'admitted', created_at_ms,
+               created_at_ms]
       tx.execute('test.request.insert', <<~SQL, binds)
         INSERT INTO tamoz_comms_requests (
           request_id, surface_id, surface_revision, conversation_id,
@@ -114,8 +115,8 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def admit(store, wire, thread: 'telegram.ops.abc', now: self.now)
     store.admit_and_enqueue(
-      wire, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
-            thread:, profile_id: 'ops', reservation: 1, now:
+      wire, stream_id: 'telegram:bot:7463512990',
+            turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1), now:
     )
   end
 
@@ -229,7 +230,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :enqueued, admit(store, first)
       assert_equal :integrity_conflict, admit(store, second)
       assert_equal :conflict_recorded, store.disposition_only(
-        second, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
+        second, stream_id: 'telegram:bot:7463512990',
                 disposition: 'quarantined', reason: 'integrity_conflict', now: now + 1
       )
       assert_equal :integrity_conflict, admit(store, third)
@@ -256,7 +257,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal :duplicate, admit(store, first, now: now + 3),
                    'the original digest still replays as a duplicate'
       assert_equal :duplicate, store.disposition_only(
-        third, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
+        third, stream_id: 'telegram:bot:7463512990',
                disposition: 'quarantined', reason: 'integrity_conflict', now: now + 4
       ), 're-recording the identical quarantine dedups'
     end
@@ -327,15 +328,15 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store|
       store.append_delivery(delivery, surface_id: 'telegram-ops', capacity: 10, now:)
       delivery_id = delivery.fetch('delivery_id')
-      store.claim_delivery(delivery_id:, owner: 'gateway:a', fence: 7,
+      store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7),
                            claim_expires_at: now + 30, now:)
 
       assert_equal :not_claimable, store.mark_delivery(
-        delivery_id:, owner: 'gateway:b', fence: 7, status: 'succeeded',
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 7), status: 'succeeded',
         receipt: { 'message_id' => 1 }, now: now + 1
       )
       assert_equal :not_claimable, store.mark_delivery(
-        delivery_id:, owner: 'gateway:a', fence: 8, status: 'succeeded',
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 8), status: 'succeeded',
         receipt: { 'message_id' => 1 }, now: now + 2
       )
       row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[claimed]).first
@@ -344,7 +345,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_nil row.fetch('receipt')
 
       assert_equal :marked, store.mark_delivery(
-        delivery_id:, owner: 'gateway:a', fence: 7, status: 'succeeded',
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status: 'succeeded',
         receipt: { 'message_id' => 42 }, now: now + 3
       )
       row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[succeeded]).first
@@ -362,9 +363,9 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
       store.admit_and_enqueue(
-        envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
-                                                      stream_id: 'telegram:bot:7463512990', thread: 'telegram.ops.abc', profile_id: 'ops',
-                                                      reservation: 1, now:
+        envelope(update_id: 1, text: 'make it blue'),
+        stream_id: 'telegram:bot:7463512990',
+        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1), now:
       )
       answer = delivery(text: 'done, it is blue')
       store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1,
@@ -376,9 +377,9 @@ class SQLiteCommsStoreTest < Minitest::Test
         surface_id: 'telegram-ops', capacity: 10, now: now + 1
       )
       store.admit_and_enqueue(
-        envelope(update_id: 2, text: 'and the font?'), surface_id: 'telegram-ops',
-                                                       stream_id: 'telegram:bot:7463512990', thread: 'telegram.ops.abc', profile_id: 'ops',
-                                                       reservation: 1, now: now + 2
+        envelope(update_id: 2, text: 'and the font?'),
+        stream_id: 'telegram:bot:7463512990',
+        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1), now: now + 2
       )
 
       history = store.conversation_history(
@@ -409,9 +410,9 @@ class SQLiteCommsStoreTest < Minitest::Test
                    'text' => "done, it is blue\nResponse provided; no task completion was claimed." }]
 
       store.admit_and_enqueue(
-        envelope(update_id: 1, text: "make it\nblue"), surface_id: 'telegram-ops',
-                                                       stream_id: 'telegram:bot:7463512990', thread: 'telegram.ops.abc', profile_id: 'ops',
-                                                       reservation: 1, now:, history:
+        envelope(update_id: 1, text: "make it\nblue"),
+        stream_id: 'telegram:bot:7463512990',
+        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1, history:), now:
       )
 
       task = checkpoints.request_history(thread_id: 'telegram.ops.abc').first.payload.fetch('task')
@@ -434,9 +435,9 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       history = [{ 'role' => 'user', 'text' => 'earlier' }]
       store.admit_and_enqueue(
-        envelope, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
-                  thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1,
-                  now:, history:
+        envelope, stream_id: 'telegram:bot:7463512990',
+                  turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1, history:),
+                  now:
       )
 
       payload = checkpoints.request_history(thread_id: 'telegram.ops.abc').first.payload
@@ -456,11 +457,11 @@ class SQLiteCommsStoreTest < Minitest::Test
   def test_disposition_only_records_and_dedups
     with_engine do |store|
       assert_equal :recorded, store.disposition_only(
-        envelope(update_id: 1), surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
+        envelope(update_id: 1), stream_id: 'telegram:bot:7463512990',
                                 disposition: 'ignored', reason: 'unbound', now:
       )
       assert_equal :duplicate, store.disposition_only(
-        envelope(update_id: 1), surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
+        envelope(update_id: 1), stream_id: 'telegram:bot:7463512990',
                                 disposition: 'ignored', reason: 'unbound', now: now + 1
       )
     end
@@ -469,13 +470,16 @@ class SQLiteCommsStoreTest < Minitest::Test
   def test_poller_lease_is_one_fenced_poller_per_bot
     with_engine do |store|
       assert_equal :acquired, store.acquire_poller_lease(
-        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', owner: 'gateway:a', fence: 1, ttl_s: 30, now:
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1',
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 1), ttl_s: 30, now:
       )
       assert_equal :not_acquirable, store.acquire_poller_lease(
-        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', owner: 'gateway:b', fence: 2, ttl_s: 30, now: now + 1
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1',
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 2), ttl_s: 30, now: now + 1
       )
       assert_equal :acquired, store.acquire_poller_lease(
-        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1', owner: 'gateway:b', fence: 2, ttl_s: 30,
+        surface_id: 'telegram-ops', stream_id: 'telegram:bot:1',
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 2), ttl_s: 30,
         now: now + 60
       ), 'an expired poller lease is recoverable'
     end
@@ -514,13 +518,15 @@ class SQLiteCommsStoreTest < Minitest::Test
       delivery_id = delivery.fetch('delivery_id')
 
       assert_equal :claimed, store.claim_delivery(
-        delivery_id:, owner: 'gateway:a', fence: 1, claim_expires_at: now + 30, now:
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 1), claim_expires_at: now + 30, now:
       )
       assert_equal :not_claimable, store.claim_delivery(
-        delivery_id:, owner: 'gateway:b', fence: 2, claim_expires_at: now + 30, now: now + 1
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b',
+                                                     fence: 2), claim_expires_at: now + 30, now: now + 1
       )
       assert_equal :missing, store.claim_delivery(
-        delivery_id: 'f' * 64, owner: 'gateway:b', fence: 2, claim_expires_at: now + 30, now:
+        delivery_id: 'f' * 64, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b',
+                                                              fence: 2), claim_expires_at: now + 30, now:
       )
     end
   end
@@ -737,7 +743,8 @@ class SQLiteCommsStoreTest < Minitest::Test
   end
 
   def claim_row(store, delivery_id)
-    store.claim_delivery(delivery_id:, owner: 'gateway:a', fence: 7, claim_expires_at: now + 30, now:)
+    store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7),
+                         claim_expires_at: now + 30, now:)
   end
 
   def test_request_status_filters_delivery_by_request_and_aggregate_keeps_conversation_scope
@@ -755,22 +762,24 @@ class SQLiteCommsStoreTest < Minitest::Test
       )
       assert_equal :appended, store.append_delivery(
         delivered, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: second_id,
-        now: now + 1
+                   now: now + 1
       )
       # Claim both while pending (the per-conversation unknown barrier only
       # blocks claiming a successor once a predecessor is unknown), then record
       # the mixed terminal states this projection asserts over.
       [unknown, delivered].each do |row|
         assert_equal :claimed, store.claim_delivery(
-          delivery_id: row.fetch('delivery_id'), owner: 'gateway:a', fence: 7,
+          delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7),
           claim_expires_at: now + 30, now:
         )
       end
       assert_equal :marked, store.mark_delivery(
-        delivery_id: unknown.fetch('delivery_id'), owner: 'gateway:a', fence: 7, status: 'unknown', now: now + 1
+        delivery_id: unknown.fetch('delivery_id'),
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status: 'unknown', now: now + 1
       )
       assert_equal :marked, store.mark_delivery(
-        delivery_id: delivered.fetch('delivery_id'), owner: 'gateway:a', fence: 7, status: 'succeeded', now: now + 1
+        delivery_id: delivered.fetch('delivery_id'),
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status: 'succeeded', now: now + 1
       )
 
       assert_equal 'unknown', store.request_status(
@@ -804,7 +813,8 @@ class SQLiteCommsStoreTest < Minitest::Test
       ) do |writer|
         writer.claim_next_request(validator: nil)
 
-        assert_equal ['telegram:chat:22222222'], store.working_conversations(surface_id: 'telegram-ops', now: Time.now.utc)
+        assert_equal ['telegram:chat:22222222'],
+                     store.working_conversations(surface_id: 'telegram-ops', now: Time.now.utc)
       end
 
       assert_empty store.working_conversations(surface_id: 'telegram-ops', now: Time.now.utc),
@@ -827,7 +837,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         txn.scalar('test.request.created_at',
                    'SELECT created_at_ms FROM tamoz_requests WHERE request_id = ?', [request_id])
       end
-      claim_window_ms = Tamoz::SQLite::CommsStore::WORKER_UNCLAIMED_WINDOW_MS
+      claim_window_ms = Tamoz::SQLite::CommsStatus::WORKER_UNCLAIMED_WINDOW_MS
       assert_equal 1, claim_window_ms
       created_at = Time.at(
         created_at_ms / 1000, (created_at_ms % 1000) * 1000, :microsecond
@@ -875,10 +885,10 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store|
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
-      insert_request!(store, request_id: 'a' * 63 + '1',
-                           conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
-      insert_request!(store, request_id: 'a' * 63 + '2',
-                           conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
+      insert_request!(store, request_id: "#{'a' * 63}1",
+                             conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
+      insert_request!(store, request_id: "#{'a' * 63}2",
+                             conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
 
       assert_equal :ambiguous_ref, store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
@@ -921,8 +931,8 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_equal epoch_ms(now + 2), cancellation_stamps(store, request_id).fetch('requested_at_ms'),
                    'a failed enqueue must not leave a later requested stamp behind'
-      assert_equal 1, checkpoints.request_history(thread_id: 'telegram.ops.abc')
-                                .count { |request| request.operation == :redirect }
+      assert_equal(1, checkpoints.request_history(thread_id: 'telegram.ops.abc')
+                                 .count { |request| request.operation == :redirect })
     end
   end
 
@@ -935,7 +945,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_equal :observed, store.mark_cancellation_observed(thread_id: 'telegram.ops.abc', now: now + 1)
       assert_nil cancellation_stamps(store, request_id).fetch('observed_at_ms'),
-                'an unrequested thread gains no observed stamp'
+                 'an unrequested thread gains no observed stamp'
 
       assert_equal :requested, store.request_cancellation(
         thread_id: 'telegram.ops.abc', request_id: 'cancel-93',
@@ -1071,7 +1081,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         WHERE request_id = ?
       SQL
     end
-    store.cancellation_outcome(observed: true, settled: row.fetch(0))
+    Tamoz::SQLite::CommsStatus.cancellation_outcome(observed: true, settled: row.fetch(0))
   end
 
   def cancellation_stamps(store, request_id)
@@ -1106,10 +1116,11 @@ class SQLiteCommsStoreTest < Minitest::Test
       admit(store, envelope(update_id: 1, text: 'first'))
       admit(store, envelope(update_id: 2, text: 'second'))
       first_id, second_id = request_ids(checkpoints, 'telegram.ops.abc')
-      draft = delivery(text: 'draft answer', content_digest: 'b' * 63 + '1')
-      lost = delivery(text: 'lost reply', content_digest: 'b' * 63 + '2')
+      draft = delivery(text: 'draft answer', content_digest: "#{'b' * 63}1")
+      lost = delivery(text: 'lost reply', content_digest: "#{'b' * 63}2")
       store.append_delivery(draft, surface_id: 'telegram-ops', capacity: 10, now:, reserved_request_id: first_id)
-      store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1, reserved_request_id: second_id)
+      store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1,
+                                  reserved_request_id: second_id)
       assistant_texts = lambda {
         store.conversation_history(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
                                    thread_id: 'telegram.ops.abc')
@@ -1128,10 +1139,10 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def claim_and_mark!(store, delivery_id, status)
     assert_equal :claimed, store.claim_delivery(
-      delivery_id:, owner: 'gateway:a', fence: 7, claim_expires_at: now + 30, now:
+      delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), claim_expires_at: now + 30, now:
     )
     assert_equal :marked, store.mark_delivery(
-      delivery_id:, owner: 'gateway:a', fence: 7, status:, now: now + 1
+      delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status:, now: now + 1
     )
   end
 
@@ -1237,6 +1248,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       end
     end
   end
+
   # Expiry is enforced where authority is granted: a challenge that is still
   # status-pending but past its expires_at_ms consumes zero rows, so the
   # approve refuses typed instead of writing a binding.
@@ -1246,11 +1258,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now: now - 7200
       )
-      store.insert_pairing_challenge(
-        digest: expired.digest, surface_id: 'telegram-ops',
-        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-        expires_at: expired.expires_at, now: now - 7200
-      )
+      store.insert_pairing_challenge(expired.wire, now: now - 7200)
       binding_wire = Comms::Binding.new(
         surface_id: 'telegram-ops', surface_revision: 1,
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -1272,11 +1280,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:
       )
-      store.insert_pairing_challenge(
-        digest: live.digest, surface_id: 'telegram-ops',
-        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-        expires_at: live.expires_at, now:
-      )
+      store.insert_pairing_challenge(live.wire, now:)
       outcome = store.approve_pairing(
         challenge_digest: live.digest,
         binding_wire: Comms::Binding.new(
@@ -1319,7 +1323,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_match(/\Asha256:[0-9a-f]{64}\z/, retained.fetch('digest'))
       assert_equal envelope.bytesize, artifacts.resolve("sha256:#{Digest::SHA256.hexdigest(envelope)}")
-                                          .fetch('bytes').bytesize
+                                               .fetch('bytes').bytesize
     end
   end
 
@@ -1333,20 +1337,12 @@ class SQLiteCommsStoreTest < Minitest::Test
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now: now - 7200, code: 'EEEE5555'
       )
-      store.insert_pairing_challenge(
-        digest: expired.digest, surface_id: 'telegram-ops',
-        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-        expires_at: expired.expires_at, now: now - 7200
-      )
+      store.insert_pairing_challenge(expired.wire, now: now - 7200)
       other = Tamoz::Comms::PairingChallenge.build(
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:99999999',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code: 'DDDD4444'
       )
-      store.insert_pairing_challenge(
-        digest: other.digest, surface_id: 'telegram-ops',
-        correspondent_id: 'telegram:user:99999999', conversation_id: 'telegram:chat:22222222',
-        expires_at: other.expires_at, now:
-      )
+      store.insert_pairing_challenge(other.wire, now:)
       codes = %w[AAAA1111 BBBB2222 CCCC3333].map do |code|
         Tamoz::Comms::PairingChallenge.build(
           surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
@@ -1354,11 +1350,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         )
       end
       codes.each do |challenge|
-        store.insert_pairing_challenge(
-          digest: challenge.digest, surface_id: 'telegram-ops',
-          correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-          expires_at: challenge.expires_at, now:
-        )
+        store.insert_pairing_challenge(challenge.wire, now:)
       end
 
       pending = store.pairing_challenges(status: 'pending', surface_id: 'telegram-ops',
@@ -1378,11 +1370,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code: 'FFFF6666'
       )
-      store.insert_pairing_challenge(
-        digest: challenge.digest, surface_id: 'telegram-ops',
-        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-        expires_at: challenge.expires_at, now:
-      )
+      store.insert_pairing_challenge(challenge.wire, now:)
 
       assert_empty store.pairing_challenges(status: 'pending', surface_id: 'telegram-other', now:)
       assert_empty store.pairing_challenges(status: 'pending',

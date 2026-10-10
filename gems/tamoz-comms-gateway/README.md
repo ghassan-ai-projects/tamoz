@@ -26,7 +26,6 @@ support.
 require 'tamoz/comms/gateway'
 
 gateway = Tamoz::Comms::Gateway.new(
-  adapter: adapter,
   checkpoints: checkpoints,
   transport: transport,
   descriptor: descriptor,

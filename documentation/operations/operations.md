@@ -196,12 +196,10 @@ next pass. Deny with `--deny`. The evidence model is in
 
 ## Migrations
 
-Schema migrations are numbered, checksummed and applied in one transaction; a
-failed migration rolls back every statement, and checksum tampering is refused.
-There are thirteen; the full list and the retirement of the old streaming-engine
-tables are in [`../architecture/data-model.md`](../architecture/data-model.md). A
-database from an older Tamoz migrates forward on open; a database from a NEWER
-Tamoz fails before any partial load.
+One checksummed migration builds the whole schema in one transaction; a failed
+build rolls back every statement, and checksum tampering is refused. There is no
+upgrade path: a database from any other Tamoz version is refused, and you start a
+fresh runtime database. See [`../architecture/data-model.md`](../architecture/data-model.md).
 
 The runtime configuration has no migrations: only schema 2 loads, an older
 directory is refused, and startup never rewrites operator authority.

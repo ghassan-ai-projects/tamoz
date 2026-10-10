@@ -351,17 +351,18 @@ class ExperienceHarnessTest < Minitest::Test
                 reserved_request_id: request_id, now:
     )
     assert_equal :claimed, store.claim_delivery(
-      delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1,
+      delivery_id: delivery.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1),
       claim_expires_at: now + 30, now:
     )
     if status == 'unknown'
       assert_equal :marked, store.mark_delivery_send_started(
-        delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1, now: now + 1
+        delivery_id: delivery.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test',
+                                                                                   fence: 1), now: now + 1
       )
     end
 
     assert_equal :marked, store.mark_delivery(
-      delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1,
+      delivery_id: delivery.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1),
       status:, receipt: status == 'succeeded' ? { 'message_id' => 1 } : nil, now: now + 2
     )
   end

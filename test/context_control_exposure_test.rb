@@ -85,7 +85,7 @@ class ContextControlExposureTest < Minitest::Test
       assert_includes context_line, 'fragments visible 0 of 1 (1 truncated by controls)'
 
       pinned = surface.captured.fetch('context').last
-        .dig('layers', 'transcript', 'earlier_summary_pinned')
+                      .dig('layers', 'transcript', 'earlier_summary_pinned')
       assert_equal true, pinned
 
       cli_thread = 'th_compact_cli'
@@ -154,10 +154,8 @@ class ContextControlExposureTest < Minitest::Test
   # again on the next pass instead of dying.
   def test_a_missing_controls_source_answers_unavailable_and_the_loop_survives
     with_dual_surface do |surface|
-      gateway = Comms::Gateway.new(
-        adapter: surface.adapter, checkpoints: surface.checkpoints, transport: surface.transport,
-        descriptor:, poller_owner: 'exposure:crash', controls: nil
-      )
+      gateway = Comms::Gateway.new(checkpoints: surface.checkpoints, transport: surface.transport,
+                                   descriptor:, poller_owner: 'exposure:crash', controls: nil)
       surface.admit(101, TURN_TEXT)
 
       assert_equal Comms::Gateway::CONTROLS_UNAVAILABLE_REPLY,
@@ -341,10 +339,8 @@ class ContextControlExposureTest < Minitest::Test
         store.bind_correspondent(binding_wire, now: NOW)
         recorded = RecordingControls.new(controls_session(adapter, workspace))
         transport = ScriptedTransport.new
-        gateway = Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'exposure:test',
-          controls: ->(_thread) { recorded }
-        )
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'exposure:test',
+                                     controls: ->(_thread) { recorded })
         yield Surface.new(gateway:, transport:, store:, session: recorded, recorded:,
                           checkpoints:, workspace:, session_dir:, adapter:)
       ensure

@@ -43,7 +43,7 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_an_unknown_command_still_gets_typed_unknown_command_and_never_model_input
-    with_gateway do |gateway, transport, store, adapter, checkpoints|
+    with_gateway do |gateway, transport, _store, adapter, checkpoints|
       transport.batch([update(1, text: '/eval rm -rf /')])
 
       assert_equal :served, gateway.serve_once(now: NOW, drain: false)
@@ -63,6 +63,7 @@ class CommsCommandParityTest < Minitest::Test
       assert_equal :served, gateway.serve_once(now: NOW, drain: false)
 
       first_ref = derived_ref(first)
+
       assert_empty capture, 'the typing indicator, not a message, acknowledges a request'
 
       resolved = store.request_status(
@@ -107,6 +108,7 @@ class CommsCommandParityTest < Minitest::Test
                    'a malformed reference gets the same bounded refusal'
 
       stub_request_status(store, :ambiguous_ref)
+
       assert_equal AMBIGUOUS_REF_REPLY,
                    drive_command(gateway, transport, "/status #{first_ref}", id: 105)
     ensure
@@ -144,6 +146,7 @@ class CommsCommandParityTest < Minitest::Test
       reference = derived_ref(update(101))
 
       aggregate = drive_command(gateway, transport, '/status --diagnostic', id: 102)
+
       assert_includes aggregate, 'phase=unknown'
       assert_includes aggregate, 'event=unknown#'
       assert_includes aggregate, 'effect=not_started'
@@ -151,6 +154,7 @@ class CommsCommandParityTest < Minitest::Test
       assert_includes aggregate, 'delivery=none'
 
       request = drive_command(gateway, transport, "/status #{reference} --diagnostic", id: 103)
+
       assert_includes request, 'phase=unknown'
       assert_includes request, 'event=unknown#'
       assert_equal Tamoz::Comms::Gateway::STATUS_USAGE_REPLY,
@@ -227,11 +231,13 @@ class CommsCommandParityTest < Minitest::Test
                    drive_command(gateway, transport, '/redirect r0000000000 some task', id: 204)
 
       stub_request_status(store, :ambiguous_ref)
+
       assert_equal AMBIGUOUS_REF_REPLY,
                    drive_command(gateway, transport, "/redirect #{ref} some task", id: 205)
       restore_request_status(store)
 
       fail_request!(checkpoints, thread)
+
       assert_equal 'That request has already finished.',
                    drive_command(gateway, transport, "/redirect #{ref} some task", id: 206)
 
@@ -242,7 +248,7 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def test_whoami_names_the_bound_context_and_confers_nothing
-    with_gateway do |gateway, transport, store, adapter, checkpoints|
+    with_gateway do |gateway, transport, _store, adapter, checkpoints|
       before = request_row_count(adapter)
 
       assert_equal "You are #{CORRESPONDENT_ID} in conversation #{CONVERSATION_ID} " \
@@ -271,12 +277,10 @@ class CommsCommandParityTest < Minitest::Test
         controls_root = File.join(directory, 'workspace')
         FileUtils.mkdir_p(controls_root)
         session = nil
-        gateway = Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'parity:test',
-          controls: ->(_thread) do
-            session ||= controls_session(adapter, controls_root)
-          end
-        )
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'parity:test',
+                                     controls: lambda do |_thread|
+                                       session ||= controls_session(adapter, controls_root)
+                                     end)
         yield gateway, transport, store, adapter, checkpoints
       ensure
         adapter&.close
@@ -375,7 +379,7 @@ class CommsCommandParityTest < Minitest::Test
   end
 
   def restore_request_status(store)
-    return unless store.singleton_class.instance_methods(false).include?(:request_status)
+    return unless store.singleton_class.method_defined?(:request_status, false)
 
     store.singleton_class.remove_method(:request_status)
   end

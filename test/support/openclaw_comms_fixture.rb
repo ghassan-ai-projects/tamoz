@@ -271,7 +271,7 @@ module Tamoz
         def drain(now: @now)
           drainer = Tamoz::Comms::DeliveryDrainer.new(
             store: @store, transport: @transport, descriptor: descriptor(:allowlist),
-            owner: 'fixture:drainer', batch_size: 50, clock: -> { now }, sleeper: ->(_) {}
+            owner: 'fixture:drainer', clock: -> { now }, sleeper: ->(_) {}
           )
           drainer.drain_once(now:)
         end
@@ -380,19 +380,19 @@ module Tamoz
         def wire_delivery_pipeline(admission_mode)
           @transport = FakeTransport.new(surface_id: SURFACE_ID, surface_revision: SURFACE_REVISION)
           surface = descriptor(admission_mode)
-          @gateway = Tamoz::Comms::Gateway.new(
-            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
-            descriptor: surface, poller_owner: 'fixture:gateway',
-            # Production paces a conversation at one message per second and the
-            # drainer really sleeps for it. These tests assert the sent chain,
-            # not its pacing, so the drainer the gateway drives skips the wait —
-            # the send, the scheduled stamp, and the receipt are unchanged.
-            drainer: Tamoz::Comms::DeliveryDrainer.new(
-              store: @store, transport: @transport, descriptor: surface,
-              owner: 'fixture:gateway:drainer', batch_size: 50, sleeper: ->(_) {}
-            ),
-            controls: ->(thread_id) { @runtime.session_for(thread_id) }
-          )
+          @gateway = Tamoz::Comms::Gateway.new(checkpoints: @runtime.checkpoints, transport: @transport,
+                                               descriptor: surface, poller_owner: 'fixture:gateway',
+                                               # Production paces a conversation at one message per second and the
+                                               # drainer really sleeps for it. These tests assert the sent chain,
+                                               # not its pacing, so the drainer the gateway drives skips the wait —
+                                               # the send, the scheduled stamp, and the receipt are unchanged.
+                                               drainer: Tamoz::Comms::DeliveryDrainer.new(
+                                                 store: @store, transport: @transport, descriptor: surface,
+                                                 owner: 'fixture:gateway:drainer', sleeper: ->(_) {}
+                                               ),
+                                               controls: lambda { |thread_id|
+                                                 @runtime.session_for(thread_id)
+                                               })
           sink = Tamoz::Comms::OutboxDeliverySink.new(
             adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
           )

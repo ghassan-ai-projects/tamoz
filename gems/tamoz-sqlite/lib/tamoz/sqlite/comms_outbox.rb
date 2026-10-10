@@ -56,40 +56,21 @@ module Tamoz
       # reservation and refuses when total slots are at capacity.
       def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
         transaction('comms.outbox.append') do |txn|
-          append_delivery_in_transaction!(txn, delivery_wire, surface_id:, capacity:, now:, reserved_request_id:)
+          existing = txn.first('comms.outbox.append.existing', <<~SQL, [delivery_wire.fetch('delivery_id')])
+            SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
+          SQL
+          next :duplicate if existing
+          next :capacity_refused if slots_in_use(txn, surface_id, reserved_request_id) + 1 > capacity
+
+          insert_delivery!(txn, outbox_binds(delivery_wire, surface_id, now, request_id: reserved_request_id))
+          :appended
         end
-      end
-
-      def append_delivery_in_transaction!(txn, delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
-        existing = txn.first('comms.outbox.append.existing', <<~SQL, [delivery_wire.fetch('delivery_id')])
-          SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
-        SQL
-        return :duplicate if existing
-
-        pending = pending_claimed_count(txn, surface_id)
-        reserved = if reserved_request_id
-                     [open_reservations(txn, surface_id) - reservation_of(txn, reserved_request_id), 0].max
-                   else
-                     open_reservations(txn, surface_id)
-                   end
-        return :capacity_refused if pending + reserved + 1 > capacity
-
-        binds = outbox_binds(delivery_wire, surface_id, now, request_id: reserved_request_id)
-        txn.execute('comms.outbox.append', <<~SQL, binds)
-          INSERT INTO tamoz_comms_outbox (
-            delivery_id, surface_id, conversation_id, kind, operation, text,
-            part_index, part_count, markup, reply_to, journaled,
-            content_digest, render_version, expires_at_ms, status,
-            created_at_ms, updated_at_ms, request_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-        SQL
-        :appended
       end
 
       # Claim one row under a fenced lease for a transport attempt. A crashed
       # claim is retryable only when the transport boundary was never crossed;
       # marked sends become unknown during reconciliation.
-      def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
+      def claim_delivery(delivery_id:, lease:, claim_expires_at:, now:)
         transaction('comms.outbox.claim') do |txn|
           existing = txn.first('comms.outbox.claim.exists', <<~SQL, [delivery_id])
             SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
@@ -97,34 +78,14 @@ module Tamoz
           next :missing unless existing
 
           txn.execute('comms.outbox.claim', CLAIM_DELIVERY_SQL,
-                      [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
+                      [lease.owner, lease.fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
           txn.changes == 1 ? :claimed : :not_claimable
         end
       end
 
-      def reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:, global_messages_per_s:, now:)
-        validate_rate!(per_chat_messages_per_s, 'per_chat_messages_per_s')
-        validate_rate!(global_messages_per_s, 'global_messages_per_s')
-        current_ms = now_ms(now)
-        global_interval = interval_ms(global_messages_per_s)
-        chat_interval = interval_ms(per_chat_messages_per_s)
-        transaction('comms.outbox.pacing.reserve') do |txn|
-          global_ready = [current_ms, pacing_time(txn, surface_id, PACING_GLOBAL_SCOPE)].max
-          chat_ready = if conversation_id
-                         [current_ms, pacing_time(txn, surface_id, conversation_id)].max
-                       else
-                         current_ms
-                       end
-          scheduled = [global_ready, chat_ready].max
-          upsert_pacing!(txn, surface_id, PACING_GLOBAL_SCOPE, scheduled + global_interval)
-          upsert_pacing!(txn, surface_id, conversation_id, scheduled + chat_interval) if conversation_id
-          (scheduled - current_ms) / 1000.0
-        end
-      end
-
-      def release_delivery_claim(delivery_id:, owner:, fence:, now:)
+      def release_delivery_claim(delivery_id:, lease:, now:)
         transaction('comms.outbox.release_claim') do |txn|
-          txn.execute('comms.outbox.release_claim', <<~SQL, [now_ms(now), delivery_id, owner, fence])
+          txn.execute('comms.outbox.release_claim', <<~SQL, [now_ms(now), delivery_id, lease.owner, lease.fence])
             UPDATE tamoz_comms_outbox
             SET status = 'pending', claim_owner = NULL, claim_fence = NULL,
                 claim_expires_at_ms = NULL, send_started_at_ms = NULL, updated_at_ms = ?
@@ -135,14 +96,15 @@ module Tamoz
         end
       end
 
-      def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+      def mark_delivery_send_started(delivery_id:, lease:, now:)
         transaction('comms.outbox.send_started') do |txn|
-          txn.execute('comms.outbox.send_started', <<~SQL, [now_ms(now), now_ms(now), delivery_id, owner, fence])
-            UPDATE tamoz_comms_outbox
-            SET send_started_at_ms = ?, updated_at_ms = ?
-            WHERE delivery_id = ? AND status = 'claimed'
-              AND claim_owner = ? AND claim_fence = ?
-          SQL
+          txn.execute('comms.outbox.send_started',
+                      <<~SQL, [now_ms(now), now_ms(now), delivery_id, lease.owner, lease.fence])
+                        UPDATE tamoz_comms_outbox
+                        SET send_started_at_ms = ?, updated_at_ms = ?
+                        WHERE delivery_id = ? AND status = 'claimed'
+                          AND claim_owner = ? AND claim_fence = ?
+                      SQL
           txn.changes == 1 ? :marked : :not_claimable
         end
       end
@@ -166,18 +128,6 @@ module Tamoz
         end
       end
 
-      def defer_delivery(surface_id:, conversation_id:, not_before:, now:)
-        deadline = [now_ms(now), now_ms(not_before)].max
-        transaction('comms.outbox.pacing.defer') do |txn|
-          scopes = [PACING_GLOBAL_SCOPE, conversation_id].compact.uniq
-          scopes.each do |scope|
-            current = pacing_time(txn, surface_id, scope)
-            upsert_pacing!(txn, surface_id, scope, [current, deadline].max)
-          end
-          :deferred
-        end
-      end
-
       # Bind one row to its effect journal entry (design §10): the journal
       # holds attempts and receipts, never the outbox. Write-once.
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
@@ -198,75 +148,20 @@ module Tamoz
         end
       end
 
-      def outbox_rows(surface_id:, statuses:, limit: 500)
-        read('comms.outbox.rows') do |txn|
-          placeholders = statuses.map { '?' }.join(', ')
-          rows = txn.rows('comms.outbox.rows', <<~SQL, [surface_id, *statuses, limit])
-            SELECT #{OUTBOX_COLUMNS.join(', ')} FROM tamoz_comms_outbox
-            WHERE surface_id = ? AND status IN (#{placeholders})
-            ORDER BY created_at_ms LIMIT ?
-          SQL
-          rows.map { |row| OUTBOX_COLUMNS.zip(row).to_h }
-        end
-      end
-
-      def delivered_messages(surface_id:, limit:)
-        columns = OUTBOX_COLUMNS.map { |column| "outbox.#{column}" }.join(', ')
-        read('comms.outbox.delivered') do |txn|
-          recent = txn.rows('comms.outbox.delivered.recent', <<~SQL, [surface_id, limit])
-            SELECT #{columns} FROM tamoz_comms_outbox AS outbox
-            WHERE outbox.surface_id = ? AND outbox.status = 'succeeded'
-            ORDER BY outbox.created_at_ms DESC, outbox.delivery_id DESC LIMIT ?
-          SQL
-          live = txn.rows('comms.outbox.delivered.live', <<~SQL, [surface_id])
-            SELECT #{columns} FROM tamoz_comms_outbox AS outbox
-            JOIN tamoz_comms_approval_prompts AS prompt
-              ON prompt.surface_id = outbox.surface_id AND prompt.conversation_id = outbox.conversation_id
-             AND prompt.status = 'active'
-             AND json_extract(outbox.receipt, '$.message_id') = CAST(prompt.prompt_receipt AS INTEGER)
-            WHERE outbox.surface_id = ? AND outbox.status = 'succeeded' AND outbox.kind = 'approval_request'
-          SQL
-          (recent + live).map { |row| OUTBOX_COLUMNS.zip(row).to_h }
-                         .uniq { |row| row.fetch('delivery_id') }
-                         .sort_by { |row| [row.fetch('created_at_ms'), row.fetch('delivery_id')] }
-        end
-      end
-
-      def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
-        message_id = Integer(message_id, exception: false)
-        return nil unless message_id&.positive?
-
-        pattern = "%\"message_id\":#{message_id}%"
-        read('comms.outbox.receipt') do |txn|
-          rows = txn.rows('comms.outbox.receipt', <<~SQL, [surface_id, conversation_id, pattern])
-            SELECT #{OUTBOX_COLUMNS.join(', ')} FROM tamoz_comms_outbox
-            WHERE surface_id = ? AND conversation_id = ? AND status = 'succeeded'
-              AND receipt LIKE ?
-            ORDER BY created_at_ms DESC
-          SQL
-          rows.map { |row| OUTBOX_COLUMNS.zip(row).to_h }.find do |row|
-            receipt = JSON.parse(row.fetch('receipt'))
-            receipt.is_a?(Hash) && receipt['message_id'] == message_id
-          rescue JSON::ParserError
-            false
-          end
-        end
-      end
-
       # Record a transport outcome for a CLAIMED row — fenced (invariant 4):
-      # the UPDATE must match the claim's owner AND fence, so a stale drainer
+      # the UPDATE must match the claim's lease, so a stale drainer
       # records nothing. `succeeded` carries the receipt, `unknown` is the
       # honest ambiguity state (design §10 — never a guess, never an
       # automatic retry).
-      def mark_delivery(delivery_id:, owner:, fence:, status:, now:, receipt: nil)
+      def mark_delivery(delivery_id:, lease:, status:, now:, receipt: nil)
         transaction('comms.outbox.mark') do |txn|
-          txn.execute('comms.outbox.mark',
-                      <<~SQL, [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id, owner, fence])
-                        UPDATE tamoz_comms_outbox
-                        SET status = ?, receipt = ?, updated_at_ms = ?
-                        WHERE delivery_id = ? AND status = 'claimed'
-                          AND claim_owner = ? AND claim_fence = ?
-                      SQL
+          binds = [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id, lease.owner, lease.fence]
+          txn.execute('comms.outbox.mark', <<~SQL, binds)
+            UPDATE tamoz_comms_outbox
+            SET status = ?, receipt = ?, updated_at_ms = ?
+            WHERE delivery_id = ? AND status = 'claimed'
+              AND claim_owner = ? AND claim_fence = ?
+          SQL
           txn.changes == 1 ? :marked : :not_claimable
         end
       end
@@ -287,40 +182,43 @@ module Tamoz
 
       private
 
-      def validate_rate!(value, name)
-        return if value.is_a?(Numeric) && value.positive?
-
-        raise ArgumentError, "#{name} must be a positive number"
+      # A terminal or prompt row's own request reservation covers it; only the OTHER admitted requests'
+      # reservations count, so the reserved terminal answer can always append.
+      def slots_in_use(txn, surface_id, reserved_request_id)
+        reserved = open_reservations(txn, surface_id)
+        reserved = [reserved - reservation_of(txn, reserved_request_id), 0].max if reserved_request_id
+        pending_claimed_count(txn, surface_id) + reserved
       end
 
-      def interval_ms(rate)
-        (1000.0 / rate).ceil
-      end
-
-      def pacing_time(txn, surface_id, scope)
-        return 0 unless scope
-
-        txn.scalar('comms.outbox.pacing.read', <<~SQL, [surface_id, scope]).to_i
-          SELECT next_allowed_at_ms FROM tamoz_comms_delivery_pacing
-          WHERE surface_id = ? AND scope = ?
+      def insert_delivery!(txn, binds)
+        txn.execute('comms.outbox.append', <<~SQL, binds)
+          INSERT INTO tamoz_comms_outbox (
+            delivery_id, surface_id, conversation_id, kind, operation, text,
+            part_index, part_count, markup, reply_to, journaled,
+            content_digest, render_version, expires_at_ms, status,
+            created_at_ms, updated_at_ms, request_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
         SQL
       end
 
-      def upsert_pacing!(txn, surface_id, scope, next_allowed_at_ms)
-        txn.execute('comms.outbox.pacing.upsert', <<~SQL, [surface_id, scope, next_allowed_at_ms])
-          INSERT INTO tamoz_comms_delivery_pacing (surface_id, scope, next_allowed_at_ms)
-          VALUES (?, ?, ?)
-          ON CONFLICT(surface_id, scope) DO UPDATE SET
-            next_allowed_at_ms = excluded.next_allowed_at_ms
+      def reservation_of(txn, request_id)
+        txn.scalar('comms.admit.capacity.request', <<~SQL, [request_id]).to_i
+          SELECT reservation FROM tamoz_comms_requests
+          WHERE request_id = ? AND projection_state = 'admitted'
         SQL
       end
 
-      def transaction(operation, &)
-        @adapter.__send__(:transaction, operation:, &)
-      end
-
-      def read(operation, &)
-        @adapter.__send__(:read, operation:, &)
+      def outbox_binds(delivery_wire, surface_id, now, request_id:)
+        [
+          delivery_wire.fetch('delivery_id'), surface_id, delivery_wire.fetch('conversation_id'),
+          delivery_wire.fetch('kind'), delivery_wire.fetch('operation'), delivery_wire.fetch('text'),
+          delivery_wire.fetch('part_index'), delivery_wire.fetch('part_count'), delivery_wire['markup'],
+          delivery_wire['reply_to'],
+          delivery_wire.fetch('journaled') ? 1 : 0, delivery_wire.fetch('content_digest'),
+          delivery_wire.fetch('render_version'),
+          wire_time_ms(delivery_wire['expires_at']),
+          now_ms(now), now_ms(now), request_id
+        ]
       end
     end
   end

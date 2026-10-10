@@ -10,13 +10,10 @@ module Tamoz
     # wire-form hashes in, wire-form hashes out. The integration layer that
     # loads both verifies the CONTRACT_VERSION pair.
     #
-    # Rows live in tamoz_comms_decisions (MIGRATION_6) so every transition is
+    # Rows live in tamoz_comms_decisions so every transition is
     # a compare-and-set UPDATE and — critically — the gateway's consume_prompt
     # can insert a decision and consume its prompt in ONE transaction (design
     # §13). An expired claim lease releases the record for crash recovery.
-    # The wire/row mapping is a fixed column table; the size and parameter
-    # metrics measure the mapping vocabulary, not a choice to overload.
-    # rubocop:disable Metrics/AbcSize
     # rubocop:disable Naming/MethodParameterName -- `ms` and `wire` are the
     #   mapping unit vocabulary.
     class CommsDecisionStore
@@ -129,43 +126,23 @@ module Tamoz
       def now_ms(now)
         raise ArgumentError, 'now must be a Time' unless now.is_a?(Time)
 
-        (now.utc.to_r * 1000).to_i
+        (now.getutc.to_r * 1000).to_i
       end
 
+      # Columns are the wire's keys in order; a `_ms` column stores its wire time as epoch milliseconds.
       def build_decision_binds(wire)
-        [
-          wire.fetch('decision_id'), wire.fetch('thread_id'), wire.fetch('occurrence_id'),
-          wire.fetch('interrupt_digest'), wire.fetch('direction'), wire.fetch('actor_kind'),
-          wire.fetch('actor_id'), wire.fetch('source'), wire['evidence'], wire['reason'],
-          now_ms(Time.parse(wire.fetch('decided_at'))), now_ms(Time.parse(wire.fetch('expires_at'))),
-          wire.fetch('status'),
-          wire['claim_owner'], wire['claim_fence'],
-          wire['claim_expires_at'] && now_ms(Time.parse(wire['claim_expires_at'])),
-          wire['consumed_at'] && now_ms(Time.parse(wire['consumed_at']))
-        ]
+        DECISION_COLUMNS.map do |column|
+          next wire[column] unless column.end_with?('_ms')
+
+          value = wire[column.delete_suffix('_ms')]
+          value && now_ms(Time.parse(value))
+        end
       end
 
       def wire_from_row(row)
-        values = DECISION_COLUMNS.zip(row).to_h
-        {
-          'decision_id' => values.fetch('decision_id'),
-          'thread_id' => values.fetch('thread_id'),
-          'occurrence_id' => values.fetch('occurrence_id'),
-          'interrupt_digest' => values.fetch('interrupt_digest'),
-          'direction' => values.fetch('direction'),
-          'actor_kind' => values.fetch('actor_kind'),
-          'actor_id' => values.fetch('actor_id'),
-          'source' => values.fetch('source'),
-          'evidence' => values['evidence'],
-          'reason' => values['reason'],
-          'decided_at' => wire_time(values.fetch('decided_at_ms')),
-          'expires_at' => wire_time(values.fetch('expires_at_ms')),
-          'status' => values.fetch('status'),
-          'claim_owner' => values['claim_owner'],
-          'claim_fence' => values['claim_fence'],
-          'claim_expires_at' => values['claim_expires_at_ms'] && wire_time(values['claim_expires_at_ms']),
-          'consumed_at' => values['consumed_at_ms'] && wire_time(values['consumed_at_ms'])
-        }
+        DECISION_COLUMNS.zip(row).to_h do |column, value|
+          column.end_with?('_ms') ? [column.delete_suffix('_ms'), value && wire_time(value)] : [column, value]
+        end
       end
 
       def wire_time(ms)
@@ -174,5 +151,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize
 # rubocop:enable Naming/MethodParameterName

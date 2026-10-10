@@ -78,7 +78,6 @@ Layout/ClosingParenthesisIndentation:
 Layout/CommentIndentation:
   Exclude:
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/preflight.rb'
-    - 'script/generate_legacy_session_fixture'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
@@ -91,7 +90,6 @@ Layout/ElseAlignment:
 Layout/EmptyLineAfterGuardClause:
   Exclude:
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
@@ -108,7 +106,6 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
@@ -159,7 +156,6 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/connection_pool.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/deletion.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/verification_store.rb'
@@ -192,7 +188,6 @@ Layout/EmptyLineAfterMagicComment:
 # Configuration parameters: EmptyLineBetweenMethodDefs, EmptyLineBetweenClassDefs, EmptyLineBetweenModuleDefs, DefLikeMacros, AllowAdjacentOneLineDefs, NumberOfEmptyLines.
 Layout/EmptyLineBetweenDefs:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/errors.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/gen/runtime-v1_services_pb.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
@@ -204,9 +199,7 @@ Layout/EmptyLineBetweenDefs:
 Layout/EmptyLines:
   Exclude:
     - 'Rakefile'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb'
-    - 'gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/gen/runtime-v1_pb.rb'
     - 'test/agent_mode_switch_kill_matrix_test.rb'
     - 'test/memory_store_test.rb'
@@ -280,8 +273,6 @@ Layout/FirstArrayElementIndentation:
 # SupportedStyles: special_inside_parentheses, consistent, align_braces
 Layout/FirstHashElementIndentation:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_comms_shared.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-evals/test/openclaw_durable_cli_adapter_test.rb'
@@ -336,7 +327,6 @@ Layout/HashAlignment:
 # SupportedStyles: normal, indented_internal_methods
 Layout/IndentationConsistency:
   Exclude:
-    - 'script/generate_legacy_session_fixture'
     - 'test/agent_session_test.rb'
 
 # Offense count: 1
@@ -364,7 +354,6 @@ Layout/LineEndStringConcatenationIndentation:
 # URISchemes: http, https
 Layout/LineLength:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
@@ -542,7 +531,6 @@ Layout/SpaceInsideHashLiteralBraces:
   Exclude:
     - 'bin/tamoz-stream-subscriber'
     - 'bin/tamoz-stream-worker'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
@@ -568,7 +556,6 @@ Layout/SpaceInsideHashLiteralBraces:
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
@@ -623,7 +610,6 @@ Layout/SpaceInsideHashLiteralBraces:
     - 'script/coverage_hook.rb'
     - 'script/generate_benchmark_protocol'
     - 'script/generate_calibration_artifact'
-    - 'script/generate_legacy_session_fixture'
     - 'script/generate_m0_fixtures'
     - 'script/generate_release_evaluation_manifest'
     - 'script/generate_requirements_audit'
@@ -707,7 +693,6 @@ Layout/SpaceInsideHashLiteralBraces:
     - 'test/healing_matrix_test.rb'
     - 'test/healing_remediation_test.rb'
     - 'test/improvement_candidate_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/m1_evidence_test.rb'
     - 'test/m2_evidence_test.rb'
     - 'test/mcp_server_config_test.rb'
@@ -861,7 +846,6 @@ Lint/AmbiguousOperatorPrecedence:
 # Configuration parameters: RequireParenthesesForMethodChains.
 Lint/AmbiguousRange:
   Exclude:
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
 
 # Offense count: 58
 # Configuration parameters: AllowedMethods.
@@ -884,7 +868,6 @@ Lint/ConstantDefinitionInBlock:
 # Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
 Lint/DuplicateBranch:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
@@ -917,7 +900,6 @@ Lint/IncompatibleIoSelectWithFiberScheduler:
 # Offense count: 1
 Lint/IneffectiveAccessModifier:
   Exclude:
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -1025,7 +1007,6 @@ Lint/ScriptPermission:
     - 'script/generate_benchmark_protocol'
     - 'script/generate_calibration_artifact'
     - 'script/generate_dependency_review'
-    - 'script/generate_legacy_session_fixture'
     - 'script/generate_release_evaluation_manifest'
     - 'script/generate_requirements_manifest'
     - 'script/release_rehearsal'
@@ -1073,7 +1054,6 @@ Lint/UnusedBlockArgument:
     - 'test/benchmark_controls_test.rb'
     - 'test/capability_host_test.rb'
     - 'test/healing_remediation_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/memory_engine_test.rb'
     - 'test/memory_repository_adapter_test.rb'
     - 'test/sqlite_stale_request_test.rb'
@@ -1088,7 +1068,6 @@ Lint/UnusedBlockArgument:
 # NotImplementedExceptions: NotImplementedError
 Lint/UnusedMethodArgument:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
@@ -1111,7 +1090,6 @@ Lint/UnusedMethodArgument:
     - 'gems/tamoz-tools/lib/tamoz/tools/local_dispatcher.rb'
     - 'script/agent_latency_smoke'
     - 'script/benchmark_release'
-    - 'script/generate_legacy_session_fixture'
     - 'script/websearch_adapter'
     - 'test/agent_non_ascii_session_test.rb'
     - 'test/agent_profile_machinery_test.rb'
@@ -1119,7 +1097,6 @@ Lint/UnusedMethodArgument:
     - 'test/agent_session_operations_test.rb'
     - 'test/agent_skills_toolbox_test.rb'
     - 'test/delivery_drainer_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/mcp_elicitation_test.rb'
     - 'test/mcp_invocation_test.rb'
     - 'test/mcp_supervisor_test.rb'
@@ -1203,7 +1180,6 @@ Metrics/AbcSize:
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
@@ -1251,7 +1227,6 @@ Metrics/AbcSize:
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_config_rules.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
@@ -1321,7 +1296,6 @@ Metrics/AbcSize:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/verification_store.rb'
@@ -1510,7 +1484,6 @@ Metrics/BlockLength:
     - 'Rakefile'
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/episode_graph.rb'
@@ -1533,7 +1506,6 @@ Metrics/BlockLength:
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
     - 'script/benchmark_release'
     - 'script/generate_graph_surface_audit'
-    - 'script/generate_legacy_session_fixture'
     - 'script/generate_requirements_audit'
     - 'script/mcp_test_server'
     - 'script/run_m1_conformance'
@@ -1603,7 +1575,6 @@ Metrics/BlockLength:
 Metrics/ClassLength:
   Exclude:
     - 'test/dependency_isolation_test.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
@@ -1629,7 +1600,6 @@ Metrics/ClassLength:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/verification_store.rb'
@@ -1708,7 +1678,6 @@ Metrics/ClassLength:
 Metrics/CyclomaticComplexity:
   Exclude:
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
@@ -1824,7 +1793,6 @@ Metrics/MethodLength:
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
@@ -1866,7 +1834,6 @@ Metrics/MethodLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_config_rules.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
@@ -1932,7 +1899,6 @@ Metrics/MethodLength:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/limits.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
@@ -2034,7 +2000,6 @@ Metrics/MethodLength:
     - 'test/healing_matrix_test.rb'
     - 'test/healing_remediation_test.rb'
     - 'test/improvement_candidate_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/m1_evidence_test.rb'
     - 'test/m2_evidence_test.rb'
     - 'test/mcp_elicitation_test.rb'
@@ -2139,7 +2104,6 @@ Metrics/ParameterLists:
   Exclude:
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/effect_identity.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
@@ -2252,7 +2216,6 @@ Metrics/ParameterLists:
 Metrics/PerceivedComplexity:
   Exclude:
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
@@ -2659,7 +2622,6 @@ Minitest/EmptyLineBeforeAssertionMethods:
     - 'test/healing_remediation_test.rb'
     - 'test/improvement_candidate_test.rb'
     - 'test/lane_config_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/m1_evidence_test.rb'
     - 'test/m2_evidence_test.rb'
     - 'test/mcp_elicitation_test.rb'
@@ -3118,7 +3080,6 @@ Naming/RescuedExceptionsVariableName:
   Exclude:
     - 'bin/tamoz-stream-subscriber'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
@@ -3133,7 +3094,6 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
@@ -3175,7 +3135,6 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/verification_store.rb'
@@ -3208,7 +3167,6 @@ Naming/RescuedExceptionsVariableName:
 # AllowedIdentifiers: TLS1_1, TLS1_2, capture3, iso8601, rfc1123_date, rfc822, rfc2822, rfc3339, x86_64
 Naming/VariableNumber:
   Exclude:
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'test/stream_situation_request_test.rb'
 
 # Offense count: 41
@@ -3216,7 +3174,6 @@ Naming/VariableNumber:
 Performance/CollectionLiteralInLoop:
   Exclude:
     - 'test/packaging_test.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
@@ -3327,7 +3284,6 @@ Performance/RegexpMatch:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/StringInclude:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'test/dependency_isolation_test.rb'
 
 # Offense count: 2
@@ -3397,8 +3353,6 @@ Style/ArgumentsForwarding:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/BitwisePredicate:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/sqlite_scenario_driver.rb'
     - 'script/tamoz_sqlite_oracle'
@@ -3495,7 +3449,6 @@ Style/Documentation:
   Exclude:
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent_capabilities.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/errors.rb'
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent_improvement.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent_memory.rb'
@@ -3599,7 +3552,6 @@ Style/Documentation:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/fault_hook.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/transaction.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/wire.rb'
@@ -3607,7 +3559,6 @@ Style/Documentation:
     - 'gems/tamoz-stream/lib/tamoz/stream/notification_contract.rb'
     - 'script/agent_latency_smoke'
     - 'script/benchmark_release'
-    - 'script/generate_legacy_session_fixture'
     - 'script/mcp_test_server'
     - 'script/tamoz_sqlite_oracle'
     - 'script/websearch_adapter'
@@ -3652,7 +3603,6 @@ Style/EmptyStringInsideInterpolation:
 # This cop supports safe autocorrection (--autocorrect).
 Style/ExplicitBlockArgument:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
@@ -3753,7 +3703,6 @@ Style/GuardClause:
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/episode_worker.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/notification_contract.rb'
     - 'script/benchmark_run'
@@ -3809,7 +3758,6 @@ Style/HashLikeCase:
 Style/HashSlice:
   Exclude:
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
-    - 'script/generate_legacy_session_fixture'
     - 'test/scheduler_contract_test.rb'
     - 'test/sqlite_store_test.rb'
 
@@ -3826,7 +3774,6 @@ Style/IfUnlessModifier:
   Exclude:
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
@@ -3858,7 +3805,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
@@ -3919,7 +3865,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/transaction.rb'
@@ -4163,7 +4108,6 @@ Style/MutableConstant:
 # This cop supports safe autocorrection (--autocorrect).
 Style/NestedTernaryOperator:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/memory_cell.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
@@ -4296,7 +4240,6 @@ Style/RedundantAssignment:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantBegin:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
@@ -4348,7 +4291,6 @@ Style/RedundantDoubleSplatHashBraces:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantFreeze:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
@@ -4356,7 +4298,6 @@ Style/RedundantFreeze:
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-evals-runner/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/notification_contract.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
@@ -4409,7 +4350,6 @@ Style/RedundantRegexpArgument:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantRegexpEscape:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'test/agent_skills_adversarial_test.rb'
 
@@ -4417,7 +4357,6 @@ Style/RedundantRegexpEscape:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantSelfAssignmentBranch:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'test/healing_matrix_test.rb'
 
 # Offense count: 5
@@ -4465,7 +4404,6 @@ Style/RescueStandardError:
 Style/SafeNavigation:
   Exclude:
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/receipt_budget_controller.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
@@ -4573,11 +4511,9 @@ Style/StringLiterals:
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent_capabilities.rb'
     - 'gems/tamoz-agent-cli/exe/tamoz'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli/version.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent_cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/effect_identity.rb'
@@ -4648,7 +4584,6 @@ Style/StringLiterals:
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/version.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
@@ -4661,7 +4596,6 @@ Style/StringLiterals:
     - 'gems/tamoz-cancellation/lib/tamoz/cancellation/version.rb'
     - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-cancellation/tamoz-cancellation.gemspec'
-    - 'gems/tamoz-comms/lib/tamoz/comms/errors.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
     - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
@@ -4807,7 +4741,6 @@ Style/StringLiterals:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/limits.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/transaction.rb'
@@ -4858,7 +4791,6 @@ Style/StringLiterals:
     - 'script/generate_calibration_artifact'
     - 'script/generate_dependency_review'
     - 'script/generate_graph_surface_audit'
-    - 'script/generate_legacy_session_fixture'
     - 'script/generate_m0_fixtures'
     - 'script/generate_m1_fixtures'
     - 'script/generate_m2_fixtures'
@@ -4960,7 +4892,6 @@ Style/StringLiterals:
     - 'test/healing_remediation_test.rb'
     - 'test/improvement_candidate_test.rb'
     - 'test/lane_config_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/m1_evidence_test.rb'
     - 'test/m2_evidence_test.rb'
     - 'test/mcp_catalog_test.rb'
@@ -5054,7 +4985,6 @@ Style/StringLiteralsInInterpolation:
     - 'Rakefile'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
@@ -5079,7 +5009,6 @@ Style/StringLiteralsInInterpolation:
     - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
@@ -5117,7 +5046,6 @@ Style/StringLiteralsInInterpolation:
     - 'script/benchmark_run'
     - 'script/generate_dependency_review'
     - 'script/generate_graph_surface_audit'
-    - 'script/generate_legacy_session_fixture'
     - 'script/generate_release_evaluation_manifest'
     - 'script/generate_requirements_audit'
     - 'script/generate_requirements_manifest'
@@ -5160,7 +5088,6 @@ Style/StringLiteralsInInterpolation:
     - 'test/healing_fixtures.rb'
     - 'test/healing_remediation_test.rb'
     - 'test/improvement_candidate_test.rb'
-    - 'test/legacy_session_resume_test.rb'
     - 'test/mcp_elicitation_test.rb'
     - 'test/mcp_invocation_test.rb'
     - 'test/mcp_server_config_test.rb'
@@ -5217,7 +5144,6 @@ Style/SuperArguments:
 # SupportedStyles: percent, brackets
 Style/SymbolArray:
   Exclude:
-    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'test/approval_values_test.rb'
     - 'test/concurrency_drain_test.rb'
@@ -5256,7 +5182,6 @@ Style/TernaryParentheses:
 # SupportedStylesForMultiline: comma, consistent_comma, diff_comma, no_comma
 Style/TrailingCommaInArrayLiteral:
   Exclude:
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
 
 # Offense count: 18
 # This cop supports safe autocorrection (--autocorrect).

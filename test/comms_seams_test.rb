@@ -60,7 +60,7 @@ class CommsSeamsTest < Minitest::Test
   def test_comms_store_contract_is_structural_and_versioned
     store = Object.new.extend(Comms::CommsStore)
 
-    assert_equal 3, Comms::CommsStore::CONTRACT_VERSION
+    assert_equal 4, Comms::CommsStore::CONTRACT_VERSION
     assert_raises(NotImplementedError) { store.inbound_observed?({}, stream_id: 'telegram:bot:1') }
     assert_raises(NotImplementedError) do
       store.persist_next_offset(surface_id: 's', stream_id: 'telegram:bot:1', next_offset: 2, now: Time.now)

@@ -6,7 +6,7 @@ class DeliveryDrainerTest < Minitest::Test
   Comms = Tamoz::Comms
 
   def test_polling_and_delivery_use_separate_store_and_transport_lifecycles
-    with_runtime do |main_adapter, drainer_adapter, main_store, _drainer_store, _second_adapter, _second_store, checkpoints|
+    with_runtime do |_main_adapter, drainer_adapter, main_store, _drainer_store, _second_adapter, _second_store, checkpoints|
       main_store.append_delivery(delivery('answer'), surface_id: 'telegram-ops', capacity: 10, now: now)
       poll_transport = ScriptedTransport.new
       send_transport = ScriptedTransport.new
@@ -19,7 +19,6 @@ class DeliveryDrainerTest < Minitest::Test
         sleeper: ->(_seconds) {}
       )
       gateway = Tamoz::Comms::Gateway.new(
-        adapter: main_adapter,
         checkpoints:,
         transport: poll_transport,
         descriptor:,
@@ -45,10 +44,12 @@ class DeliveryDrainerTest < Minitest::Test
     store.working = ['telegram:chat:1']
 
     [0, 1, 4].each { |offset| drainer.drain_once(now: now + offset) }
+
     assert_equal [[:typing, 'telegram:chat:1']] * 2, transport.signals
 
     store.working = []
     drainer.drain_once(now: now + 9)
+
     assert_equal 2, transport.signals.length
   end
 
@@ -100,7 +101,7 @@ class DeliveryDrainerTest < Minitest::Test
       row = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
 
       assert_equal :claimed, main_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), owner: 'crashed', fence: 1,
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1),
         claim_expires_at: now + 1, now:
       )
 
@@ -117,11 +118,11 @@ class DeliveryDrainerTest < Minitest::Test
       main_store.append_delivery(delivery('ambiguous'), surface_id: 'telegram-ops', capacity: 10, now:)
       row = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
       main_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), owner: 'crashed', fence: 1,
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1),
         claim_expires_at: now + 1, now:
       )
       main_store.mark_delivery_send_started(
-        delivery_id: row.fetch('delivery_id'), owner: 'crashed', fence: 1, now:
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1), now:
       )
 
       transport = ScriptedTransport.new
@@ -141,12 +142,13 @@ class DeliveryDrainerTest < Minitest::Test
 
       assert stale.send(:claim, row, now:), 'the drainer initially holds its own claim'
       taker_store = second_adapter.bind_comms_store
+
       assert_equal :not_claimable, taker_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), owner: 'drainer:taker', fence: 7,
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 7),
         claim_expires_at: now + 60, now:
       ), 'a live unexpired claim is not stealable'
       assert_equal :claimed, taker_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), owner: 'drainer:taker', fence: 7,
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 7),
         claim_expires_at: now + 60, now: now + 31
       )
 
@@ -179,7 +181,7 @@ class DeliveryDrainerTest < Minitest::Test
         clock: -> { now },
         sleeper: lambda { |_seconds|
           second_store.claim_delivery(
-            delivery_id: row.fetch('delivery_id'), owner: 'drainer:taker', fence: 9,
+            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 9),
             claim_expires_at: now + 60, now: now + 31
           )
         }
@@ -201,13 +203,13 @@ class DeliveryDrainerTest < Minitest::Test
       main_store.append_delivery(delivery('answer'), surface_id: 'telegram-ops', capacity: 10, now:)
       row = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
       delivery_id = row.fetch('delivery_id')
-      main_store.claim_delivery(delivery_id:, owner: 'drainer:stale', fence: 3,
+      main_store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:stale', fence: 3),
                                 claim_expires_at: now + 1, now:)
-      main_store.claim_delivery(delivery_id:, owner: 'drainer:current', fence: 4,
+      main_store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:current', fence: 4),
                                 claim_expires_at: now + 60, now: now + 2)
 
       assert_equal :not_claimable, main_store.mark_delivery(
-        delivery_id:, owner: 'drainer:stale', fence: 3,
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:stale', fence: 3),
         status: 'succeeded', receipt: { 'message_id' => 99 }, now: now + 3
       )
       held = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[claimed]).first
@@ -217,7 +219,7 @@ class DeliveryDrainerTest < Minitest::Test
       assert_nil held.fetch('receipt'), 'the losing write changes nothing'
 
       assert_equal :marked, main_store.mark_delivery(
-        delivery_id:, owner: 'drainer:current', fence: 4,
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:current', fence: 4),
         status: 'succeeded', receipt: { 'message_id' => 99 }, now: now + 3
       )
     end
@@ -235,7 +237,7 @@ class DeliveryDrainerTest < Minitest::Test
 
       failed = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[failed])
 
-      assert_equal ['first'], failed.map { |row| row.fetch('text') }
+      assert_equal(['first'], failed.map { |row| row.fetch('text') })
       assert_equal 'authentication_refused', JSON.parse(failed.first.fetch('receipt')).fetch('reason_code')
       pending = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
 
@@ -244,7 +246,7 @@ class DeliveryDrainerTest < Minitest::Test
       assert_empty transport.deliveries, 'a refused credential delivers nothing'
 
       assert_equal :authentication_refused, drainer.serve_loop(interval_s: 0)
-      assert_equal ['first', 'second'], transport.attempts.map(&:text)
+      assert_equal %w[first second], transport.attempts.map(&:text)
       assert_equal 1, transport.attempts.count { |sent| sent.text == 'first' },
                    'a failed row is terminal and never resent'
     end

@@ -2,7 +2,7 @@
 
 Tamoz persists durable state in a single SQLite database per runtime or session location: checkpoints, the request inbox, the effect journal, leases, schedules, the comms store, the circuit store, and the memory index. This page describes what each store holds and the migration regime that keeps the schema honest.
 
-Current version: `0.1.0.alpha.1` (pre-release). Schema `CURRENT_VERSION = 13`.
+Current version: `0.1.0.alpha.1` (pre-release). Schema `CURRENT_VERSION = 27`.
 
 ## One database, many stores
 
@@ -47,7 +47,7 @@ erDiagram
 ### Generic Store, circuits, memory
 
 - **`tamoz_store_heads` / `tamoz_store_versions`** — the versioned cross-thread Store. The DR-2 circuit store lives here: each circuit scope type maps to namespace `tamoz.circuit.<scope_type>` and key `<scope_digest>` for the four scopes (`server`, `rule_target`, `schedule`, `egress`). Memory records also live here, with per-version rows.
-- **`tamoz_memory_index`** — the lexical index over memory versions: layer (`experience`/`knowledge`/`wisdom`), class, state, tenant/user/project scope, sensitivity, validity, graph/behavior compatibility, and a searchable statement column that is populated only for non-sensitive records (invariant 30). `MIGRATION_12` adds situation/entity scope columns.
+- **`tamoz_memory_index`** — the lexical index over memory versions: layer (`experience`/`knowledge`/`wisdom`), class, state, tenant/user/project scope, sensitivity, validity, graph/behavior compatibility, and a searchable statement column that is populated only for non-sensitive records (invariant 30). It carries situation/entity scope columns.
 
 ### Scheduling
 
@@ -59,7 +59,7 @@ erDiagram
 - **`tamoz_comms_surfaces` / `tamoz_comms_bindings`** — configured channel surfaces and their conversation bindings.
 - **`tamoz_comms_inbound` / `tamoz_comms_requests` / `tamoz_comms_poll_state`** — durable admission of inbound messages and the poll offset (persisted only after durable disposition of the returned prefix).
 - **`tamoz_comms_outbox`** — the bounded durable outbox drained under a fenced lease; an ambiguous non-idempotent send becomes `:unknown` with no automatic retry (invariant 57).
-- **`tamoz_comms_approval_prompts` / `tamoz_comms_decisions`** — single-use expiring approval references (digest-only) and their consumed decisions; `MIGRATION_9`/`MIGRATION_10` pin `required_evidence` and the decision audit trail (ADR-049).
+- **`tamoz_comms_approval_prompts` / `tamoz_comms_decisions`** — single-use expiring approval references (digest-only) and their consumed decisions; the prompt pins `required_evidence` and the decision records its audit trail (ADR-049).
 - **`tamoz_comms_gaps` / `tamoz_comms_delivery_pacing`** — detected gaps and durable delivery pacing.
 
 ### Deletion
@@ -68,13 +68,13 @@ erDiagram
 
 ## Migration regime
 
-The schema moves forward through **13 checksummed, monotonic migrations**:
+There is no upgrade path before 1.0 (ADR-059): **one checksummed migration builds the whole schema**
+(`gems/tamoz-sqlite/migrations/0027.sql`).
 
-- Each ordinal `1..13` maps to a frozen statement list and its SHA-256 checksum. The monotonic-ordering test asserts the ordinals are exactly `1..CURRENT_VERSION` with no gap and no reuse.
-- `PRAGMA application_id` is `0x54414D5A` ("TAMZ"); a database belonging to another application is refused. `PRAGMA user_version` must equal `CURRENT_VERSION`; a newer schema fails fast.
-- Migrations apply in one transaction; a failure rolls back every statement, so a fresh database and an in-place upgrade are both all-or-nothing.
-- Every existing ordinal must still be recorded with its registered checksum before pending ones are layered on. The digest epoch (`DIGEST_EPOCH = 1`, registered by `MIGRATION_11`) guards the canonical serialization rule.
-- **No backwards compatibility**: databases are free to be reset or cleaned whenever a change needs it. `MIGRATION_13` drops the retired P14 streaming-engine tables outright.
+- The file's statements are joined by `-- tamoz migration boundary --`; its checksum is the file's SHA-256, recorded in `tamoz_schema_migrations` and verified on every open.
+- `PRAGMA application_id` is `0x54414D5A` ("TAMZ"); a database belonging to another application is refused. A fresh database is built in one transaction (a failure rolls back every statement); a database at `CURRENT_VERSION` is verified; any other version is refused with an instruction to start a fresh runtime database.
+- The schema seeds the digest epoch (`DIGEST_EPOCH = 1`), which guards the canonical serialization rule.
+- A schema change replaces the file with the next ordinal; an ordinal is never reused. Ordinals 1–26 were squashed into 27.
 
 SQLite serializes writers even in WAL mode, so `tamoz-sqlite` keeps write transactions short, uses `BEGIN IMMEDIATE` where appropriate, retries `SQLITE_BUSY` with bounded jitter, and never holds a transaction across a model or tool call. Backup and restore are adapter-level operations ([../operations/operations.md](../operations/operations.md)).
 

@@ -126,6 +126,11 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/agent_cli_self_diagnosis_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/agent_cli_test.rb",
     "status": "done",
     "reason": "Shared scripted/comms/policy fixtures replace duplicated helper implementations; lease-expiry wait replaced by an injected clock; helper failure paths tested.",
@@ -546,6 +551,11 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/attachment_text_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/autonomy_scorecard_test.rb",
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
@@ -666,6 +676,26 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/channel_dependency_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/channel_kind_containment_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/channel_kinds_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/chat_attachment_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/chat_work_loop_test.rb",
     "status": "done",
     "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
@@ -690,6 +720,21 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/cli_channel_talk_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/cli_channel_telegram_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/cli_child_processes_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/cli_code_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -708,6 +753,21 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/cli_runtime_models_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/cli_service_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/cli_setup_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/cli_skills_command_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -720,10 +780,9 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
-    "path": "test/cli_telegram_test.rb",
-    "status": "done",
-    "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
-    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+    "path": "test/cli_start_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/comms_admission_test.rb",
@@ -804,6 +863,11 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/comms_parties_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/comms_rendering_test.rb",
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
@@ -882,6 +946,11 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/core_attachment_spool_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/core_context_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -918,6 +987,11 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/core_spoken_text_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/core_state_codec_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -952,6 +1026,11 @@
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/diagnosis_rules_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/documentation_surface_test.rb",
@@ -1146,6 +1225,11 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/healing_notice_channel_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/healing_remediation_test.rb",
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
@@ -1182,16 +1266,20 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
-    "path": "test/legacy_session_resume_test.rb",
-    "status": "done",
-    "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
-    "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+    "path": "test/launchd_plist_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/m2_evidence_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/mcp_catalog_store_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/mcp_catalog_test.rb",
@@ -1222,6 +1310,11 @@
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/mcp_server_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/mcp_supervisor_test.rb",
@@ -1308,6 +1401,16 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/model_speech_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/model_transcription_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/model_transport_parity_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -1318,6 +1421,11 @@
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/no_env_model_readers_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/observability_catalog_test.rb",
@@ -1488,6 +1596,16 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/runtime_directory_update_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/runtime_models_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/scheduler_consumer_test.rb",
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
@@ -1530,6 +1648,26 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/self_diagnosis_boundary_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/self_diagnosis_corpus_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/self_diagnosis_scale_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/self_diagnosis_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/self_healing_assessor_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -1554,10 +1692,25 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/self_investigation_grader_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/self_observation_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/session_context_controls_test.rb",
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/session_memory_episode_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/shared_helpers_test.rb",
@@ -1626,6 +1779,11 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/sqlite_channels_migration_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/sqlite_checkpoint_seams_test.rb",
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
@@ -1668,6 +1826,11 @@
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
   },
   {
+    "path": "test/sqlite_delivered_messages_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/sqlite_effect_journal_test.rb",
     "status": "done",
     "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
@@ -1684,6 +1847,11 @@
     "status": "done",
     "reason": "Reviewed executable diff, assertion binding, fixture ownership and test identity. Existing scenarios retained; shared setup and runner regressions are recorded in FOLLOWUP_BAR.md.",
     "verification": "2026-10-04 local review (owner requested no subagents). Syntax/assertion/comment guards clean. Full offline execution recorded in FOLLOWUP_BAR.md; this disposition does not certify exhaustive behavioral coverage."
+  },
+  {
+    "path": "test/sqlite_record_reader_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/sqlite_request_inbox_test.rb",
@@ -1944,6 +2112,86 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/talk_boundary_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_checks_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_client_js_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_comms_cli_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_end_to_end_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_endpointing_eval_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_eval_controls_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_event_log_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_fixtures_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_gateway_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_http_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_hub_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_inbox_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_normalizer_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_server_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/talk_speaker_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/tamoz_brain_hardware_boundary_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -1954,6 +2202,21 @@
     "status": "done",
     "reason": "Planning-vocabulary comments deleted; code-named tests, files and constants renamed to behavior names; plan_vocabulary guard added; manifest ids regenerated and green.",
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/telegram_attachment_checks_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/telegram_attachment_fixtures_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
+    "path": "test/telegram_boundary_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   },
   {
     "path": "test/telegram_markup_test.rb",
@@ -2112,6 +2375,11 @@
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
   },
   {
+    "path": "test/work_attachment_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
+  },
+  {
     "path": "test/work_loop_investigation_test.rb",
     "status": "fine",
     "reason": "Reviewed source guards, helper duplication and time/cleanup sites. Executable tokens match the pre-branch revision; existing cohesive scenarios retained. No change required for this branch refactoring.",
@@ -2128,5 +2396,10 @@
     "status": "done",
     "reason": "Waits audit: dead waits removed (mutation- or stress-probed), blind waits converted to bounded readiness polls, one process fixture made deterministic, load-bearing settles kept with truthful comments.",
     "verification": "Focused files green individually; per-file lint at/below HEAD; independent review per batch; full suite 3095 runs green."
+  },
+  {
+    "path": "test/work_web_chat_test.rb",
+    "status": "needs review",
+    "reason": "Static inventory only."
   }
 ]

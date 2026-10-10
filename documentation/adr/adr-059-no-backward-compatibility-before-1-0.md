@@ -3,7 +3,7 @@
 **Status:** Accepted 2026-10-01
 **Date:** 2026-10-01
 **Tier:** C
-**Implementation:** Partial — `test/legacy_session_resume_test.rb` still requires a current build to read a pre-P8 session database, and session records tolerate the missing fields; that is the read-time tolerance this rule forbids
+**Implementation:** Partial — session records still tolerate the fields a pre-P8 record lacks; the migrator and the tests no longer read an older database
 **Relates to:** [ADR-019](./adr-019-resume-is-graph-version-checked.md) (graph-state compatibility, a different contract), [ADR-001](./adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md)
 
 Until 1.0, Tamoz keeps no compatibility machinery: no legacy-row readers, no compatibility shims or
@@ -32,3 +32,9 @@ do exist during development.
 
 The code carries only the current shape. **Cost:** upgrading a development install may mean losing
 its local state.
+
+## History
+
+- 2026-10-10 (owner) — The migrator's in-place upgrade path was removed: ordinals 1–26 were squashed into one
+  migration (`gems/tamoz-sqlite/migrations/0027.sql`) that builds the whole schema, and a database at any other
+  version is refused with an instruction to start fresh.

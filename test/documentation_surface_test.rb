@@ -128,7 +128,6 @@ class DocumentationSurfaceTest < Minitest::Test
     'PHASE-P3' => 'Coding behavior scorecard remains incomplete (phase P3)',
     'PHASE-DR-3' => 'Memory evaluation evidence remains injection-correctness-only (phase DR-3)',
     'PHASE-P14' => 'The P14 streaming-input engine is retired',
-    'MIG-15' => 'MIGRATION_15 evidence remains partial (migration 15)',
     'NG-real-actuator' => 'Real physical actuation',
     'OBJ-7' => '## Release readiness'
   }.freeze

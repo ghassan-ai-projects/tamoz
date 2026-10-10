@@ -68,11 +68,11 @@ but the current release audit still reports a failing takeover test. Treat a
 failed single-writer evidence gate as a release blocker until the expired-owner
 and concurrent-owner cases are green together.
 
-### MIGRATION_15 evidence remains partial (migration 15)
+### Verified artifact store evidence remains partial
 
-The migration is present, but the release audit currently marks its named
-tamper/recovery evidence as failing. Do not treat the migration as release
-evidence until the verified-store case is green in an authorized environment.
+The release audit has marked the store's named tamper/recovery evidence as
+failing. Do not treat the verified store as release evidence until that case is
+green in an authorized environment.
 
 ### Cron and civil-time scheduling (invariant 39)
 
@@ -218,8 +218,7 @@ runtime) owns the continuous plane (event time, watermarks, windows,
 channels, replay) and hands Tamoz the snapshot. **Tamoz computes no watermark,
 no event time, no lateness, and no window membership** — the deterministic
 plane is the stream's. The old engine's channel vocabulary, backpressure
-declarations, connector contract, and replay runtime were deleted with it by
-forward migration (MIGRATION_13); nothing reads the old `queue_capacity` /
+declarations, connector contract, and replay runtime were deleted with it; nothing reads the old `queue_capacity` /
 `spool_capacity_bytes` / `overflow` vocabulary because the vocabulary is gone.
 
 ### Real physical actuation

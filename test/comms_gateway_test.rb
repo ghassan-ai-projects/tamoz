@@ -46,11 +46,9 @@ class CommsGatewayTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor(limits:).wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
         transport = ScriptedTransport.new
-        gateway = Tamoz::Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
-          poller_owner: 'gateway:test', controls:,
-          attachments: attachments && Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
-        )
+        spool = attachments && Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
+        gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor: descriptor(limits:),
+                                            poller_owner: 'gateway:test', controls:, attachments: spool)
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
         adapter&.close
@@ -90,7 +88,8 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal Tamoz::Comms::Gateway::UNADMITTABLE_REPLY, appended.last.fetch('text')
       assert_includes err, 'could not admit update 1'
-      assert_operator store.poll_offset(stream_id: 'telegram:bot:7463512990'), :>, 1, 'the offset moves past the message'
+      assert_operator store.poll_offset(stream_id: 'telegram:bot:7463512990'), :>, 1,
+                      'the offset moves past the message'
     end
   end
 
@@ -317,7 +316,7 @@ class CommsGatewayTest < Minitest::Test
       gateway.serve_once(drain: false)
       old_thread = store.conversation(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
                         .fetch('thread_id')
-      changed = Tamoz::Comms::Gateway.new(adapter:, checkpoints:, transport:, poller_owner: 'gateway:test',
+      changed = Tamoz::Comms::Gateway.new(checkpoints:, transport:, poller_owner: 'gateway:test',
                                           descriptor: descriptor(profile_digest: "sha256:#{'b' * 64}"))
 
       transport.batch([update(2, text: 'second')])
@@ -462,16 +461,15 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_replayed_update_does_not_create_a_second_request
-    with_gateway do |gateway, transport, store, adapter, checkpoints|
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       transport.batch([update(101, text: 'first'), update(102, text: 'second')])
 
       assert_equal :served, gateway.serve_once(drain: false)
 
       transport.batch([update(101, text: 'first')])
-      restarted_gateway = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:restarted'
-      )
+      restarted_gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor:,
+                                                    poller_owner: 'gateway:restarted')
       assert_equal :served, restarted_gateway.serve_once(drain: false)
 
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
@@ -500,11 +498,11 @@ class CommsGatewayTest < Minitest::Test
                   reserved_request_id: request_id, now:
       )
       assert_equal :claimed, store.claim_delivery(
-        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1),
         claim_expires_at: now + 30, now:
       )
       assert_equal :marked, store.mark_delivery(
-        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1),
         status: 'succeeded', receipt: { 'message_id' => 42 }, now:
       )
 
@@ -577,7 +575,9 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([])
 
       runner = Thread.new { gateway.serve_loop(interval_s: 0.01) }
-      Timeout.timeout(5) { sleep 0.05 until store.poll_state(stream_id: 'telegram:bot:7463512990')&.fetch('poller_owner_id') }
+      Timeout.timeout(5) do
+        sleep 0.05 until store.poll_state(stream_id: 'telegram:bot:7463512990')&.fetch('poller_owner_id')
+      end
 
       gateway.stop
       outcome = Timeout.timeout(5) { runner.value }
@@ -825,10 +825,8 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal :started, gateway.start
 
-      second = Tamoz::Comms::Gateway.new(
-        adapter:, checkpoints: build_checkpoints(adapter),
-        transport:, descriptor:, poller_owner: 'gateway:other'
-      )
+      second = Tamoz::Comms::Gateway.new(checkpoints: build_checkpoints(adapter),
+                                         transport:, descriptor:, poller_owner: 'gateway:other')
 
       assert_equal :poller_busy, second.start,
                    'a live fenced poller lease is not claimable by a second gateway'
@@ -841,7 +839,7 @@ class CommsGatewayTest < Minitest::Test
     with_gateway do |gateway, transport, _store, adapter|
       assert_equal :started, gateway.start
       other_surface = Comms::SurfaceDescriptor.from_wire(descriptor.wire.merge('surface_id' => 'telegram-other'))
-      second = Tamoz::Comms::Gateway.new(adapter:, checkpoints: build_checkpoints(adapter), transport:,
+      second = Tamoz::Comms::Gateway.new(checkpoints: build_checkpoints(adapter), transport:,
                                          descriptor: other_surface, poller_owner: 'gateway:other')
 
       assert_equal :poller_busy, second.start
@@ -891,8 +889,10 @@ class CommsGatewayTest < Minitest::Test
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       admit = lambda do |wire|
         store.admit_and_enqueue(
-          wire, surface_id: 'telegram-ops', stream_id: 'telegram:bot:7463512990',
-                thread:, profile_id: 'ops', reservation: 9, now: Time.utc(2026, 8, 10, 12, 0, 0)
+          wire,
+          stream_id: 'telegram:bot:7463512990',
+          turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 9),
+          now: Time.utc(2026, 8, 10, 12, 0, 0)
         )
       end
 

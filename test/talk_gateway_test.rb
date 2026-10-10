@@ -25,7 +25,7 @@ class TalkGatewayTest < Minitest::Test
       store.deploy_surface(talk_descriptor.wire, now: NOW)
       spool = Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
       yield(lambda do |hub|
-        Comms::Gateway.new(adapter:, checkpoints:, transport: NoWait.new(hub.transport), descriptor: talk_descriptor,
+        Comms::Gateway.new(checkpoints:, transport: NoWait.new(hub.transport), descriptor: talk_descriptor,
                            poller_owner: "gateway:#{hub.object_id}", attachments: spool)
       end, store)
     ensure
@@ -181,8 +181,9 @@ class TalkGatewayTest < Minitest::Test
                                    render_version: 1, content_digest: 'e' * 64,
                                    markup: JSON.generate('reference' => reference, 'actions' => %w[approve deny]))
       store.append_delivery(card.wire, surface_id: 'talk', capacity: 50, reserved_request_id: nil, now: Time.now.utc)
-      Comms::DeliveryDrainer.new(store:, transport: first.transport, descriptor: talk_descriptor, owner: 'drainer:test',
-                                 batch_size: 10, sleeper: ->(_) {}).drain_once(now: Time.now.utc)
+      Comms::DeliveryDrainer.new(store:, transport: first.transport, descriptor: talk_descriptor,
+                                 owner: 'drainer:test', sleeper: lambda { |_|
+                                 }).drain_once(now: Time.now.utc)
       card_id = first.log.since(after: 0, epoch: nil, timeout_s: 0)['events'].first.fetch('message_id')
       first.stop
 

@@ -28,8 +28,6 @@ class SqliteApprovalStoresTest < Minitest::Test
   end
 
   def test_migration_applies_on_fresh_database_and_checksum_verifies
-    assert_equal (1..Tamoz::SQLite::Migrator::CURRENT_VERSION).to_a, Tamoz::SQLite::Migrator.migration_ordinals
-
     with_adapter do |adapter|
       tables = adapter.__send__(:read, operation: 'test.tables') do |txn|
         txn.rows('test.tables', "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'tamoz_approval%'")

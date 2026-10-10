@@ -60,8 +60,8 @@ class CallbackAckCrashTest < Minitest::Test
       text: 'hello', observed_time: now
     ).wire
     store.admit_and_enqueue(
-      envelope, surface_id: SURFACE_ID, stream_id: "telegram:bot:#{BOT_ID}",
-                thread: THREAD_ID, profile_id: 'ops', reservation: 1, now:
+      envelope, stream_id: "telegram:bot:#{BOT_ID}",
+                turn: Tamoz::Comms::Turn.new(thread: THREAD_ID, profile_id: 'ops', reservation: 1), now:
     )
   end
 
@@ -209,7 +209,7 @@ class CallbackAckCrashTest < Minitest::Test
         requests_before_ack = request_count(runtime.adapter, THREAD_ID)
         transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-77', reference: reference,
                                        callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
-        gateway = Comms::Gateway.new(adapter: runtime.adapter, checkpoints: runtime.checkpoints,
+        gateway = Comms::Gateway.new(checkpoints: runtime.checkpoints,
                                      transport:, descriptor:, poller_owner: 'gateway:test')
 
         assert_equal :served, gateway.serve_once(now: base, drain: false)
@@ -283,7 +283,7 @@ class CallbackAckCrashTest < Minitest::Test
         )
         transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-88', reference: reference,
                                        callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
-        gateway = Comms::Gateway.new(adapter:, checkpoints:, transport:, descriptor:,
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:,
                                      poller_owner: 'gateway:test', drainer:)
 
         assert_equal :transient, gateway.serve_once(now: base),

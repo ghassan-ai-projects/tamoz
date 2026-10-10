@@ -72,10 +72,9 @@ module Tamoz
           history = @store.conversation_history(
             surface_id:, conversation_id: envelope.fetch('conversation_id'), thread_id: thread
           )
-          outcome = @store.admit_and_enqueue(
-            envelope, surface_id:, stream_id:, thread:, profile_id: @descriptor.profile_id,
-                      reservation: reservation_slots, now:, history:, research:, attachment:
-          )
+          turn = Comms::Turn.new(thread:, profile_id: @descriptor.profile_id, reservation: reservation_slots,
+                                 history:, research:, attachment:)
+          outcome = @store.admit_and_enqueue(envelope, stream_id:, turn:, now:)
           return outcome if %i[enqueued duplicate].include?(outcome)
 
           refuse_admission(envelope, outcome, now:)
@@ -89,25 +88,26 @@ module Tamoz
           append_control(reply, envelope, now:)
         end
 
+        # /answer and /research record their own disposition; every other control is recorded here first.
         def admit_control(envelope, decision, now:)
-          if control_inbound_too_large?(envelope)
-            refuse_admission(envelope, :inbound_too_large, now:)
-          elsif %w[answer research].include?(decision.command_intent&.name)
-            handle_command(envelope, decision, now:)
-          else
-            outcome = record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
-            return if outcome == :duplicate
+          return refuse_admission(envelope, :inbound_too_large, now:) if control_inbound_too_large?(envelope)
+          return handle_command(envelope, decision, now:) if %w[answer research].include?(decision.command_intent&.name)
+          return if record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s,
+                                                 now:) == :duplicate
 
-            if decision.command_intent
-              handle_command(envelope, decision, now:)
-            elsif decision.control_reply
-              append_control(decision.control_reply, envelope, now:)
-            end
+          reply_to_control(envelope, decision, now:)
+        end
+
+        def reply_to_control(envelope, decision, now:)
+          if decision.command_intent
+            handle_command(envelope, decision, now:)
+          elsif decision.control_reply
+            append_control(decision.control_reply, envelope, now:)
           end
         end
 
         def record_disposition(envelope, disposition:, reason:, now:)
-          @store.disposition_only(envelope, surface_id:, stream_id:, disposition:, reason:, now:)
+          @store.disposition_only(envelope, stream_id:, disposition:, reason:, now:)
         end
 
         def control_inbound_too_large?(envelope)
@@ -119,17 +119,6 @@ module Tamoz
 
         def deployed_max_inbound_bytes
           @store.surface(surface_id:).fetch('limits').fetch('max_inbound_bytes')
-        end
-
-        # A bound conversation admits onto the thread its durable generation derives.
-        def admission_thread(envelope, conversation)
-          conversation_id = envelope.fetch('conversation_id')
-          return Comms::Admission.thread_id(surface_id, conversation_id) unless conversation
-
-          Comms::Admission.thread_id(
-            surface_id, conversation_id,
-            generation: @store.conversation_generation(surface_id:, conversation_id:)
-          )
         end
       end
     end

@@ -67,10 +67,7 @@ module Tamoz
             surface_id:, correspondent_id:, conversation_id: envelope.fetch('conversation_id'),
             ttl_s: PAIRING_CODE_TTL_S, now:, code:
           )
-          @store.insert_pairing_challenge(
-            digest: challenge.digest, surface_id:, correspondent_id:,
-            conversation_id: envelope.fetch('conversation_id'), expires_at: challenge.expires_at, now:
-          )
+          @store.insert_pairing_challenge(challenge.wire, now:)
           @issued_pairing_codes[challenge.digest] = code
           code
         end

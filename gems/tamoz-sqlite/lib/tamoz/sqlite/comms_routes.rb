@@ -17,6 +17,14 @@ module Tamoz
     class CommsRoutes
       include CommsStoreRows
 
+      BINDING_COLUMNS = %w[
+        surface_id correspondent_id conversation_id status bound_by bound_at_ms
+        version revocation_reason
+      ].freeze
+      ROUTE_COLUMNS = %w[
+        surface_id conversation_id surface_revision thread_id profile_id
+        threading bound_at_ms version
+      ].freeze
       def initialize(adapter:)
         @adapter = adapter
       end
@@ -126,14 +134,50 @@ module Tamoz
         end
       end
 
-      private
-
-      def transaction(operation, &)
-        @adapter.__send__(:transaction, operation:, &)
+      def bindings(surface_id:)
+        read('comms.binding.list') do |txn|
+          txn.rows('comms.binding.list', <<~SQL, [surface_id]).map { |row| BINDING_COLUMNS.zip(row).to_h }
+            SELECT #{BINDING_COLUMNS.join(', ')} FROM tamoz_comms_bindings
+            WHERE surface_id = ? ORDER BY bound_at_ms DESC
+          SQL
+        end
       end
 
-      def read(operation, &)
-        @adapter.__send__(:read, operation:, &)
+      def conversations(surface_id:)
+        read('comms.route.list') do |txn|
+          txn.rows('comms.route.list', <<~SQL, [surface_id]).map { |row| ROUTE_COLUMNS.zip(row).to_h }
+            SELECT #{ROUTE_COLUMNS.join(', ')} FROM tamoz_comms_conversations
+            WHERE surface_id = ? ORDER BY bound_at_ms DESC
+          SQL
+        end
+      end
+
+      # The active binding that admitted one conversation's correspondent
+      # (the prompt needs the correspondent to scope its single-use digest).
+      def binding_by_conversation(surface_id:, conversation_id:)
+        bindings(surface_id:).find do |binding|
+          binding.fetch('conversation_id') == conversation_id && binding.fetch('status') == 'active'
+        end
+      end
+
+      private
+
+      def binding_binds(binding_wire, _now)
+        [
+          binding_wire.fetch('surface_id'), binding_wire.fetch('correspondent_id'),
+          binding_wire.fetch('conversation_id'), binding_wire.fetch('status'),
+          binding_wire.fetch('bound_by'), now_ms(Time.parse(binding_wire.fetch('bound_at'))),
+          binding_wire.fetch('version'), binding_wire['revocation_reason']
+        ]
+      end
+
+      def route_binds(conversation_wire, _now)
+        [
+          conversation_wire.fetch('surface_id'), conversation_wire.fetch('conversation_id'),
+          conversation_wire.fetch('surface_revision'), conversation_wire.fetch('thread_id'),
+          conversation_wire.fetch('profile_id'), conversation_wire.fetch('threading'),
+          now_ms(Time.parse(conversation_wire.fetch('bound_at'))), conversation_wire.fetch('version')
+        ]
       end
     end
   end

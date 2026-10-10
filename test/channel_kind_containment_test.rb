@@ -11,13 +11,12 @@ class ChannelKindContainmentTest < Minitest::Test
   OWNERS = (KINDS.map { |kind| "gems/#{kind.library.tr('/', '-')}/" } +
             %w[gems/tamoz-agent-cli/lib/tamoz/agent/channel_kinds.rb]).freeze
 
-  # Only frozen files remain: checksummed migrations, benchmark-protocol code (ADR-058), and the stream's
-  # escalation default. A new mention anywhere fails.
+  # Only frozen files remain: benchmark-protocol code (ADR-058) and the stream's escalation default.
+  # A new mention anywhere fails.
   EXPECTED = {
     'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb' => 18,
     'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb' => 11,
     'gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/readiness.rb' => 1,
-    'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb' => 6,
     'gems/tamoz-stream/lib/tamoz/stream/approval_relay.rb' => 1
   }.freeze
 

@@ -1381,7 +1381,7 @@
       "state": "accepted",
       "date": "2026-10-01",
       "tier": "C",
-      "implementation": "Partial — `test/legacy_session_resume_test.rb` still requires a current build to read a pre-P8 session database, and session records tolerate the missing fields; that is the read-time tolerance this rule forbids",
+      "implementation": "Partial — session records still tolerate the fields a pre-P8 record lacks; the migrator and the tests no longer read an older database",
       "file": "adr-059-no-backward-compatibility-before-1-0.md",
       "relates_to": [
         "001",
@@ -1394,7 +1394,8 @@
       "sections": [
         "Context",
         "Decision",
-        "Consequences"
+        "Consequences",
+        "History"
       ]
     },
     {

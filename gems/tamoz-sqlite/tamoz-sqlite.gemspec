@@ -14,5 +14,6 @@ TamozGemspec.build(
     ["tamoz-scheduler", "= #{Tamoz::SQLite::VERSION}"],
     ["tamoz-stream", "= #{Tamoz::SQLite::VERSION}"],
     ["sqlite3", "~> 2.9"]
-  ]
+  ],
+  runtime_contracts: ["migrations/*.sql"]
 )

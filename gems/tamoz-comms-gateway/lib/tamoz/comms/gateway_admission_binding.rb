@@ -72,6 +72,17 @@ module Tamoz
             now:
           )
         end
+
+        # A bound conversation admits onto the thread its durable generation derives.
+        def admission_thread(envelope, conversation)
+          conversation_id = envelope.fetch('conversation_id')
+          return Comms::Admission.thread_id(surface_id, conversation_id) unless conversation
+
+          Comms::Admission.thread_id(
+            surface_id, conversation_id,
+            generation: @store.conversation_generation(surface_id:, conversation_id:)
+          )
+        end
       end
     end
   end

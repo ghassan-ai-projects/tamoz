@@ -94,69 +94,18 @@ class SQLiteKernelTest < Minitest::Test
     end
   end
 
-  # Every shipped schema version must be able to reach the current one.
-  #
-  # This did not hold: `migrate!` branched on `when 0` and `when 1` and let
-  # everything else fall through to `verify_connection!`, which demands
-  # `version == CURRENT_VERSION`. So a database created at 2, 3 or 4 raised
-  # `MigrationError` on every open, forever, with no way forward.
-  #
-  # The database is built the way the release at that version built it: by
-  # running exactly the migrator's own statements for ordinals 1..N. That is
-  # why the registry is read here — a rewind (dropping rows from a current
-  # database) would leave the LATER migrations' tables in place and prove
-  # nothing about applying them.
-  MIGRATIONS = Tamoz::SQLite::Migrator.class_eval("MIGRATIONS", __FILE__, __LINE__)
-  APPLICATION_ID = Tamoz::SQLite::Migrator.class_eval("APPLICATION_ID", __FILE__, __LINE__)
-
-  def seed_database_at_version(path, version)
-    database = SQLite3::Database.new(path)
-    database.execute("PRAGMA journal_mode = WAL")
-    (1..version).each do |ordinal|
-      statements, checksum = MIGRATIONS.fetch(ordinal)
-      statements.each { |sql| database.execute(sql) }
-      database.execute(
-        "INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms) VALUES (?, ?, ?)",
-        [ordinal, checksum, 0]
-      )
-    end
-    database.execute("PRAGMA application_id = #{APPLICATION_ID}")
-    database.execute("PRAGMA user_version = #{version}")
-    database.close
-    File.chmod(0o600, path)
-  end
-
-  def test_every_shipped_schema_version_migrates_forward_in_place
-    (1...Tamoz::SQLite::Migrator::CURRENT_VERSION).each do |version|
-      Dir.mktmpdir("tamoz-sqlite-upgrade-#{version}") do |directory|
-        path = File.join(directory, "tamoz.db")
-        seed_database_at_version(path, version)
-
-        adapter = Tamoz::SQLite::Adapter.new(path:)
-        assert_equal(
-          Tamoz::SQLite::Migrator::CURRENT_VERSION,
-          adapter.integrity_check.fetch("schema_version"),
-          "a database at version #{version} must migrate forward, not raise"
-        )
-        assert adapter.integrity_check.fetch("ok")
-        adapter.close
-      end
-    end
-  end
-
-  # The upgrade path still verifies what is already there. A database claiming
-  # version 3 with a tampered ordinal-2 row is not a database to layer 4 and 5
-  # on top of.
-  def test_an_in_place_upgrade_refuses_a_tampered_earlier_migration
-    Dir.mktmpdir("tamoz-sqlite-upgrade-tampered") do |directory|
+  # There is no upgrade path: a database at any other schema version is refused by name, never layered on.
+  def test_a_database_at_another_schema_version_is_refused_with_a_reset_instruction
+    Dir.mktmpdir("tamoz-sqlite-older") do |directory|
       path = File.join(directory, "tamoz.db")
-      seed_database_at_version(path, 3)
-
       database = SQLite3::Database.new(path)
-      database.execute("UPDATE tamoz_schema_migrations SET checksum = ? WHERE version = 2", ["tampered"])
+      database.execute("PRAGMA application_id = #{Tamoz::SQLite::Migrator.const_get(:APPLICATION_ID)}")
+      database.execute("PRAGMA user_version = #{Tamoz::SQLite::Migrator::CURRENT_VERSION - 1}")
       database.close
+      File.chmod(0o600, path)
 
-      assert_raises(Tamoz::SQLite::MigrationError) { Tamoz::SQLite::Adapter.new(path:) }
+      error = assert_raises(Tamoz::SQLite::MigrationError) { Tamoz::SQLite::Adapter.new(path:) }
+      assert_includes error.message, "start a fresh one"
     end
   end
 
@@ -166,8 +115,8 @@ class SQLiteKernelTest < Minitest::Test
       injected = false
       fault = lambda do |point, metadata|
         next unless point == :after_sql
-        next unless metadata.fetch("operation") == "migration.1"
-        next unless metadata.fetch("statement") == "migration.1.5"
+        next unless metadata.fetch("operation") == "migration.#{Tamoz::SQLite::Migrator::CURRENT_VERSION}"
+        next unless metadata.fetch("statement") == "migration.#{Tamoz::SQLite::Migrator::CURRENT_VERSION}.5"
 
         injected = true
         raise "injected migration failure"
@@ -200,8 +149,8 @@ class SQLiteKernelTest < Minitest::Test
 
       database = SQLite3::Database.new(path)
       database.execute(
-        "UPDATE tamoz_schema_migrations SET checksum = ? WHERE version = 1",
-        ["tampered"]
+        "UPDATE tamoz_schema_migrations SET checksum = ? WHERE version = ?",
+        ["tampered", Tamoz::SQLite::Migrator::CURRENT_VERSION]
       )
       database.close
 
