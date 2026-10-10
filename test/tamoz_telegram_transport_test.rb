@@ -2,10 +2,66 @@
 
 require_relative 'test_helper'
 require_relative 'support/telegram_fixture_server'
+require_relative 'support/transport_conformance'
 
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class TamozTelegramTransportTest < Minitest::Test
+  include TransportConformance
+
   Comms = Tamoz::Comms
+
+  # Stages Telegram Bot API responses for the shared transport conformance suite.
+  class ConformanceDriver
+    BOT_ID = 7_463_512_990
+
+    def initialize(server, test)
+      @server = server
+      @test = test
+    end
+
+    def identity = BOT_ID
+    def descriptor = nil
+    def credential = 'test-token'
+    def conversation_id = 'telegram:chat:22222222'
+
+    def stage_nothing = @server.script('getUpdates', body: { 'ok' => true, 'result' => [] }, times: 1)
+
+    # Telegram redelivers what no offset confirmed; the fixture plays that part.
+    def stage_text(text, deliveries: 1)
+      @server.script('getUpdates', body: { 'ok' => true, 'result' => [@test.update(100, text:)] }, times: deliveries)
+    end
+
+    # An offset confirms every update below it.
+    def released?(ids, cursor)
+      offset = JSON.parse(@server.requests.last.fetch(:body))['offset']
+      offset == cursor && ids.all? { |id| id < offset }
+    end
+
+    def stage_receipt
+      @server.script('sendMessage', body: { 'ok' => true, 'result' => { 'message_id' => 42, 'date' => 1 } }, times: 1)
+    end
+
+    def stage_typing = @server.script('sendChatAction', body: { 'ok' => true, 'result' => true }, times: 1)
+
+    def stage_attachment(bytes)
+      file = { 'file_id' => 'D1', 'file_size' => bytes.bytesize, 'file_path' => 'documents/d1.bin' }
+      @server.script('getFile', body: { 'ok' => true, 'result' => file }, times: 2)
+      @server.script('d1.bin', raw: bytes, times: 1)
+      'D1'
+    end
+
+    def delivery(text)
+      Comms::Delivery.build(conversation_id:, kind: 'answer', text:, part_index: 0, part_count: 1, journaled: true,
+                            render_version: 1, content_digest: 'b' * 64)
+    end
+  end
+
+  def with_conformance
+    with_transport do |transport, server|
+      server.script('getMe', body: { 'ok' => true, 'result' => { 'id' => ConformanceDriver::BOT_ID } }, times: 1)
+      yield transport, ConformanceDriver.new(server, self)
+    end
+  end
 
   def with_transport(max_response_bytes: Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES, read_timeout: 1.0)
     server = TelegramFixtureServer.new

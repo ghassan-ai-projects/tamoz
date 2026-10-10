@@ -2,11 +2,13 @@
 
 require_relative 'test_helper'
 require_relative 'support/talk_fixtures'
+require_relative 'support/transport_conformance'
 require 'json'
 
 # rubocop:disable Minitest/MultipleAssertions
 class TalkHubTest < Minitest::Test
   include TalkFixtures
+  include TransportConformance
 
   Talk = Tamoz::Talk
   Comms = Tamoz::Comms
@@ -31,6 +33,47 @@ class TalkHubTest < Minitest::Test
     Comms::Delivery.build(conversation_id: 'talk:chat:1', kind:, text:, render_version: 1,
                           content_digest: Digest::SHA256.hexdigest(text), part_index:, part_count:, markup:,
                           operation:, reply_to:)
+  end
+
+  # Stages browser input on an unstarted hub for the shared transport conformance suite.
+  class ConformanceDriver
+    attr_reader :descriptor
+
+    def initialize(hub, descriptor)
+      @hub = hub
+      @descriptor = descriptor
+      @update_id = 0
+    end
+
+    def identity = descriptor.identity.fetch(:expected_bot_id)
+    def credential = TOKEN
+    def conversation_id = 'talk:chat:1'
+    def stage_nothing = nil
+    def stage_receipt = nil
+    def stage_typing = nil
+
+    # The inbox itself redelivers until a cursor confirms, so one submission serves any number of polls.
+    def stage_text(text, **) = @hub.inbox.submit(@hub.normalizer.text(update_id: @update_id += 1, text:), timeout_s: 0)
+
+    def released?(_ids, _cursor) = @hub.inbox.size.zero?
+
+    def stage_attachment(bytes)
+      envelope = @hub.normalizer.utterance(update_id: @update_id += 1, audio: bytes, duration_s: 1)
+      @hub.inbox.submit(envelope, audio: bytes, timeout_s: 0)
+      envelope.dig('attachment', 'file_id')
+    end
+
+    def delivery(text)
+      Comms::Delivery.build(conversation_id:, kind: 'answer', text:, render_version: 1,
+                            content_digest: Digest::SHA256.hexdigest(text), part_index: 0, part_count: 1)
+    end
+  end
+
+  def with_conformance
+    hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
+    yield hub.transport, ConformanceDriver.new(hub, descriptor)
+  ensure
+    hub&.stop
   end
 
   def test_a_short_token_is_refused
