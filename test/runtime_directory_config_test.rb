@@ -126,6 +126,24 @@ class RuntimeDirectoryConfigTest < Minitest::Test
     end
   end
 
+  # A key the config no longer has fails by name and says how to rebuild the channels; nothing reads it.
+  def test_a_removed_channel_key_is_refused_by_name
+    Dir.mktmpdir('tamoz-runtime-config') do |root|
+      FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
+      path = RuntimeDirectory.create!(File.join(root, 'runtime'), workspace:).path
+      config = File.join(path, RuntimeDirectory::CONFIG_FILE)
+      entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat',
+                'stream_id' => 'telegram:bot:7', 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' } }
+      { 'expected_bot_id' => 7, 'talk' => { 'port' => 8787 } }.each do |key, value|
+        File.write(config, Psych.dump(Psych.safe_load_file(config).merge('channels' => { 'ops' => entry.merge(key => value) })))
+
+        error = assert_raises(RuntimeDirectory::Error) { RuntimeDirectory.resolve(path:, env: {}).channels }
+        assert_includes error.message, "channels.ops.#{key} is not a channel field"
+        assert_includes error.message, '`tamoz channel add`'
+      end
+    end
+  end
+
   # A surface id names a folder under the runtime, so it can never climb out of it.
   def test_a_surface_id_is_a_plain_name
     Dir.mktmpdir('tamoz-runtime-config') do |root|
