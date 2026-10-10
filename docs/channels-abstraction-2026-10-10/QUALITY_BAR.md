@@ -73,7 +73,7 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| C1 | `script/telegram_attachment_eval` and `script/talk_eval` run before C2a and after C3 on the same real model; both results reported; BLOCKED or SHORT is reported, never a pass; safety scenarios pass every run | eval reports in `docs/channels-abstraction-2026-10-10/` | BLOCKED — no funded chat model until 2026-10-13 (Z.ai weekly limit; DeepSeek $0; OpenRouter $0.45). Baseline runs later at `6f85a1ac` (pre-change code) |
+| C1 | `script/telegram_attachment_eval` and `script/talk_eval` run before C2a and after C3 on the same real model; both results reported; BLOCKED or SHORT is reported, never a pass; safety scenarios pass every run | eval reports in `docs/channels-abstraction-2026-10-10/` | PARTIAL — after-change `telegram_attachment_eval --runs 5` on zai/glm-5.3-flash (Z.ai coding endpoint) at `3e1db7f3`: 16/16 scenarios PASS, every safety scenario 5/5, `receipt_photo` 4/5 (one reply missed 27.85) ([report](telegram-attachment-eval-glm-5.3-flash.md)). Real-model result. With 5 runs a 5/5 lower bound is 0.566, so the verdicts rest on the rate. Not run: the pre-change baseline and `talk_eval` |
 
 ## D. Gates
 
@@ -119,8 +119,8 @@ Out of scope: `script/tamoz_sqlite_oracle` (the branch changed a version pin onl
 | G1 | Every scoped file passes `Metrics/*` at the `.rubocop.yml` ceilings (method ≤ 20, class/module ≤ 250, ABC ≤ 20, cyclomatic/perceived ≤ 8, parameters ≤ 5 counting keywords, nesting ≤ 3, block ≤ 25) | `rubocop --only Metrics --ignore-disable-comments` with those ceilings | PASS — 82 scoped files, zero offenses with disables ignored (`bar.sh`) |
 | G2 | No `rubocop:disable Metrics/*` in a scoped file, and no `.rubocop_todo.yml` `Metrics/*` entry for one | grep; the TODO parse | PASS — no `Metrics` disable comments; 58 `.rubocop_todo.yml` exclusions for scoped files removed and the files pass every cop |
 | G3 | Every scoped file is ≤ 250 lines | `wc -l` | PASS — largest scoped file 229 lines; `migrator.rb` 1,873 → 149 (SQL moved to `migrations/0027.sql`), SQLite comms store 1,341 → 164 |
-| G4 | Splits extract a responsibility (a collaborator or a value), never a concern that only relocates methods (CODING_STANDARD §2, §6) | review | PASS — splits are collaborators (`CommsInbound`, `CommsPolling`, `CommsStatus`, …), rule modules, or values (`Comms::Lease`, `Turn`, `Resume`, `Data` records) — review pending |
-| G5 | Behavior unchanged: `rake ci`, `rubocop`, `quality:reek`, `enola check` green | the gates | OPEN |
+| G4 | Splits extract a responsibility (a collaborator or a value), never a concern that only relocates methods (CODING_STANDARD §2, §6) | review | PASS — splits are collaborators (`CommsInbound`, `CommsPolling`, `CommsStatus`, …), rule modules, or values (`Comms::Lease`, `Turn`, `Resume`, `Data` records); size-round review: 0 critical / 0 high |
+| G5 | Behavior unchanged: `rake ci`, `rubocop`, `quality:reek`, `enola check` green | the gates | PASS for what this change owns — `rake ci` tests green (two TIME-cap overruns under eval load re-timed alone: 2.3 s and 3.0 s, cap 6.5 s); `enola check` PASS, no structural regression; requirements audit 538 pass / same 14 pre-existing gaps. `rubocop` and `quality:reek` are red at HEAD already (rubocop 4,721 offenses at HEAD → 4,644 now); reek smells in the touched gems rose 2,162 → 2,241 because split classes lost class-wide `:reek:` suppressions — reported, not chased |
 | G6 | `config migrate` and schema 1 are gone; the callback-ack `NameError` is fixed with case 13 green | tests | PASS — `f203bf54`, `6feedb75` |
 
 ## Review log
@@ -138,6 +138,7 @@ Out of scope: `script/tamoz_sqlite_oracle` (the branch changed a version pin onl
 | Whole branch | 0 / 0 / 4 / 6 | response-cap assertion restored through `connect`; listed test changes; a kind's credential must be its own token; LoadError only for the adapter itself; doctor writes nothing; greeting after the backlog; comments trimmed; E8 to the owner | final |
 | C4 records | 0 / 1 / 5 / 7 | measuring tests read the registry (a third line needs no edit); ADR-041/042/062 wording and History; design/comms.md, public-api.md, config.md, README gem map, guide limits | C4 |
 | C3 code | 0 / 0 / 4 / 8 | A7 cases (negative ids, reserved kinds), B4 row survival, config message, Telegram `bot_username` type, test/comment/dead-code fixes; docs to C4 | C3 |
+| Size round (G1–G6) | 0 / 0 / mediums and lows below | applied: stale doc versions, simpler migrator, duplicate `refuse`, controls stub, one `DEFAULT_NAMESPACE`, requires, `getutc`; noted for the owner: kwrest + `Data` bundles, duck-typed `Turn`/`Lease` in the SQLite store (cross-gem), narrower answers rescue | `3e1db7f3` |
 | C2 code (bar review) | 0 / 0 / 3 / 8 | surface-id rule + test; A1 CLI-level test; busy-surface message; origin refusal named; `http://` only; messages, comments, help banners; `bot_username` move recorded for C3 | C2 |
 
 ## Loop log
