@@ -43,10 +43,12 @@ class ReconnectionResumeProtocolTest < Minitest::Test
           session_builder: ->(thread) { runtime.session_for(thread) },
           emitter: ->(_event) {}, once: true
         )
+
         assert worker.poll_once
 
         reference = Comms::Lifecycle::RequestRef.for(request_id)
         view = runtime.session_for(THREAD).view(thread: THREAD)
+
         assert_equal :completed, view.status
       ensure
         runtime&.close
@@ -54,13 +56,16 @@ class ReconnectionResumeProtocolTest < Minitest::Test
 
       # Every writer is gone. The reconnect view answers from durable rows.
       status, out, err = rt.cli(['comms', 'request', reference])
+
       assert_equal 0, status, err
-      assert_match(/request #{reference} on #{SURFACE_ID}\/#{CONVERSATION} \(thread #{THREAD}\)/, out)
+      assert_match(%r{request #{reference} on #{SURFACE_ID}/#{CONVERSATION} \(thread #{THREAD}\)}, out)
       assert_match(/task=completed delivery=\w+ open_requests=0 state=idle/, out)
 
       status, out, err = rt.cli(['comms', 'request', reference, '--json'])
+
       assert_equal 0, status, err
       row = JSON.parse(out.lines.last).fetch('requests').first
+
       assert_equal reference, row.fetch('request_ref'), 'identity round-trips through the short ref'
       assert_equal THREAD, row.fetch('thread_id')
       assert_equal request_id, row.fetch('request_id')
@@ -70,6 +75,7 @@ class ReconnectionResumeProtocolTest < Minitest::Test
       # Nothing re-ran and no second terminal appeared during reconnection.
       rt.with_engine do |adapter, checkpoints|
         store = adapter.bind_comms_store(checkpoints)
+
         assert_equal 1, checkpoints.request_history(thread_id: THREAD).length,
                      'reconnection must not enqueue or run the turn again'
         assert_equal 1, answer_rows(store),
@@ -104,9 +110,11 @@ class ReconnectionResumeProtocolTest < Minitest::Test
           profile_id: 'ops', bound_at: NOW
         ).wire, now: NOW
       )
+
       assert_equal :enqueued, store.admit_and_enqueue(
         envelope(update_id: 401), stream_id: "telegram:bot:#{BOT_ID}",
-        turn: Tamoz::Comms::Turn.new(thread: THREAD, profile_id: 'ops', reservation: 1), now: NOW
+                                  turn: Tamoz::Comms::Turn.new(thread: THREAD, profile_id: 'ops', reservation: 1).wire,
+                                  now: NOW
       )
     end
   end
@@ -182,18 +190,18 @@ class ReconnectionResumeProtocolTest < Minitest::Test
     File.chmod(0o700, directory)
     path = File.join(directory, 'trusted.yaml')
     File.write(path, Psych.dump(
-      'profile' => {
-        'schema_version' => 1, 'profile_id' => 'trusted', 'profile_version' => '1.0',
-        'canonical_root' => workspace
-      },
-      'roots' => { 'workspace' => workspace },
-      'tools' => { 'allowed' => READ_ONLY_TOOLS },
-      'policy' => {
-        'allow_changes' => false, 'default_check_safety' => 'read_only',
-        'graph_version' => '1', 'behavior_version' => '1.0',
-        'tool_catalog_digest' => digest, 'unattended_catalog_digest' => digest
-      }
-    ))
+                       'profile' => {
+                         'schema_version' => 1, 'profile_id' => 'trusted', 'profile_version' => '1.0',
+                         'canonical_root' => workspace
+                       },
+                       'roots' => { 'workspace' => workspace },
+                       'tools' => { 'allowed' => READ_ONLY_TOOLS },
+                       'policy' => {
+                         'allow_changes' => false, 'default_check_safety' => 'read_only',
+                         'graph_version' => '1', 'behavior_version' => '1.0',
+                         'tool_catalog_digest' => digest, 'unattended_catalog_digest' => digest
+                       }
+                     ))
     File.chmod(0o600, path)
   end
 

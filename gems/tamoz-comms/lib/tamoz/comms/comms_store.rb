@@ -15,7 +15,7 @@ module Tamoz
     #
     # The signatures below ARE the contract — the bodies raise because a
     # contract module has nothing to implement. An inbound row names its own
-    # surface (`envelope_wire['surface_id']`); a fenced write takes a `Lease`.
+    # surface (`envelope_wire['surface_id']`); a fenced write takes `Lease#wire`; values cross as wire hashes.
     # :reek:UnusedParameters
     module CommsStore
       CONTRACT_VERSION = 4
@@ -38,7 +38,7 @@ module Tamoz
       # :duplicate, and the SAME identity under a DIFFERENT payload digest is
       # a durable integrity conflict recorded on the ONE anchor row — its
       # conflict counter advances, nothing is enqueued (invariant 1).
-      # `turn` is a `Turn`: its research input makes it a deep-research turn.
+      # `turn` is `Turn#wire`: its research input makes it a deep-research turn.
       # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
       def admit_and_enqueue(envelope_wire, stream_id:, turn:, now:)
         raise NotImplementedError
@@ -47,7 +47,7 @@ module Tamoz
       # Admit one clarification answer and enqueue its durable resume in the
       # same transaction. The request id includes the exact target request,
       # allowing the worker to reject a stale answer after the pause changes.
-      # `resume` is a `Resume`.
+      # `resume` is `Resume#wire`.
       # @return [:enqueued, :duplicate, :integrity_conflict]
       def admit_and_enqueue_answer(envelope_wire, stream_id:, resume:, now:)
         raise NotImplementedError

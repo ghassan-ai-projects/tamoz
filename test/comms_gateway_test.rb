@@ -498,11 +498,11 @@ class CommsGatewayTest < Minitest::Test
                   reserved_request_id: request_id, now:
       )
       assert_equal :claimed, store.claim_delivery(
-        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1),
+        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
         claim_expires_at: now + 30, now:
       )
       assert_equal :marked, store.mark_delivery(
-        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1),
+        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
         status: 'succeeded', receipt: { 'message_id' => 42 }, now:
       )
 
@@ -891,7 +891,7 @@ class CommsGatewayTest < Minitest::Test
         store.admit_and_enqueue(
           wire,
           stream_id: 'telegram:bot:7463512990',
-          turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 9),
+          turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 9).wire,
           now: Time.utc(2026, 8, 10, 12, 0, 0)
         )
       end

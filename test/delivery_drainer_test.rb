@@ -101,7 +101,7 @@ class DeliveryDrainerTest < Minitest::Test
       row = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
 
       assert_equal :claimed, main_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1),
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1).wire,
         claim_expires_at: now + 1, now:
       )
 
@@ -118,11 +118,11 @@ class DeliveryDrainerTest < Minitest::Test
       main_store.append_delivery(delivery('ambiguous'), surface_id: 'telegram-ops', capacity: 10, now:)
       row = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
       main_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1),
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1).wire,
         claim_expires_at: now + 1, now:
       )
       main_store.mark_delivery_send_started(
-        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1), now:
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'crashed', fence: 1).wire, now:
       )
 
       transport = ScriptedTransport.new
@@ -144,11 +144,11 @@ class DeliveryDrainerTest < Minitest::Test
       taker_store = second_adapter.bind_comms_store
 
       assert_equal :not_claimable, taker_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 7),
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 7).wire,
         claim_expires_at: now + 60, now:
       ), 'a live unexpired claim is not stealable'
       assert_equal :claimed, taker_store.claim_delivery(
-        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 7),
+        delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 7).wire,
         claim_expires_at: now + 60, now: now + 31
       )
 
@@ -181,7 +181,8 @@ class DeliveryDrainerTest < Minitest::Test
         clock: -> { now },
         sleeper: lambda { |_seconds|
           second_store.claim_delivery(
-            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 9),
+            delivery_id: row.fetch('delivery_id'),
+            lease: Tamoz::Comms::Lease.new(owner: 'drainer:taker', fence: 9).wire,
             claim_expires_at: now + 60, now: now + 31
           )
         }
@@ -203,13 +204,13 @@ class DeliveryDrainerTest < Minitest::Test
       main_store.append_delivery(delivery('answer'), surface_id: 'telegram-ops', capacity: 10, now:)
       row = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
       delivery_id = row.fetch('delivery_id')
-      main_store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:stale', fence: 3),
+      main_store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:stale', fence: 3).wire,
                                 claim_expires_at: now + 1, now:)
-      main_store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:current', fence: 4),
+      main_store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:current', fence: 4).wire,
                                 claim_expires_at: now + 60, now: now + 2)
 
       assert_equal :not_claimable, main_store.mark_delivery(
-        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:stale', fence: 3),
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:stale', fence: 3).wire,
         status: 'succeeded', receipt: { 'message_id' => 99 }, now: now + 3
       )
       held = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[claimed]).first
@@ -219,7 +220,7 @@ class DeliveryDrainerTest < Minitest::Test
       assert_nil held.fetch('receipt'), 'the losing write changes nothing'
 
       assert_equal :marked, main_store.mark_delivery(
-        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:current', fence: 4),
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'drainer:current', fence: 4).wire,
         status: 'succeeded', receipt: { 'message_id' => 99 }, now: now + 3
       )
     end

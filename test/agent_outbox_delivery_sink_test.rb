@@ -62,7 +62,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     ).wire
     store.admit_and_enqueue(
       envelope, stream_id: 'telegram:bot:7463512990',
-                turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1), now:
+                turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1).wire, now:
     )
   end
 
@@ -338,7 +338,8 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
-      event = { thread_id: 'telegram.ops.abc', kind: 'healing.escalated', text: 'it needs you', request_id: 'occurrence-1' }
+      event = { thread_id: 'telegram.ops.abc', kind: 'healing.escalated', text: 'it needs you',
+                request_id: 'occurrence-1' }
 
       assert_equal :accepted, sink.push(event)
       sink.push(event)

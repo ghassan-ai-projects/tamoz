@@ -116,7 +116,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   def admit(store, wire, thread: 'telegram.ops.abc', now: self.now)
     store.admit_and_enqueue(
       wire, stream_id: 'telegram:bot:7463512990',
-            turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1), now:
+            turn: Tamoz::Comms::Turn.new(thread:, profile_id: 'ops', reservation: 1).wire, now:
     )
   end
 
@@ -328,15 +328,15 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store|
       store.append_delivery(delivery, surface_id: 'telegram-ops', capacity: 10, now:)
       delivery_id = delivery.fetch('delivery_id')
-      store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7),
+      store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire,
                            claim_expires_at: now + 30, now:)
 
       assert_equal :not_claimable, store.mark_delivery(
-        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 7), status: 'succeeded',
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 7).wire, status: 'succeeded',
         receipt: { 'message_id' => 1 }, now: now + 1
       )
       assert_equal :not_claimable, store.mark_delivery(
-        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 8), status: 'succeeded',
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 8).wire, status: 'succeeded',
         receipt: { 'message_id' => 1 }, now: now + 2
       )
       row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[claimed]).first
@@ -345,7 +345,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_nil row.fetch('receipt')
 
       assert_equal :marked, store.mark_delivery(
-        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status: 'succeeded',
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire, status: 'succeeded',
         receipt: { 'message_id' => 42 }, now: now + 3
       )
       row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[succeeded]).first
@@ -365,7 +365,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope(update_id: 1, text: 'make it blue'),
         stream_id: 'telegram:bot:7463512990',
-        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1), now:
+        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1).wire, now:
       )
       answer = delivery(text: 'done, it is blue')
       store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1,
@@ -379,7 +379,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope(update_id: 2, text: 'and the font?'),
         stream_id: 'telegram:bot:7463512990',
-        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1), now: now + 2
+        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1).wire, now: now + 2
       )
 
       history = store.conversation_history(
@@ -412,7 +412,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope(update_id: 1, text: "make it\nblue"),
         stream_id: 'telegram:bot:7463512990',
-        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1, history:), now:
+        turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1, history:).wire, now:
       )
 
       task = checkpoints.request_history(thread_id: 'telegram.ops.abc').first.payload.fetch('task')
@@ -436,7 +436,8 @@ class SQLiteCommsStoreTest < Minitest::Test
       history = [{ 'role' => 'user', 'text' => 'earlier' }]
       store.admit_and_enqueue(
         envelope, stream_id: 'telegram:bot:7463512990',
-                  turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops', reservation: 1, history:),
+                  turn: Tamoz::Comms::Turn.new(thread: 'telegram.ops.abc', profile_id: 'ops',
+                                               reservation: 1, history:).wire,
                   now:
       )
 
@@ -471,15 +472,15 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store|
       assert_equal :acquired, store.acquire_poller_lease(
         surface_id: 'telegram-ops', stream_id: 'telegram:bot:1',
-        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 1), ttl_s: 30, now:
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 1).wire, ttl_s: 30, now:
       )
       assert_equal :not_acquirable, store.acquire_poller_lease(
         surface_id: 'telegram-ops', stream_id: 'telegram:bot:1',
-        lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 2), ttl_s: 30, now: now + 1
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 2).wire, ttl_s: 30, now: now + 1
       )
       assert_equal :acquired, store.acquire_poller_lease(
         surface_id: 'telegram-ops', stream_id: 'telegram:bot:1',
-        lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 2), ttl_s: 30,
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:b', fence: 2).wire, ttl_s: 30,
         now: now + 60
       ), 'an expired poller lease is recoverable'
     end
@@ -518,15 +519,16 @@ class SQLiteCommsStoreTest < Minitest::Test
       delivery_id = delivery.fetch('delivery_id')
 
       assert_equal :claimed, store.claim_delivery(
-        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 1), claim_expires_at: now + 30, now:
+        delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a',
+                                                     fence: 1).wire, claim_expires_at: now + 30, now:
       )
       assert_equal :not_claimable, store.claim_delivery(
         delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b',
-                                                     fence: 2), claim_expires_at: now + 30, now: now + 1
+                                                     fence: 2).wire, claim_expires_at: now + 30, now: now + 1
       )
       assert_equal :missing, store.claim_delivery(
         delivery_id: 'f' * 64, lease: Tamoz::Comms::Lease.new(owner: 'gateway:b',
-                                                              fence: 2), claim_expires_at: now + 30, now:
+                                                              fence: 2).wire, claim_expires_at: now + 30, now:
       )
     end
   end
@@ -743,7 +745,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   end
 
   def claim_row(store, delivery_id)
-    store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7),
+    store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire,
                          claim_expires_at: now + 30, now:)
   end
 
@@ -769,17 +771,17 @@ class SQLiteCommsStoreTest < Minitest::Test
       # the mixed terminal states this projection asserts over.
       [unknown, delivered].each do |row|
         assert_equal :claimed, store.claim_delivery(
-          delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7),
+          delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire,
           claim_expires_at: now + 30, now:
         )
       end
       assert_equal :marked, store.mark_delivery(
         delivery_id: unknown.fetch('delivery_id'),
-        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status: 'unknown', now: now + 1
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire, status: 'unknown', now: now + 1
       )
       assert_equal :marked, store.mark_delivery(
         delivery_id: delivered.fetch('delivery_id'),
-        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status: 'succeeded', now: now + 1
+        lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire, status: 'succeeded', now: now + 1
       )
 
       assert_equal 'unknown', store.request_status(
@@ -1139,10 +1141,10 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def claim_and_mark!(store, delivery_id, status)
     assert_equal :claimed, store.claim_delivery(
-      delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), claim_expires_at: now + 30, now:
+      delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire, claim_expires_at: now + 30, now:
     )
     assert_equal :marked, store.mark_delivery(
-      delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7), status:, now: now + 1
+      delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:a', fence: 7).wire, status:, now: now + 1
     )
   end
 

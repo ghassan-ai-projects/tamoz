@@ -38,7 +38,7 @@ module Tamoz
         def enqueue_answer(envelope, resolved, payload, now:)
           resume = Comms::Resume.new(thread: resolved.fetch('thread_id'), payload:,
                                      request_id: Comms::ClarificationAnswerRequest.id_for(resolved.fetch('request_id')))
-          case @store.admit_and_enqueue_answer(envelope, stream_id:, resume:, now:)
+          case @store.admit_and_enqueue_answer(envelope, stream_id:, resume: resume.wire, now:)
           when :duplicate then nil
           when :integrity_conflict then ANSWER_UNQUEUED_REPLY
           else ANSWER_QUEUED_REPLY

@@ -115,7 +115,8 @@ class CommsCliTest < Minitest::Test
       assert_equal 0, rt.cli(%w[comms serve --once]).first
       with_store(rt) do |store|
         store.append_delivery(delivery_wire, surface_id: 'telegram-ops', capacity: 500, now: Time.now.utc)
-        store.acquire_poller_lease(surface_id: 'telegram-ops', stream_id: "telegram:bot:#{BOT_ID}", lease: Tamoz::Comms::Lease.new(owner: 'gateway:999', fence: 1),
+        store.acquire_poller_lease(surface_id: 'telegram-ops', stream_id: "telegram:bot:#{BOT_ID}",
+                                   lease: Tamoz::Comms::Lease.new(owner: 'gateway:999', fence: 1).wire,
                                    ttl_s: 60, now: Time.now.utc)
       end
 
@@ -171,7 +172,7 @@ class CommsCliTest < Minitest::Test
       # Re-acquire a live poller lease the doctor must see as foreign.
       with_store(rt) do |store|
         store.acquire_poller_lease(surface_id: 'telegram-ops', stream_id: "telegram:bot:#{BOT_ID}",
-                                   lease: Tamoz::Comms::Lease.new(owner: 'gateway:999', fence: 1), ttl_s: 60,
+                                   lease: Tamoz::Comms::Lease.new(owner: 'gateway:999', fence: 1).wire, ttl_s: 60,
                                    now: Time.now.utc)
       end
 

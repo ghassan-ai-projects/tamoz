@@ -30,13 +30,14 @@ module Tamoz
           anchor = inbound_anchor(txn, envelope_wire, stream_id)
           next replay_outcome(txn, envelope_wire, stream_id, anchor) if anchor
 
-          refusal = intake_refusal(txn, envelope_wire, turn.reservation)
+          refusal = intake_refusal(txn, envelope_wire, turn.fetch('reservation'))
           next refusal if refusal
 
           request_id = request_id_for(envelope_wire, stream_id)
           insert_inbound!(txn, envelope_wire.merge('disposition' => 'request', 'reason' => 'accepted'), stream_id, now)
           insert_admitted_request!(txn, request_id, envelope_wire, turn, now)
-          enqueue!(txn, turn.thread, request_id, REQUEST_OPERATION, turn_payload(envelope_wire, turn, request_id))
+          enqueue!(txn, turn.fetch('thread'), request_id, REQUEST_OPERATION,
+                   turn_payload(envelope_wire, turn, request_id))
           :enqueued
         end
       end
@@ -48,9 +49,9 @@ module Tamoz
           anchor = inbound_anchor(txn, envelope_wire, stream_id)
           next replay_outcome(txn, envelope_wire, stream_id, anchor) if anchor
 
-          enqueue!(txn, resume.thread, resume.request_id, 'resume', resume.payload)
+          enqueue!(txn, resume.fetch('thread'), resume.fetch('request_id'), 'resume', resume.fetch('payload'))
           row = envelope_wire.merge('disposition' => 'ignored', 'reason' => 'clarification_answer',
-                                    'request_id' => resume.request_id)
+                                    'request_id' => resume.fetch('request_id'))
           insert_inbound!(txn, row, stream_id, now)
           :enqueued
         end
@@ -114,13 +115,13 @@ module Tamoz
       # The transcript nests with the text under the task Hash, the shape the graph's
       # payload-to-channel mapping tolerates; research and attachment ride beside it.
       def turn_payload(envelope_wire, turn, request_id)
-        fragments = turn.history.filter_map do |fragment|
+        fragments = turn.fetch('history').filter_map do |fragment|
           flattened = flatten_context_text(fragment.fetch('text'))
           { 'role' => fragment.fetch('role'), 'text' => flattened } unless flattened.empty?
         end
-        Tamoz::Core::TurnContext.task(thread_id: turn.thread, request_id:,
+        Tamoz::Core::TurnContext.task(thread_id: turn.fetch('thread'), request_id:,
                                       text: flatten_context_text(envelope_wire.fetch('text')), fragments:)
-                                .merge({ 'research' => turn.research, 'attachment' => turn.attachment }.compact)
+                                .merge({ 'research' => turn['research'], 'attachment' => turn['attachment'] }.compact)
       end
 
       # TurnContext forbids control characters; a multi-line message or transcript fragment is
@@ -146,8 +147,8 @@ module Tamoz
 
       def insert_admitted_request!(txn, request_id, envelope_wire, turn, now)
         binds = [request_id, envelope_wire.fetch('surface_id'), envelope_wire.fetch('surface_revision'),
-                 envelope_wire.fetch('conversation_id'), turn.thread, turn.profile_id,
-                 turn.reservation, now_ms(now), now_ms(now)]
+                 envelope_wire.fetch('conversation_id'), turn.fetch('thread'), turn.fetch('profile_id'),
+                 turn.fetch('reservation'), now_ms(now), now_ms(now)]
         txn.execute('comms.admit.request.upsert', <<~SQL, binds)
           INSERT OR IGNORE INTO tamoz_comms_requests (
             request_id, surface_id, surface_revision, conversation_id,

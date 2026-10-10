@@ -108,7 +108,7 @@ module Tamoz
           @index.fetch('scenarios').find { |entry| entry.fetch('scenario_id') == scenario_id }
         end
 
-        # rubocop:disable Metrics/MethodLength -- one scenario record per branch.
+        # -- one scenario record per branch.
         def run_scenario(scenario_id, directory)
           record = if PENDING_SEAM.key?(scenario_id)
                      pending_seam_record(scenario_id)
@@ -128,7 +128,6 @@ module Tamoz
             'record' => record.slice('status', 'reason', 'metrics', 'hard_zero', 'parity')
           }
         end
-        # rubocop:enable Metrics/MethodLength
 
         def surfaces_driven(scenario_id)
           SURFACES_DRIVEN.fetch(scenario_id, %w[telegram])
@@ -232,8 +231,10 @@ module Tamoz
             'surfaces_driven' => @scenarios.to_h { |scenario_id| [scenario_id, surfaces_driven(scenario_id)] },
             'pending_seam' => artifacts.select { |artifact| artifact.dig('record', 'status') == 'pending_seam' }
                                        .map { |artifact| [artifact.fetch('scenario_id'), artifact] }.to_h,
-            'results' => artifacts.to_h { |artifact| [artifact.fetch('scenario_id'),
-                                                      artifact.fetch('record').fetch('status')] },
+            'results' => artifacts.to_h do |artifact|
+              [artifact.fetch('scenario_id'),
+               artifact.fetch('record').fetch('status')]
+            end,
             'controls_passed' => false,
             'publication_blocked_reason' => 'fixture_or_fake_provider'
           }
@@ -272,8 +273,8 @@ module Tamoz
           send("drive_#{scenario_id.downcase}")
         end
 
-        def with_fixture(**options)
-          fixture = @adapter.build(**options)
+        def with_fixture(**)
+          fixture = @adapter.build(**)
           yield fixture
         ensure
           fixture&.close
@@ -422,8 +423,8 @@ module Tamoz
             fixture.submit([raw_update(201, 'Summarize both notes.')])
             begin
               fixture.work
-            rescue Exception => error
-              raise unless error.is_a?(@adapter.crash_error)
+            rescue Exception => e
+              raise unless e.is_a?(@adapter.crash_error)
             end
             recovered = fixture.fresh_worker
             work_until_terminal(fixture, recovered, conversation)
@@ -511,8 +512,11 @@ module Tamoz
 
         def unknown_rows(fixture, delivery_id)
           fixture.outbox(statuses: %w[unknown]).select { |row| row['delivery_id'] == delivery_id }
-                                               .map { |row| [
-row['delivery_id'], row['status'], row['receipt']] }
+                                               .map do |row|
+            [
+              row['delivery_id'], row['status'], row['receipt']
+            ]
+          end
         end
 
         def stale_owner_refused?(fixture)
@@ -521,15 +525,16 @@ row['delivery_id'], row['status'], row['receipt']] }
 
           now = fixture.now
           claimed = fixture.store.claim_delivery(
-            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'owner-stale-a', fence: 11),
+            delivery_id: row.fetch('delivery_id'),
+            lease: Tamoz::Comms::Lease.new(owner: 'owner-stale-a', fence: 11).wire,
             claim_expires_at: now + 30, now: now
           )
           return false unless claimed == :claimed
 
           fixture.store.reconcile_expired_deliveries(now: now + 60)
           result = fixture.store.mark_delivery_send_started(
-            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'owner-stale-a', 
-                                                                                  fence: 11), now: now + 61
+            delivery_id: row.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'owner-stale-a',
+                                                                                  fence: 11).wire, now: now + 61
           )
           result != :marked
         end
@@ -543,8 +548,8 @@ row['delivery_id'], row['status'], row['receipt']] }
             boundaries << 'after_inbound_persistence'
             begin
               fixture.work
-            rescue Exception => error
-              raise unless error.is_a?(@adapter.crash_error)
+            rescue Exception => e
+              raise unless e.is_a?(@adapter.crash_error)
             end
             boundaries << 'after_worker_claim_crash'
             fresh = fixture.fresh_worker
@@ -758,8 +763,10 @@ row['delivery_id'], row['status'], row['receipt']] }
             receipt_id = fixture.transport.sends
                                 .find { |send| send[:kind] == 'approval_request' }
                                 &.fetch(:receipt_message_id)
-            fixture.submit([callback_update(603, data: "deny:#{reference}",
-                                                 callback_message_id: receipt_id)]) if reference && receipt_id
+            if reference && receipt_id
+              fixture.submit([callback_update(603, data: "deny:#{reference}",
+                                                   callback_message_id: receipt_id)])
+            end
             prompt_consumed = reference && fixture.prompt(fixture.prompt_digest(reference))
                                                   &.fetch('status') == 'consumed'
             # A deny is observed by a worker pass the way production observes
@@ -827,8 +834,8 @@ row['delivery_id'], row['status'], row['receipt']] }
             fixture.submit([raw_update(881, 'Summarize both notes.')])
             begin
               fixture.work
-            rescue Exception => error
-              raise unless error.is_a?(@adapter.crash_error)
+            rescue Exception => e
+              raise unless e.is_a?(@adapter.crash_error)
             end
             target = fixture.request_ids_for(conversation).last
             raise 'the crashed turn was not admitted durably' unless target
@@ -928,9 +935,9 @@ row['delivery_id'], row['status'], row['receipt']] }
         end
 
         def first_terminal_settle_ms(fixture)
-          row = fixture.outbox.select { |candidate|
+          row = fixture.outbox.select do |candidate|
             OpenclawCommsOracles::TERMINAL_KINDS.include?(candidate['kind'])
-          }.min_by { |candidate| candidate.fetch('created_at_ms') }
+          end.min_by { |candidate| candidate.fetch('created_at_ms') }
           row && row.fetch('created_at_ms')
         end
 

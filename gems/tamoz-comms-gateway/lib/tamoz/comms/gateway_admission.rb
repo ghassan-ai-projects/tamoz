@@ -74,7 +74,7 @@ module Tamoz
           )
           turn = Comms::Turn.new(thread:, profile_id: @descriptor.profile_id, reservation: reservation_slots,
                                  history:, research:, attachment:)
-          outcome = @store.admit_and_enqueue(envelope, stream_id:, turn:, now:)
+          outcome = @store.admit_and_enqueue(envelope, stream_id:, turn: turn.wire, now:)
           return outcome if %i[enqueued duplicate].include?(outcome)
 
           refuse_admission(envelope, outcome, now:)

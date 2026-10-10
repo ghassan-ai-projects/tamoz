@@ -78,20 +78,21 @@ module Tamoz
           next :missing unless existing
 
           txn.execute('comms.outbox.claim', CLAIM_DELIVERY_SQL,
-                      [lease.owner, lease.fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
+                      [lease.fetch('owner'), lease.fetch('fence'), now_ms(claim_expires_at), delivery_id, now_ms(now)])
           txn.changes == 1 ? :claimed : :not_claimable
         end
       end
 
       def release_delivery_claim(delivery_id:, lease:, now:)
         transaction('comms.outbox.release_claim') do |txn|
-          txn.execute('comms.outbox.release_claim', <<~SQL, [now_ms(now), delivery_id, lease.owner, lease.fence])
-            UPDATE tamoz_comms_outbox
-            SET status = 'pending', claim_owner = NULL, claim_fence = NULL,
-                claim_expires_at_ms = NULL, send_started_at_ms = NULL, updated_at_ms = ?
-            WHERE delivery_id = ? AND status = 'claimed'
-              AND claim_owner = ? AND claim_fence = ?
-          SQL
+          txn.execute('comms.outbox.release_claim',
+                      <<~SQL, [now_ms(now), delivery_id, lease.fetch('owner'), lease.fetch('fence')])
+                        UPDATE tamoz_comms_outbox
+                        SET status = 'pending', claim_owner = NULL, claim_fence = NULL,
+                            claim_expires_at_ms = NULL, send_started_at_ms = NULL, updated_at_ms = ?
+                        WHERE delivery_id = ? AND status = 'claimed'
+                          AND claim_owner = ? AND claim_fence = ?
+                      SQL
           txn.changes == 1 ? :released : :not_claimable
         end
       end
@@ -99,7 +100,7 @@ module Tamoz
       def mark_delivery_send_started(delivery_id:, lease:, now:)
         transaction('comms.outbox.send_started') do |txn|
           txn.execute('comms.outbox.send_started',
-                      <<~SQL, [now_ms(now), now_ms(now), delivery_id, lease.owner, lease.fence])
+                      <<~SQL, [now_ms(now), now_ms(now), delivery_id, lease.fetch('owner'), lease.fetch('fence')])
                         UPDATE tamoz_comms_outbox
                         SET send_started_at_ms = ?, updated_at_ms = ?
                         WHERE delivery_id = ? AND status = 'claimed'
@@ -155,7 +156,8 @@ module Tamoz
       # automatic retry).
       def mark_delivery(delivery_id:, lease:, status:, now:, receipt: nil)
         transaction('comms.outbox.mark') do |txn|
-          binds = [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id, lease.owner, lease.fence]
+          binds = [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id, lease.fetch('owner'),
+                   lease.fetch('fence')]
           txn.execute('comms.outbox.mark', <<~SQL, binds)
             UPDATE tamoz_comms_outbox
             SET status = ?, receipt = ?, updated_at_ms = ?

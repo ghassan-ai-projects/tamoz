@@ -61,7 +61,7 @@ class CallbackAckCrashTest < Minitest::Test
     ).wire
     store.admit_and_enqueue(
       envelope, stream_id: "telegram:bot:#{BOT_ID}",
-                turn: Tamoz::Comms::Turn.new(thread: THREAD_ID, profile_id: 'ops', reservation: 1), now:
+                turn: Tamoz::Comms::Turn.new(thread: THREAD_ID, profile_id: 'ops', reservation: 1).wire, now:
     )
   end
 
@@ -104,6 +104,7 @@ class CallbackAckCrashTest < Minitest::Test
   def pending_prompt_row(store)
     row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
                .find { |candidate| candidate.fetch('kind') == 'approval_request' }
+
     refute_nil row, 'the pause projects its actionable prompt'
     JSON.parse(row.fetch('markup')).fetch('reference')
   end
@@ -111,10 +112,12 @@ class CallbackAckCrashTest < Minitest::Test
   def activate_prompt(store, transport, reference, now:)
     drainer = Comms::DeliveryDrainer.new(store:, transport:, descriptor:, owner: 'test:drainer',
                                          sleeper: ->(_seconds) {})
+
     assert_equal :drained, drainer.drain_once(now:)
 
     digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
     prompt = store.prompt(reference_digest: digest)
+
     assert_equal 'active', prompt.fetch('status'), 'the delivered card activates the prompt durably'
     [digest, prompt]
   end
@@ -162,7 +165,7 @@ class CallbackAckCrashTest < Minitest::Test
       { updates: @updates, next_offset: ids.max && (ids.max + 1) }
     end
 
-    def deliver(delivery)
+    def deliver(_delivery)
       raise Comms::CommsError, 'fixture drain crash' if @crash_deliveries
 
       @last_message_id += 1
@@ -194,7 +197,7 @@ class CallbackAckCrashTest < Minitest::Test
         bind_thread_to_conversation(store, now: base - 120)
         runtime.bind_thread_profile(THREAD_ID, 'trusted')
 
-        rt.cli(%W[queue add --task Fix\ note.txt --thread #{THREAD_ID} --profile trusted],
+        rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--thread', "#{THREAD_ID}", '--profile', 'trusted'],
                factory: edit_factory)
 
         worker = new_worker(runtime)
@@ -260,6 +263,7 @@ class CallbackAckCrashTest < Minitest::Test
         bind_thread_to_conversation(store, now: base - 120)
 
         sink = Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
+
         assert_equal :accepted, sink.push(
           thread_id: THREAD_ID, kind: 'request.approval_request', text: 'Approval requested.',
           request_id: 'occurrence-1', interrupts: approval_interrupts

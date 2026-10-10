@@ -181,9 +181,9 @@ class CommsCliOpsTest < Minitest::Test
         store.append_delivery(delivery_wire, surface_id: 'telegram-ops', capacity: 500,
                                              now: Time.now.utc)
         delivery_id = delivery_wire.fetch('delivery_id')
-        store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:test', fence: 1),
+        store.claim_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:test', fence: 1).wire,
                              claim_expires_at: Time.now.utc + 60, now: Time.now.utc)
-        store.mark_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:test', fence: 1),
+        store.mark_delivery(delivery_id:, lease: Tamoz::Comms::Lease.new(owner: 'gateway:test', fence: 1).wire,
                             status: 'unknown', now: Time.now.utc)
       end
 

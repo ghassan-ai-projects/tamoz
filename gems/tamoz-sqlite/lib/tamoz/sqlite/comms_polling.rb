@@ -24,10 +24,12 @@ module Tamoz
             SELECT poller_owner_id, poller_fence, poller_expires_at_ms
             FROM tamoz_comms_poll_state WHERE stream_id = ?
           SQL
-          next :not_acquirable if current && current[2] && current[2] > now_ms(now) && current[0] != lease.owner
+          if current && current[2] && current[2] > now_ms(now) && current[0] != lease.fetch('owner')
+            next :not_acquirable
+          end
 
-          upsert_poller!(txn, [stream_id, surface_id, lease.owner, lease.fence, now_ms(now) + (ttl_s * 1000),
-                               now_ms(now)])
+          upsert_poller!(txn, [stream_id, surface_id, lease.fetch('owner'), lease.fetch('fence'),
+                               now_ms(now) + (ttl_s * 1000), now_ms(now)])
           :acquired
         end
       end
@@ -66,7 +68,7 @@ module Tamoz
       # Releases only a lease that is still ours, so a crashed gateway's lease expires on its own.
       def release_poller_lease(stream_id:, lease:)
         transaction('comms.poll.release') do |txn|
-          txn.execute('comms.poll.release', <<~SQL, [stream_id, lease.owner, lease.fence])
+          txn.execute('comms.poll.release', <<~SQL, [stream_id, lease.fetch('owner'), lease.fetch('fence')])
             UPDATE tamoz_comms_poll_state
             SET poller_owner_id = NULL, poller_fence = NULL, poller_expires_at_ms = NULL
             WHERE stream_id = ? AND poller_owner_id = ? AND poller_fence = ?

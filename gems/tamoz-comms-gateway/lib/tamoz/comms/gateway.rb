@@ -115,7 +115,7 @@ module Tamoz
                                   fence: Process.clock_gettime(
                                     Process::CLOCK_MONOTONIC, :microsecond
                                   ))
-        acquired = @store.acquire_poller_lease(surface_id:, stream_id:, lease: @lease, ttl_s: poller_ttl_s, now:)
+        acquired = @store.acquire_poller_lease(surface_id:, stream_id:, lease: @lease.wire, ttl_s: poller_ttl_s, now:)
         return :poller_busy unless acquired == :acquired
 
         authenticate_transport
@@ -172,7 +172,7 @@ module Tamoz
       def renew_poller(now)
         return true unless @lease
 
-        @store.acquire_poller_lease(surface_id:, stream_id:, lease: @lease, ttl_s: poller_ttl_s, now:) == :acquired
+        @store.acquire_poller_lease(surface_id:, stream_id:, lease: @lease.wire, ttl_s: poller_ttl_s, now:) == :acquired
       end
       # rubocop:enable Naming/PredicateMethod
 
@@ -207,7 +207,7 @@ module Tamoz
       end
 
       def release_poller
-        @store.release_poller_lease(stream_id:, lease: @lease) if @lease
+        @store.release_poller_lease(stream_id:, lease: @lease.wire) if @lease
       end
 
       def authenticate_transport

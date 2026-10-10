@@ -81,7 +81,7 @@ module Tamoz
 
       def claim(row, now:)
         @lease = Comms::Lease.new(owner: @owner, fence: Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond))
-        @store.claim_delivery(delivery_id: row.fetch('delivery_id'), lease: @lease,
+        @store.claim_delivery(delivery_id: row.fetch('delivery_id'), lease: @lease.wire,
                               claim_expires_at: now + CLAIM_TTL_S, now:)
       end
 
@@ -92,7 +92,8 @@ module Tamoz
         delivery_id = row.fetch('delivery_id')
         @store.bind_journal_effect(delivery_id:, effect_key: effect_key(delivery_id),
                                    execution_id: "comms:#{delivery_id}", now: scheduled_at)
-        return nil unless @store.mark_delivery_send_started(delivery_id:, lease: @lease, now: scheduled_at) == :marked
+        return nil unless @store.mark_delivery_send_started(delivery_id:, lease: @lease.wire,
+                                                            now: scheduled_at) == :marked
 
         deliver_and_record(row, scheduled_at)
       rescue Comms::ThrottledError => e
@@ -125,13 +126,13 @@ module Tamoz
       end
 
       def mark(row, status, receipt, now)
-        @store.mark_delivery(delivery_id: row.fetch('delivery_id'), lease: @lease, status:, receipt:, now:)
+        @store.mark_delivery(delivery_id: row.fetch('delivery_id'), lease: @lease.wire, status:, receipt:, now:)
       end
 
       def defer(row, retry_after, scheduled_at, now)
         @store.defer_delivery(surface_id:, conversation_id: row.fetch('conversation_id'),
                               not_before: scheduled_at + retry_after, now: scheduled_at)
-        @store.release_delivery_claim(delivery_id: row.fetch('delivery_id'), lease: @lease, now:)
+        @store.release_delivery_claim(delivery_id: row.fetch('delivery_id'), lease: @lease.wire, now:)
       end
 
       # The receipt comes from the send outcome directly — the outbox row is
