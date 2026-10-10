@@ -11,5 +11,6 @@
 - [`rules/subgraphs.md`](rules/subgraphs.md) — child effect identity and checkpoint recovery.
 - [`rules/adr.md`](rules/adr.md) — ADRs match the code; policy edits are ADR changes.
 - [`rules/mcp.md`](rules/mcp.md) — a server being down costs a call, never a session.
+- [`rules/channels.md`](rules/channels.md) — a channel kind's code lives in its adapter gem; two tests say where.
 
 Record a rule in the same change that taught it; rewrite any rule it contradicts.

@@ -14,6 +14,8 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | `OPENAI_API_KEY` | Credential for the default provider |
 | `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, ... | Credentials for other providers — the provider's own standard variable |
 | `TAMOZ_TELEGRAM_BOT_TOKEN` | Telegram bot token, referenced by NAME in channel config |
+| `TAMOZ_TELEGRAM_API_ORIGIN` | A loopback `http://` stand-in for the Bot API (the evals); any other origin is refused |
+| `TAMOZ_TALK_TOKEN` | Not set by hand: `start` reads the talk token from `<runtime>/channels/<surface>/token` and gives it to the talk gateway |
 | `TAMOZ_RUNTIME_DIR` | Operator runtime directory (alternative to `--runtime-dir`) |
 | `TAMOZ_SESSION_DIR` | Default durable session directory |
 | `TAMOZ_PROFILE` / `TAMOZ_PROFILE_ID` | Default profile selection |
@@ -98,7 +100,8 @@ channels:
     enabled: true
     profile: ops
     credential_ref: {kind: env, name: TAMOZ_TELEGRAM_BOT_TOKEN}
-    expected_bot_id: 7463512990
+    stream_id: "telegram:bot:7463512990"
+    settings: {bot_username: ops_bot}
     threading: conversation
     admission:
       direct: allowlist

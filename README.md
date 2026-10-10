@@ -31,11 +31,11 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-research` | The rules of a deep-research run behind one facade: plans, waves, cited sources checked against the pages read, the ledger and stop rule, the report and run folder. Pure: no I/O | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core`, nokogiri |
-| `tamoz-comms` | Channel values, admission policy, rendering, transport seam, store contract | `tamoz-core` |
+| `tamoz-comms` | Channel values, admission policy, rendering, the party-id grammar, the interfaces a channel kind implements (`Transport`, `Channel`, `ChannelSetup`), store contract | `tamoz-core` |
 | `tamoz-comms-gateway` | Long-running gateway and delivery drainer over injected Comms transport/store seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: digest-pinned YAML documents, ask/park/deny ladder, scoped grants, durable decision log | `tamoz-core` |
-| `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
-| `tamoz-talk` | Browser talk channel: hardened stdlib HTTP server, confirm-by-next-poll inbox, the talk page | `tamoz-comms`, `tamoz-core` |
+| `tamoz-telegram` | The Telegram channel: Bot API transport, pairing, checks | `tamoz-comms` |
+| `tamoz-talk` | Browser talk channel: hardened stdlib HTTP server, confirm-by-next-poll inbox, the talk page, its setup and checks | `tamoz-comms`, `tamoz-core` |
 | `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
 | `tamoz-agent-kernel` | The deliberation substrate: episode records and receipts, the plan/review/execute/verify engine, the effect seam, catalogs, error taxonomy, request routes and projections | `tamoz-core`, `tamoz-tools` |

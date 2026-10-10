@@ -7,10 +7,15 @@ never loads a model client; `tamoz start` builds it from the runtime's voice mod
 
 ## Facade
 
-- `Tamoz::Talk::Hub.new(descriptor:, token:, floor:, synthesize: nil, host: '127.0.0.1', trace: false)` — one talk
-  surface in one process. `#start` binds the server, `#transport` returns a `Comms::Transport` handle
-  (the gateway poller and the delivery drainer each take one), `#seed(rows)` restores delivered messages
-  from `CommsStore#delivered_messages`, `#stop` releases waiting requests with 503.
+- `Tamoz::Talk::Channel` — validates a descriptor (`settings`: `port`, `allow_hosts`, `host`; a non-loopback
+  host needs an allowed name) and connects a hub; the connection starts the page only once the gateway
+  holds the `talk:page` stream's lease.
+- `Tamoz::Talk::Setup` — `tamoz channel add talk` (port, host, allowed names, the token in
+  `<runtime>/channels/<surface>/token`), the token and port checks, the link `start` prints.
+- `Tamoz::Talk::Hub.new(descriptor:, token:, floor: 0, synthesize: nil, host: '127.0.0.1', port: nil, trace: false)` — one talk
+  surface in one process. `#resume(floor:, history:)` raises its clock past the durable cursor and restores
+  delivered messages, `#start` binds the server, `#transport` returns the `Comms::Transport`, `#stop`
+  releases waiting requests with 503.
 
 ## What it guarantees
 

@@ -4,9 +4,12 @@ require_relative 'test_helper'
 require 'ripper'
 
 class ChannelKindContainmentTest < Minitest::Test
-  WORDS = %w[telegram talk tg tk].freeze
+  KINDS = Tamoz::Agent::CHANNEL_KINDS.values
+  # Every shipped kind's name, and the two-letter thread prefixes the old kind table used.
+  WORDS = (KINDS.map(&:name) + %w[tg tk]).freeze
   NAMED = %i[on_ident on_const on_tstring_content on_label on_ivar on_cvar on_gvar].freeze
-  OWNERS = %w[gems/tamoz-telegram/ gems/tamoz-talk/ gems/tamoz-agent-cli/lib/tamoz/agent/channel_kinds.rb].freeze
+  OWNERS = (KINDS.map { |kind| "gems/#{kind.library.tr('/', '-')}/" } +
+            %w[gems/tamoz-agent-cli/lib/tamoz/agent/channel_kinds.rb]).freeze
 
   # Only frozen files remain: checksummed migrations, benchmark-protocol code (ADR-058), and the stream's
   # escalation default. A new mention anywhere fails.

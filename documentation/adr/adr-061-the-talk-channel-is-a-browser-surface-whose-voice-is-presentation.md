@@ -21,9 +21,10 @@ seconds. Tamoz already has a governed channel path — admission, dedup, one thr
 
 ## Decision
 
-- **A second surface kind.** `Comms::Parties` holds what differs per kind (identity prefixes,
-  `tg.`/`tk.` thread prefix, whether the surface speaks). Admission refuses a party of another kind;
-  Telegram's digests, thread ids and decision ids are byte-identical (pinned).
+- **A second surface kind.** Every kind's parties follow one grammar (ADR-041): `talk:user:1`,
+  `talk:chat:1`, thread ids `talk.<surface>.<digest>`. Whether a surface speaks is its descriptor's
+  `rendering.speech`, which turns on the Heard notice and the echo guard. Admission refuses a party of
+  another kind.
 - **The transport is `tamoz-talk`.** A hardened stdlib HTTP server (deadlines, caps, CRLF only, the
   token checked before any body is read, a `Host` allow-list, no CORS, CSP), an in-memory inbox whose
   entries are confirmed only by a later poll with an offset it handed out (Telegram's contract, so the
@@ -82,3 +83,5 @@ speaker.
 ## History
 
 - 2026-10-09 — Accepted (owner decisions OD1–OD6, `docs/talk-voice-2026-10-09/PLAN.md` §2).
+- 2026-10-10 (owner) — The per-kind `Parties` table and `tg.`/`tk.` prefixes gave way to one grammar and
+  `rendering.speech`; the talk page's code moved into `tamoz-talk` (`docs/channels-abstraction-2026-10-10/`).

@@ -101,7 +101,8 @@ channels:
     enabled: true
     profile: ops
     credential_ref: {kind: env, name: TAMOZ_TELEGRAM_BOT_TOKEN}
-    expected_bot_id: 7463512990
+    stream_id: "telegram:bot:7463512990"
+    settings: {bot_username: ops_bot}
     threading: conversation
     admission:
       direct: allowlist
@@ -120,7 +121,7 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms doctor
 ```
 
 The doctor checks, in order: runtime permissions, adapter presence, token
-presence, token validity and the exact bot id against `expected_bot_id` (one
+presence, token validity and the exact bot id against `stream_id` (one
 getMe; a token swap is a different surface), the webhook conflict, and the
 poller lease. The Bot API origin is Telegram's own unless a loopback stand-in is
 set (`TAMOZ_TELEGRAM_API_ORIGIN`, the evals), so there is no TLS check to fail.

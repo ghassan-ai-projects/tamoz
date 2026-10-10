@@ -15,7 +15,7 @@ Communication channels ship as **three gems**:
 | `tamoz-telegram` | One conforming transport: Telegram Bot API over long polling | `tamoz-comms`, stdlib |
 | `tamoz-talk` | A second conforming transport: a browser page over a local HTTP server (ADR-061) | `tamoz-comms`, `tamoz-core`, stdlib |
 
-A **channel** is a *user surface*: it submits requests and renders results — the same category as the CLI, and explicitly not a stream channel, not a scheduler occurrence, and not an execution stream. The kind list is a closed set owned by `tamoz-comms`; adding a transport is a release, not a plugin (ADR-014 stands). `tamoz-comms-gateway` owns only the long-running process boundary and receives its transport and durable seams from the caller. `tamoz-telegram` is the only package that loads `net/http`; an installation without the adapter still runs the agent and reports a typed missing-adapter error for `tamoz comms serve`.
+A **channel** is a *user surface*: it submits requests and renders results — the same category as the CLI, and explicitly not a stream channel, not a scheduler occurrence, and not an execution stream. `tamoz-comms` holds the grammar every kind follows and the interfaces it implements (`Transport`, `Channel`, `ChannelSetup`); the closed set of kinds is one registry in `tamoz-agent-cli`, and adding a kind is a release, not a plugin (ADR-014 stands). `tamoz-comms-gateway` owns only the long-running process boundary and receives its transport and durable seams from the caller. `tamoz-telegram` is the only package that loads `net/http`; an installation without the adapter still runs the agent and reports a typed missing-adapter error for `tamoz comms serve`.
 
 The execution machinery already exists — inbox requests, turns on bound profiles, durable interrupts, and journaled effects. This design adds a transport, admission/rendering contracts, a delivery sink, and a stronger exact decision record shared with the local CLI. It adds no second execution engine.
 
@@ -42,7 +42,7 @@ Both long-running processes open the **same** runtime database. That is delibera
 
 ## 4. Channel values
 
-**`SurfaceDescriptor`** — content-addressed operator configuration for one deployed channel, in the shape of the stream's channel descriptor: every field validated and frozen, the digest binding the deployed contract, a revision bump for any change. It declares the transport (`:long_poll` only in v1), expected bot id, admission mode and correspondents, threading mode, the bound profile id and its canonical digest (authority for every turn from this surface; the digest is recorded on each thread binding, so a profile widened on disk cannot run under a stale binding), approval mode, rendering limits, and inbound/outbound bounds. The Telegram API origin is not configurable in v1.
+**`SurfaceDescriptor`** — content-addressed operator configuration for one deployed channel, in the shape of the stream's channel descriptor: every field validated and frozen, the digest binding the deployed contract, a revision bump for any change. It declares the transport (credential reference, poll bounds), the `<kind>:…` update stream it consumes, the kind's own `settings`, whether its rendering speaks, admission mode and correspondents, threading mode, the bound profile id and its canonical digest (authority for every turn from this surface; the digest is recorded on each thread binding, so a profile widened on disk cannot run under a stale binding), approval mode, rendering limits, and inbound/outbound bounds. The Telegram API origin is Telegram's own, or a loopback `http://` stand-in for the evals; nothing else is accepted.
 
 **`InboundEnvelope`** — the normalized, validated form of one platform update. Transport-specific shapes collapse into one typed value (`:text | :command | :callback | :membership | :unsupported`) with the surface/revision that admitted it, the raw payload hash and parser version, correspondent and conversation ids, bounded `SafeText`-normalized text, and distinct platform/observed/ingestion times. The transport caps the HTTP body before JSON parsing, parses with a nesting limit, and validates ids as bounded integers.
 
@@ -73,7 +73,7 @@ The request id is **derived**, not random:
 
 ```text
 request_id = sha256("tamoz.comms.request.v1\n" +
-                    canonical([surface_id, surface_revision, bot_id, update_id]))
+                    canonical([surface_id, surface_revision, stream_id, update_id, raw_payload_hash]))
 ```
 
 The inbox then deduplicates before lease acquisition, and a duplicate delivery returns the prior outcome or joins the active turn — invariant 23 does the rest for free. The inbound table also records the raw payload hash: same update id with a different hash is a durable integrity conflict, quarantined rather than admitted. Authority binding precedes work: the integration creates its deterministic thread and writes the surface's profile id with a write-once compare-and-set before any admission may enqueue work.
@@ -115,7 +115,7 @@ A chat rendering is a **bounded projection**: what is rendered may be lossy, wha
 
 ## 12. Secrets and egress
 
-The token is referenced by **name** (`credential_ref`) and never by value; it is resolved once at gateway start, never written to any durable record, and never crosses into the worker process. The production adapter constructs only `https://api.telegram.org/bot<TOKEN>/<METHOD>`, follows no redirects, ignores proxy environment variables, caps request and response bodies, sets deadlines, requires peer verification and SNI, and rejects any resolved private/loopback/link-local/reserved address before connect. `getMe` at startup pins the bot id; a token swap that yields a different bot id is a different surface and the gateway refuses to run against existing bindings until the operator bumps the revision and re-confirms them. The bot token appears in the Bot API URL path, so every transport error, URI, and log line is redacted at the point of construction.
+The token is referenced by **name** (`credential_ref`) and never by value; it is resolved once at gateway start, never written to any durable record, and never crosses into the worker process. The production adapter constructs only `https://api.telegram.org/bot<TOKEN>/<METHOD>`, follows no redirects, ignores proxy environment variables, caps request and response bodies, sets deadlines, requires peer verification and SNI, and rejects any resolved private/loopback/link-local/reserved address before connect, except the loopback stand-in origin the evals name. `getMe` at startup pins the stream (`telegram:bot:<id>`); a token swap that yields a different bot is a different surface and the gateway refuses to run against existing bindings until the operator bumps the revision and re-confirms them. The bot token appears in the Bot API URL path, so every transport error, URI, and log line is redacted at the point of construction.
 
 ## 13. The Telegram transport
 

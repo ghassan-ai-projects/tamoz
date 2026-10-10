@@ -57,6 +57,7 @@ root is the entry point; this folder contains the detailed reference material.
 - [guides/deep-research.md](guides/deep-research.md): `tamoz deep-research` and `/research`: the plan, the research, the cited report
 - [guides/agent-operator.md](guides/agent-operator.md): runbook for operating an agent over Tamoz
 - [guides/telegram.md](guides/telegram.md): talking to Tamoz over Telegram
+- [guides/adding-a-channel.md](guides/adding-a-channel.md): adding a channel kind — one gem and one registry line
 - [guides/talk.md](guides/talk.md): talking to Tamoz by voice in a browser
 - [guides/evaluation.md](guides/evaluation.md): how evaluation, scorecards and release evidence work
 - [benchmark/README.md](benchmark/README.md): the frozen benchmark and rollout evidence contract

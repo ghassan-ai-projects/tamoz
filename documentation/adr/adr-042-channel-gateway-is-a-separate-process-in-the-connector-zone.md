@@ -31,6 +31,12 @@ would be a diagram, not a boundary.
   gateway (ADR-061) holds the VOICE role's credential to synthesize speech of text it has already
   delivered; `tamoz start` refuses that credential when it is the chat model's, by name or by value.
   Only `start` checks: a hand-run `tamoz comms serve` gets the environment it is given.
+- A gateway's environment is exactly the standard variables, the runtime folder, its channel kind's
+  declared variables (`ChannelSetup#env_names`) and, for a surface that speaks, the voice key; a name
+  outside that set is refused. Each surface's connection and delivery drainer start only once its
+  gateway holds the stream's lease, so a second run neither listens nor delivers.
+- The Telegram Bot API origin is Telegram's own, or a loopback `http://` stand-in that the evals use
+  (`TAMOZ_TELEGRAM_API_ORIGIN`); any other origin is refused, so the token cannot be sent elsewhere.
 - It and the worker share one SQLite runtime database, so admission and request enqueue are one
   transaction and a replayed update creates no second request.
 
@@ -58,6 +64,8 @@ side). **Adversary:** a remote chat sender, or code execution in one of the two 
 | A sent file makes the worker reach the channel | The gateway fetches it; the request carries a temporary file's name and digest, never a file handle or URL |
 | A network peer reaches the talk page's HTTP parser in the process that can write approvals | The token is checked before any body is read; the parser has deadlines and caps; loopback by default, and a non-loopback bind needs an allowed host name (ADR-061) |
 | A compromised talk gateway spends speech credit | It holds only the VOICE key, never the chat key; a separate speech key is the operator's spending limit |
+| Adapter code forwards a key its kind does not declare | Setups see only `env.slice(*env_names)`; `ChildEnvironments` refuses an undeclared or model-role variable |
+| A configurable API origin exfiltrates the bot token | Only Telegram's origin or a loopback stand-in is accepted |
 
 **Residual risk:** both processes can write the shared SQLite file. A compromised gateway can write
 any runtime table — including approval decisions and requests — directly, bypassing every check in
@@ -66,6 +74,10 @@ credentials come from environment variables, so the credential split holds only 
 starts each process with only its own variable set.
 
 ## History
+
+- 2026-10-10 (owner) — A gateway's environment is its kind's declared variables; its connection and drainer start
+  only once it holds the lease; the Telegram API origin is Telegram's or a loopback stand-in
+  (`docs/channels-abstraction-2026-10-10/`).
 
 - 2026-10-09 — the gateway also downloads admitted attachments (owner request: Telegram documents,
   images and voice) and hands each to the worker as a temporary file that is deleted once read; owner

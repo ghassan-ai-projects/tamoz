@@ -104,9 +104,9 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | # | Property | Check | Status |
 |---|---|---|---|
 | F1 | Report separates plumbing tests from the B10 real-model smoke | review | OPEN |
-| F2 | READMEs (`tamoz-comms`, `tamoz-telegram`, `tamoz-talk`), `documentation/guides/adding-a-channel.md` and this plan match the code; the guide's steps are the loopback test's | review | OPEN |
-| F3 | ADR-041, 042, 062 (and 014 Relates) true after the change; `rake adr:validate adr:verify` | ADR tooling | OPEN |
-| F4 | Lesson recorded in `.agent/rules/`: "channel code lives in its adapter gem; three tests say where" | review | OPEN |
+| F2 | READMEs (`tamoz-comms`, `tamoz-telegram`, `tamoz-talk`), `documentation/guides/adding-a-channel.md` and this plan match the code; the guide's steps are the loopback test's | review | PASS — READMEs of `tamoz-comms`, `tamoz-telegram`, `tamoz-talk`, the root README gem map, `documentation/guides/adding-a-channel.md` (steps checked against the loopback kind; the measuring tests read the registry), Telegram/talk guides, `reference/cli.md`, `config.md`, `public-api.md`, `design/comms.md` |
+| F3 | ADR-041, 042, 062 (and 014 Relates) true after the change; `rake adr:validate adr:verify` | ADR tooling | PASS — ADR-041, 042, 061, 062 (History lines, owner-marked), ADR-014 Relates; `adr:validate` and `adr:verify` (583 citations) green; catalog regenerated |
+| F4 | Lesson recorded in `.agent/rules/`: "channel code lives in its adapter gem; two tests say where" | review | PASS — `.agent/rules/channels.md` (kind literals, word-splitting, child bundles), indexed in `.agent/README.md` |
 
 ## Review log
 
@@ -120,6 +120,7 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 | Plan rev 5 — safety | 0 / 4 / 5 / 7 | resolved in rev 6 | — |
 | C0–C1 code | 0 / 1 / 2 / 4 | high (redelivery property) and both mediums fixed before commit | `a1c8c207` |
 | C2 code (interfaces review) | 0 / 1 / 2 / 4 | `add` takes `existing:`; origin rule in `Client`; default bodies; all fixed | C2 |
+| C4 records | 0 / 1 / 5 / 7 | measuring tests read the registry (a third line needs no edit); ADR-041/042/062 wording and History; design/comms.md, public-api.md, config.md, README gem map, guide limits | C4 |
 | C3 code | 0 / 0 / 4 / 8 | A7 cases (negative ids, reserved kinds), B4 row survival, config message, Telegram `bot_username` type, test/comment/dead-code fixes; docs to C4 | C3 |
 | C2 code (bar review) | 0 / 0 / 3 / 8 | surface-id rule + test; A1 CLI-level test; busy-surface message; origin refusal named; `http://` only; messages, comments, help banners; `bot_username` move recorded for C3 | C2 |
 
@@ -129,5 +130,6 @@ iteration changed nothing. A plan review round that finds a high finding is foll
 |---|---|---|
 | 0 (plan) | — | Bar set before code; revised with plan revs 3–6 |
 | 1 | E1, E2, B1 started | C0–C1 committed; rows stay OPEN until the outcome they measure is reached |
+| 4 | F2–F4 → PASS | C4 records; `test_slow`: one MCP case errors at seeds 1–2 and passes at 3 — identical at `fc594acc` (pre-change), flagged as its own task |
 | 3 | A5–A8, A12, B4, B8, B8b, E1, E2 → PASS | C3: one party grammar, string stream ids, migration 26; `test_fast` green (one load-noise over-cap re-run clean; HEAD clean); `quality:architecture` green |
 | 2 | A1–A4, A9–A11, A13–A16, B1, B3, B5–B7, B11, B12 → PASS; C1 → BLOCKED | C2: all channel code in the adapter gems; containment counts outside core = 0; `rake ci` tests 407/407 green; `stream:proto:check` BLOCKED here (no Rosetta for grpc-tools' x86_64 protoc; untouched by this change); `quality:architecture` green |

@@ -3,11 +3,14 @@
 require_relative 'test_helper'
 
 class ChannelDependencyTest < Minitest::Test
-  ADAPTERS = %w[tamoz-telegram tamoz-talk].freeze
-  REFERENCE = %r{['"]tamoz/(?:telegram|talk)(?:/[^'"]*)?['"]|(?<![\w:])(?:::)?(?:Tamoz::)?(?:Telegram|Talk)::|
-                 Tamoz::(?:Telegram|Talk)\b|const_get\(\s*[:'"](?:Tamoz::)?(?:Telegram|Talk)\b}x
+  KINDS = Tamoz::Agent::CHANNEL_KINDS.values
+  ADAPTERS = KINDS.map { |kind| kind.library.tr('/', '-') }.freeze
+  LIBRARIES = KINDS.map { |kind| Regexp.escape(kind.library) }.join('|')
+  MODULES = KINDS.map { |kind| kind.namespace.delete_prefix('Tamoz::') }.join('|')
+  REFERENCE = %r{['"](?:#{LIBRARIES})(?:/[^'"]*)?['"]|(?<![\w:])(?:::)?(?:Tamoz::)?(?:#{MODULES})::|
+                 Tamoz::(?:#{MODULES})\b|const_get\(\s*[:'"](?:Tamoz::)?(?:#{MODULES})\b}x
   # Lines that load or name an adapter outside it: only the registry's one line per kind.
-  EXPECTED = { 'gems/tamoz-agent-cli/lib/tamoz/agent/channel_kinds.rb' => 2 }.freeze
+  EXPECTED = { 'gems/tamoz-agent-cli/lib/tamoz/agent/channel_kinds.rb' => KINDS.length }.freeze
 
   def test_only_the_registry_loads_or_names_an_adapter
     actual = Dir[ROOT.join('gems/*/lib/**/*.rb')].filter_map do |path|
