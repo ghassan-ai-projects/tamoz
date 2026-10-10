@@ -1,9 +1,8 @@
 # One setup — where the loop stands (2026-10-10)
 
-PR: https://github.com/ghassan-ai-projects/tamoz/pull/78 (draft). Committed and pushed: P1–P5.
+PR: https://github.com/ghassan-ai-projects/tamoz/pull/78 (draft). Committed and pushed: P1–P6.
 
-Next: P6 (ADR-062 "a runtime is one agent; channels are ways in", ADR updates, `RUNBOOK.md` with stop, copy,
-rehearsal, verify and a tested rollback), then P7 (rehearsal on a copy, then `~/.tamoz` with the owner present).
+Next: P7 with the owner present — follow `RUNBOOK.md` (rehearsal on a copy first).
 
 For P7: the `.env` passed to `tamoz service install` must hold the web-search keys (`TAMOZ_BRAVE_API_KEY`,
 `TAMOZ_WEBSEARCH_*`) and `ZAI_API_BASE`, which the old hand-written worker plist carried. Path: `service install`

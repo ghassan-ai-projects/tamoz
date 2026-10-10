@@ -43,7 +43,7 @@ about setup (`PLAN.md` §7).
 | A3 | A thread bound before the change still validates its profile pin after `setup`, `channel add` and the migration; no command rewrites an existing profile | fixture of the owner's shape with a bound thread (rewrite the profile) | OPEN |
 | A4 | No code reads `TAMOZ_PROVIDER`, `TAMOZ_MODEL` or `TAMOZ_<ROLE>_*` | source scan over the files named in `PLAN.md` §3 plus the CLI, scripts, agenteval and test support; allowlist: the CLI flags (re-add one reader) | PASS — `no_env_model_readers_test` scans code, scripts, agenteval, test support, Rakefile and CI (bites on a planted reader); harness scripts use `AGENTEVAL_PROVIDER/MODEL` for their own model and pass it to `tamoz` by flag |
 | A5 | `start` refuses: a second `start`; a runtime served by a loaded `com.tamoz.*` job (launchctl fake); a talk-only runtime already served; a runtime folder inside the workspace | `start` tests, one per case (drop each guard) | PASS — `cli_start_test`: second start (telegram and talk lease), runtime inside workspace; `cli_service_test`: start refused while a loaded job serves the runtime |
-| A6 | Plists are 0600, written atomically; `.env` readable by group/others is refused; no output, log line or error contains a secret value; `service status` never runs `launchctl print` | service tests (chmod after write; print the env) | PASS — plists and backups 0600 via AtomicFile; a group/other-readable `.env` refused (start, service install, channel add); no output carries a secret; status reads `launchctl list`, never `print` (`cli_service_test`) |
+| A6 | Plists are 0600, written atomically; `.env` readable by group/others is refused; no output, log line or error contains a secret value; `service status` never runs `launchctl print` | service tests (chmod after write; print the env) | PASS — plists 0600 via AtomicFile (backups by the same call, untested); a group/other-readable `.env` refused (`cli_child_processes_test`, `cli_channel_telegram_test`; start and install share the guard); no output carries a secret; status reads `launchctl list`, never `print` (`cli_service_test`) |
 | A7 | Two chat channels naming different profiles are refused by `RuntimeDirectory` | config test (drop the rule) | PASS — `runtime_directory_update_test` (mutation killed) |
 
 ## B. Function — fixture providers prove plumbing only
@@ -60,7 +60,7 @@ about setup (`PLAN.md` §7).
 | B8 | A failing voice probe runs text-only and says so; a failing chat or transcription probe stops with its name | `start` tests | PASS — failing chat or transcription stops with its name; failing or keyless voice warns and the gateway runs text only (`cli_start_test`) |
 | B9 | `service install/status/uninstall`: plists are pure output (golden, keys masked), match the owner's current plists field by field, escape XML; install twice is a no-op; uninstall with files gone succeeds and touches only its labels; old plists backed up | service tests with a launchctl fake (run on Linux CI, never skipped) | PARTIAL — install/status/uninstall with a fake launchctl; plist renderer escapes and is well formed; a failed bootstrap fails the install; a job that stays loaded keeps its plist; another runtime's jobs untouched. Install on a running service is refused (uninstall first) rather than a no-op; the comparison with the owner's plists is a P7 live check |
 | B10 | `ask` with a runtime uses its model, roles and sources; workspace stays the current folder; `--provider/--model` override for one run | CLI tests | OPEN |
-| B11 | Rollback restores the old config and plists, and the old start validates the runtime | migration rollback test | OPEN |
+| B11 | Rollback restores the old config and plists, and the old start validates the runtime | migration rollback test | OPEN — rehearsed by hand in runbook step 5 on the copy (owner, keep it simple: no automated migration test) |
 
 ## C. Evaluation — live, real models, the owner present (P7)
 
@@ -105,9 +105,9 @@ about setup (`PLAN.md` §7).
 | # | Property | Check | Status |
 |---|---|---|---|
 | F1 | The report separates plumbing from the live checks and claims nothing not run | review | OPEN |
-| F2 | ADR-062; ADR-042/048/061 updated where they name removed commands or variables; `rake adr:validate adr:verify` | ADR tooling | OPEN |
-| F3 | Guides, `reference/cli.md`, READMEs (`apps/tamoz-agent`, `gems/tamoz-agent`) match the new commands | `documentation_test`, review | OPEN |
-| F4 | `RUNBOOK.md` delivered; each step names its check and the rollback | review, B11 | OPEN |
+| F2 | ADR-062; ADR-042/048/061 updated where they name removed commands or variables; `rake adr:validate adr:verify` | ADR tooling | PASS — ADR-062 accepted (Implementation: Partial until P7); ADR-016/042/048/061 and the evidence index name the new commands; `rake adr:validate adr:verify` green |
+| F3 | Guides, `reference/cli.md`, READMEs (`apps/tamoz-agent`, `gems/tamoz-agent`) match the new commands | `documentation_test`, review | PASS — guides, reference, README, app and gem READMEs teach setup / channel add / start / service; `documentation_test`, `documentation_surface_test` green |
+| F4 | `RUNBOOK.md` delivered; each step names its check and the rollback | review, B11 | PASS — `RUNBOOK.md` written (snapshot, stop, consistent copy with the old plists, `.env`, rehearsal, apply, install with a check before it, verify, rollback); the rollback rehearsal itself is P7 (B11) |
 
 ## Review log
 
@@ -123,6 +123,7 @@ about setup (`PLAN.md` §7).
 | P4 A (round 1) | Sonnet 5.5, fresh ×2 | function/safety; code quality | 0 / 1 / 3 / 6 and 0 / 0 / 5 / 8 | Fixed: a keyless voice crashed the talk gateway (now text only); a stale script ran `telegram start` as a one-shot prompt; talk lease checked before its port; source variables merged before the fixed keys, never the env file; voice probed only with a talk channel; test seam and `with_env` removed; no boolean parameter. Not built (owner 2026-10-10, keep it simple): module reshuffles, supervision/rollback tests, vision probe, rejecting `telegram`/`talk` as a first word | P4 A commit |
 | P4 B (round 1) | Sonnet 5.5, fresh ×2 | function/safety; code quality | 0 / 1 / 0 / 2 and 0 / 1 / 4 / 3 | Fixed: the agenteval memory and subagents packs launched `tamoz` with no model (shared `TamozCode.model_flags`); AGENTS.md role text; one harness knob family (`AGENTEVAL_*`); scan widened (Rakefile, CI, interpolated names); talk eval no longer forwards every `*_API_KEY`. Not built: attachment-eval BLOCKED-on-empty-key nuance | P4 B commit |
 | P5 (round 1) | Sonnet 5.5, fresh ×2 | function/safety; code quality | 0 / 0 / 1 / 0 and 0 / 0 / 3 / 3 | Fixed: a failed or missing launchctl reported success; a job that failed to unload lost its plist; `launchctl list` ran with no plists and per label. Not built: install as a no-op on a running service, runtime-scoped labels | P5 commit |
+| P6 (round 1) | Sonnet 5.5, fresh ×2 | runbook safety; ADR and docs accuracy | 0 / 1 / 4 / 2 and 0 / 0 / 6 / 3 | Runbook: the old plists are copied in step 3 and checked gone before install (an unmatched plist would be overwritten); oldest config backup named; `pgrep tamoz`; counts retaken stopped; read-only rehearsal; talk link handling. ADR-062: claims scoped to what tests prove (CLI shares models, `TAMOZ_*` scan, start limits), missing evidence rows added, next number 063 | P6 commit |
 | P1 (round 3) | Sonnet 5.5, fresh ×2 | correctness/safety; code quality | 0 / 0 / 2 / 5 and 0 / 0 / 2 / 7 | Talk preflight reads config roles; a model named alone tolerates an unreadable runtime; cache keyed on the real path; live script passes models; comments trimmed; tests split; complexity fix by Haiku 5.5 | P1 commit |
 
 ## Loop log
@@ -137,3 +138,4 @@ about setup (`PLAN.md` §7).
 | 5 | 2026-10-10 | P4 A: one `tamoz start` (both channel starts removed); child environments from the config; `models.voice`; role models from the config only | A2, B1, B8 PASS; A5, B7 PARTIAL | the rest | P4 B: remove the env model readers |
 | 6 | 2026-10-10 | P4 B: no code reads a model from the environment; CLI flags or the runtime config only | A4 PASS | the rest | P5 `tamoz service` |
 | 7 | 2026-10-10 | P5: `tamoz service install/status/uninstall`; `start` refuses while the service runs the runtime; `.env` must be private | A5, A6 PASS; B9 PARTIAL | the rest | P6 ADR-062 and RUNBOOK |
+| 8 | 2026-10-10 | P6: ADR-062, `RUNBOOK.md` | F2, F4 PASS | B11, C1–C7 (P7, owner present) | P7 with the owner |

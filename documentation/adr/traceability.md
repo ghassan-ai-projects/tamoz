@@ -59,14 +59,15 @@ clause or has a dedicated test yet.
 | [056](./adr-056-skills-gem.md) | Skills are a gem, `tamoz-skills`, reached through one facade | C | `tamoz-core`, `tamoz-skills`, `tamoz-tools` | — | — |
 | [057](./adr-057-a-user-stop-ends-the-turn-it-never-aborts-the-graph.md) | A user's stop ends the turn; it never aborts the graph | F | `tamoz-agent`, `tamoz-agent-session`, `tamoz-cancellation` | 14, 15, 53 | — |
 | [058](./adr-058-domain-knowledge-is-digest-pinned-data-never-code.md) | Domain knowledge is digest-pinned data, never code | C | — | — | — |
-| [059](./adr-059-no-backward-compatibility-before-1-0.md) | No backward compatibility before 1.0 | C | `tamoz-sqlite` | — | — |
+| [059](./adr-059-no-backward-compatibility-before-1-0.md) | No backward compatibility before 1.0 | C | `tamoz-sqlite` | — | `no_env_model_readers_test.rb` |
 | [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-observability`, `tamoz-sqlite` | 59, 60, 61 | — |
 | [061](./adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md) | The talk channel is a browser surface; its voice is presentation, its record is text | F | `tamoz-agent-session`, `tamoz-comms`, `tamoz-talk` | 56, 57 | — |
+| [062](./adr-062-a-runtime-is-one-agent-and-channels-are-ways-in.md) | A runtime is one agent; channels are ways in to it | F | `tamoz-agent`, `tamoz-agent-cli` | — | — |
 
 ## Coverage snapshot
 
-- In-force ADRs: **52**
-- With at least one referencing test: **14**
+- In-force ADRs: **53**
+- With at least one referencing test: **15**
 - With a named invariant clause: **35**
 
 ## Next reads

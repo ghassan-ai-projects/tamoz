@@ -21,6 +21,16 @@ class CliChildProcessesTest < Minitest::Test
     end
   end
 
+  def test_an_env_file_others_can_read_is_refused
+    Dir.mktmpdir('tamoz-env-file') do |directory|
+      File.write(path = File.join(directory, '.env'), "ZAI_API_KEY=x\n")
+      File.chmod(0o644, path)
+      cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+
+      assert_includes cli.send(:env_file_problem, path), 'chmod 600'
+    end
+  end
+
   def test_an_env_file_reads_exports_quotes_and_comments
     Dir.mktmpdir('tamoz-env-file') do |directory|
       path = File.join(directory, '.env')
