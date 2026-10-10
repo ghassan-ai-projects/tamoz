@@ -335,7 +335,7 @@ module AutonomyCase
         end
         @sent << params
         {"message_id" => @sent.length, "date" => 1_752_700_800}
-      when "answerCallbackQuery" then true
+      when "answerCallbackQuery", "editMessageReplyMarkup" then true
       when "getWebhookInfo" then {"url" => @webhook_url}
       else
         raise ArgumentError, "unexpected method #{method}"

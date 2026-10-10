@@ -24,7 +24,7 @@ module Tamoz
 
           @transport.signal(:clear_buttons, conversation_id: envelope.fetch('conversation_id'),
                                             message_id: envelope.fetch('callback_message_id'))
-        rescue Comms::Error, NotImplementedError
+        rescue Comms::CommsError, NotImplementedError
           nil
         end
 
