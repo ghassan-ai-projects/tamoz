@@ -33,7 +33,7 @@ leak test for candidates (plan §6); real-model drafting evidence (session 4 run
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| A1 | A draft document cannot express `mode`, `active`, `envelope`, approval, or a free value; unknown keys refused | parser refusal tests (TZ-2), TZ-5 test | OPEN |
+| A1 | A draft document cannot express `mode`, `active`, `envelope`, approval, or a free value; unknown keys refused | `agent_playbook_draft_test` (mutation: dropped key check → red); TZ-5 test | PASS (TZ-2; TZ-5 adds the cross-path test) |
 | A2 | The draft model call goes through `EffectDispatcher.run`; a replay returns the receipt | draft path test (TZ-3) | OPEN |
 | A3 | Case summaries are framed as untrusted data, never as instructions | frame test (TZ-3) + injection eval case (TZ-4) | OPEN |
 | A4 | No new cross-gem reach past a facade; enola shows no new cycle | `enola check`, `diff_snapshot` | OPEN |
@@ -92,10 +92,12 @@ design, ADR and architecture gates were run on their own.
 
 | Package | Findings (c / h / m / l) | Resolution | Commit |
 |---|---|---|---|
+| TZ-2 | 0 / 1 / 2 / 3 | int literals refused (CEL never mixes int and double); finite literals, depth ≤ 32; repair directive names why a case fails; comments trimmed; precedence tests strengthened; eager `&&`/`||` kept (stricter than CEL) | see git log |
 | TZ-1 | 0 / 0 / 1 / 4 | RECONSIDER assertion added; summary reads the code without a default; the `unknown` decision runs through the schema; 64-char `CODE_PATTERN` left (optional) | see git log |
 
 ## Loop log
 
 | Iteration | Date | What changed | Rows moved | Still open | Next |
 |---|---|---|---|---|---|
+| 2 | 2026-10-27 | TZ-2: draft parser, condition evaluator, reply builder, proto vendored | A1 PASS | B3, B4, C, A2-A6 | TZ-3 |
 | 1 | 2026-10-27 | TZ-1: `diagnosis_code` on the decision; empty `validate_terminal_memory_consistency!` removed | B1 PASS, B2 WAIVED | TZ-2..TZ-5 rows | TZ-2 |

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "json"
 require "tamoz/agent/errors"
+require "tamoz/agent/strict_document"
 
 module Tamoz
   module Agent
@@ -20,7 +20,10 @@ module Tamoz
     # Every rejection raises ProtocolError with a stable `reasoning_document/<code>`
     # prefix so conformance fixtures can assert the exact failure.
     module ReasoningDocument
+      extend StrictDocument
+
       PROTOCOL = "tamoz.episode-diagnosis/v2"
+      ERROR_PREFIX = "reasoning_document"
 
       MAX_BYTES = 64 * 1024
       MAX_HYPOTHESIS_BYTES = 4096
@@ -91,17 +94,6 @@ module Tamoz
         end
 
         private
-
-        def strict_parse(bytes)
-          # allow_duplicate_key:false raises on `{"a":1,"a":2}` at any depth
-          # instead of silently keeping the last value (json 3.0 default).
-          JSON.parse(bytes, allow_duplicate_key: false)
-        rescue JSON::ParserError => e
-          # ProtocolError deliberately quotes provider text (errors.rb) — a prose
-          # wrapper around the JSON also lands here.
-          code = e.message.include?("duplicate key") ? "duplicate_key" : "malformed_json"
-          raise ProtocolError, "reasoning_document/#{code}: #{e.message}"
-        end
 
         def parse_tool_turn(root)
           TERMINAL_KEYS.each do |key|
@@ -241,46 +233,6 @@ module Tamoz
           raise ProtocolError, "reasoning_document/probability_range: #{float}" unless float >= 0.0 && float <= 1.0
 
           float
-        end
-
-        def fetch_array(root, key, max)
-          value = root[key]
-          raise ProtocolError, "reasoning_document/#{key}_not_array" unless value.is_a?(Array)
-          raise ProtocolError, "reasoning_document/#{key}_too_many: #{value.length}" if value.length > max
-
-          value
-        end
-
-        def fetch_bounded_string(hash, key, max)
-          raise ProtocolError, "reasoning_document/#{key}_missing" unless hash.key?(key)
-          value = hash[key]
-          raise ProtocolError, "reasoning_document/#{key}_not_string" unless value.is_a?(String)
-          reject_bad_utf8(value)
-          reject_oversize(value.bytesize, key, max)
-
-          value
-        end
-
-        def optional_bounded_string(hash, key, max)
-          return nil unless hash.key?(key)
-
-          fetch_bounded_string(hash, key, max)
-        end
-
-        def reject_unknown_keys(hash, allowed, context)
-          unknown = hash.keys - allowed
-          raise ProtocolError, "reasoning_document/unknown_key: #{context}.#{unknown.first}" unless unknown.empty?
-        end
-
-        def reject_oversize(bytesize, what, max)
-          raise ProtocolError, "reasoning_document/#{what}_too_large: #{bytesize}" if bytesize > max
-        end
-
-        def reject_bad_utf8(string)
-          # Validate the bytes, not the label: a provider may hand back valid
-          # UTF-8 tagged ASCII-8BIT. Only genuinely invalid byte sequences fail.
-          utf8 = string.dup.force_encoding(Encoding::UTF_8)
-          raise ProtocolError, "reasoning_document/invalid_utf8" unless utf8.valid_encoding?
         end
 
         def validate_catalog(catalog)

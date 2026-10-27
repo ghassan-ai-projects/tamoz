@@ -193,7 +193,7 @@ worker's decisions carry `diagnosis_code`.
 | Round | State | Commit | Notes |
 |---|---|---|---|
 | TZ-1 | done | see git log | `DecisionBuilder` writes `diagnosis_code` (the document's `selected_code`) on every DIAGNOSE decision; RECONSIDER decisions carry none; `decision-v1.json` re-vendored. Deviation (owner, 2026-10-27): step 3, the case key in memory, moved to §6. |
-| TZ-2 | not started | | |
+| TZ-2 | done | see git log | `PlaybookDraft` (`tamoz.playbook-draft/v1`) and `FeatureCondition` in the kernel, `DraftReply` in tamoz-stream; `ReasoningDocument`'s strict readers moved to a shared `StrictDocument`; proto vendored (stubs from a native `protoc` 35.1 that reproduces the committed `_pb.rb` byte for byte; the services rpc line written by hand, as the x86 grpc plugin cannot run here). Deviations (owner, 2026-10-27): the model writes only `when`, `cited_episode_ids`, `rationale` or a `no_proposal` reason; the key comes from the request. The condition is evaluated against every cited case, so a failing condition goes back through the repair loop; numbers must be doubles (CEL never mixes int and double). Step 3 (fixture replies) moved to TZ-4 with the pump-station fixture. |
 | TZ-3 | not started | | |
 | TZ-4 | not started | | |
 | TZ-5 | not started | | |
