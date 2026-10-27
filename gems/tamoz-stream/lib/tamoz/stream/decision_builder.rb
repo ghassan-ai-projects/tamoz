@@ -77,7 +77,7 @@ module Tamoz
       # Returns [decision_hash, decision_digest]. The digest covers the whole
       # decision document (CONTRACTS §3.2, decision domain).
       def build
-        self.class.with_digest(
+        decision = {
           "decision_id" => decision_id,
           "episode_id" => @envelope.episode_id,
           "attempt_id" => @envelope.attempt_id,
@@ -92,7 +92,9 @@ module Tamoz
           "alternatives" => bounded_outcome_entries(:alternatives, MAX_ALTERNATIVES),
           "intents" => intents,
           "valid_until" => valid_until
-        )
+        }
+        decision["diagnosis_code"] = @outcome[:diagnosis_code] if @outcome[:diagnosis_code]
+        self.class.with_digest(decision)
       end
 
       private

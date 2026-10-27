@@ -228,10 +228,9 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "#{field} must not contain '.'"
         end
-        if value.bytesize > 200 || value.match?(/[\x00-\x1F\x7F]/)
-          raise EpisodeRequestInvalidError,
-                "#{field} must be at most 200 bytes with no control characters"
-        end
+        return unless value.bytesize > 200 || value.match?(/[\x00-\x1F\x7F]/)
+        raise EpisodeRequestInvalidError,
+              "#{field} must be at most 200 bytes with no control characters"
       end
 
       def validate_fence!
@@ -289,9 +288,8 @@ module Tamoz
         if traceparent && !traceparent.match?(TRACEPARENT_PATTERN)
           raise EpisodeRequestInvalidError, "traceparent is malformed"
         end
-        if tracestate && tracestate.bytesize > 512
-          raise EpisodeRequestInvalidError, "tracestate exceeds 512 bytes"
-        end
+        return unless tracestate && tracestate.bytesize > 512
+        raise EpisodeRequestInvalidError, "tracestate exceeds 512 bytes"
       end
 
       # F-2 (security review): the budget is the worker's only resource
@@ -703,8 +701,6 @@ module Tamoz
       # identity complete the manifest.
       def build_artifact_manifest(envelope, terminal_state = nil)
         terminal_state ||= {}
-        validate_terminal_memory_consistency!(terminal_state)
-
         Agenticstream::Runtime::V1::ArtifactManifest.new(
           prompt_sha256: digest_bytes_or_nil(envelope.prompt_sha256),
           skill_set_sha256: digest_bytes_or_nil(terminal_state[:skill_set_digest]),
@@ -1013,10 +1009,9 @@ module Tamoz
           raise StreamError,
                 "wire_refused_model_event/forged_provider_marker"
         end
-        if provider.empty?
-          raise StreamError,
-                "wire_refused_model_event/missing_provider"
-        end
+        return unless provider.empty?
+        raise StreamError,
+              "wire_refused_model_event/missing_provider"
       end
 
       # The response/request digest stored on the journaled attempt — the

@@ -167,6 +167,9 @@ Per the owner's rule to defer complexity to a future plan:
 - **A rule-candidate record** on the Knowledge layer with its own provenance (source episodes, key, proposal
   digest, Agentic Stream's response), reusing the pattern of `consolidation.rb:29-43`, not the `Wisdom` or
   `HealingRule` types.
+- **The case key in memory** (was TZ-1 step 3): the admitted statement would keep the diagnosis code and the
+  actionable intent with the values the model wrote, read by nomination from memory. Built with that query, not
+  before: nothing in the first slice reads it, and naming the preset would copy Agentic Stream's `PresetOf` rule.
 - **A tenant leak test** for candidates beside `test/memory_boundary_test.rb`, and `*.sqlite3` in `.gitignore`.
 
 ## 7. What session 4 needs from this session
@@ -189,7 +192,7 @@ worker's decisions carry `diagnosis_code`.
 
 | Round | State | Commit | Notes |
 |---|---|---|---|
-| TZ-1 | not started | | |
+| TZ-1 | done | see git log | `DecisionBuilder` writes `diagnosis_code` (the document's `selected_code`) on every DIAGNOSE decision; RECONSIDER decisions carry none; `decision-v1.json` re-vendored. Deviation (owner, 2026-10-27): step 3, the case key in memory, moved to §6. |
 | TZ-2 | not started | | |
 | TZ-3 | not started | | |
 | TZ-4 | not started | | |
