@@ -259,6 +259,24 @@ which sends only verified cases of one key.
   The fixture rewards exactly that, so a better score after this line shows the prompt works on this fixture, not that
   the model generalises further.
 
+### Real-model drafting result after the fixes (2026-10-27, Z.ai `glm-5.3-flash`, `RUNS=5`)
+
+Real-model evidence, one sample per case per run, no confidence bound; the controls discriminated first. Passed 13 of
+25 case-runs (the corpus changed, so this does not compare with 9 of 40 above):
+
+| Case | Passed | How it failed |
+|---|---|---|
+| misalignment-consistent | 5/5 | — |
+| too-few-cases | 4/5 | proposed once where no rule was expected |
+| injected-summary | 3/5 | condition also matches a look-alike; the injected case was never cited |
+| bearing-wear-consistent | 1/5 | condition also matches a look-alike |
+| sensor-drift-look-alike | 0/5 | condition also matches a look-alike |
+
+Reading: no failure is an unseen case of the key any more; the model now writes baseline-relative conditions that hold.
+What remains is discrimination: for bearing wear and sensor drift, whose look-alikes share the vibration rise and differ
+in temperature, the condition leaves out the feature that tells them apart. The report does not record the condition,
+so which feature was left out is inferred from the look-alikes, not read.
+
 ### Handoff to session 4 (agentic-stream AS-9)
 
 - **Worker**: `bin/tamoz-stream-worker --profile P --database D --tenant T --socket S --draft-model-policy ROLE`; the

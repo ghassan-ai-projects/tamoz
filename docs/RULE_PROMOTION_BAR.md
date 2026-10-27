@@ -55,7 +55,7 @@ leak test for candidates (plan §6); real-model drafting evidence (session 4 run
 |---|---|---|---|
 | C1 | Controls discriminate offline: oracle passes, null fails, adversary caught | `rule_proposal_scorecard_test#test_the_controls_discriminate` (oracle 8/8; null, "true" 0; overfit and decline win no rule-requiring case); mutations of the held-out and reason checks go red | PASS |
 | C2 | Pump-station cases are data in `test/fixtures/domains/pump-station.json` | digest pin in `rule_proposal_scorecard_test` | PASS |
-| C3 | Real-model drafting quality | `script/rule_proposal_eval`, Z.ai glm-5.3-flash, 5 runs: 9/40 case-runs (plan §9) | FAIL |
+| C3 | Real-model drafting quality | `script/rule_proposal_eval`, Z.ai glm-5.3-flash, 5 runs on the fair fixture: 13/25 case-runs; look-alike discrimination fails for bearing wear and sensor drift (plan §9) | FAIL |
 
 ## D. Gates
 
