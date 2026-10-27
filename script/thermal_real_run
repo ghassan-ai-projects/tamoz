@@ -30,6 +30,7 @@ require 'support/thermal_lab_domain'
 require 'support/thermal_tournament'
 require 'support/thermal_manifest'
 require 'support/episode_composition'
+require 'support/real_profile'
 
 # Drives the thermal trial cells through the real episode graph against a real
 # provider, scores supervisor vs baseline vs oracle, and emits the manifest.
@@ -42,29 +43,7 @@ module ThermalRealRun
   DOMAIN = ThermalLabDomain
   ALLOWED = %w[install_watch_condition request_evidence set_indicator request_bounded_cooling].freeze
 
-  # A profile whose `fast` role is the real provider — injected into the episode
-  # composition through its profile_builder seam (no fixture endpoint).
-  def profile_builder
-    lambda do |endpoint:, root:, model:|
-      _ = endpoint
-      {
-        'profile' => { 'schema_version' => 1, 'profile_id' => 'tamoz-real', 'profile_version' => '1.0',
-                       'canonical_root' => root },
-        'roots' => { 'workspace' => root },
-        'tools' => { 'allowed' => %w[read_file list_directory] },
-        'policy' => {
-          'allow_changes' => false, 'default_check_safety' => 'read_only',
-          'graph_version' => '1', 'behavior_version' => '1.0', 'tool_catalog_digest' => "sha256:#{'0' * 64}"
-        },
-        'model_roles' => {
-          'fast' => {
-            'provider' => PROVIDER, 'model' => model,
-            'normalized_settings' => { 'temperature' => '0', 'response_format' => 'json_object' }
-          }
-        }
-      }
-    end
-  end
+  def profile_builder = RealProfile.builder(PROVIDER)
 
   def govern(trial, _dir)
     snapshot = DOMAIN.snapshot(**trial.fetch('facts').transform_keys(&:to_sym))

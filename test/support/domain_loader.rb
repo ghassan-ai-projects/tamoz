@@ -101,6 +101,7 @@ class DomainLoader
   def prompt = @data.fetch("prompt")
   def intent_types = @data.fetch("intent_types")
   def benchmark_family = @data.fetch("benchmark_family", {})
+  def rule_proposal = @data.fetch("rule_proposal", {})
 
   # The curated tournament trial corpus: named
   # scenarios with fact overrides and the human-oracle labels (truth_code,

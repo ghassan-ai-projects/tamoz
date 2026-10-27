@@ -37,8 +37,8 @@ module EpisodeComposition
     Dir.mkdir(root)
     profile_path = File.join(directory, "profile.yml")
     # Default: the fixture ollama profile pointing at `endpoint`. A real-model
-    # runner (script/thermal_real_run) injects a builder that returns a real
-    # provider profile instead — the ONLY seam a real run needs.
+    # runner injects RealProfile.builder (test/support/real_profile.rb) instead
+    # — the ONLY seam a real run needs.
     builder = profile_builder || AquacultureDomain.method(:profile_document)
     profile_document = builder.call(endpoint:, root:, model:)
     profile_document.fetch("model_roles").fetch("fast")["credential_ref"] = credential_ref if credential_ref

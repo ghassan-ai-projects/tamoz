@@ -37,7 +37,7 @@ leak test for candidates (plan §6); real-model drafting evidence (session 4 run
 | A2 | The draft model call goes through `EffectDispatcher.run`; a replay returns the receipt | `stream_draft_playbook_rule_test` — redelivered draft makes no new call; repair is a second journaled call | PASS (TZ-3) |
 | A3 | Case summaries are framed as untrusted data, never as instructions | `agent_playbook_draft_frame_test` (summary only in the user section) + injection eval case (TZ-4) | PASS (TZ-3 frame) |
 | A4 | No new cross-gem reach past a facade; enola shows no new cycle | `enola check`, `diff_snapshot` | OPEN |
-| A5 | No Tamoz code path writes Agentic Stream state or a rule's mode | TZ-5 adversarial test | OPEN |
+| A5 | No Tamoz code path writes Agentic Stream state or a rule's mode | `rule_promotion_authority_test` (wire fields, served/dialled RPCs, the one proposal builder, a smuggled `mode` refused through repair) | PASS (TZ-5) |
 | A6 | An oversized draft request is refused, not truncated | `stream_draft_playbook_rule_test`, `agent_playbook_draft_frame_test` (21 cases, a 5 KB case, an id over 120 bytes; no model call) | PASS |
 
 ## B. Function (fake provider: plumbing only)
@@ -53,8 +53,8 @@ leak test for candidates (plan §6); real-model drafting evidence (session 4 run
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| C1 | Controls discriminate offline: oracle passes, null fails, adversary caught | `rule_proposal` scorecard control test | OPEN |
-| C2 | Pump-station cases are data in `test/fixtures/domains/pump-station.json` | fixture test | OPEN |
+| C1 | Controls discriminate offline: oracle passes, null fails, adversary caught | `rule_proposal_scorecard_test#test_the_controls_discriminate` (oracle 8/8; null, "true" 0; overfit and decline win no rule-requiring case); mutations of the held-out and reason checks go red | PASS |
+| C2 | Pump-station cases are data in `test/fixtures/domains/pump-station.json` | digest pin in `rule_proposal_scorecard_test` | PASS |
 | C3 | Real-model drafting quality | BLOCKED until session 4 runs a real model; never claimed here | BLOCKED |
 
 ## D. Gates
@@ -92,6 +92,7 @@ design, ADR and architecture gates were run on their own.
 
 | Package | Findings (c / h / m / l) | Resolution | Commit |
 |---|---|---|---|
+| TZ-4/5 | 0 / 1 / 3 / 6 | held-out `must_hold` cases, more look-alikes, overfit and always-decline controls; decline reasons graded; injection case is a proposal case that may decline; malformed answers fail the case; per-run fresh database and temp cleanup in the script, `RUNS`; tautological assertions replaced; TZ-5 scans broadened to any `PlaybookProposal` reference | see git log |
 | TZ-3 | 0 / 1 / 3 / 5 | id bound to the store's 128-byte request id; `draft_failed` fallback code; duplicate case ids refused; tests for repair exhaustion with usage, fixture-mode refusal; wall-time-in-flight and token under-count kept as for episodes (noted in plan §9) | see git log |
 | TZ-2 | 0 / 1 / 2 / 3 | int literals refused (CEL never mixes int and double); finite literals, depth ≤ 32; repair directive names why a case fails; comments trimmed; precedence tests strengthened; eager `&&`/`||` kept (stricter than CEL) | see git log |
 | TZ-1 | 0 / 0 / 1 / 4 | RECONSIDER assertion added; summary reads the code without a default; the `unknown` decision runs through the schema; 64-char `CODE_PATTERN` left (optional) | see git log |
@@ -100,6 +101,7 @@ design, ADR and architecture gates were run on their own.
 
 | Iteration | Date | What changed | Rows moved | Still open | Next |
 |---|---|---|---|---|---|
+| 4 | 2026-10-27 | TZ-4 scorecard, fixture, controls, real-model script; TZ-5 authority test | A5, C1, C2 PASS; C3 BLOCKED (no real-model run in this session) | C3, D2 proto check | owner: real-model run |
 | 3 | 2026-10-27 | TZ-3: draft route, runner, worker RPC, launcher flag; benchmark protocol re-pinned (graph version 5) | A2, A3, A6, B3 PASS; B4 PASS/BLOCKED | C, A5, D | TZ-4 |
 | 2 | 2026-10-27 | TZ-2: draft parser, condition evaluator, reply builder, proto vendored | A1 PASS | B3, B4, C, A2-A6 | TZ-3 |
 | 1 | 2026-10-27 | TZ-1: `diagnosis_code` on the decision; empty `validate_terminal_memory_consistency!` removed | B1 PASS, B2 WAIVED | TZ-2..TZ-5 rows | TZ-2 |

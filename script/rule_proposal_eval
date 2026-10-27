@@ -1,0 +1,86 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Runs the rule-proposal scorecard (pump-station cases in test/fixtures/domains/pump-station.json) through the
+# worker's DraftPlaybookRule against a REAL model. A runner, never a test: tests use the fixture provider.
+# The controls run first; a corpus whose controls do not discriminate is not used to grade a model.
+#
+#   export ZAI_API_KEY=... ZAI_API_BASE=https://api.z.ai/api/coding/paas/v4 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+#   RUNS=5 AGENTEVAL_PROVIDER=zai AGENTEVAL_MODEL=glm-5.3-flash script/rule_proposal_eval > report.json
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path('../test', __dir__))
+$stdout.sync = true
+
+require 'json'
+require 'fileutils'
+require 'tamoz/evals/runner'
+require 'tamoz/stream/draft_runner'
+require 'support/domain_loader'
+require 'support/episode_composition'
+require 'support/real_profile'
+require 'support/rule_proposal_drafter'
+
+# Grades the real draft path on every rule-proposal case and prints the scorecard report.
+module RuleProposalEval
+  module_function
+
+  PROVIDER = ENV.fetch('AGENTEVAL_PROVIDER', 'zai')
+  MODEL = ENV.fetch('AGENTEVAL_MODEL', 'glm-5.3-flash')
+  DATA = DomainLoader.load('pump-station').rule_proposal
+  Scorecard = Tamoz::Evals::Harness::RuleProposalScorecard
+
+  def scorecard(drafter, subject)
+    Scorecard.new(cases: DATA.fetch('cases'), allowed_features: DATA.fetch('allowed_features'), drafter:, subject:).run
+  end
+
+  def controls_discriminate?
+    reports = Scorecard.control_drafters(DATA.fetch('cases')).to_h do |name, drafter|
+      [name, scorecard(drafter, { 'id' => "control:#{name}" }).to_h.fetch('aggregate')]
+    end
+    warn "controls: #{reports}"
+    reports.fetch('oracle').fetch('passed') == DATA.fetch('cases').length &&
+      %w[null adversary].all? { |name| reports.fetch(name).fetch('passed').zero? } &&
+      reports.fetch('overfit').fetch('proposals_passed').zero? &&
+      reports.fetch('decline').fetch('proposals_passed') == declinable
+  end
+
+  def declinable
+    DATA.fetch('cases').count do |entry|
+      !entry.fetch('abstain_expected') && entry.dig('gold', 'allow_decline')
+    end
+  end
+
+  # Each run drafts into a fresh worker database: a durable draft id answers once.
+  def real_run(index)
+    composition = EpisodeComposition.build(endpoint: 'unused', model: MODEL,
+                                           profile_builder: RealProfile.builder(PROVIDER))
+    worker = Tamoz::Stream::EpisodeWorker.new(worker_version: 'eval').bind_draft_runner(
+      Tamoz::Stream::DraftRunner.new(durable_runner: composition.fetch(:app).durable_runner, tenant: 'acme',
+                                     model_policy: 'fast')
+    )
+    scorecard(RuleProposalDrafter.through(worker, tenant: 'acme'),
+              { 'id' => 'tamoz-worker', 'provider' => PROVIDER, 'model' => MODEL, 'run' => index,
+                'evidence' => 'real_model' }).to_h
+  ensure
+    composition&.fetch(:adapter)&.close
+    FileUtils.remove_entry(composition.fetch(:directory)) if composition
+  end
+
+  def run(runs)
+    key = Tamoz::Agent::Providers::ENV_KEYS.fetch(PROVIDER.to_sym)
+    abort "BLOCKED: #{key} is not set; no draft would reach the model" if ENV[key].to_s.strip.empty?
+    abort 'the controls do not discriminate; the corpus cannot grade a model' unless controls_discriminate?
+
+    warn "REAL run: provider=#{PROVIDER} model=#{MODEL} runs=#{runs}"
+    reports = Array.new(runs) { |index| real_run(index) }
+    passes = reports.flat_map { |report| report.fetch('cases') }.group_by { |entry| entry.fetch('case_id') }
+    passes.each do |case_id, entries|
+      warn "#{case_id.ljust(28)} #{entries.count { |entry| entry.fetch('passed') }}/#{runs} " \
+           "#{entries.filter_map { |entry| entry['failure'] }.uniq.join('; ')}"
+    end
+    puts JSON.generate({ 'runs' => reports })
+  end
+end
+
+RuleProposalEval.run(Integer(ENV.fetch('RUNS', '1'))) if $PROGRAM_NAME == __FILE__
