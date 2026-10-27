@@ -45,7 +45,8 @@ class RulePromotionAuthorityTest < Minitest::Test
     V1::DraftRequest.new(
       protocol_version: '1.0', draft_id: 'draft-authority', tenant_id: 'acme',
       key: V1::DraftKey.new(diagnosis_code: 'code_a', intent: 'act', preset: 'p1'),
-      cases: [V1::DraftCase.new(episode_id: 'ep-1', verdict: 'verified', features_json: Tamoz::Core.jcs({ 'a' => 2.0 }))],
+      cases: [V1::DraftCase.new(episode_id: 'ep-1', diagnosis_code: 'code_a', intent: 'act', preset: 'p1', verdict: 'verified',
+                                features_json: Tamoz::Core.jcs({ 'a' => 2.0 }))],
       allowed_features: %w[a]
     )
   end

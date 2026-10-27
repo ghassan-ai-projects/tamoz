@@ -15,6 +15,7 @@ module Tamoz
       # "draft.<id>" must fit the durable store's 128-byte request id.
       MAX_ID_BYTES = 120
       UNKNOWN_CODE = 'unknown'
+      VERIFIED = 'verified'
       Identity = Struct.new(:episode_id, :attempt_id, :fence)
       private_constant :Identity
 
@@ -120,6 +121,7 @@ module Tamoz
         refuse("a draft needs 1 to #{MAX_CASES} cases") unless request.cases.length.between?(1, MAX_CASES)
         ids = request.cases.map(&:episode_id)
         refuse('every case needs its own episode_id') if ids.include?('') || ids.uniq.length != ids.length
+        admit_cases!(request)
         admit_budget!(request.budget)
       end
 
@@ -127,6 +129,13 @@ module Tamoz
         refuse('a draft needs a key with a diagnosis code and an intent') if
           key.nil? || key.diagnosis_code.empty? || key.intent.empty?
         refuse("#{UNKNOWN_CODE} never becomes a rule") if key.diagnosis_code == UNKNOWN_CODE
+      end
+
+      def admit_cases!(request)
+        key = [request.key.diagnosis_code, request.key.intent, request.key.preset]
+        refuse('every case must have the draft key') unless
+          request.cases.all? { |entry| [entry.diagnosis_code, entry.intent, entry.preset] == key }
+        refuse('every case must be verified') unless request.cases.all? { |entry| entry.verdict == VERIFIED }
       end
 
       def admit_budget!(wire)

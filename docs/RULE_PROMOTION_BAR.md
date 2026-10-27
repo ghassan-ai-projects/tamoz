@@ -102,6 +102,7 @@ design, ADR and architecture gates were run on their own.
 
 | Iteration | Date | What changed | Rows moved | Still open | Next |
 |---|---|---|---|---|---|
+| 6 | 2026-10-27 | Fixture baselines and look-alikes varied; cavitation, contradicting and mixed-key cases dropped (Agentic Stream cannot send them); worker refuses mixed or unverified case sets; baseline line in the draft prompt | — | C3 (real-model rerun) | rerun `script/rule_proposal_eval` |
 | 5 | 2026-10-27 | Two-lens PR review fixes | all OPEN rows graded | C3 (real-model run reported separately) | owner decisions in plan §9 |
 | 4 | 2026-10-27 | TZ-4 scorecard, fixture, controls, real-model script; TZ-5 authority test | A5, C1, C2 PASS; C3 BLOCKED (no real-model run in this session) | C3, D2 proto check | owner: real-model run |
 | 3 | 2026-10-27 | TZ-3: draft route, runner, worker RPC, launcher flag; benchmark protocol re-pinned (graph version 5) | A2, A3, A6, B3 PASS; B4 PASS/BLOCKED | C, A5, D | TZ-4 |

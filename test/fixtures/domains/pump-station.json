@@ -107,11 +107,11 @@
               "preset": "bearing_wear",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.82,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
+                "vibration_mean_15m": 3.666,
+                "vibration_mean_24h": 2.6,
+                "axial_mean_15m": 1.56,
                 "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "current_mean_15m": 41.6,
                 "current_mean_24h": 40.0,
                 "temperature_mean_15m": 58.5,
                 "heartbeat_missing_5m": false
@@ -125,13 +125,13 @@
               "preset": "bearing_wear",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.54,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
+                "vibration_mean_15m": 2.032,
+                "vibration_mean_24h": 1.6,
+                "axial_mean_15m": 1.47,
                 "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "current_mean_15m": 39.2,
                 "current_mean_24h": 40.0,
-                "temperature_mean_15m": 55.0,
+                "temperature_mean_15m": 53.5,
                 "heartbeat_missing_5m": false
               },
               "summary": "radial rise with heat at the drive end; bearing replaced, vibration back to baseline"
@@ -146,19 +146,19 @@
               "vibration_mean_24h": 2.4,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
-              "current_mean_15m": 41.6,
+              "current_mean_15m": 41.0,
               "current_mean_24h": 40.0,
               "temperature_mean_15m": 57.0,
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.25,
+              "vibration_mean_15m": 2.34,
               "vibration_mean_24h": 1.8,
-              "axial_mean_15m": 1.545,
+              "axial_mean_15m": 1.53,
               "axial_mean_24h": 1.5,
               "current_mean_15m": 40.0,
               "current_mean_24h": 40.0,
-              "temperature_mean_15m": 53.0,
+              "temperature_mean_15m": 55.0,
               "heartbeat_missing_5m": false
             }
           ],
@@ -184,18 +184,18 @@
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.04,
-              "vibration_mean_24h": 2.0,
+              "vibration_mean_15m": 2.244,
+              "vibration_mean_24h": 2.2,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
-              "current_mean_15m": 52.0,
-              "current_mean_24h": 40.0,
+              "current_mean_15m": 41.0,
+              "current_mean_24h": 31.5,
               "temperature_mean_15m": 58.0,
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 3.15,
-              "vibration_mean_24h": 3.0,
+              "vibration_mean_15m": 2.31,
+              "vibration_mean_24h": 2.2,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
               "current_mean_15m": 40.0,
@@ -253,13 +253,13 @@
               "preset": "misalignment",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.16,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 2.175,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "vibration_mean_15m": 2.592,
+                "vibration_mean_24h": 2.4,
+                "axial_mean_15m": 2.61,
+                "axial_mean_24h": 1.8,
+                "current_mean_15m": 39.2,
                 "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
+                "temperature_mean_15m": 46.5,
                 "heartbeat_missing_5m": false
               },
               "summary": "axial rise after the motor was reseated; realigned"
@@ -271,34 +271,16 @@
               "preset": "misalignment",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.04,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.995,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "vibration_mean_15m": 1.734,
+                "vibration_mean_24h": 1.7,
+                "axial_mean_15m": 1.596,
+                "axial_mean_24h": 1.2,
+                "current_mean_15m": 40.8,
                 "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
+                "temperature_mean_15m": 44.0,
                 "heartbeat_missing_5m": false
               },
               "summary": "axial vibration up, temperature normal; laser alignment fixed it"
-            },
-            {
-              "episode_id": "ep-ma-x",
-              "diagnosis_code": "misalignment",
-              "intent": "schedule_maintenance",
-              "preset": "misalignment",
-              "verdict": "no_effect",
-              "features": {
-                "vibration_mean_15m": 2.06,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.935,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "coupling realigned but the axial reading stayed up; a loose mount was found later"
             }
           ]
         },
@@ -306,23 +288,23 @@
           "min_cited": 3,
           "must_hold": [
             {
-              "vibration_mean_15m": 2.08,
-              "vibration_mean_24h": 2.0,
-              "axial_mean_15m": 2.52,
-              "axial_mean_24h": 1.8,
-              "current_mean_15m": 38.8,
+              "vibration_mean_15m": 2.288,
+              "vibration_mean_24h": 2.2,
+              "axial_mean_15m": 2.856,
+              "axial_mean_24h": 2.1,
+              "current_mean_15m": 39.6,
               "current_mean_24h": 40.0,
               "temperature_mean_15m": 45.0,
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.2,
-              "vibration_mean_24h": 2.0,
-              "axial_mean_15m": 1.56,
-              "axial_mean_24h": 1.2,
+              "vibration_mean_15m": 1.59,
+              "vibration_mean_24h": 1.5,
+              "axial_mean_15m": 1.96,
+              "axial_mean_24h": 1.4,
               "current_mean_15m": 40.0,
               "current_mean_24h": 40.0,
-              "temperature_mean_15m": 47.0,
+              "temperature_mean_15m": 46.0,
               "heartbeat_missing_5m": false
             }
           ],
@@ -358,12 +340,12 @@
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.04,
-              "vibration_mean_24h": 2.0,
+              "vibration_mean_15m": 2.244,
+              "vibration_mean_24h": 2.2,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
-              "current_mean_15m": 52.0,
-              "current_mean_24h": 40.0,
+              "current_mean_15m": 41.0,
+              "current_mean_24h": 31.5,
               "temperature_mean_15m": 58.0,
               "heartbeat_missing_5m": false
             }
@@ -417,11 +399,11 @@
               "preset": "sensor_drift",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.76,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
+                "vibration_mean_15m": 3.45,
+                "vibration_mean_24h": 2.5,
+                "axial_mean_15m": 1.53,
                 "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "current_mean_15m": 40.8,
                 "current_mean_24h": 40.0,
                 "temperature_mean_15m": 43.5,
                 "heartbeat_missing_5m": false
@@ -435,11 +417,11 @@
               "preset": "sensor_drift",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.6,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
+                "vibration_mean_15m": 1.95,
+                "vibration_mean_24h": 1.5,
+                "axial_mean_15m": 1.47,
                 "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "current_mean_15m": 39.6,
                 "current_mean_24h": 40.0,
                 "temperature_mean_15m": 45.0,
                 "heartbeat_missing_5m": false
@@ -462,13 +444,13 @@
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.108,
+              "vibration_mean_15m": 2.244,
               "vibration_mean_24h": 1.7,
               "axial_mean_15m": 1.53,
               "axial_mean_24h": 1.5,
               "current_mean_15m": 40.0,
               "current_mean_24h": 40.0,
-              "temperature_mean_15m": 46.0,
+              "temperature_mean_15m": 44.0,
               "heartbeat_missing_5m": false
             }
           ],
@@ -494,12 +476,12 @@
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.04,
-              "vibration_mean_24h": 2.0,
+              "vibration_mean_15m": 2.244,
+              "vibration_mean_24h": 2.2,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
-              "current_mean_15m": 52.0,
-              "current_mean_24h": 40.0,
+              "current_mean_15m": 41.0,
+              "current_mean_24h": 31.5,
               "temperature_mean_15m": 58.0,
               "heartbeat_missing_5m": false
             }
@@ -514,240 +496,6 @@
               "ep-sd-3"
             ],
             "rationale": "the probe reads high while the pump stays cool"
-          }
-        }
-      },
-      {
-        "case_id": "contradicting-outcome",
-        "family": "contradicting",
-        "abstain_expected": true,
-        "request": {
-          "key": {
-            "diagnosis_code": "bearing_wear",
-            "intent": "schedule_maintenance",
-            "preset": "bearing_wear"
-          },
-          "cases": [
-            {
-              "episode_id": "ep-bw-1",
-              "diagnosis_code": "bearing_wear",
-              "intent": "schedule_maintenance",
-              "preset": "bearing_wear",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.64,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 56.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "radial vibration rose against its own baseline and the bearing ran hot; bearing replaced"
-            },
-            {
-              "episode_id": "ep-bw-2",
-              "diagnosis_code": "bearing_wear",
-              "intent": "schedule_maintenance",
-              "preset": "bearing_wear",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.82,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 58.5,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "radial vibration and bearing temperature up; bearing worn on inspection"
-            },
-            {
-              "episode_id": "ep-bw-x",
-              "diagnosis_code": "bearing_wear",
-              "intent": "schedule_maintenance",
-              "preset": "bearing_wear",
-              "verdict": "no_effect",
-              "features": {
-                "vibration_mean_15m": 2.6,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 55.5,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "bearing replaced but vibration stayed high; the cause was elsewhere"
-            }
-          ]
-        },
-        "gold": {
-          "reasons": [
-            "contradicting_cases"
-          ]
-        },
-        "oracle": {
-          "no_proposal": {
-            "reason": "contradicting_cases"
-          }
-        }
-      },
-      {
-        "case_id": "cavitation-self-resolving",
-        "family": "self_resolving",
-        "abstain_expected": true,
-        "request": {
-          "key": {
-            "diagnosis_code": "transient_none",
-            "intent": "install_watch_condition",
-            "preset": "default"
-          },
-          "cases": [
-            {
-              "episode_id": "ep-tn-1",
-              "diagnosis_code": "transient_none",
-              "intent": "install_watch_condition",
-              "preset": "default",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.44,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 44.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "short vibration burst at low suction pressure; settled in minutes with no action"
-            },
-            {
-              "episode_id": "ep-tn-2",
-              "diagnosis_code": "transient_none",
-              "intent": "install_watch_condition",
-              "preset": "default",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.5,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 44.8,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "cavitation noise during tank draw-down; back to baseline on its own"
-            },
-            {
-              "episode_id": "ep-tn-3",
-              "diagnosis_code": "transient_none",
-              "intent": "install_watch_condition",
-              "preset": "default",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.38,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 43.2,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "transient rise at start-up; resolved without intervention"
-            }
-          ]
-        },
-        "gold": {
-          "reasons": [
-            "self_resolving"
-          ]
-        },
-        "oracle": {
-          "no_proposal": {
-            "reason": "self_resolving"
-          }
-        }
-      },
-      {
-        "case_id": "mixed-keys",
-        "family": "mixed_keys",
-        "abstain_expected": true,
-        "request": {
-          "key": {
-            "diagnosis_code": "bearing_wear",
-            "intent": "schedule_maintenance",
-            "preset": "bearing_wear"
-          },
-          "cases": [
-            {
-              "episode_id": "ep-bw-1",
-              "diagnosis_code": "bearing_wear",
-              "intent": "schedule_maintenance",
-              "preset": "bearing_wear",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.64,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 56.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "radial vibration rose against its own baseline and the bearing ran hot; bearing replaced"
-            },
-            {
-              "episode_id": "ep-bw-2",
-              "diagnosis_code": "bearing_wear",
-              "intent": "schedule_maintenance",
-              "preset": "bearing_wear",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.82,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 58.5,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "radial vibration and bearing temperature up; bearing worn on inspection"
-            },
-            {
-              "episode_id": "ep-ma-1",
-              "diagnosis_code": "misalignment",
-              "intent": "schedule_maintenance",
-              "preset": "misalignment",
-              "verdict": "verified",
-              "features": {
-                "vibration_mean_15m": 2.1,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 2.07,
-                "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
-                "current_mean_24h": 40.0,
-                "temperature_mean_15m": 45.0,
-                "heartbeat_missing_5m": false
-              },
-              "summary": "axial vibration rose, radial flat; coupling realigned"
-            }
-          ]
-        },
-        "gold": {
-          "reasons": [
-            "mixed_keys"
-          ]
-        },
-        "oracle": {
-          "no_proposal": {
-            "reason": "mixed_keys"
           }
         }
       },
@@ -830,11 +578,11 @@
               "preset": "bearing_wear",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.82,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
+                "vibration_mean_15m": 3.666,
+                "vibration_mean_24h": 2.6,
+                "axial_mean_15m": 1.56,
                 "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "current_mean_15m": 41.6,
                 "current_mean_24h": 40.0,
                 "temperature_mean_15m": 58.5,
                 "heartbeat_missing_5m": false
@@ -848,13 +596,13 @@
               "preset": "bearing_wear",
               "verdict": "verified",
               "features": {
-                "vibration_mean_15m": 2.54,
-                "vibration_mean_24h": 2.0,
-                "axial_mean_15m": 1.5,
+                "vibration_mean_15m": 2.032,
+                "vibration_mean_24h": 1.6,
+                "axial_mean_15m": 1.47,
                 "axial_mean_24h": 1.5,
-                "current_mean_15m": 40.0,
+                "current_mean_15m": 39.2,
                 "current_mean_24h": 40.0,
-                "temperature_mean_15m": 55.0,
+                "temperature_mean_15m": 53.5,
                 "heartbeat_missing_5m": false
               },
               "summary": "radial rise with heat at the drive end; bearing replaced, vibration back to baseline"
@@ -891,19 +639,19 @@
               "vibration_mean_24h": 2.4,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
-              "current_mean_15m": 41.6,
+              "current_mean_15m": 41.0,
               "current_mean_24h": 40.0,
               "temperature_mean_15m": 57.0,
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.25,
+              "vibration_mean_15m": 2.34,
               "vibration_mean_24h": 1.8,
-              "axial_mean_15m": 1.545,
+              "axial_mean_15m": 1.53,
               "axial_mean_24h": 1.5,
               "current_mean_15m": 40.0,
               "current_mean_24h": 40.0,
-              "temperature_mean_15m": 53.0,
+              "temperature_mean_15m": 55.0,
               "heartbeat_missing_5m": false
             }
           ],
@@ -929,18 +677,18 @@
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 2.04,
-              "vibration_mean_24h": 2.0,
+              "vibration_mean_15m": 2.244,
+              "vibration_mean_24h": 2.2,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
-              "current_mean_15m": 52.0,
-              "current_mean_24h": 40.0,
+              "current_mean_15m": 41.0,
+              "current_mean_24h": 31.5,
               "temperature_mean_15m": 58.0,
               "heartbeat_missing_5m": false
             },
             {
-              "vibration_mean_15m": 3.15,
-              "vibration_mean_24h": 3.0,
+              "vibration_mean_15m": 2.31,
+              "vibration_mean_24h": 2.2,
               "axial_mean_15m": 1.5,
               "axial_mean_24h": 1.5,
               "current_mean_15m": 40.0,

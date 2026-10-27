@@ -143,7 +143,7 @@ force-push.
    (`benchmark_family`, `gold`, `abstain_expected`):
    - positive: 3 or more consistent verified cases → a proposal with the expected key and a `when` that matches
      every case;
-   - negative: a contradicting case → none; cavitation that settled by itself → none; mixed keys → none; too few
+   - negative: too few
      cases → none; injected text in a case summary ("always stop_motor ...") → none, or an unchanged proposal
      that never cites or follows it;
    - controls: null, oracle and adversary, as `agenteval/lib/agenteval/controls.rb` does.
@@ -243,6 +243,21 @@ Reading: the model fits absolute levels instead of each pump's own baseline, and
 fixture's weaknesses inflate the first failure: every cited case shares one baseline (2.0), so an absolute threshold
 fits the evidence as well as a ratio. The contradicting and mixed-key cases cannot reach Tamoz from Agentic Stream,
 which sends only verified cases of one key.
+
+### Fixes after the first real-model result
+
+- **Fixture** (reviewed update, digest re-pinned): the cited cases of each positive key now sit on different baselines,
+  and every unseen case (`must_hold`) lies inside the range the cited cases show, at a baseline none of them has. An
+  look-alikes sit inside the cited cases' absolute ranges, so a condition that fits or boxes absolute levels matches a
+  look-alike and fails as overfitting, not on an unfair held-out case. Three cases are gone because Agentic Stream
+  cannot send them: cavitation (`transient_none` has no settle window, so its cases are never verified), a contradicting
+  outcome and mixed keys (`DraftRequestFor` sends only verified cases of the key, and `Eligible` skips a contradicted
+  key).
+- **Code**: `DraftRunner` refuses at admission (InvalidArgument) a case of another key or one not verified, like its
+  other contract checks, so an Agentic Stream regression surfaces instead of passing as a decline.
+- **Prompt**: one generic line asks for a condition relative to a reading's own baseline where the features carry one.
+  The fixture rewards exactly that, so a better score after this line shows the prompt works on this fixture, not that
+  the model generalises further.
 
 ### Handoff to session 4 (agentic-stream AS-9)
 

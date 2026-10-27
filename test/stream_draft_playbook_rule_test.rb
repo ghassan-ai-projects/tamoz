@@ -149,7 +149,9 @@ class StreamDraftPlaybookRuleTest < Minitest::Test
         'features that are not an object' => request.tap { |wire| wire.cases.first.features_json = '[1.0]' },
         'features that are not JSON' => request.tap { |wire| wire.cases.first.features_json = '{a' },
         'wall time over the ceiling' => request.tap { |wire| wire.budget.wall_time.seconds = 601 },
-        'model calls over the ceiling' => request.tap { |wire| wire.budget.model_calls = 51 }
+        'model calls over the ceiling' => request.tap { |wire| wire.budget.model_calls = 51 },
+        'a case of another key' => request.tap { |wire| wire.cases.last.preset = 'p2' },
+        'a case that is not verified' => request.tap { |wire| wire.cases.last.verdict = 'not_verified' }
       }
 
       refusals.each do |name, wire|

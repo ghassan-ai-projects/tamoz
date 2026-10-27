@@ -8,7 +8,7 @@ require 'support/rule_proposal_drafter'
 class RuleProposalScorecardTest < Minitest::Test
   Scorecard = Tamoz::Evals::Harness::RuleProposalScorecard
   FIXTURE = File.expand_path('fixtures/domains/pump-station.json', __dir__)
-  FIXTURE_SHA256 = '2f3432ff1bd268711c21b8ec0a4ec34518f444d45ccd15b82389bd4d6c39b901'
+  FIXTURE_SHA256 = 'c5b0955d940e05b6eda6102d0d19ff0ca459e663180387a2934bdb3dbe371f48'
   DATA = DomainLoader.load('pump-station').rule_proposal
   CASES = DATA.fetch('cases')
   ALLOWED = DATA.fetch('allowed_features')
@@ -27,8 +27,6 @@ class RuleProposalScorecardTest < Minitest::Test
     verdict, scores = Scorecard.controls_discriminate?(CASES, ALLOWED)
 
     assert verdict, scores.inspect
-    assert_operator scores.dig('decline', 'abstentions_passed'), :<, scores.dig('decline', 'abstentions_expected'),
-                    'a decline for the wrong reason must fail'
   end
 
   def test_each_wrong_proposal_fails_for_its_own_reason
@@ -38,8 +36,10 @@ class RuleProposalScorecardTest < Minitest::Test
       'features.vibration_mean_15m / features.vibration_mean_24h > 1.2' => 'also matches a look-alike it must reject',
       'features.temperature_mean_15m > 57.0' => 'does not hold for ep-bw-1',
       'features.temperature_mean_15m > 50.0' => 'also matches a look-alike it must reject',
-      'features.vibration_mean_15m / features.vibration_mean_24h > 1.26 && features.temperature_mean_15m > 54.0' =>
-        'does not hold for an unseen case of this key',
+      'features.temperature_mean_15m == 56.0 || features.temperature_mean_15m == 58.5 || ' \
+      'features.temperature_mean_15m == 53.5' => 'does not hold for an unseen case of this key',
+      'features.vibration_mean_15m > 2.0 && features.temperature_mean_15m > 50.0 && ' \
+      'features.vibration_mean_24h < 2.8 && features.current_mean_15m < 45.0' => 'also matches a look-alike it must reject',
       'features.pressure > 1.0' => 'invalid condition: features.pressure is not an allowed feature'
     }
     answers.each do |condition, failure|
@@ -72,13 +72,12 @@ class RuleProposalScorecardTest < Minitest::Test
 
   def test_a_decline_passes_only_where_expected_and_for_an_accepted_reason
     decline = ->(reason) { ->(_request) { { 'no_proposal' => { 'reason' => reason } } } }
-    contradicting = CASES.find { |entry| entry.fetch('case_id') == 'contradicting-outcome' }
+    too_few = CASES.find { |entry| entry.fetch('case_id') == 'too-few-cases' }
     positive = CASES.find { |entry| entry.fetch('case_id') == 'misalignment-consistent' }
 
-    assert_predicate scorecard(decline.call('contradicting_cases'), cases: [contradicting]), :passed?
-    assert_equal 'declined for too_few_cases',
-                 failure_reasons(scorecard(decline.call('too_few_cases'),
-                                           cases: [contradicting])).fetch('contradicting-outcome')
+    assert_predicate scorecard(decline.call('too_few_cases'), cases: [too_few]), :passed?
+    assert_equal 'declined for mixed_keys',
+                 failure_reasons(scorecard(decline.call('mixed_keys'), cases: [too_few])).fetch('too-few-cases')
     assert_equal 'declined where a rule was expected',
                  failure_reasons(scorecard(decline.call('mixed_keys'),
                                            cases: [positive])).fetch('misalignment-consistent')
@@ -86,6 +85,10 @@ class RuleProposalScorecardTest < Minitest::Test
 
   def test_a_proposal_citing_a_case_whose_outcome_was_not_verified_fails
     positive = CASES.find { |entry| entry.fetch('case_id') == 'misalignment-consistent' }
+    unverified = positive.dig('request', 'cases').first.merge('episode_id' => 'ep-ma-x', 'verdict' => 'not_verified')
+    positive = positive.merge('request' => positive.fetch('request').merge(
+      'cases' => positive.dig('request', 'cases') + [unverified]
+    ))
     citing_all = ->(request) { Scorecard.proposal(positive.dig('oracle', 'proposal', 'when'), request.fetch('cases')) }
 
     assert_equal 'cites a case that is not a trusted verified case',
