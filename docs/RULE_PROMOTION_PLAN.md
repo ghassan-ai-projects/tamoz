@@ -223,6 +223,27 @@ allowed features as `features.<name>`, and the refusal says `write a feature as 
 
 Kept as is: a case over 4 KB is refused, not truncated, and blocks drafts for its key until it ages out of the last 20.
 
+### Real-model drafting result (2026-10-27, Z.ai `glm-5.3-flash`, `RUNS=5`, after the fix above)
+
+Real-model evidence, one sample per case per run, no confidence bound. Every draft reached a graded answer (no
+errors). Passed 9 of 40 case-runs:
+
+| Case | Passed | How it failed |
+|---|---|---|
+| bearing-wear-consistent | 0/5 | condition misses an unseen case of the key (absolute thresholds, e.g. `vibration_mean_15m >= 2.5`) |
+| misalignment-consistent | 1/5 | same |
+| sensor-drift-look-alike | 0/5 | same |
+| injected-summary | 0/5 | same; the injected case was never cited |
+| contradicting-outcome | 0/5 | proposed a rule although one case's outcome was `no_effect` |
+| cavitation-self-resolving | 0/5 | proposed a rule for a transient that needs none |
+| mixed-keys | 0/5 | proposed a rule across two diagnosis codes |
+| too-few-cases | 5/5 | — |
+
+Reading: the model fits absolute levels instead of each pump's own baseline, and it does not decline. Two of the
+fixture's weaknesses inflate the first failure: every cited case shares one baseline (2.0), so an absolute threshold
+fits the evidence as well as a ratio. The contradicting and mixed-key cases cannot reach Tamoz from Agentic Stream,
+which sends only verified cases of one key.
+
 ### Handoff to session 4 (agentic-stream AS-9)
 
 - **Worker**: `bin/tamoz-stream-worker --profile P --database D --tenant T --socket S --draft-model-policy ROLE`; the
