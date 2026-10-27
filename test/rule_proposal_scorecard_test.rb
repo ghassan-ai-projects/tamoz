@@ -2,10 +2,7 @@
 
 require_relative 'test_helper'
 require 'tamoz/evals/runner'
-require 'tamoz/stream/draft_runner'
 require 'support/domain_loader'
-require 'support/episode_composition'
-require 'support/local_model_endpoint'
 require 'support/rule_proposal_drafter'
 
 class RuleProposalScorecardTest < Minitest::Test
@@ -27,18 +24,10 @@ class RuleProposalScorecardTest < Minitest::Test
   end
 
   def test_the_controls_discriminate
-    reports = Scorecard.control_drafters(CASES).transform_values do |drafter|
-      scorecard(drafter).to_h.fetch('aggregate')
-    end
+    verdict, scores = Scorecard.controls_discriminate?(CASES, ALLOWED)
 
-    assert_equal CASES.length, reports.fetch('oracle').fetch('passed')
-    %w[null adversary].each { |control| assert_equal 0, reports.fetch(control).fetch('passed'), control }
-    assert_equal 0, reports.fetch('overfit').fetch('proposals_passed')
-    declinable = CASES.count { |entry| !entry.fetch('abstain_expected') && entry.dig('gold', 'allow_decline') }
-
-    assert_equal declinable, reports.fetch('decline').fetch('proposals_passed'),
-                 'declining wins only where it is allowed'
-    assert_operator reports.fetch('decline').fetch('abstentions_passed'), :<, reports.fetch('decline').fetch('abstentions_expected'),
+    assert verdict, scores.inspect
+    assert_operator scores.dig('decline', 'abstentions_passed'), :<, scores.dig('decline', 'abstentions_expected'),
                     'a decline for the wrong reason must fail'
   end
 
@@ -105,23 +94,11 @@ class RuleProposalScorecardTest < Minitest::Test
 
   def test_the_draft_path_through_the_worker_carries_every_oracle_answer_plumbing_only
     replies = CASES.map { |entry| Tamoz::Core.jcs({ 'protocol' => Tamoz::Agent::PlaybookDraft::PROTOCOL }.merge(entry.fetch('oracle'))) }
-    Dir.mktmpdir('tamoz-rule-eval') do |dir|
-      endpoint = LocalModelEndpoint.new(mode: :fixture, responses: replies,
-                                        log_path: File.join(dir, 'endpoint.log')).start
-      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
-      worker = Tamoz::Stream::EpisodeWorker.new(worker_version: 'test').bind_draft_runner(
-        Tamoz::Stream::DraftRunner.new(durable_runner: composition.fetch(:app).durable_runner, tenant: 'acme',
-                                       model_policy: 'fast')
-      )
-
+    RuleProposalDrafter.with_fixture_worker(replies) do |worker, endpoint|
       report = scorecard(RuleProposalDrafter.through(worker, tenant: 'acme'))
 
       assert_predicate report, :passed?, failure_reasons(report).compact.inspect
       assert_equal CASES.length, endpoint.observed.length
-    ensure
-      endpoint&.stop
-      composition&.fetch(:adapter)&.close
-      FileUtils.remove_entry(composition.fetch(:directory)) if composition
     end
   end
 end

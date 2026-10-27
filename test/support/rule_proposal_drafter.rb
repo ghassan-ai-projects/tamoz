@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
+require 'tmpdir'
 require 'tamoz/stream/episode_worker'
+require 'tamoz/stream/draft_runner'
+require_relative 'episode_composition'
+require_relative 'local_model_endpoint'
 
 # Drafts a rule-proposal eval case through the worker's DraftPlaybookRule, as Agentic Stream calls it.
 module RuleProposalDrafter
@@ -9,6 +13,26 @@ module RuleProposalDrafter
                                input_tokens: 30_000, output_tokens: 5_000)
 
   module_function
+
+  def worker(composition)
+    Tamoz::Stream::EpisodeWorker.new(worker_version: 'test').bind_draft_runner(
+      Tamoz::Stream::DraftRunner.new(durable_runner: composition.fetch(:app).durable_runner, tenant: 'acme',
+                                     model_policy: 'fast')
+    )
+  end
+
+  # Yields a drafting worker whose model answers each call with the next fixture response, and that endpoint.
+  def with_fixture_worker(responses)
+    Dir.mktmpdir('tamoz-draft') do |dir|
+      endpoint = LocalModelEndpoint.new(mode: :fixture, responses:, log_path: File.join(dir, 'endpoint.log')).start
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      yield worker(composition), endpoint
+    ensure
+      endpoint&.stop
+      composition&.fetch(:adapter)&.close
+      FileUtils.remove_entry(composition.fetch(:directory)) if composition
+    end
+  end
 
   def through(worker, tenant:)
     lambda do |request|

@@ -198,6 +198,23 @@ worker's decisions carry `diagnosis_code`.
 | TZ-4 | done | see git log | `test/fixtures/domains/pump-station.json` (catalog, intents and presets copied from the Agentic Stream spec; allowed features; 8 cases: bearing wear, misalignment and the sensor-drift look-alike, a contradicting outcome, self-resolving cavitation, mixed keys, too few cases, an injected summary), digest-pinned in `rule_proposal_scorecard_test`. `RuleProposalScorecard` in `tamoz-evals-runner`: a proposal must cite at least `min_cited` trusted verified cases, hold for every one of them and for unseen cases of the key (`must_hold`), and reject every look-alike (`must_reject`); a decline passes only where expected and for an accepted reason; the injection case may be declined or proposed without the injected case. Controls: oracle passes all; null and "always true" pass none; a memorising (overfit) drafter and an always-decline drafter win no case that needs a rule. `script/rule_proposal_eval` checks the controls, then runs `RUNS` real-model passes (a fresh worker database each) and prints per-case pass counts; BLOCKED without a provider key. Deviations: no `tamoz-eval-runner scorecard rule-proposal` CLI entry (its input-manifest machinery is not needed to grade eight data cases); `BenchmarkFamilies` skips a domain that declares no diagnosis family (ADR-058 evidence updated); duplicate report and real-profile code extracted (`ScorecardReport`, `test/support/real_profile.rb`). No real-model result yet. |
 | TZ-5 | done | see git log | `test/rule_promotion_authority_test.rb`: the proposal and event messages have no authority field, the worker serves only its three RPCs and dials only the read-only evidence tools, only `DraftReply` builds a proposal and nothing builds a rule or a rule approval, and a model that writes `mode` gets no proposal even after repair. |
 
+### Two-lens review of PR 82 (contract and safety; simplicity and fit)
+
+Fixed: the call to `validate_terminal_memory_consistency!` that TZ-1 removed by mistake (it is a real integrity check
+on recalled memory digests) is restored with a test; features Go encodes as `-0` or integers past 2^53 are read as
+doubles instead of refusing the draft; a condition must read at least one feature (`true` is refused); diagnosis codes
+are at most 63 characters, as Agentic Stream's decision schema allows; every draft admission guard has a test;
+duplication removed (`BudgetLimits` shared with episodes, one test helper for a drafting worker, one
+`RuleProposalScorecard.controls_discriminate?`).
+
+**Owner decisions open (Agentic Stream side):**
+1. Agentic Stream retries a failed draft with the same `draft_id` (`drafts.go`, `NextDraft`), but Tamoz's durable
+   inbox answers a repeated id with the recorded result, and refuses it when the cases changed. A transient provider
+   failure is therefore final. Proposed: Agentic Stream sends a per-attempt id (for example `<draft>-a<attempt>`).
+2. Agentic Stream's `DraftReading` ignores `diagnostic` events, so Tamoz's typed failure code is lost on its side.
+
+Kept as is: a case over 4 KB is refused, not truncated, and blocks drafts for its key until it ages out of the last 20.
+
 ### Handoff to session 4 (agentic-stream AS-9)
 
 - **Worker**: `bin/tamoz-stream-worker --profile P --database D --tenant T --socket S --draft-model-policy ROLE`; the

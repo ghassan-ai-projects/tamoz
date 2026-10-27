@@ -4,6 +4,7 @@ require 'tamoz/core'
 require 'tamoz/stream/gen'
 require 'tamoz/stream/draft_reply'
 require 'tamoz/stream/durable_terminal'
+require 'tamoz/stream/budget_limits'
 require 'tamoz/stream/episode_stream'
 
 module Tamoz
@@ -13,8 +14,6 @@ module Tamoz
       MAX_CASES = 20
       # "draft.<id>" must fit the durable store's 128-byte request id.
       MAX_ID_BYTES = 120
-      MAX_WALL_TIME_SECONDS = 600
-      MAX_MODEL_CALLS = 50
       UNKNOWN_CODE = 'unknown'
       Identity = Struct.new(:episode_id, :attempt_id, :fence)
       private_constant :Identity
@@ -87,25 +86,27 @@ module Tamoz
         }
       end
 
+      # Go may encode a feature as -0 or an integer past 2^53; CEL reads every number as a double, so do we.
       def case_entry(entry)
-        features = Tamoz::Core.parse_json_strict(entry.features_json)
+        features = JSON.parse(entry.features_json)
         refuse("case #{entry.episode_id} features are not an object") unless features.is_a?(Hash)
 
         {
           'episode_id' => entry.episode_id, 'diagnosis_code' => entry.diagnosis_code, 'intent' => entry.intent,
-          'preset' => entry.preset, 'verdict' => entry.verdict, 'features' => features, 'summary' => entry.summary
+          'preset' => entry.preset, 'verdict' => entry.verdict, 'summary' => entry.summary,
+          'features' => features.transform_values { |value| value.is_a?(Numeric) ? value.to_f + 0.0 : value }
         }
-      rescue Tamoz::Core::ProtocolError, JSON::ParserError
-        refuse("case #{entry.episode_id} features are not canonical JSON")
+      rescue JSON::ParserError
+        refuse("case #{entry.episode_id} features are not JSON")
       end
 
       def budget(wire)
         return nil unless wire
 
         {
-          'max_model_calls' => wire.model_calls.positive? ? wire.model_calls : nil,
-          'max_input_tokens' => wire.input_tokens.positive? ? wire.input_tokens : nil,
-          'max_output_tokens' => wire.output_tokens.positive? ? wire.output_tokens : nil
+          'max_model_calls' => BudgetLimits.positive_int_or_nil(wire.model_calls),
+          'max_input_tokens' => BudgetLimits.positive_int_or_nil(wire.input_tokens),
+          'max_output_tokens' => BudgetLimits.positive_int_or_nil(wire.output_tokens)
         }
       end
 
@@ -131,10 +132,10 @@ module Tamoz
       def admit_budget!(wire)
         return unless wire
 
-        if wire.wall_time && wire.wall_time.seconds > MAX_WALL_TIME_SECONDS
-          refuse("wall_time exceeds #{MAX_WALL_TIME_SECONDS}s")
-        end
-        refuse("model_calls exceeds #{MAX_MODEL_CALLS}") if wire.model_calls > MAX_MODEL_CALLS
+        limits = BudgetLimits
+        refuse("wall_time exceeds #{limits::MAX_WALL_TIME_SECONDS}s") if
+          wire.wall_time && wire.wall_time.seconds > limits::MAX_WALL_TIME_SECONDS
+        refuse("model_calls exceeds #{limits::MAX_MODEL_CALLS}") if wire.model_calls > limits::MAX_MODEL_CALLS
       end
 
       def refuse(message)

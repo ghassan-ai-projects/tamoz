@@ -23,12 +23,26 @@ module Tamoz
           }
         end
 
+        # The controls' verdicts are known: the oracle wins every case, null and always-true none, and the
+        # memorising and always-decline drafters no case that needs a rule unless declining is allowed there.
+        def self.controls_discriminate?(cases, allowed_features)
+          scores = control_drafters(cases).to_h do |name, drafter|
+            [name,
+             new(cases:, allowed_features:, drafter:, subject: { 'id' => "control:#{name}" }).run.to_h['aggregate']]
+          end
+          declinable = cases.count { |entry| !entry.fetch('abstain_expected') && entry.dig('gold', 'allow_decline') }
+          verdict = scores.dig('oracle', 'passed') == cases.length &&
+                    %w[null adversary].all? { |name| scores.dig(name, 'passed').zero? } &&
+                    scores.dig('overfit', 'proposals_passed').zero? &&
+                    scores.dig('decline', 'proposals_passed') == declinable
+          [verdict, scores]
+        end
+
         def self.proposal(condition, cases)
           { 'proposal' => { 'when' => condition, 'cited_episode_ids' => cases.map { |entry| entry.fetch('episode_id') },
                             'rationale' => 'control' } }
         end
 
-        # Matches exactly the values it was shown on the feature that varies most, and nothing else.
         def self.memorised(cases)
           numeric = cases.first.fetch('features').select { |_key, value| value.is_a?(Numeric) }.keys
           name = numeric.max_by do |key|
@@ -67,13 +81,7 @@ module Tamoz
           kind = answer_kind(answer)
           failure = case kind
                     when 'no_proposal' then decline_failure(entry, answer)
-                    when 'proposal' then if entry.fetch('abstain_expected')
-                                           'proposed where no rule was expected'
-                                         else
-                                           proposal_failure(
-                                             entry, answer
-                                           )
-                                         end
+                    when 'proposal' then proposal_outcome(entry, answer)
                     else "no answer (#{kind})"
                     end
           {
@@ -81,6 +89,12 @@ module Tamoz
             'abstain_expected' => entry.fetch('abstain_expected'), 'answer' => kind,
             'passed' => failure.nil?, 'failure' => failure
           }.compact
+        end
+
+        def proposal_outcome(entry, answer)
+          return 'proposed where no rule was expected' if entry.fetch('abstain_expected')
+
+          proposal_failure(entry, answer.fetch('proposal'))
         end
 
         def answer_kind(answer)
@@ -97,14 +111,17 @@ module Tamoz
           "declined for #{reason}" unless gold.fetch('reasons', [reason]).include?(reason)
         end
 
-        def proposal_failure(entry, answer)
-          proposal = answer.fetch('proposal')
+        def proposal_failure(entry, proposal)
+          return 'malformed proposal' unless well_formed?(proposal)
+
           condition = Condition.parse(proposal.fetch('when'), allowed: @allowed_features)
-          cited_failure(entry, Array(proposal.fetch('cited_episode_ids'))) || condition_failure(entry, condition)
+          cited_failure(entry, proposal.fetch('cited_episode_ids')) || condition_failure(entry, condition)
         rescue Condition::Invalid => e
           "invalid condition: #{e.message}"
-        rescue KeyError, TypeError, NoMethodError
-          'malformed proposal'
+        end
+
+        def well_formed?(proposal)
+          proposal.is_a?(Hash) && proposal['when'].is_a?(String) && proposal['cited_episode_ids'].is_a?(Array)
         end
 
         def cited_failure(entry, cited)

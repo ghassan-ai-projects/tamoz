@@ -3,8 +3,7 @@
 require_relative 'test_helper'
 require 'tamoz/stream/draft_runner'
 require 'tamoz/stream/worker_server'
-require 'support/local_model_endpoint'
-require 'support/episode_composition'
+require 'support/rule_proposal_drafter'
 
 class StreamDraftPlaybookRuleTest < Minitest::Test
   V1 = Agenticstream::Runtime::V1
@@ -34,20 +33,8 @@ class StreamDraftPlaybookRuleTest < Minitest::Test
     )
   end
 
-  def with_worker(*responses)
-    Dir.mktmpdir('tamoz-draft') do |dir|
-      endpoint = LocalModelEndpoint.new(mode: :fixture, responses:, log_path: File.join(dir, 'endpoint.log')).start
-      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
-      worker = Tamoz::Stream::EpisodeWorker.new(worker_version: 'test').bind_draft_runner(
-        Tamoz::Stream::DraftRunner.new(durable_runner: composition.fetch(:app).durable_runner, tenant: 'acme',
-                                       model_policy: 'fast')
-      )
-      yield worker, endpoint
-    ensure
-      endpoint&.stop
-      composition&.fetch(:adapter)&.close
-      FileUtils.remove_entry(composition.fetch(:directory)) if composition
-    end
+  def with_worker(*responses, &)
+    RuleProposalDrafter.with_fixture_worker(responses, &)
   end
 
   def draft(worker, wire = request) = worker.draft_playbook_rule(wire, nil)
@@ -150,6 +137,34 @@ class StreamDraftPlaybookRuleTest < Minitest::Test
       repeated.cases.last.episode_id = 'ep-1'
       assert_raises(GRPC::InvalidArgument) { draft(worker, repeated) }
       assert_equal 1, endpoint.observed.length
+    end
+  end
+
+  def test_every_admission_guard_refuses_before_any_model_call
+    with_worker(no_proposal_bytes('too_few_cases')) do |worker, endpoint|
+      refusals = {
+        'empty id' => request(draft_id: ''),
+        'control character in id' => request(draft_id: "d\n1"),
+        'key without an intent' => request.tap { |wire| wire.key.intent = '' },
+        'features that are not an object' => request.tap { |wire| wire.cases.first.features_json = '[1.0]' },
+        'features that are not JSON' => request.tap { |wire| wire.cases.first.features_json = '{a' },
+        'wall time over the ceiling' => request.tap { |wire| wire.budget.wall_time.seconds = 601 },
+        'model calls over the ceiling' => request.tap { |wire| wire.budget.model_calls = 51 }
+      }
+
+      refusals.each do |name, wire|
+        assert_raises(GRPC::InvalidArgument, name) { draft(worker, wire) }
+      end
+      assert_empty endpoint.observed
+    end
+  end
+
+  def test_go_encoded_features_with_negative_zero_and_large_integers_are_read
+    go_features = '{"a":-0.0,"b":123456789012345670}'
+    with_worker(no_proposal_bytes('too_few_cases')) do |worker, _endpoint|
+      wire = request.tap { |draft_request| draft_request.cases.first.features_json = go_features }
+
+      assert_equal 'too_few_cases', draft(worker, wire).first.no_proposal.reason
     end
   end
 

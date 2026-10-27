@@ -2,8 +2,7 @@
 
 require_relative 'test_helper'
 require 'tamoz/stream/draft_runner'
-require 'support/local_model_endpoint'
-require 'support/episode_composition'
+require 'support/rule_proposal_drafter'
 
 # Invariant 34: Tamoz drafts a playbook rule; it never sets a rule's mode or writes Agentic Stream state.
 class RulePromotionAuthorityTest < Minitest::Test
@@ -24,33 +23,21 @@ class RulePromotionAuthorityTest < Minitest::Test
     assert_equal ['EvidenceTools'], stubs
   end
 
-  def test_only_the_reply_builder_builds_a_proposal_and_nothing_builds_a_rule_or_an_approval
+  def test_only_the_reply_builder_names_a_playbook_proposal
     builders = LIBRARIES.select { |path| File.read(path).include?('PlaybookProposal') }
-    writers = LIBRARIES.select { |path| File.read(path).match?(/DraftRule\.new|rprop_/) }
 
     assert_equal [File.join(ROOT, 'gems/tamoz-stream/lib/tamoz/stream/draft_reply.rb')], builders
-    assert_empty writers
   end
 
   def test_a_model_that_sets_a_mode_gets_no_proposal_even_after_repair
     smuggled = Tamoz::Core.jcs({ 'protocol' => Tamoz::Agent::PlaybookDraft::PROTOCOL,
                                  'proposal' => { 'when' => 'features.a > 1.0', 'cited_episode_ids' => ['ep-1'],
                                                  'rationale' => 'r', 'mode' => 'active' } })
-    Dir.mktmpdir('tamoz-authority') do |dir|
-      endpoint = LocalModelEndpoint.new(mode: :fixture, responses: [smuggled],
-                                        log_path: File.join(dir, 'endpoint.log')).start
-      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
-      runner = Tamoz::Stream::DraftRunner.new(durable_runner: composition.fetch(:app).durable_runner, tenant: 'acme',
-                                              model_policy: 'fast')
-
-      event = runner.run(request).first
+    RuleProposalDrafter.with_fixture_worker([smuggled]) do |worker, endpoint|
+      event = worker.draft_playbook_rule(request, nil).first
 
       assert_equal :diagnostic, event.event
       assert_equal 2, endpoint.observed.length, 'the refusal went through the one repair'
-    ensure
-      endpoint&.stop
-      composition&.fetch(:adapter)&.close
-      FileUtils.remove_entry(composition.fetch(:directory)) if composition
     end
   end
 

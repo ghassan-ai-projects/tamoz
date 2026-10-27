@@ -15,7 +15,7 @@ class AgentFeatureConditionTest < Minitest::Test
   end
 
   def test_and_binds_tighter_than_or_and_product_tighter_than_sum
-    assert holds?('true || false && false', {})
+    assert holds?('features.flag || false && false', { 'flag' => true })
     assert holds?('features.a - 1.0 * 2.0 == -1.0', { 'a' => 1 })
     assert holds?('features.a / features.b > 1.15 && !(features.a < 0.0)', { 'a' => 2.4, 'b' => 2.0 })
     refute holds?('features.a / features.b > 1.15', { 'a' => 2.2, 'b' => 2.0 })
@@ -40,6 +40,11 @@ class AgentFeatureConditionTest < Minitest::Test
     assert_equal 'it evaluates to false', condition('features.a > 1.0').failure({ 'a' => 0.5 })
     assert_equal 'it evaluates to 3.0', condition('features.a').failure({ 'a' => 3 })
     assert_nil condition('features.a > 1.0').failure({ 'a' => 2 })
+  end
+
+  def test_a_condition_that_reads_no_feature_is_refused
+    assert_invalid 'true', 'reads no feature'
+    assert_invalid '1.0 < 2.0', 'reads no feature'
   end
 
   def test_a_feature_outside_the_allowed_names_is_refused

@@ -36,6 +36,8 @@ module Tamoz
         @tree = disjunction
         raise Invalid, "unexpected #{@tokens[@position]}" if @position < @tokens.length
 
+        raise Invalid, 'the condition reads no feature' if @features.empty?
+
         unknown = @features - allowed
         raise Invalid, "features.#{unknown.first} is not an allowed feature" unless unknown.empty?
 
@@ -45,7 +47,6 @@ module Tamoz
 
       def holds?(values) = failure(values).nil?
 
-      # Why the condition does not hold for these feature values; nil when it does.
       def failure(values)
         absent = @features.reject { |name| values.key?(name) }
         return "#{absent.map { |name| "features.#{name}" }.join(', ')} absent" unless absent.empty?

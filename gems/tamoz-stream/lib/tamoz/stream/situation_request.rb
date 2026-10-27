@@ -5,6 +5,7 @@ require "tamoz/stream/gen"
 require "tamoz/stream/episode_stream"
 require "tamoz/stream/decision_builder"
 require "tamoz/stream/durable_terminal"
+require "tamoz/stream/budget_limits"
 require "tamoz/stream/capability_host"
 require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
@@ -107,14 +108,14 @@ module Tamoz
         return nil if budget.nil?
 
         {
-          "max_model_calls" => positive_int_or_nil(budget.max_model_calls),
-          "max_input_tokens" => positive_int_or_nil(budget.max_input_tokens),
-          "max_output_tokens" => positive_int_or_nil(budget.max_output_tokens),
-          "max_tool_calls" => positive_int_or_nil(budget.max_tool_calls),
-          "max_tool_result_bytes" => positive_int_or_nil(budget.max_tool_result_bytes),
-          "max_total_tool_result_bytes" => positive_int_or_nil(budget.max_total_tool_result_bytes),
-          "max_provider_retries" => positive_int_or_nil(budget.max_provider_retries),
-          "max_cost_microunits" => positive_int_or_nil(budget.max_cost_microunits)
+          "max_model_calls" => BudgetLimits.positive_int_or_nil(budget.max_model_calls),
+          "max_input_tokens" => BudgetLimits.positive_int_or_nil(budget.max_input_tokens),
+          "max_output_tokens" => BudgetLimits.positive_int_or_nil(budget.max_output_tokens),
+          "max_tool_calls" => BudgetLimits.positive_int_or_nil(budget.max_tool_calls),
+          "max_tool_result_bytes" => BudgetLimits.positive_int_or_nil(budget.max_tool_result_bytes),
+          "max_total_tool_result_bytes" => BudgetLimits.positive_int_or_nil(budget.max_total_tool_result_bytes),
+          "max_provider_retries" => BudgetLimits.positive_int_or_nil(budget.max_provider_retries),
+          "max_cost_microunits" => BudgetLimits.positive_int_or_nil(budget.max_cost_microunits)
         }
       end
 
@@ -293,31 +294,20 @@ module Tamoz
         raise EpisodeRequestInvalidError, "tracestate exceeds 512 bytes"
       end
 
-      # F-2 (security review): the budget is the worker's only resource
-      # control — a hostile budget must not be able to disable it. Values are
-      # clamped to worker maxima, fail-closed.
-      MAX_WALL_TIME_SECONDS = 600
-      MAX_MODEL_CALLS = 50
-
       def validate_budget!
         budget = @wire.budget
         return if budget.nil?
 
-        if budget.wall_time&.seconds && budget.wall_time.seconds > MAX_WALL_TIME_SECONDS
+        if budget.wall_time&.seconds && budget.wall_time.seconds > BudgetLimits::MAX_WALL_TIME_SECONDS
           raise EpisodeRequestInvalidError,
-                "wall_time exceeds the worker maximum of #{MAX_WALL_TIME_SECONDS}s"
+                "wall_time exceeds the worker maximum of #{BudgetLimits::MAX_WALL_TIME_SECONDS}s"
         end
-        if budget.max_model_calls.to_i > MAX_MODEL_CALLS
+        if budget.max_model_calls.to_i > BudgetLimits::MAX_MODEL_CALLS
           raise EpisodeRequestInvalidError,
-                "max_model_calls exceeds the worker maximum of #{MAX_MODEL_CALLS}"
+                "max_model_calls exceeds the worker maximum of #{BudgetLimits::MAX_MODEL_CALLS}"
         end
 
         true
-      end
-
-      def positive_int_or_nil(value)
-        int = value.to_i
-        int.positive? ? int : nil
       end
 
       def episode_payload
@@ -547,7 +537,7 @@ module Tamoz
         retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
         emit_model_events(adapter, terminal_state, envelope)
         emit_tool_events(stream, envelope, terminal_state)
-        emit_budget_update(stream, adapter, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
+        emit_budget_update(stream, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
         manifest
       end
 
@@ -560,7 +550,7 @@ module Tamoz
         DurableTerminal.state(@durable_runner, thread_id: envelope.thread_id, namespace: envelope.namespace, result:)
       end
 
-      def emit_budget_update(stream, adapter, terminal_state)
+      def emit_budget_update(stream, terminal_state)
         receipts = Array(terminal_state[:model_receipts])
         stream.budget(
           cumulative_usage: EpisodeStreamAdapter.cumulative_usage(receipts),
@@ -678,6 +668,8 @@ module Tamoz
       # identity complete the manifest.
       def build_artifact_manifest(envelope, terminal_state = nil)
         terminal_state ||= {}
+        validate_terminal_memory_consistency!(terminal_state)
+
         Agenticstream::Runtime::V1::ArtifactManifest.new(
           prompt_sha256: digest_bytes_or_nil(envelope.prompt_sha256),
           skill_set_sha256: digest_bytes_or_nil(terminal_state[:skill_set_digest]),

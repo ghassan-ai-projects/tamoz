@@ -36,7 +36,7 @@ leak test for candidates (plan §6); real-model drafting evidence (session 4 run
 | A1 | A draft document cannot express `mode`, `active`, `envelope`, approval, or a free value; unknown keys refused | `agent_playbook_draft_test` (mutation: dropped key check → red); TZ-5 test | PASS (TZ-2; TZ-5 adds the cross-path test) |
 | A2 | The draft model call goes through `EffectDispatcher.run`; a replay returns the receipt | `stream_draft_playbook_rule_test` — redelivered draft makes no new call; repair is a second journaled call | PASS (TZ-3) |
 | A3 | Case summaries are framed as untrusted data, never as instructions | `agent_playbook_draft_frame_test` (summary only in the user section) + injection eval case (TZ-4) | PASS (TZ-3 frame) |
-| A4 | No new cross-gem reach past a facade; enola shows no new cycle | `enola check`, `diff_snapshot` | OPEN |
+| A4 | No new cross-gem reach past a facade; enola shows no new cycle | `enola check` PASS; tamoz-stream requires no kernel file; the evals runner uses the kernel's public `FeatureCondition` (declared dependency) | PASS |
 | A5 | No Tamoz code path writes Agentic Stream state or a rule's mode | `rule_promotion_authority_test` (wire fields, served/dialled RPCs, the one proposal builder, a smuggled `mode` refused through repair) | PASS (TZ-5) |
 | A6 | An oversized draft request is refused, not truncated | `stream_draft_playbook_rule_test`, `agent_playbook_draft_frame_test` (21 cases, a 5 KB case, an id over 120 bytes; no model call) | PASS |
 
@@ -61,10 +61,10 @@ leak test for candidates (plan §6); real-model drafting evidence (session 4 run
 
 | # | Gate | Check | Status |
 |---|---|---|---|
-| D1 | Touched test files, one per command | `ruby -Itest test/<file>.rb` | OPEN |
-| D2 | `rake ci` | output | OPEN |
-| D4 | RuboCop autocorrect on touched files | `bundle exec rubocop -a` | OPEN |
-| D5 | enola `diff_snapshot` vs baseline: no new cycle or unintended coupling; `enola check` | enola output | OPEN |
+| D1 | Touched test files, one per command | each round's files, after every fix | PASS |
+| D2 | `rake ci` | `design:validate adr:validate adr:verify syntax test_fast quality:architecture` PASS; `stream:proto:check` known-red here (see above) | PASS / BLOCKED (proto check) |
+| D4 | RuboCop autocorrect on touched files | `bundle exec rubocop -a` on every touched file; leftovers not hand-fixed (owner rule) | PASS |
+| D5 | enola `diff_snapshot` vs baseline: no new cycle or unintended coupling; `enola check` | no new cycle or coupling; new findings are false positives (vendored proto message `DraftRule`, a Hash `fetch` in a loop) | PASS |
 
 **Known-red at HEAD:** `stream:proto:check` — grpc-tools 1.83 ships only an x86_64 `protoc` and this Mac has no
 Rosetta (`Errno::EBADARCH` before reading any proto, so it fails identically at HEAD). `rake ci`'s test phase,
@@ -74,24 +74,25 @@ design, ADR and architecture gates were run on their own.
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| E1 | Simplest design; reuse reason/validate/repair, no second model-call path | review | OPEN |
-| E2 | No compatibility shim (ADR-059) | diff review | OPEN |
-| E3 | Comments per `AGENTS.md` | review | OPEN |
-| E4 | File modes 644, no scratch files | `git status` | OPEN |
-| E6 | No domain literal in Ruby (ADR-058) | review | OPEN |
+| E1 | Simplest design; reuse reason/validate/repair, no second model-call path | draft route on the one graph; two-lens review: duplication removed (`BudgetLimits`, test worker helper, one controls check) | PASS |
+| E2 | No compatibility shim (ADR-059) | diff review: none; graph version bumped, no old-version reader | PASS |
+| E3 | Comments per `AGENTS.md` | one-line class docs and short "why" lines only, trimmed after review | PASS |
+| E4 | File modes 644, no scratch files | `ls -l`, `git status` (scripts 755) | PASS |
+| E6 | No domain literal in Ruby (ADR-058) | review: pump features, codes and thresholds only in `pump-station.json`; a pump line in the draft prompt was removed | PASS |
 
 ## F. Honesty and records
 
 | # | Property | Check | Status |
 |---|---|---|---|
-| F1 | Report separates plumbing from real-model results | review | OPEN |
-| F2 | Plan §9 records state, commits and deviations | review | OPEN |
-| F3 | Affected ADRs stay true (`rake adr:validate adr:verify`) | ADR tooling | OPEN |
+| F1 | Report separates plumbing from real-model results | tests named plumbing; reports tagged; real-model run reported separately | PASS |
+| F2 | Plan §9 records state, commits and deviations | §9 rounds, review fixes and open owner decisions | PASS |
+| F3 | Affected ADRs stay true (`rake adr:validate adr:verify`) | ADR-055 (new RPC), ADR-058 evidence row; tooling PASS | PASS |
 
 ## Review log
 
 | Package | Findings (c / h / m / l) | Resolution | Commit |
 |---|---|---|---|
+| PR #82, two lenses | 0 / 0 / 9 / 12 | restored the memory-digest integrity check removed in TZ-1 (with a test); Go-encoded `-0`/large-integer features read as doubles; a condition must read a feature; catalog codes ≤ 63 chars as Agentic Stream's schema; untested admission guards tested; `BudgetLimits`, one test worker helper, one controls check; Go retrying a failed draft under the same id and Go ignoring draft diagnostics left to the owner (plan §9) | see git log |
 | TZ-4/5 | 0 / 1 / 3 / 6 | held-out `must_hold` cases, more look-alikes, overfit and always-decline controls; decline reasons graded; injection case is a proposal case that may decline; malformed answers fail the case; per-run fresh database and temp cleanup in the script, `RUNS`; tautological assertions replaced; TZ-5 scans broadened to any `PlaybookProposal` reference | see git log |
 | TZ-3 | 0 / 1 / 3 / 5 | id bound to the store's 128-byte request id; `draft_failed` fallback code; duplicate case ids refused; tests for repair exhaustion with usage, fixture-mode refusal; wall-time-in-flight and token under-count kept as for episodes (noted in plan §9) | see git log |
 | TZ-2 | 0 / 1 / 2 / 3 | int literals refused (CEL never mixes int and double); finite literals, depth ≤ 32; repair directive names why a case fails; comments trimmed; precedence tests strengthened; eager `&&`/`||` kept (stricter than CEL) | see git log |
@@ -101,7 +102,8 @@ design, ADR and architecture gates were run on their own.
 
 | Iteration | Date | What changed | Rows moved | Still open | Next |
 |---|---|---|---|---|---|
+| 5 | 2026-10-27 | Two-lens PR review fixes | all OPEN rows graded | C3 (real-model run reported separately) | owner decisions in plan §9 |
 | 4 | 2026-10-27 | TZ-4 scorecard, fixture, controls, real-model script; TZ-5 authority test | A5, C1, C2 PASS; C3 BLOCKED (no real-model run in this session) | C3, D2 proto check | owner: real-model run |
 | 3 | 2026-10-27 | TZ-3: draft route, runner, worker RPC, launcher flag; benchmark protocol re-pinned (graph version 5) | A2, A3, A6, B3 PASS; B4 PASS/BLOCKED | C, A5, D | TZ-4 |
 | 2 | 2026-10-27 | TZ-2: draft parser, condition evaluator, reply builder, proto vendored | A1 PASS | B3, B4, C, A2-A6 | TZ-3 |
-| 1 | 2026-10-27 | TZ-1: `diagnosis_code` on the decision; empty `validate_terminal_memory_consistency!` removed | B1 PASS, B2 WAIVED | TZ-2..TZ-5 rows | TZ-2 |
+| 1 | 2026-10-27 | TZ-1: `diagnosis_code` on the decision; the call to `validate_terminal_memory_consistency!` was removed in error (the author misread two concatenated outputs as an empty method); restored with a test in iteration 5 | B1 PASS, B2 WAIVED | TZ-2..TZ-5 rows | TZ-2 |
