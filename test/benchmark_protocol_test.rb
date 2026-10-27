@@ -23,7 +23,8 @@ class BenchmarkProtocolTest < Minitest::Test
   # 2026-09-30 bump: the CLI's declared tamoz-research dependency (lockfile).
   # 2026-10-01 bump: the tamoz-skills gem and its dependents join the lockfile.
   # 2026-10-09 bump: the new tamoz-talk gem in the lockfile.
-  COMMITTED_SHA256 = "3b255590bc1d1e0f4813da7586f8016e3d2bdbc1ce2463cbd5a17c7c3795d0c0"
+  # 2026-10-27 bump: the episode graph gains the playbook draft route (graph version 5).
+  COMMITTED_SHA256 = "b2507e5c89c4c9a40ed5862d592593912eb800c3ce912b508b7c3d1caa41eec4"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider

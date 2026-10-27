@@ -20,6 +20,7 @@ module Tamoz
     #
     #   RECONSIDER: START → intake → judge → compensate → END
     #   (deterministic — no model call, ever; compensation from the catalog).
+    #   DRAFT: START → intake → draft_frame → reason → validate → END (repair as above; no recall, no tools).
     #
     # `reason` is the ONLY model-calling node; `execute_tool` the only
     # tool-calling node — both journaled unsafe effects with logical keys.
@@ -33,7 +34,7 @@ module Tamoz
       GRAPH_NAME = "tamoz.agent.episode"
       # Version of THIS episode graph family only — unrelated to the durable
       # session-graph versions in Tamoz::Agent::GraphVersions.
-      GRAPH_VERSION = "4"
+      GRAPH_VERSION = "5"
 
       def self.build(checkpointer:, nodes:)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
@@ -62,12 +63,16 @@ module Tamoz
           # P6: the kind route the intake writes; the route_kind branch reads
           # it (:recall for DIAGNOSE, :judge for RECONSIDER).
           state :route, default: nil
+          state :draft, default: nil
 
-          node(:intake, implementation_name: "tamoz.agent.episode.intake", version: "1") do |state, context|
+          node(:intake, implementation_name: "tamoz.agent.episode.intake", version: "2") do |state, context|
             nodes.intake(state, context)
           end
           node(:recall, implementation_name: "tamoz.agent.episode.recall", version: "1") do |state, context|
             nodes.recall(state, context)
+          end
+          node(:draft_frame, implementation_name: "tamoz.agent.episode.draft_frame", version: "1") do |state, context|
+            nodes.draft_frame(state, context)
           end
           node(:build_frame, implementation_name: "tamoz.agent.episode.build_frame", version: "3") do |state, context|
             nodes.build_frame(state, context)
@@ -75,13 +80,13 @@ module Tamoz
           node(:reason, implementation_name: "tamoz.agent.episode.reason", version: "2") do |state, context|
             nodes.reason(state, context)
           end
-          node(:validate, implementation_name: "tamoz.agent.episode.validate", version: "4") do |state, context|
+          node(:validate, implementation_name: "tamoz.agent.episode.validate", version: "5") do |state, context|
             nodes.validate(state, context)
           end
           node(:execute_tool, implementation_name: "tamoz.agent.episode.execute_tool", version: "2") do |state, context|
             nodes.execute_tool(state, context)
           end
-          node(:rebuild_frame, implementation_name: "tamoz.agent.episode.rebuild_frame", version: "3") do |state, context|
+          node(:rebuild_frame, implementation_name: "tamoz.agent.episode.rebuild_frame", version: "4") do |state, context|
             nodes.rebuild_frame(state, context)
           end
           node(:repair, implementation_name: "tamoz.agent.episode.repair", version: "1") do |state, context|
@@ -102,11 +107,12 @@ module Tamoz
           # judge → compensate. Same spine, deterministic.
           branch :intake,
                  name: :tamoz_episode_route_kind,
-                 version: "1",
-                 targets: %i[recall judge] do |state|
+                 version: "2",
+                 targets: %i[recall judge draft_frame] do |state|
             state.fetch(:route).to_sym
           end
           edge :recall, :build_frame
+          edge :draft_frame, :reason
           edge :judge, :compensate
           edge :compensate, Tamoz::END
           edge :build_frame, :reason
@@ -117,9 +123,10 @@ module Tamoz
           # rebuild_frame → reason. Bounded by Limits#max_steps.
           branch :validate,
                  name: :tamoz_episode_validate_route,
-                 version: "1",
-                 targets: %i[decide execute_tool repair] do |state|
-            state.fetch(:next_node).to_sym
+                 version: "2",
+                 targets: [:decide, :execute_tool, :repair, Tamoz::END] do |state|
+            next_node = state.fetch(:next_node)
+            next_node == "end" ? Tamoz::END : next_node.to_sym
           end
 
           edge :execute_tool, :rebuild_frame

@@ -4,6 +4,7 @@ require "tamoz/core"
 require "tamoz/agent/errors"
 require "tamoz/agent/model_receipt"
 require "tamoz/agent/reasoning_document"
+require "tamoz/agent/playbook_draft_frame"
 require "tamoz/agent/episode_model_call"
 require "tamoz/agent/episode_frame_builder"
 
@@ -153,8 +154,12 @@ module Tamoz
             "profile_digest" => role.profile_digest
           },
           # The route is codec-safe (the graph branch reads it as a symbol).
-          "route" => "recall"
+          "route" => kind == "draft" ? "draft_frame" : "recall"
         }
+      end
+
+      def draft_frame(state, _context)
+        {"frame" => draft_frame_projection(state)}
       end
 
       # P6: the wire's Reconsideration payload, parsed into plain hashes
@@ -374,6 +379,8 @@ module Tamoz
       # malformed-after-success → repair (exactly once) or typed terminal;
       # valid → decide. Never a second model.
       def validate(state, _context)
+        return {"draft" => validated_draft(state), "next_node" => "end"} if draft?(state)
+
         document = validated_document(state)
         next_node = next_node_for_document(document)
         if next_node == "execute_tool" && budget_controller(state).spent?(state.fetch(:budget_state, nil))
@@ -419,6 +426,8 @@ module Tamoz
       # section. Same inputs → same frame bytes → the next reason call's
       # logical key is deterministic.
       def rebuild_frame(state, _context)
+        return {"frame" => draft_frame_projection(state)} if draft?(state)
+
         frame = assemble_frame(
           state,
           skills: verified_skills(state.fetch(:wire)),
@@ -551,15 +560,35 @@ module Tamoz
         end
       end
 
+      def draft?(state) = state.fetch(:episode).fetch("kind") == "draft"
+
+      def draft_frame_projection(state)
+        frame = PlaybookDraftFrame.build(state.fetch(:wire).fetch("draft"), repair_directive: state[:repair_directive])
+        {"system" => frame.system, "user" => frame.user, "digest" => frame.digest}
+      end
+
+      def validated_draft(state)
+        draft = state.fetch(:wire).fetch("draft")
+        answer = PlaybookDraft.parse(
+          model_response(state),
+          cases: draft.fetch("cases").to_h { |entry| [entry.fetch("episode_id"), entry.fetch("features")] },
+          allowed_features: draft.fetch("allowed_features")
+        )
+        kind = answer.is_a?(PlaybookDraft::Proposal) ? "proposal" : "no_proposal"
+        {kind => answer.to_h.transform_keys(&:to_s)}
+      end
+
+      def model_response(state)
+        raw = state.fetch(:raw_response)
+        raise ProtocolError, "episode has no model response to validate" if raw.nil? || raw.empty?
+
+        raw
+      end
+
       def validated_document(state)
         frame = required_frame(state.fetch(:frame))
-        raw = state.fetch(:raw_response)
-        if raw.nil? || raw.empty?
-          raise ProtocolError, "episode has no model response to validate"
-        end
-
         catalog = DiagnosisCatalog.from_list(frame.fetch("catalog"))
-        document = ReasoningDocument.parse(raw, catalog:)
+        document = ReasoningDocument.parse(model_response(state), catalog:)
         ground_evidence!(document, frame)
         intent_catalog = IntentCatalog.verify_wire(
           state.fetch(:wire).fetch("intent_catalog_json"),

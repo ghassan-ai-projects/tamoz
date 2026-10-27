@@ -4,6 +4,7 @@ require "tamoz/core"
 require "tamoz/stream/gen"
 require "tamoz/stream/episode_stream"
 require "tamoz/stream/decision_builder"
+require "tamoz/stream/durable_terminal"
 require "tamoz/stream/capability_host"
 require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
@@ -483,7 +484,7 @@ module Tamoz
         adapter = EpisodeStreamAdapter.new(stream)
         stream.started
         stream.budget(
-          cumulative_usage: adapter.cumulative_usage([]),
+          cumulative_usage: EpisodeStreamAdapter.cumulative_usage([]),
           model_calls_used: 0,
           tool_calls_used: 0
         )
@@ -534,7 +535,7 @@ module Tamoz
         record_produced_decision(envelope:, stream:, snapshot:, terminal_state:) if produced
         manifest ||= build_artifact_manifest(envelope, terminal_state)
         stream.terminal(
-          status, reason_code: reason_code_for(result),
+          status, reason_code: DurableTerminal.reason_code(result),
           artifact_manifest: manifest
         )
       end
@@ -556,25 +557,13 @@ module Tamoz
       end
 
       def load_terminal_state(envelope, result)
-        return {} unless result.checkpoint_id
-
-        # The request's OWN last checkpoint — for a PRODUCED run this is
-        # the decide node's state; for a run that failed after the model
-        # call it is the last appended step, so the call's receipts are
-        # still witnessed (B4: model events come from receipts, and a
-        # completed call is never silently dropped).
-        checkpoint = @durable_runner.compiled.checkpointer.find(
-          thread_id: envelope.thread_id,
-          namespace: envelope.namespace,
-          checkpoint_id: result.checkpoint_id
-        )
-        checkpoint.state.to_h
+        DurableTerminal.state(@durable_runner, thread_id: envelope.thread_id, namespace: envelope.namespace, result:)
       end
 
       def emit_budget_update(stream, adapter, terminal_state)
         receipts = Array(terminal_state[:model_receipts])
         stream.budget(
-          cumulative_usage: adapter.cumulative_usage(receipts),
+          cumulative_usage: EpisodeStreamAdapter.cumulative_usage(receipts),
           model_calls_used: receipts.length,
           tool_calls_used: terminal_state[:budget_state]&.fetch("tool_calls_used", 0).to_i
         )
@@ -595,18 +584,6 @@ module Tamoz
 
       def dispatched_tools(terminal_state)
         Array(terminal_state[:tool_results]).reject { |result| result["dispatched"] == false }
-      end
-
-      # P1: the typed reason on a FAILED terminal — the durable request's
-      # terminal error carries the graph failure category; a produced run has
-      # none.
-      def reason_code_for(result)
-        return nil if result.nil? || result.status != :failed
-
-        terminal_error = result.respond_to?(:terminal_error) ? result.terminal_error : nil
-        return nil unless terminal_error.is_a?(Hash)
-
-        terminal_error.fetch("category", terminal_error.fetch("graph_status", nil))
       end
 
       # P1: TRANSLATES the terminal graph state to the wire decision event.

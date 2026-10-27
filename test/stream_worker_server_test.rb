@@ -101,6 +101,18 @@ class StreamWorkerServerTest < Minitest::Test
     end
   end
 
+  def test_the_bin_launcher_announces_drafting_only_with_a_draft_model_policy
+    with_launcher_files do |files|
+      features = nil
+      served, = launch_and_handshake(files, "--draft-model-policy", "fast") do |socket|
+        features = handshake_on("unix://#{socket}").supported_features.to_a
+      end
+
+      assert served
+      assert_equal ["draft_playbook_rule"], features
+    end
+  end
+
   def test_the_bin_launcher_refuses_a_runtime_dir_without_probes
     with_launcher_files do |files|
       runtime_dir = write_probe_runtime(files.fetch(:directory), probes: false)
@@ -137,6 +149,7 @@ class StreamWorkerServerTest < Minitest::Test
                         "--tenant", "acme", "--socket", files.fetch(:socket), *extra,
                         out: File::NULL, err: File::NULL)
     served = handshake_within_deadline?(files.fetch(:socket))
+    yield files.fetch(:socket) if served && block_given?
     Process.kill("TERM", pid)
     [served, Process.wait2(pid).last]
   end

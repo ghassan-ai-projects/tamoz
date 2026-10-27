@@ -133,12 +133,7 @@ class StreamEpisodeStreamTest < Minitest::Test
   end
 
   def test_cumulative_usage_sums_available_receipt_projections
-    stream = Stream::EpisodeStream.new(
-      Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)
-    )
-    adapter = Stream::EpisodeStreamAdapter.new(stream)
-
-    usage = adapter.cumulative_usage([
+    usage = Stream::EpisodeStreamAdapter.cumulative_usage([
       {"usage" => {
         "input_tokens" => 5, "output_tokens" => 3, "cached_input_tokens" => 2,
         "reasoning_tokens" => 1, "cost_microunits" => 7

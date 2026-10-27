@@ -31,8 +31,11 @@ and they have different justifications:
 ## Decision
 
 - **Roles.** `tamoz-stream` implements `agenticstream.runtime.v1.EpisodeWorker` (`Handshake`,
-  `Execute(EpisodeRequest) -> stream EpisodeEvent`) as the gRPC server; the Go executor is the
-  client and authority. Worker events are proposals and telemetry, never commands.
+  `Execute(EpisodeRequest) -> stream EpisodeEvent`, and `DraftPlaybookRule(DraftRequest) -> stream
+  DraftEvent` when the operator names a drafting model role, announced as `draft_playbook_rule`) as the
+  gRPC server; the Go executor is the client and authority. Worker events are proposals and telemetry,
+  never commands: a drafted playbook rule carries no mode or envelope, and only a human approval in
+  `agentic-stream` lets it run.
 - **Tamoz computes no stream-plane concept:** no event time, watermark, lateness, window membership,
   backpressure, or replay policy. Those are `agentic-stream`'s contracts (formerly ADR-037).
 - **Sealed snapshot** per ADR-036.
@@ -70,6 +73,7 @@ compromised or mistaken worker; a process that reaches the worker socket.
 | The worker actuates or overspends | It only proposes; the stream disposes and owns budget; no effector credential |
 | A tampered snapshot drives a decision | Digest recomputed; mismatch ends the episode before any model call |
 | Injection names a forbidden tool | Allowlist fixed at construction; unknown names are refused |
+| A case summary steers a drafted rule | Summaries are framed as untrusted data; the key comes from the request; `agentic-stream` checks, replays and a human approves the rule |
 | A leaked reverse-channel token is replayed | Short-lived, opaque, scoped to exact tools, never persisted |
 | Another local process drives the worker | Only socket and directory permissions stop it; the worker does not set them |
 | A network peer drives the worker in TCP mode | **Not mitigated:** TCP binds all interfaces with no authentication |

@@ -212,7 +212,7 @@ module Tamoz
         end
       end
 
-      def cumulative_usage(receipts)
+      def self.cumulative_usage(receipts)
         totals = USAGE_FIELDS.to_h { |field| [field, 0] }
         Array(receipts).each do |receipt|
           usage = wire_usage(receipt["usage"])
@@ -282,14 +282,14 @@ module Tamoz
       def model_completed_part(data)
         @stream.model_completed(
           ordinal: Integer(data.fetch("ordinal")),
-          usage: wire_usage(data["usage"]),
+          usage: self.class.wire_usage(data["usage"]),
           response_sha256: data["response_sha256"]
         )
       end
 
       # nil usage (unavailable) crosses as nil — the wire claims nothing it
       # cannot prove. Present usage is mapped 1:1 from the receipt projection.
-      def wire_usage(usage)
+      def self.wire_usage(usage)
         return nil if usage.nil?
 
         fields = USAGE_FIELDS.to_h { |field| [field, Integer(usage.fetch(field.to_s, 0))] }
