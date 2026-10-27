@@ -63,12 +63,19 @@ module Tamoz
         scanner = StringScanner.new(text)
         tokens = []
         until scanner.skip(/\s*/) && scanner.eos?
-          token = scanner.scan(TOKEN) or raise Invalid, "unexpected #{scanner.rest[0, 16].inspect}"
+          token = scanner.scan(TOKEN) or raise Invalid, unexpected(scanner.rest)
           tokens << token
         end
         raise Invalid, 'the condition is empty' if tokens.empty?
 
         tokens
+      end
+
+      def unexpected(rest)
+        name = rest[/\A[A-Za-z_][A-Za-z0-9_]*/]
+        return "unexpected #{rest[0, 16].inspect}" unless name
+
+        "unexpected #{name}: write a feature as features.#{name}"
       end
 
       def disjunction = binary_chain(%w[||]) { conjunction }

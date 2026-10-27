@@ -9,7 +9,7 @@ require_relative 'local_model_endpoint'
 # Drafts a rule-proposal eval case through the worker's DraftPlaybookRule, as Agentic Stream calls it.
 module RuleProposalDrafter
   V1 = Agenticstream::Runtime::V1
-  BUDGET = V1::DraftBudget.new(wall_time: Google::Protobuf::Duration.new(seconds: 60), model_calls: 6,
+  BUDGET = V1::DraftBudget.new(wall_time: Google::Protobuf::Duration.new(seconds: 180), model_calls: 6,
                                input_tokens: 30_000, output_tokens: 5_000)
 
   module_function

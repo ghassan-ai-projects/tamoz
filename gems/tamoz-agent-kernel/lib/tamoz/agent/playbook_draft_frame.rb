@@ -44,7 +44,7 @@ module Tamoz
         [
           INSTRUCTIONS,
           "KEY: #{Tamoz::Core.jcs(draft.fetch('key'))}",
-          "ALLOWED FEATURES: #{draft.fetch('allowed_features').join(', ')}",
+          "ALLOWED FEATURES: #{draft.fetch('allowed_features').map { |name| "features.#{name}" }.join(', ')}",
           "CURRENT RULES FOR THIS KEY: #{Tamoz::Core.jcs(rules)}"
         ].join("\n")
       end

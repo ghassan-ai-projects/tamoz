@@ -213,6 +213,14 @@ duplication removed (`BudgetLimits` shared with episodes, one test helper for a 
    failure is therefore final. Proposed: Agentic Stream sends a per-attempt id (for example `<draft>-a<attempt>`).
 2. Agentic Stream's `DraftReading` ignores `diagnostic` events, so Tamoz's typed failure code is lost on its side.
 
+3. The first real-model run (Z.ai `glm-5.3-flash`) showed its calls take 25 to 50 s, so Agentic Stream's draft budget of
+   60 s (`DraftBudget`) leaves no room for the one repair; the drafting eval uses 180 s. Proposed: raise
+   `DraftBudget.wall_time` to 180 s.
+
+Real-model fixes: that run also showed the model writing bare feature names (`vibration_mean_15m >= 2.5`), copied from
+the frame's allowed-feature list, and a repair message that did not say what to change. The frame now lists the
+allowed features as `features.<name>`, and the refusal says `write a feature as features.<name>`.
+
 Kept as is: a case over 4 KB is refused, not truncated, and blocks drafts for its key until it ages out of the last 20.
 
 ### Handoff to session 4 (agentic-stream AS-9)

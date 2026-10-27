@@ -42,6 +42,10 @@ class AgentFeatureConditionTest < Minitest::Test
     assert_nil condition('features.a > 1.0').failure({ 'a' => 2 })
   end
 
+  def test_a_bare_feature_name_is_refused_with_how_to_write_it
+    assert_invalid 'a >= 2.5', 'unexpected a: write a feature as features.a'
+  end
+
   def test_a_condition_that_reads_no_feature_is_refused
     assert_invalid 'true', 'reads no feature'
     assert_invalid '1.0 < 2.0', 'reads no feature'
