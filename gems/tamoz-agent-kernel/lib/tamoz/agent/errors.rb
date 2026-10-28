@@ -127,5 +127,14 @@ module Tamoz
 
       CATEGORY = 'episode_document_rejected'
     end
+
+    # A journaled episode model or tool call ended failed. The raise site writes only the
+    # failure's serialized class, code and HTTP status, never the provider body, so the
+    # message may cross the wire as the failure diagnostic.
+    class EpisodeCallFailedError < ProtocolError
+      include Tamoz::DisclosableMessage
+
+      CATEGORY = 'episode_call_failed'
+    end
   end
 end

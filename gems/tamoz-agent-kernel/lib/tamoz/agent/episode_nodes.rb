@@ -643,9 +643,13 @@ module Tamoz
         if result.unknown?
           raise EffectUnknownError, "episode #{subject} call outcome is unknown"
         end
-        if result.failed?
-          raise ProtocolError, "episode #{subject} call failed"
-        end
+        raise EpisodeCallFailedError, failed_call_message(result, subject) if result.failed?
+      end
+
+      def failed_call_message(result, subject)
+        error = result.outcome.error || {}
+        cause = error.values_at("class", "code", "status").compact.join(" ")
+        ["episode #{subject} call failed", cause].reject(&:empty?).join(": ")
       end
 
       def endpoint_for(role)

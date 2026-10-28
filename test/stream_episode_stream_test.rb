@@ -165,6 +165,18 @@ class StreamEpisodeStreamTest < Minitest::Test
     assert_match(/forbidden model event/, error.message)
   end
 
+  def test_an_untyped_graph_error_names_its_class_in_the_worker_log_line
+    stream = Stream::EpisodeStream.new(
+      Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)
+    )
+    adapter = Stream::EpisodeStreamAdapter.new(stream)
+    adapter.emit(:error, [], {"error_class" => "Tamoz::Core::ToolError", "node" => "reason",
+                              "safe_message" => "A workflow step failed."})
+
+    assert_equal "node reason: graph_step_failed (Tamoz::Core::ToolError): A workflow step failed.",
+                 adapter.last_failure
+  end
+
   def test_the_trusted_channel_projects_receipt_parts_into_the_wire
     stream = Stream::EpisodeStream.new(
       Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)

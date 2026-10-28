@@ -185,6 +185,23 @@ class StreamEpisodeLoopTest < Minitest::Test
     end
   end
 
+  def test_a_refused_model_call_names_its_status_on_the_wire_and_in_the_log
+    refusal = {status: 429, body: JSON.generate("error" => {"message" => "provider secret detail"})}
+    with_fixture_endpoint([refusal]) do |endpoint|
+      log = StringIO.new
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, log:)
+      events, terminal, _state = run_episode(composition, request_with_budget(composition, "refused", nil))
+      diagnostic = events.filter_map(&:diagnostic).last
+      reason = "episode model call failed: Tamoz::Agent::ModelCallError http_failure 429"
+
+      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+      assert_equal ["episode_call_failed", reason], [diagnostic.code, diagnostic.message]
+      assert_includes log.string, "node reason: episode_call_failed: #{reason}\n"
+      refute_includes log.string, "provider secret detail"
+      composition.fetch(:adapter).close
+    end
+  end
+
   def test_the_frame_lists_only_the_intents_the_episode_may_recommend
     with_fixture_endpoint([final_response]) do |endpoint|
       composition = EpisodeComposition.build(endpoint: endpoint.base_url)

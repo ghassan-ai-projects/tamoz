@@ -251,8 +251,12 @@ module Tamoz
         code = typed_code(data["error_class"].to_s)
         message = data.fetch("safe_message", "graph step failed")
         @last_diagnostic_code = code
-        @last_failure = "node #{data.fetch('node', 'unknown')}: #{code}: #{message}"
+        @last_failure = "node #{data.fetch('node', 'unknown')}: #{code}#{untyped_class(code, data)}: #{message}"
         @stream.diagnostic(code:, message:, retryable: false)
+      end
+
+      def untyped_class(code, data)
+        code == "graph_step_failed" ? " (#{data['error_class']})" : ""
       end
 
       def typed_code(error_class_name)
