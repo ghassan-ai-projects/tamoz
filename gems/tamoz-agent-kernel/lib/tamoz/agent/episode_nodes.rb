@@ -353,12 +353,13 @@ module Tamoz
           slot: 0,
           system: frame.fetch("system"),
           prompt: frame.fetch("user"),
-          frame_digest: frame["digest"]
+          frame_digest: frame["digest"],
+          provider_retries: budget.provider_retries_left(state.fetch(:budget_state, nil))
         )
         enforce_successful_outcome!(result, subject: "model")
 
         budget_state = budget.reconcile_model(
-          state.fetch(:budget_state, nil), result.receipt.usage
+          state.fetch(:budget_state, nil), result.receipt.usage, retries: result.receipt.retry_count
         )
 
         {

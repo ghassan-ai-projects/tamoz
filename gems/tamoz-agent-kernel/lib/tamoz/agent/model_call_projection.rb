@@ -8,11 +8,11 @@ module Tamoz
     module ModelCallProjection
       KEYS = %w[
         request_digest content response_digest usage settings_digest
-        provider_configuration_digest
+        provider_configuration_digest provider_retries
       ].freeze
       RESPONSE_FIELDS = %i[
         content request_digest response_digest usage settings_digest
-        provider_configuration_digest
+        provider_configuration_digest provider_retries
       ].freeze
 
       module_function
@@ -34,7 +34,8 @@ module Tamoz
           "response_digest" => response.response_digest,
           "usage" => usage_projection(response.usage),
           "settings_digest" => response.settings_digest,
-          "provider_configuration_digest" => response.provider_configuration_digest
+          "provider_configuration_digest" => response.provider_configuration_digest,
+          "provider_retries" => response.provider_retries
         }
         validate!(projection)
       rescue ModelReceiptError => error
@@ -61,6 +62,9 @@ module Tamoz
         )
         raise ModelReceiptError, "model_projection/content" unless projection["content"].is_a?(String)
         validate_usage!(projection["usage"])
+        retries = projection["provider_retries"]
+        raise ModelReceiptError, "model_projection/provider_retries" unless retries.is_a?(Integer) && retries >= 0
+
         Tamoz::Core.deep_freeze(projection)
       end
 

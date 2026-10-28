@@ -36,7 +36,7 @@ module EpisodeComposition
     ALLOWED_INTENT_TYPES.map { |type| catalog.entry(type) }
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil, probe_source: nil, log: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil, probe_source: nil, log: nil, pause: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
@@ -69,7 +69,8 @@ module EpisodeComposition
           profile_role: resolved_role,
           environment: ENV,
           explicit_api_base: role.fetch("endpoint").to_s.empty? ? nil : role.fetch("endpoint"),
-          gateway:
+          gateway:,
+          pause:
         )
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,

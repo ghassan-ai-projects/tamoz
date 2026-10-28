@@ -49,6 +49,11 @@ module Tamoz
         end
       end
 
+      # Provider retries the wire budget still allows; an unset limit allows none.
+      def provider_retries_left(state)
+        [@budget["max_provider_retries"].to_i - used(state, "provider_retries_used"), 0].max
+      end
+
       # Tool calls this episode may still dispatch. An unset wire limit is one document's worth.
       def tool_calls_left(state)
         [tool_limit - used(state, "tool_calls_used"), 0].max
@@ -76,11 +81,12 @@ module Tamoz
       end
 
       # Reconcile a model receipt: the state advances by one call + the
-      # receipt's usage. Usage.unavailable contributes nothing (it is never
-      # fabricated as zero tokens).
-      def reconcile_model(state, usage)
+      # receipt's usage and the provider retries it took. Usage.unavailable
+      # contributes nothing (it is never fabricated as zero tokens).
+      def reconcile_model(state, usage, retries: 0)
         base = (state || ZERO).dup
         base["model_calls_used"] = base.fetch("model_calls_used", 0).to_i + 1
+        base["provider_retries_used"] = base.fetch("provider_retries_used", 0).to_i + retries
         add_available_usage(base, usage)
         enforce_input_token_budget!(base)
         enforce_output_token_budget!(base)

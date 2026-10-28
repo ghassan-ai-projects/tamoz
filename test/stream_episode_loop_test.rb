@@ -202,6 +202,42 @@ class StreamEpisodeLoopTest < Minitest::Test
     end
   end
 
+  def rate_limit_refusal
+    {status: 429, body: JSON.generate("error" => {"code" => "1302", "message" => "Rate limit reached for requests"})}
+  end
+
+  def test_a_rate_limited_model_call_is_retried_within_the_budget_and_the_episode_decides
+    budget = Agenticstream::Runtime::V1::EpisodeBudget.new(max_provider_retries: 2)
+    pauses = []
+    with_fixture_endpoint([rate_limit_refusal, final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, pause: pauses.method(:push))
+      _events, terminal, state = run_episode(composition, request_with_budget(composition, "retried", budget))
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+      assert_equal 2, endpoint.observed.length
+      assert_equal [2], pauses
+      assert_equal 1, state.fetch(:budget_state).fetch("provider_retries_used")
+      assert_equal 1, state.fetch(:budget_state).fetch("model_calls_used")
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_a_model_call_rate_limited_beyond_the_retry_budget_fails_the_episode
+    budget = Agenticstream::Runtime::V1::EpisodeBudget.new(max_provider_retries: 2)
+    pauses = []
+    with_fixture_endpoint([rate_limit_refusal]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, pause: pauses.method(:push))
+      events, terminal, _state = run_episode(composition, request_with_budget(composition, "exhausted", budget))
+      diagnostic = events.filter_map(&:diagnostic).last
+
+      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+      assert_equal "episode_call_failed", diagnostic.code
+      assert_equal 3, endpoint.observed.length, "the first request and two retries"
+      assert_equal [2, 6], pauses
+      composition.fetch(:adapter).close
+    end
+  end
+
   def test_the_frame_lists_only_the_intents_the_episode_may_recommend
     with_fixture_endpoint([final_response]) do |endpoint|
       composition = EpisodeComposition.build(endpoint: endpoint.base_url)
