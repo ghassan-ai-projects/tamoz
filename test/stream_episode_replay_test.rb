@@ -221,7 +221,7 @@ class StreamEpisodeReplayTest < Minitest::Test
       catalog:, objective: AquacultureDomain::OBJECTIVE
     ).build(
       snapshot:, prompt: AquacultureDomain::PROMPT,
-      prompt_version: "1.0", tool_results:
+      prompt_version: "1.0", tool_results:, intents: EpisodeComposition.frame_intents
     )
     # The logical key binds the factory-computed provider configuration
     # digest, so the seed transport must be built exactly like the live one.

@@ -45,13 +45,15 @@ module Tamoz
       PROBABILITY_TOLERANCE = 0.05
       REF_PREFIXES = %w[fact evidence memory tool skill].freeze
 
-      TOP_LEVEL_KEYS = %w[
-        protocol primary_hypothesis diagnosis_probabilities evidence_refs
-        tool_requests recommended_intents evidence_gaps
-      ].freeze
       TERMINAL_KEYS = %w[
         primary_hypothesis diagnosis_probabilities evidence_refs recommended_intents evidence_gaps
       ].freeze
+      TOOL_KEYS = %w[tool_requests].freeze
+      TOP_LEVEL_KEYS = ["protocol", *TERMINAL_KEYS, *TOOL_KEYS].freeze
+      PROBABILITY_KEYS = %w[diagnosis_code probability].freeze
+      INTENT_KEYS = %w[type parameter_preset parameters].freeze
+      TOOL_REQUEST_KEYS = %w[name arguments purpose].freeze
+      EVIDENCE_GAP_KEYS = %w[datum why].freeze
 
       Probability = Data.define(:code, :probability)
       RecommendedIntent = Data.define(:type, :parameter_preset, :parameters)
@@ -144,7 +146,7 @@ module Tamoz
         def parse_probability_entry(entry, codes, seen)
           raise ProtocolError, "reasoning_document/probability_not_object" unless entry.is_a?(Hash)
 
-          reject_unknown_keys(entry, %w[diagnosis_code probability], "probability")
+          reject_unknown_keys(entry, PROBABILITY_KEYS, "probability")
           code = fetch_bounded_string(entry, "diagnosis_code", MAX_CODE_BYTES)
           raise ProtocolError, "reasoning_document/unknown_diagnosis_code: #{code}" unless codes.include?(code)
           raise ProtocolError, "reasoning_document/duplicate_diagnosis_code: #{code}" if seen[code]
@@ -184,7 +186,7 @@ module Tamoz
         def parse_recommended_intent(intent)
           raise ProtocolError, "reasoning_document/intent_not_object" unless intent.is_a?(Hash)
 
-          reject_unknown_keys(intent, %w[type parameter_preset parameters], "recommended_intent")
+          reject_unknown_keys(intent, INTENT_KEYS, "recommended_intent")
           type = fetch_bounded_string(intent, "type", MAX_CODE_BYTES)
           preset = optional_bounded_string(intent, "parameter_preset", MAX_PRESET_BYTES)
           parameters = intent["parameters"]
@@ -201,7 +203,7 @@ module Tamoz
         def parse_tool_request(request)
           raise ProtocolError, "reasoning_document/tool_request_not_object" unless request.is_a?(Hash)
 
-          reject_unknown_keys(request, %w[name arguments purpose], "tool_request")
+          reject_unknown_keys(request, TOOL_REQUEST_KEYS, "tool_request")
           name = fetch_bounded_string(request, "name", MAX_CODE_BYTES)
           arguments = request.fetch("arguments", {})
           raise ProtocolError, "reasoning_document/tool_arguments_not_object: #{name}" unless arguments.is_a?(Hash)
@@ -218,7 +220,7 @@ module Tamoz
           fetch_array(root, "evidence_gaps", MAX_EVIDENCE_GAPS).map do |gap|
             raise ProtocolError, "reasoning_document/evidence_gap_not_object" unless gap.is_a?(Hash)
 
-            reject_unknown_keys(gap, %w[datum why], "evidence_gap")
+            reject_unknown_keys(gap, EVIDENCE_GAP_KEYS, "evidence_gap")
             EvidenceGap.new(datum: fetch_bounded_string(gap, "datum", MAX_GAP_FIELD_BYTES),
                             why: fetch_bounded_string(gap, "why", MAX_GAP_FIELD_BYTES))
           end

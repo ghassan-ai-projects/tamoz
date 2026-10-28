@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "stringio"
 require "tamoz/agent"
 require "tamoz/sqlite"
 require "tamoz/stream/episode_worker"
@@ -163,6 +164,52 @@ class StreamEpisodeLoopTest < Minitest::Test
       _events, terminal, _state = run_episode(composition, request_with_budget(composition, "repair2", nil))
       assert_equal :TERMINAL_STATUS_FAILED, terminal.status
       assert_equal 2, endpoint.observed.length, "no third provider call after two malformed responses"
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_a_document_rejected_after_repair_names_the_node_and_code_on_the_wire_and_in_the_log
+    invented = JSON.generate("protocol" => "tamoz.episode-diagnosis/v2", "diagnosis" => "low_dissolved_oxygen")
+    with_fixture_endpoint([invented, invented]) do |endpoint|
+      log = StringIO.new
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, log:)
+      events, terminal, _state = run_episode(composition, request_with_budget(composition, "rejected", nil))
+      diagnostic = events.filter_map(&:diagnostic).last
+      reason = "validate rejected the model's document after one repair: reasoning_document/unknown_key"
+
+      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+      assert_equal ["episode_document_rejected", reason], [diagnostic.code, diagnostic.message]
+      assert_equal "tamoz-stream-worker: episode loop-rejected attempt at-1 ended TERMINAL_STATUS_FAILED: " \
+                   "node validate: episode_document_rejected: #{reason}\n", log.string
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_the_frame_lists_only_the_intents_the_episode_may_recommend
+    with_fixture_endpoint([final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      _events, terminal, state = run_episode(composition, request_with_budget(composition, "intents", nil))
+      system = state.fetch(:frame).fetch("system")
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+      assert_includes system, "- start_aerator (risk R1)"
+      assert_includes system, "- install_watch_condition (risk R0)"
+      refute_includes system, "- halt_feeding"
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_the_frame_leaves_out_intents_above_the_risk_ceiling
+    with_fixture_endpoint([final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      request = request_with_budget(composition, "ceiling", nil)
+      request.risk_ceiling = :RISK_CLASS_R0
+      _events, _terminal, _state = run_episode(composition, request)
+      state = composition.fetch(:app).state(thread: "episode.loop-ceiling", namespace: [request.tenant_id]).state.to_h
+      system = state.fetch(:frame).fetch("system")
+
+      assert_includes system, "- install_watch_condition (risk R0)"
+      refute_includes system, "- start_aerator"
       composition.fetch(:adapter).close
     end
   end

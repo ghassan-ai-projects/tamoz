@@ -155,7 +155,8 @@ runner = Tamoz::Stream::EpisodeRunner.new(
   verification_store: checkpointer.bind_verification_store,
   artifact_store: Tamoz::Stream::ArtifactStore.new,
   configured_tenant: options.fetch(:tenant),
-  probe_source: mcp_source
+  probe_source: mcp_source,
+  log: $stderr
 )
 worker.bind_runner(runner)
 if options[:draft_model_policy]

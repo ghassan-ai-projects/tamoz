@@ -146,7 +146,7 @@ class StreamEpisodeCrashMatrixTest < Minitest::Test
       kind: :EPISODE_KIND_DIAGNOSE,
       lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R1,
-      allowed_intent_types: %w[install_watch_condition start_aerator],
+      allowed_intent_types: EpisodeComposition::ALLOWED_INTENT_TYPES,
       executor_name: "tamoz",
       dispatch_policy: :DISPATCH_POLICY_SHADOW
     )
@@ -214,7 +214,7 @@ class StreamEpisodeCrashMatrixTest < Minitest::Test
     canonical_snapshot = Tamoz::Core.parse_json_strict(Tamoz::Core.jcs(snapshot))
     frame = Tamoz::Agent::EpisodeFrameBuilder.new(
       catalog:, objective: AquacultureDomain::OBJECTIVE
-    ).build(snapshot: canonical_snapshot, prompt:)
+    ).build(snapshot: canonical_snapshot, prompt:, intents: EpisodeComposition.frame_intents)
     transport = Tamoz::Agent::EpisodeModelTransport.new(
       endpoint: @endpoint_base, model: "local-model", provider: "ollama"
     )

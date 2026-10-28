@@ -181,9 +181,11 @@ module Tamoz
       def initialize(stream)
         @stream = stream
         @last_diagnostic_code = nil
+        @last_failure = nil
       end
 
-      attr_reader :stream, :last_diagnostic_code
+      # last_failure: the failing node, typed code and safe message of the last graph error, for the worker log.
+      attr_reader :stream, :last_diagnostic_code, :last_failure
 
       # The Context emitter entry point. Model events are forbidden here — the
       # only model events on the wire come from receipts via the trusted
@@ -247,12 +249,10 @@ module Tamoz
       # so a consumer can act on the real reason.
       def diagnostic(data)
         code = typed_code(data["error_class"].to_s)
+        message = data.fetch("safe_message", "graph step failed")
         @last_diagnostic_code = code
-        @stream.diagnostic(
-          code:,
-          message: data.fetch("safe_message", "graph step failed"),
-          retryable: false
-        )
+        @last_failure = "node #{data.fetch('node', 'unknown')}: #{code}: #{message}"
+        @stream.diagnostic(code:, message:, retryable: false)
       end
 
       def typed_code(error_class_name)

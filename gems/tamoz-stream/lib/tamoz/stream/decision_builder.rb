@@ -25,7 +25,6 @@ module Tamoz
       }.freeze
       MAX_FACTS = 64
       MAX_ALTERNATIVES = 16
-      MAX_ACTIONABLE_INTENTS = 1
       MAX_HYPOTHESIS_BYTES = 1_024
       MAX_SUMMARY_BYTES = 4_096
       VALIDITY_WINDOW_SECONDS = 86_400
@@ -174,7 +173,7 @@ module Tamoz
       def recommended_proposal
         proposals = Array(@outcome.fetch(:recommended_intents, []))
         actionable = proposals.reject { |intent| proposal_type(intent) == Tamoz::Core::INTENT_WATCH_TYPE }
-        if actionable.length > MAX_ACTIONABLE_INTENTS
+        if actionable.length > Tamoz::Core::MAX_ACTIONABLE_INTENTS
           raise StreamError,
                 "a document may propose at most one actionable intent " \
                 "(proposed #{actionable.length})"

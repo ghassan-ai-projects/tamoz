@@ -381,9 +381,11 @@ module Tamoz
       include BlankToNil
 
       # probe_source: the operator's governed probes (a Tamoz::Agent::ProbeSource), nil when none are configured.
+      # log: an IO that gets one line per episode ending without a decision (nil: none).
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
-                     configured_tenant: nil, episode_tools: nil, probe_source: nil)
+                     configured_tenant: nil, episode_tools: nil, probe_source: nil, log: nil)
         @probe_source = probe_source
+        @log = log
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
@@ -430,7 +432,15 @@ module Tamoz
         stream ||= EpisodeStream.new(identity_for(wire_request))
         stream.diagnostic(code:, message: error.message)
         stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: code)
+        log_ended(wire_request, :TERMINAL_STATUS_FAILED, "#{code}: #{Tamoz::Error.disclosable_message(error.message, fallback: code)}")
         stream
+      end
+
+      def log_ended(identity, status, reason)
+        return unless @log
+
+        line = "tamoz-stream-worker: episode #{identity.episode_id} attempt #{identity.attempt_id} ended #{status}"
+        @log.puts(reason ? "#{line}: #{reason}" : line)
       end
 
       # Every StreamError subclass defines CATEGORY; anything else is
@@ -523,6 +533,7 @@ module Tamoz
           manifest = emit_terminal_outputs(envelope:, stream:, adapter:, terminal_state:, status:)
         end
         record_produced_decision(envelope:, stream:, snapshot:, terminal_state:) if produced
+        log_ended(envelope, status, adapter.last_failure) unless produced
         manifest ||= build_artifact_manifest(envelope, terminal_state)
         stream.terminal(
           status, reason_code: DurableTerminal.reason_code(result),
