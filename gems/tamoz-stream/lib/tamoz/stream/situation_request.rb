@@ -4,6 +4,8 @@ require "tamoz/core"
 require "tamoz/stream/gen"
 require "tamoz/stream/episode_stream"
 require "tamoz/stream/decision_builder"
+require "tamoz/stream/durable_terminal"
+require "tamoz/stream/budget_limits"
 require "tamoz/stream/capability_host"
 require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
@@ -106,14 +108,14 @@ module Tamoz
         return nil if budget.nil?
 
         {
-          "max_model_calls" => positive_int_or_nil(budget.max_model_calls),
-          "max_input_tokens" => positive_int_or_nil(budget.max_input_tokens),
-          "max_output_tokens" => positive_int_or_nil(budget.max_output_tokens),
-          "max_tool_calls" => positive_int_or_nil(budget.max_tool_calls),
-          "max_tool_result_bytes" => positive_int_or_nil(budget.max_tool_result_bytes),
-          "max_total_tool_result_bytes" => positive_int_or_nil(budget.max_total_tool_result_bytes),
-          "max_provider_retries" => positive_int_or_nil(budget.max_provider_retries),
-          "max_cost_microunits" => positive_int_or_nil(budget.max_cost_microunits)
+          "max_model_calls" => BudgetLimits.positive_int_or_nil(budget.max_model_calls),
+          "max_input_tokens" => BudgetLimits.positive_int_or_nil(budget.max_input_tokens),
+          "max_output_tokens" => BudgetLimits.positive_int_or_nil(budget.max_output_tokens),
+          "max_tool_calls" => BudgetLimits.positive_int_or_nil(budget.max_tool_calls),
+          "max_tool_result_bytes" => BudgetLimits.positive_int_or_nil(budget.max_tool_result_bytes),
+          "max_total_tool_result_bytes" => BudgetLimits.positive_int_or_nil(budget.max_total_tool_result_bytes),
+          "max_provider_retries" => BudgetLimits.positive_int_or_nil(budget.max_provider_retries),
+          "max_cost_microunits" => BudgetLimits.positive_int_or_nil(budget.max_cost_microunits)
         }
       end
 
@@ -228,10 +230,9 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "#{field} must not contain '.'"
         end
-        if value.bytesize > 200 || value.match?(/[\x00-\x1F\x7F]/)
-          raise EpisodeRequestInvalidError,
-                "#{field} must be at most 200 bytes with no control characters"
-        end
+        return unless value.bytesize > 200 || value.match?(/[\x00-\x1F\x7F]/)
+        raise EpisodeRequestInvalidError,
+              "#{field} must be at most 200 bytes with no control characters"
       end
 
       def validate_fence!
@@ -289,36 +290,24 @@ module Tamoz
         if traceparent && !traceparent.match?(TRACEPARENT_PATTERN)
           raise EpisodeRequestInvalidError, "traceparent is malformed"
         end
-        if tracestate && tracestate.bytesize > 512
-          raise EpisodeRequestInvalidError, "tracestate exceeds 512 bytes"
-        end
+        return unless tracestate && tracestate.bytesize > 512
+        raise EpisodeRequestInvalidError, "tracestate exceeds 512 bytes"
       end
-
-      # F-2 (security review): the budget is the worker's only resource
-      # control — a hostile budget must not be able to disable it. Values are
-      # clamped to worker maxima, fail-closed.
-      MAX_WALL_TIME_SECONDS = 600
-      MAX_MODEL_CALLS = 50
 
       def validate_budget!
         budget = @wire.budget
         return if budget.nil?
 
-        if budget.wall_time&.seconds && budget.wall_time.seconds > MAX_WALL_TIME_SECONDS
+        if budget.wall_time&.seconds && budget.wall_time.seconds > BudgetLimits::MAX_WALL_TIME_SECONDS
           raise EpisodeRequestInvalidError,
-                "wall_time exceeds the worker maximum of #{MAX_WALL_TIME_SECONDS}s"
+                "wall_time exceeds the worker maximum of #{BudgetLimits::MAX_WALL_TIME_SECONDS}s"
         end
-        if budget.max_model_calls.to_i > MAX_MODEL_CALLS
+        if budget.max_model_calls.to_i > BudgetLimits::MAX_MODEL_CALLS
           raise EpisodeRequestInvalidError,
-                "max_model_calls exceeds the worker maximum of #{MAX_MODEL_CALLS}"
+                "max_model_calls exceeds the worker maximum of #{BudgetLimits::MAX_MODEL_CALLS}"
         end
 
         true
-      end
-
-      def positive_int_or_nil(value)
-        int = value.to_i
-        int.positive? ? int : nil
       end
 
       def episode_payload
@@ -392,9 +381,11 @@ module Tamoz
       include BlankToNil
 
       # probe_source: the operator's governed probes (a Tamoz::Agent::ProbeSource), nil when none are configured.
+      # log: an IO that gets one line per episode ending without a decision (nil: none).
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
-                     configured_tenant: nil, episode_tools: nil, probe_source: nil)
+                     configured_tenant: nil, episode_tools: nil, probe_source: nil, log: nil)
         @probe_source = probe_source
+        @log = log
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
@@ -441,7 +432,15 @@ module Tamoz
         stream ||= EpisodeStream.new(identity_for(wire_request))
         stream.diagnostic(code:, message: error.message)
         stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: code)
+        log_ended(wire_request, :TERMINAL_STATUS_FAILED, "#{code}: #{Tamoz::Error.disclosable_message(error.message, fallback: code)}")
         stream
+      end
+
+      def log_ended(identity, status, reason)
+        return unless @log
+
+        line = "tamoz-stream-worker: episode #{identity.episode_id} attempt #{identity.attempt_id} ended #{status}"
+        @log.puts(reason ? "#{line}: #{reason}" : line)
       end
 
       # Every StreamError subclass defines CATEGORY; anything else is
@@ -485,7 +484,7 @@ module Tamoz
         adapter = EpisodeStreamAdapter.new(stream)
         stream.started
         stream.budget(
-          cumulative_usage: adapter.cumulative_usage([]),
+          cumulative_usage: EpisodeStreamAdapter.cumulative_usage([]),
           model_calls_used: 0,
           tool_calls_used: 0
         )
@@ -534,9 +533,10 @@ module Tamoz
           manifest = emit_terminal_outputs(envelope:, stream:, adapter:, terminal_state:, status:)
         end
         record_produced_decision(envelope:, stream:, snapshot:, terminal_state:) if produced
+        log_ended(envelope, status, adapter.last_failure) unless produced
         manifest ||= build_artifact_manifest(envelope, terminal_state)
         stream.terminal(
-          status, reason_code: reason_code_for(result),
+          status, reason_code: DurableTerminal.reason_code(result),
           artifact_manifest: manifest
         )
       end
@@ -548,7 +548,7 @@ module Tamoz
         retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
         emit_model_events(adapter, terminal_state, envelope)
         emit_tool_events(stream, envelope, terminal_state)
-        emit_budget_update(stream, adapter, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
+        emit_budget_update(stream, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
         manifest
       end
 
@@ -558,25 +558,13 @@ module Tamoz
       end
 
       def load_terminal_state(envelope, result)
-        return {} unless result.checkpoint_id
-
-        # The request's OWN last checkpoint — for a PRODUCED run this is
-        # the decide node's state; for a run that failed after the model
-        # call it is the last appended step, so the call's receipts are
-        # still witnessed (B4: model events come from receipts, and a
-        # completed call is never silently dropped).
-        checkpoint = @durable_runner.compiled.checkpointer.find(
-          thread_id: envelope.thread_id,
-          namespace: envelope.namespace,
-          checkpoint_id: result.checkpoint_id
-        )
-        checkpoint.state.to_h
+        DurableTerminal.state(@durable_runner, thread_id: envelope.thread_id, namespace: envelope.namespace, result:)
       end
 
-      def emit_budget_update(stream, adapter, terminal_state)
+      def emit_budget_update(stream, terminal_state)
         receipts = Array(terminal_state[:model_receipts])
         stream.budget(
-          cumulative_usage: adapter.cumulative_usage(receipts),
+          cumulative_usage: EpisodeStreamAdapter.cumulative_usage(receipts),
           model_calls_used: receipts.length,
           tool_calls_used: terminal_state[:budget_state]&.fetch("tool_calls_used", 0).to_i
         )
@@ -597,18 +585,6 @@ module Tamoz
 
       def dispatched_tools(terminal_state)
         Array(terminal_state[:tool_results]).reject { |result| result["dispatched"] == false }
-      end
-
-      # P1: the typed reason on a FAILED terminal — the durable request's
-      # terminal error carries the graph failure category; a produced run has
-      # none.
-      def reason_code_for(result)
-        return nil if result.nil? || result.status != :failed
-
-        terminal_error = result.respond_to?(:terminal_error) ? result.terminal_error : nil
-        return nil unless terminal_error.is_a?(Hash)
-
-        terminal_error.fetch("category", terminal_error.fetch("graph_status", nil))
       end
 
       # P1: TRANSLATES the terminal graph state to the wire decision event.
@@ -1013,10 +989,9 @@ module Tamoz
           raise StreamError,
                 "wire_refused_model_event/forged_provider_marker"
         end
-        if provider.empty?
-          raise StreamError,
-                "wire_refused_model_event/missing_provider"
-        end
+        return unless provider.empty?
+        raise StreamError,
+              "wire_refused_model_event/missing_provider"
       end
 
       # The response/request digest stored on the journaled attempt — the

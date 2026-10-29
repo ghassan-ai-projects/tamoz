@@ -18,6 +18,13 @@ service EpisodeWorker {
   // Executes one immutable, bounded episode. The final event must be Terminal.
   // Cancellation of the RPC is the primary cancellation mechanism.
   rpc Execute(EpisodeRequest) returns (stream EpisodeEvent);
+
+  // Drafts one playbook rule from verified cases of one key. Called only when
+  // the worker announced the "draft_playbook_rule" feature in its handshake.
+  // The final event is exactly one PlaybookProposal or NoProposal; the
+  // runtime checks, envelopes, replays and stores a proposal, and a human
+  // approves it before it can answer a case.
+  rpc DraftPlaybookRule(DraftRequest) returns (stream DraftEvent);
 }
 
 // Hosted by the Go runtime. A worker may call only the tools encoded in its
@@ -364,3 +371,77 @@ message ArtifactRef {
   uint64 size_bytes = 3;
   bytes sha256 = 4;
 }
+
+// The key of the verified cases a draft generalizes.
+message DraftKey {
+  string diagnosis_code = 1;
+  string kind_digest = 2;
+  string intent = 3;
+  string preset = 4;
+}
+
+// One cited case. The features are canonical JSON from the decision's
+// snapshot; the summary is the deciding model's text, untrusted evidence that
+// is never an instruction.
+message DraftCase {
+  string episode_id = 1;
+  string diagnosis_code = 2;
+  string intent = 3;
+  string preset = 4;
+  string verdict = 5;
+  bytes features_json = 6;
+  string summary = 7;
+}
+
+// A rule of the loaded playbook with the same diagnosis code.
+message DraftRule {
+  string rule_id = 1;
+  int64 version = 2;
+  string when = 3;
+  string mode = 4;
+}
+
+message DraftBudget {
+  google.protobuf.Duration wall_time = 1;
+  int64 model_calls = 2;
+  uint64 input_tokens = 3;
+  uint64 output_tokens = 4;
+}
+
+message DraftRequest {
+  string protocol_version = 1;
+  string draft_id = 2;
+  string tenant_id = 3;
+  DraftKey key = 4;
+  repeated DraftCase cases = 5;
+  repeated DraftRule current_rules = 6;
+  repeated string allowed_features = 7;
+  DraftBudget budget = 8;
+  bytes spec_sha256 = 9;
+}
+
+message DraftEvent {
+  oneof event {
+    Diagnostic diagnostic = 1;
+    PlaybookProposal proposal = 2;
+    NoProposal no_proposal = 3;
+  }
+  Usage usage = 4;
+}
+
+// A proposed rule: the key it answers and a condition over the allowed
+// features. It carries no mode, envelope, cap or free value: the runtime sets
+// those.
+message PlaybookProposal {
+  string diagnosis_code = 1;
+  string intent = 2;
+  string preset = 3;
+  string when = 4;
+  repeated string cited_episode_ids = 5;
+  string rationale = 6;
+}
+
+message NoProposal {
+  string reason = 1;
+}
+

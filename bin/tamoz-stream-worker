@@ -28,6 +28,7 @@ require "tamoz/stream/worker_server"
 require "tamoz/stream/verification_store"
 require "tamoz/stream/artifact_store"
 require "tamoz/stream/decision_node_builder"
+require "tamoz/stream/draft_runner"
 require "tamoz/agent"
 require "tamoz/sqlite"
 
@@ -60,6 +61,10 @@ parser = OptionParser.new do |opts|
   end
   opts.on("--skills-source PATH", "JSON map {name => rendered text} of the operator-approved skills") do |value|
     options[:skills_source] = value
+  end
+  opts.on("--draft-model-policy ROLE",
+          "Profile role that drafts playbook rules; announces draft_playbook_rule") do |value|
+    options[:draft_model_policy] = value
   end
 end
 parser.on("--runtime-dir PATH", "Operator runtime directory whose sources.probes the episodes may use") do |value|
@@ -150,9 +155,18 @@ runner = Tamoz::Stream::EpisodeRunner.new(
   verification_store: checkpointer.bind_verification_store,
   artifact_store: Tamoz::Stream::ArtifactStore.new,
   configured_tenant: options.fetch(:tenant),
-  probe_source: mcp_source
+  probe_source: mcp_source,
+  log: $stderr
 )
 worker.bind_runner(runner)
+if options[:draft_model_policy]
+  Tamoz::Agent::ModelCall.resolve_role(profile, options[:draft_model_policy])
+  worker.bind_draft_runner(
+    Tamoz::Stream::DraftRunner.new(
+      durable_runner: app.durable_runner, tenant: options.fetch(:tenant), model_policy: options[:draft_model_policy]
+    )
+  )
+end
 
 server = Tamoz::Stream::WorkerServer.new(
   worker:,

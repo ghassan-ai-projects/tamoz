@@ -31,16 +31,6 @@ module Tamoz
         LIVE_ENV_GATE = "TAMOZ_MEMORY_LIVE"
         CONTROL_KEYS = %w[task_success model_calls steps terminal].freeze
 
-        Report = Data.define(:document) do
-          def initialize(document:)
-            super(document: DeepFreeze.call(document))
-          end
-
-          def passed? = document.fetch("decision") == "pass"
-          def to_h = document
-          def to_json = CanonicalJSON.dump(document)
-        end
-
         def initialize(
           corpus:,
           mode: :ci,
@@ -311,7 +301,7 @@ module Tamoz
             self.class.reproducible_surface(document),
             domain: REPORT_DOMAIN
           )
-          Report.new(document:)
+          ScorecardReport.new(document:)
         end
 
         def gate(id, passed)

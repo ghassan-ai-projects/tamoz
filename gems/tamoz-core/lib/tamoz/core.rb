@@ -26,6 +26,8 @@ module Tamoz
     # WITHOUT a tamoz-agent dependency edge; tamoz-agent's IntentCatalog
     # aliases it. The wire value is frozen — a change is a new intent catalog.
     INTENT_WATCH_TYPE = "install_watch_condition"
+    # A decision carries at most this many intents besides the watch.
+    MAX_ACTIONABLE_INTENTS = 1
 
     # P16: the D-7 taxonomy classes moved into tamoz-core, but every durable and
     # model-visible serialization of them keeps the public `Tamoz::Agent::Tool*`

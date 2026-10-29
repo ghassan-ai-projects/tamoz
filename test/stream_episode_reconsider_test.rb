@@ -92,6 +92,7 @@ class StreamEpisodeReconsiderTest < Minitest::Test
     assert_equal "downgrade_climate_action", intent.fetch("type")
     assert_equal "R1", intent.fetch("risk_class")
     assert_equal "c1", intent.fetch("compensates")
+    refute decision.key?("diagnosis_code"), "a reconsideration diagnoses nothing"
     # The action open_roof_louvers exists ONLY in the climate catalog — the
     # compensation resolved from the CLIMATE catalog, not a copy.
     refute AquacultureDomain::INTENT_TYPES.key?("open_roof_louvers")

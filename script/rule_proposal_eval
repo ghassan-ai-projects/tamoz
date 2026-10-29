@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The rule-proposal scorecard against a REAL model, through the worker's DraftPlaybookRule. Never a test.
+#
+#   export ZAI_API_KEY=... ZAI_API_BASE=https://api.z.ai/api/coding/paas/v4 LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+#   RUNS=5 AGENTEVAL_PROVIDER=zai AGENTEVAL_MODEL=glm-5.3-flash script/rule_proposal_eval > report.json
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path('../test', __dir__))
+$stdout.sync = true
+
+require 'json'
+require 'fileutils'
+require 'tamoz/evals/runner'
+require 'support/domain_loader'
+require 'support/episode_composition'
+require 'support/real_profile'
+require 'support/rule_proposal_drafter'
+
+module RuleProposalEval
+  module_function
+
+  PROVIDER = ENV.fetch('AGENTEVAL_PROVIDER', 'zai')
+  MODEL = ENV.fetch('AGENTEVAL_MODEL', 'glm-5.3-flash')
+  DATA = DomainLoader.load('pump-station').rule_proposal
+  Scorecard = Tamoz::Evals::Harness::RuleProposalScorecard
+
+  def scorecard(drafter, subject)
+    Scorecard.new(cases: DATA.fetch('cases'), allowed_features: DATA.fetch('allowed_features'), drafter:, subject:).run
+  end
+
+  def controls_discriminate?
+    verdict, scores = Scorecard.controls_discriminate?(DATA.fetch('cases'), DATA.fetch('allowed_features'))
+    warn "controls: #{scores}"
+    verdict
+  end
+
+  # Each run drafts into a fresh worker database: a durable draft id answers once.
+  def real_run(index)
+    composition = EpisodeComposition.build(endpoint: 'unused', model: MODEL,
+                                           profile_builder: RealProfile.builder(PROVIDER))
+    scorecard(RuleProposalDrafter.through(RuleProposalDrafter.worker(composition), tenant: 'acme'),
+              { 'id' => 'tamoz-worker', 'provider' => PROVIDER, 'model' => MODEL, 'run' => index,
+                'evidence' => 'real_model' }).to_h
+  ensure
+    composition&.fetch(:adapter)&.close
+    FileUtils.remove_entry(composition.fetch(:directory)) if composition
+  end
+
+  def run(runs)
+    key = Tamoz::Agent::Providers::ENV_KEYS.fetch(PROVIDER.to_sym)
+    abort "BLOCKED: #{key} is not set; no draft would reach the model" if ENV[key].to_s.strip.empty?
+    abort 'the controls do not discriminate; the corpus cannot grade a model' unless controls_discriminate?
+
+    warn "REAL run: provider=#{PROVIDER} model=#{MODEL} runs=#{runs}"
+    reports = Array.new(runs) { |index| real_run(index) }
+    passes = reports.flat_map { |report| report.fetch('cases') }.group_by { |entry| entry.fetch('case_id') }
+    passes.each do |case_id, entries|
+      warn "#{case_id.ljust(28)} #{entries.count { |entry| entry.fetch('passed') }}/#{runs} " \
+           "#{entries.filter_map { |entry| entry['failure'] }.uniq.join('; ')}"
+    end
+    puts JSON.generate({ 'runs' => reports })
+  end
+end
+
+RuleProposalEval.run(Integer(ENV.fetch('RUNS', '1'))) if $PROGRAM_NAME == __FILE__

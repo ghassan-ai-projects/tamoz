@@ -47,7 +47,7 @@ module Tamoz
         @transport = transport
       end
 
-      def call(context:, episode_id:, invocation:, slot:, system:, prompt:, frame_digest: nil)
+      def call(context:, episode_id:, invocation:, slot:, system:, prompt:, frame_digest: nil, provider_retries: 0)
         request_bytes = @transport.build_request(system:, prompt:)
         request_digest = @transport.request_digest(request_bytes)
         logical = ModelCall::LogicalCallKey.new(
@@ -55,7 +55,7 @@ module Tamoz
           provider_configuration_digest: @transport.provider_configuration_digest
         )
         outcome = journal_episode_model_call(
-          context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:
+          context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:, provider_retries:
         )
         map_outcome(
           outcome, logical:, invocation:, request_bytes:, frame_digest:
@@ -65,7 +65,7 @@ module Tamoz
       private
 
       def journal_episode_model_call(
-        context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:
+        context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:, provider_retries:
       )
         EffectDispatcher.run(
           context:,
@@ -82,7 +82,7 @@ module Tamoz
           actor: "tamoz.agent.episode.reason",
           logical_key: logical
         ) do
-          perform_call(request_bytes, logical:, frame_digest:)
+          perform_call(request_bytes, logical:, frame_digest:, provider_retries:)
         end
       end
 
@@ -113,9 +113,9 @@ module Tamoz
       # and provider-reported usage — so a replayed run rebuilds the identical
       # receipt from stored bytes and the runner can verify the receipt's
       # request digest against the journal, not just the response side.
-      def perform_call(request_bytes, logical:, frame_digest:)
+      def perform_call(request_bytes, logical:, frame_digest:, provider_retries:)
         response = @transport.call(
-          request_bytes, logical_call_id: logical.to_key, frame_digest:
+          request_bytes, logical_call_id: logical.to_key, frame_digest:, max_retries: provider_retries
         )
         ModelCallProjection.from_response(
           response,
@@ -160,7 +160,7 @@ module Tamoz
           artifact_refs: [],
           usage: usage,
           provider_request_id: nil,
-          retry_count: [outcome.attempt_number - 1, 0].max,
+          retry_count: [outcome.attempt_number - 1, 0].max + projection.fetch("provider_retries"),
           started_at: iso_time(attempt&.started_at_ms),
           completed_at: iso_time(attempt&.completed_at_ms),
           error_category: nil

@@ -3,7 +3,7 @@
   "sealed_build_digest": "sha256:b8dd9b3de4185163c002e00a78b65790a0784fdb0aa69c197df63bb8d8edd7e4",
   "graph": {
     "name": "tamoz.agent.episode",
-    "version": "4"
+    "version": "5"
   },
   "digests": {
     "diagnosis_catalog": "sha256:7ab740e0d7fbc256dfadc445b60c6a16ebdda629e75b09d856289f67e9e1a54d",

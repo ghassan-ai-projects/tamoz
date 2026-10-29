@@ -42,7 +42,7 @@ module Tamoz
 
       def initialize(message = nil, code: nil, status: nil, body_digest: nil, body_bytes: nil)
         if code.nil?
-          @code = "replayed"
+          @code = 'replayed'
           super(String(message))
           return
         end
@@ -61,7 +61,7 @@ module Tamoz
         details << "status=#{status}" if status
         details << "body_digest=#{body_digest}" if body_digest
         details << "body_bytes=#{body_bytes}" if body_bytes
-        details.join(" ")
+        details.join(' ')
       end
     end
 
@@ -118,5 +118,23 @@ module Tamoz
     # episode fails typed before any model call. Distinct from ProtocolError,
     # which is untrusted-model-document territory.
     class EpisodeFrameError < Error; end
+
+    # The validate node refused the model's document after its one repair. The raise
+    # site writes only the node and the stable rejection code, never the model-quoted
+    # detail after it, so the message may cross the wire as the failure diagnostic.
+    class EpisodeDocumentRejectedError < ProtocolError
+      include Tamoz::DisclosableMessage
+
+      CATEGORY = 'episode_document_rejected'
+    end
+
+    # A journaled episode model or tool call ended failed. The raise site writes only the
+    # failure's serialized class, code and HTTP status, never the provider body, so the
+    # message may cross the wire as the failure diagnostic.
+    class EpisodeCallFailedError < ProtocolError
+      include Tamoz::DisclosableMessage
+
+      CATEGORY = 'episode_call_failed'
+    end
   end
 end

@@ -175,6 +175,7 @@ class StreamSituationRequestTest < Minitest::Test
       decision = JSON.parse(decision_event.decision.decision_json)
       intent = decision.fetch("intents").fetch(0)
       assert_equal "R1", intent.fetch("risk_class")
+      assert_equal "low_dissolved_oxygen", decision.fetch("diagnosis_code")
 
       rows = store.all
       assert_equal 1, rows.length

@@ -15,6 +15,7 @@ module EpisodeComposition
   # verifies with the SAME rule, so tests must too.
   PROMPT_VERSION = "1.0"
   PROMPT_DOMAIN = "situation-runtime/prompt/v1\n"
+  ALLOWED_INTENT_TYPES = %w[install_watch_condition start_aerator].freeze
 
   module_function
 
@@ -29,7 +30,13 @@ module EpisodeComposition
     Tamoz::Core.parse_json_strict(catalog_json)
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil, probe_source: nil)
+  # The intent entries the graph's frame lists for the default allowed types, for tests that rebuild the frame.
+  def frame_intents
+    catalog = Tamoz::Agent::IntentCatalog.from_list(AquacultureDomain::INTENT_CATALOG)
+    ALLOWED_INTENT_TYPES.map { |type| catalog.entry(type) }
+  end
+
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil, probe_source: nil, log: nil, pause: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
@@ -37,8 +44,8 @@ module EpisodeComposition
     Dir.mkdir(root)
     profile_path = File.join(directory, "profile.yml")
     # Default: the fixture ollama profile pointing at `endpoint`. A real-model
-    # runner (script/thermal_real_run) injects a builder that returns a real
-    # provider profile instead — the ONLY seam a real run needs.
+    # runner injects RealProfile.builder (test/support/real_profile.rb) instead
+    # — the ONLY seam a real run needs.
     builder = profile_builder || AquacultureDomain.method(:profile_document)
     profile_document = builder.call(endpoint:, root:, model:)
     profile_document.fetch("model_roles").fetch("fast")["credential_ref"] = credential_ref if credential_ref
@@ -62,7 +69,8 @@ module EpisodeComposition
           profile_role: resolved_role,
           environment: ENV,
           explicit_api_base: role.fetch("endpoint").to_s.empty? ? nil : role.fetch("endpoint"),
-          gateway:
+          gateway:,
+          pause:
         )
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,
@@ -90,7 +98,8 @@ module EpisodeComposition
       worker:,
       artifact_store: artifact_store,
       episode_tools: episode_tools,
-      probe_source:
+      probe_source:,
+      log:
     )
     {app:, runner:, adapter: checkpointer, directory:}
   end
@@ -109,7 +118,7 @@ module EpisodeComposition
     decision_schema_json: nil, decision_schema_sha256: nil,
     objective: AquacultureDomain::OBJECTIVE, objective_sha256: nil,
     snapshot_sha256: nil, evidence_tools_endpoint: nil, capability_token: nil,
-    allowed_intent_types: %w[install_watch_condition start_aerator],
+    allowed_intent_types: ALLOWED_INTENT_TYPES,
     skill_refs_json: nil,
     reconsideration: nil,
     risk_ceiling: :RISK_CLASS_R1

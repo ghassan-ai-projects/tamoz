@@ -349,9 +349,20 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal valid_until, Time.iso8601(decision.fetch("intents").first.fetch("expires_at"))
   end
 
+  def test_a_diagnosed_outcome_carries_its_code_and_an_undiagnosed_one_has_none
+    action = [proposal("recommend_operating_limit")]
+    diagnosed, = build(primary_hypothesis: "x", diagnosis_code: "unknown", confidence: 0.9, recommended_intents: action)
+    undiagnosed, = build(primary_hypothesis: "x", confidence: 0.9, recommended_intents: action)
+
+    assert_equal "unknown", diagnosed.fetch("diagnosis_code")
+    refute undiagnosed.key?("diagnosis_code")
+    schema = JSONSchemer.schema(File.read(ROOT.join("gems/tamoz-stream/contracts/schemas/decision-v1.json")))
+    assert schema.valid?(diagnosed)
+  end
+
   def test_the_decision_conforms_to_the_vendored_decision_v1_schema
     decision, = build(
-      primary_hypothesis: "bearing wear", confidence: 0.9,
+      primary_hypothesis: "bearing wear", diagnosis_code: "bearing_wear", confidence: 0.9,
       summary: "pressure trend", facts_used: [{"evidence" => "fact:p"}],
       recommended_intents: [proposal("recommend_operating_limit", parameters: {"hypothesis" => "bearing wear"})]
     )

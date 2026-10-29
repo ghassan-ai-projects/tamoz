@@ -71,11 +71,9 @@ class LocalModelEndpoint
     return if request_bytes.nil?
 
     if @mode == :fixture
-      content = @responses[@index] || @responses.last
-      @index += 1
-      envelope = fixture_envelope(content)
+      status, envelope = next_fixture_reply
       append_log(request_bytes:, response_bytes: envelope, authorization: headers["authorization"])
-      Tamoz::Core::RawHttp.write_response(client, envelope, status: 200)
+      Tamoz::Core::RawHttp.write_response(client, envelope, status:)
     else
       status, body = forward(request_bytes)
       append_log(request_bytes:, response_bytes: body, upstream_status: status)
@@ -89,6 +87,14 @@ class LocalModelEndpoint
     rescue StandardError
       nil
     end
+  end
+
+  def next_fixture_reply
+    content = @responses[@index] || @responses.last
+    @index += 1
+    return [200, fixture_envelope(content)] unless content.is_a?(Hash)
+
+    content.values_at(:status, :body)
   end
 
   def forward(request_bytes)
