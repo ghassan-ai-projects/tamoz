@@ -13,7 +13,7 @@ class AgentEpisodeInvestigationTest < Minitest::Test
   CATALOG = [{ 'code' => 'low_oxygen', 'description' => 'Oxygen below threshold.' },
              { 'code' => 'unknown', 'description' => 'Cannot tell.' }].freeze
   SNAPSHOT = { 'facts' => { 'do_mg_l' => 3.1, 'temp_c' => 24 } }.freeze
-  NO_TOOLS_DIGEST = 'sha256:ebe8e5402a27556abf229e20c3e0bf184ddaf56403c26afa7822e6e77fd55de3'
+  NO_TOOLS_DIGEST = 'sha256:87021ce9d8a36ec14c51f7f3500a9849ac58b75290729c7fa5cf24bdfb1968c9'
   SURFACE = [{ 'name' => 'probe_logs_search', 'description' => 'Search the pond logs.',
                'parameters' => { 'type' => 'object', 'properties' => { 'filter' => { 'type' => 'string' } } } }].freeze
 

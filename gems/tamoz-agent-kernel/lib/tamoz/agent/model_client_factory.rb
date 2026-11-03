@@ -31,7 +31,8 @@ module Tamoz
         # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists -- one build: every ensure,
         # the configuration digest and the transport in the order a caller can read them.
         def build(provider:, model:, profile_role:, environment:, explicit_api_base: nil,
-                  safety: :unsafe, gateway: nil, timeout_seconds: nil, context_window: nil, credential_name: nil)
+                  safety: :unsafe, gateway: nil, timeout_seconds: nil, context_window: nil, credential_name: nil,
+                  pause: nil)
           name = normalize_provider(provider)
           descriptor = descriptor_for(name)
           ensure_model!(model, name)
@@ -48,6 +49,7 @@ module Tamoz
           configuration = configuration_document(name, model, endpoint, descriptor, profile_role, safety)
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:, gateway:,
+            pause:,
             timeout_seconds: timeout_seconds || ModelWindows.request_timeout(provider: name, model:),
             context_window: context_window || configured_context_window(profile_role, environment, name, model),
             provider_configuration_digest: Tamoz::Core.digest(

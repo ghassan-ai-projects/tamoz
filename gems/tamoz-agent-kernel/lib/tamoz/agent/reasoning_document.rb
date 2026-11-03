@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "json"
 require "tamoz/agent/errors"
+require "tamoz/agent/strict_document"
 
 module Tamoz
   module Agent
@@ -20,7 +20,10 @@ module Tamoz
     # Every rejection raises ProtocolError with a stable `reasoning_document/<code>`
     # prefix so conformance fixtures can assert the exact failure.
     module ReasoningDocument
+      extend StrictDocument
+
       PROTOCOL = "tamoz.episode-diagnosis/v2"
+      ERROR_PREFIX = "reasoning_document"
 
       MAX_BYTES = 64 * 1024
       MAX_HYPOTHESIS_BYTES = 4096
@@ -42,13 +45,15 @@ module Tamoz
       PROBABILITY_TOLERANCE = 0.05
       REF_PREFIXES = %w[fact evidence memory tool skill].freeze
 
-      TOP_LEVEL_KEYS = %w[
-        protocol primary_hypothesis diagnosis_probabilities evidence_refs
-        tool_requests recommended_intents evidence_gaps
-      ].freeze
       TERMINAL_KEYS = %w[
         primary_hypothesis diagnosis_probabilities evidence_refs recommended_intents evidence_gaps
       ].freeze
+      TOOL_KEYS = %w[tool_requests].freeze
+      TOP_LEVEL_KEYS = ["protocol", *TERMINAL_KEYS, *TOOL_KEYS].freeze
+      PROBABILITY_KEYS = %w[diagnosis_code probability].freeze
+      INTENT_KEYS = %w[type parameter_preset parameters].freeze
+      TOOL_REQUEST_KEYS = %w[name arguments purpose].freeze
+      EVIDENCE_GAP_KEYS = %w[datum why].freeze
 
       Probability = Data.define(:code, :probability)
       RecommendedIntent = Data.define(:type, :parameter_preset, :parameters)
@@ -91,17 +96,6 @@ module Tamoz
         end
 
         private
-
-        def strict_parse(bytes)
-          # allow_duplicate_key:false raises on `{"a":1,"a":2}` at any depth
-          # instead of silently keeping the last value (json 3.0 default).
-          JSON.parse(bytes, allow_duplicate_key: false)
-        rescue JSON::ParserError => e
-          # ProtocolError deliberately quotes provider text (errors.rb) — a prose
-          # wrapper around the JSON also lands here.
-          code = e.message.include?("duplicate key") ? "duplicate_key" : "malformed_json"
-          raise ProtocolError, "reasoning_document/#{code}: #{e.message}"
-        end
 
         def parse_tool_turn(root)
           TERMINAL_KEYS.each do |key|
@@ -152,7 +146,7 @@ module Tamoz
         def parse_probability_entry(entry, codes, seen)
           raise ProtocolError, "reasoning_document/probability_not_object" unless entry.is_a?(Hash)
 
-          reject_unknown_keys(entry, %w[diagnosis_code probability], "probability")
+          reject_unknown_keys(entry, PROBABILITY_KEYS, "probability")
           code = fetch_bounded_string(entry, "diagnosis_code", MAX_CODE_BYTES)
           raise ProtocolError, "reasoning_document/unknown_diagnosis_code: #{code}" unless codes.include?(code)
           raise ProtocolError, "reasoning_document/duplicate_diagnosis_code: #{code}" if seen[code]
@@ -192,7 +186,7 @@ module Tamoz
         def parse_recommended_intent(intent)
           raise ProtocolError, "reasoning_document/intent_not_object" unless intent.is_a?(Hash)
 
-          reject_unknown_keys(intent, %w[type parameter_preset parameters], "recommended_intent")
+          reject_unknown_keys(intent, INTENT_KEYS, "recommended_intent")
           type = fetch_bounded_string(intent, "type", MAX_CODE_BYTES)
           preset = optional_bounded_string(intent, "parameter_preset", MAX_PRESET_BYTES)
           parameters = intent["parameters"]
@@ -209,7 +203,7 @@ module Tamoz
         def parse_tool_request(request)
           raise ProtocolError, "reasoning_document/tool_request_not_object" unless request.is_a?(Hash)
 
-          reject_unknown_keys(request, %w[name arguments purpose], "tool_request")
+          reject_unknown_keys(request, TOOL_REQUEST_KEYS, "tool_request")
           name = fetch_bounded_string(request, "name", MAX_CODE_BYTES)
           arguments = request.fetch("arguments", {})
           raise ProtocolError, "reasoning_document/tool_arguments_not_object: #{name}" unless arguments.is_a?(Hash)
@@ -226,7 +220,7 @@ module Tamoz
           fetch_array(root, "evidence_gaps", MAX_EVIDENCE_GAPS).map do |gap|
             raise ProtocolError, "reasoning_document/evidence_gap_not_object" unless gap.is_a?(Hash)
 
-            reject_unknown_keys(gap, %w[datum why], "evidence_gap")
+            reject_unknown_keys(gap, EVIDENCE_GAP_KEYS, "evidence_gap")
             EvidenceGap.new(datum: fetch_bounded_string(gap, "datum", MAX_GAP_FIELD_BYTES),
                             why: fetch_bounded_string(gap, "why", MAX_GAP_FIELD_BYTES))
           end
@@ -241,46 +235,6 @@ module Tamoz
           raise ProtocolError, "reasoning_document/probability_range: #{float}" unless float >= 0.0 && float <= 1.0
 
           float
-        end
-
-        def fetch_array(root, key, max)
-          value = root[key]
-          raise ProtocolError, "reasoning_document/#{key}_not_array" unless value.is_a?(Array)
-          raise ProtocolError, "reasoning_document/#{key}_too_many: #{value.length}" if value.length > max
-
-          value
-        end
-
-        def fetch_bounded_string(hash, key, max)
-          raise ProtocolError, "reasoning_document/#{key}_missing" unless hash.key?(key)
-          value = hash[key]
-          raise ProtocolError, "reasoning_document/#{key}_not_string" unless value.is_a?(String)
-          reject_bad_utf8(value)
-          reject_oversize(value.bytesize, key, max)
-
-          value
-        end
-
-        def optional_bounded_string(hash, key, max)
-          return nil unless hash.key?(key)
-
-          fetch_bounded_string(hash, key, max)
-        end
-
-        def reject_unknown_keys(hash, allowed, context)
-          unknown = hash.keys - allowed
-          raise ProtocolError, "reasoning_document/unknown_key: #{context}.#{unknown.first}" unless unknown.empty?
-        end
-
-        def reject_oversize(bytesize, what, max)
-          raise ProtocolError, "reasoning_document/#{what}_too_large: #{bytesize}" if bytesize > max
-        end
-
-        def reject_bad_utf8(string)
-          # Validate the bytes, not the label: a provider may hand back valid
-          # UTF-8 tagged ASCII-8BIT. Only genuinely invalid byte sequences fail.
-          utf8 = string.dup.force_encoding(Encoding::UTF_8)
-          raise ProtocolError, "reasoning_document/invalid_utf8" unless utf8.valid_encoding?
         end
 
         def validate_catalog(catalog)

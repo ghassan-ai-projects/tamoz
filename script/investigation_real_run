@@ -22,6 +22,7 @@ require 'tamoz/agent'
 require 'tamoz/sqlite'
 require 'tamoz/stream/episode_worker'
 require 'support/investigation_control_gate'
+require 'support/real_profile'
 
 # Runs every cell REPEATS x SEEDS times under a real provider and prints the graded report.
 module InvestigationRealRun
@@ -30,18 +31,7 @@ module InvestigationRealRun
   PROVIDER = ENV.fetch('AGENTEVAL_PROVIDER', 'openrouter')
   MODEL = ENV.fetch('AGENTEVAL_MODEL', 'z-ai/glm-5.3-flash')
 
-  def profile_builder
-    lambda do |root:, model:, **|
-      { 'profile' => { 'schema_version' => 1, 'profile_id' => 'tamoz-real', 'profile_version' => '1.0',
-                       'canonical_root' => root },
-        'roots' => { 'workspace' => root }, 'tools' => { 'allowed' => %w[read_file list_directory] },
-        'policy' => { 'allow_changes' => false, 'default_check_safety' => 'read_only', 'graph_version' => '1',
-                      'behavior_version' => '1.0', 'tool_catalog_digest' => "sha256:#{'0' * 64}" },
-        'model_roles' => { 'fast' => { 'provider' => PROVIDER, 'model' => model,
-                                       'normalized_settings' => { 'temperature' => '0',
-                                                                  'response_format' => 'json_object' } } } }
-    end
-  end
+  def profile_builder = RealProfile.builder(PROVIDER)
 
   def run(repeats, seeds, workers)
     preflight!

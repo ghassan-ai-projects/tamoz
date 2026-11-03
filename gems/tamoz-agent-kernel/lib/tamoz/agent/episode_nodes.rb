@@ -4,6 +4,8 @@ require "tamoz/core"
 require "tamoz/agent/errors"
 require "tamoz/agent/model_receipt"
 require "tamoz/agent/reasoning_document"
+require "tamoz/agent/reasoning_document_shape"
+require "tamoz/agent/playbook_draft_frame"
 require "tamoz/agent/episode_model_call"
 require "tamoz/agent/episode_frame_builder"
 
@@ -153,8 +155,12 @@ module Tamoz
             "profile_digest" => role.profile_digest
           },
           # The route is codec-safe (the graph branch reads it as a symbol).
-          "route" => "recall"
+          "route" => kind == "draft" ? "draft_frame" : "recall"
         }
+      end
+
+      def draft_frame(state, _context)
+        {"frame" => draft_frame_projection(state)}
       end
 
       # P6: the wire's Reconsideration payload, parsed into plain hashes
@@ -195,10 +201,7 @@ module Tamoz
         episode = state.fetch(:episode)
         snapshot = state.fetch(:snapshot)
         wire = state.fetch(:wire)
-        catalog = IntentCatalog.verify_wire(
-          wire.fetch("intent_catalog_json"),
-          wire.fetch("intent_catalog_sha256")
-        )
+        catalog = verified_intent_catalog(wire)
         ceiling = String(episode.fetch("risk_ceiling", "")).upcase
         now = Time.now.utc
         judgements = Array(state.fetch(:judgements)).select { |j| j.fetch("decision") != "let_stand" }
@@ -305,13 +308,9 @@ module Tamoz
       # mismatch), and recalled memory enters the frame as attributed,
       # untrusted evidence with memory:<digest> ids.
       def build_frame(state, _context)
-        wire = state.fetch(:wire)
-        IntentCatalog.verify_wire(
-          wire.fetch("intent_catalog_json"),
-          wire.fetch("intent_catalog_sha256")
-        )
-        skills = verified_skills(wire)
-        frame = assemble_frame(state, skills:, memory: memory_entries(state), **tool_frame(state))
+        intents = recommendable_intents(state)
+        skills = verified_skills(state.fetch(:wire))
+        frame = assemble_frame(state, skills:, intents:, memory: memory_entries(state), **tool_frame(state))
         {"frame" => frame_projection(frame), "skill_set_digest" => skills.digest}
       end
 
@@ -354,12 +353,13 @@ module Tamoz
           slot: 0,
           system: frame.fetch("system"),
           prompt: frame.fetch("user"),
-          frame_digest: frame["digest"]
+          frame_digest: frame["digest"],
+          provider_retries: budget.provider_retries_left(state.fetch(:budget_state, nil))
         )
         enforce_successful_outcome!(result, subject: "model")
 
         budget_state = budget.reconcile_model(
-          state.fetch(:budget_state, nil), result.receipt.usage
+          state.fetch(:budget_state, nil), result.receipt.usage, retries: result.receipt.retry_count
         )
 
         {
@@ -374,6 +374,8 @@ module Tamoz
       # malformed-after-success → repair (exactly once) or typed terminal;
       # valid → decide. Never a second model.
       def validate(state, _context)
+        return {"draft" => validated_draft(state), "next_node" => "end"} if draft?(state)
+
         document = validated_document(state)
         next_node = next_node_for_document(document)
         if next_node == "execute_tool" && budget_controller(state).spent?(state.fetch(:budget_state, nil))
@@ -388,9 +390,10 @@ module Tamoz
         # A succeeded-but-malformed response is repaired exactly once; a
         # second malformed response terminates typed.
         if Integer(state.fetch(:repair_count, 0)) < 1
-          {"next_node" => "repair", "repair_directive" => error.message}
+          {"next_node" => "repair", "repair_directive" => repair_directive_for(state, error)}
         else
-          raise ProtocolError, "episode document is malformed after repair"
+          raise EpisodeDocumentRejectedError,
+                "validate rejected the model's document after one repair: #{error.message.split(":", 2).first}"
         end
       end
 
@@ -419,9 +422,12 @@ module Tamoz
       # section. Same inputs → same frame bytes → the next reason call's
       # logical key is deterministic.
       def rebuild_frame(state, _context)
+        return {"frame" => draft_frame_projection(state)} if draft?(state)
+
         frame = assemble_frame(
           state,
           skills: verified_skills(state.fetch(:wire)),
+          intents: recommendable_intents(state),
           memory: memory_entries(state),
           tool_results: Array(state.fetch(:tool_results, [])),
           repair_directive: state[:repair_directive],
@@ -451,10 +457,7 @@ module Tamoz
         snapshot = state.fetch(:snapshot)
         wire = state.fetch(:wire)
         allowlist = Array(episode.fetch("allowed_intent_types", []))
-        catalog = IntentCatalog.verify_wire(
-          wire.fetch("intent_catalog_json"),
-          wire.fetch("intent_catalog_sha256")
-        )
+        catalog = verified_intent_catalog(wire)
         decision, digest = @decision_builder.call(
           document:,
           episode:,
@@ -551,21 +554,40 @@ module Tamoz
         end
       end
 
+      def draft?(state) = state.fetch(:episode).fetch("kind") == "draft"
+
+      def draft_frame_projection(state)
+        frame = PlaybookDraftFrame.build(state.fetch(:wire).fetch("draft"), repair_directive: state[:repair_directive])
+        {"system" => frame.system, "user" => frame.user, "digest" => frame.digest}
+      end
+
+      def validated_draft(state)
+        draft = state.fetch(:wire).fetch("draft")
+        answer = PlaybookDraft.parse(
+          model_response(state),
+          cases: draft.fetch("cases").to_h { |entry| [entry.fetch("episode_id"), entry.fetch("features")] },
+          allowed_features: draft.fetch("allowed_features")
+        )
+        kind = answer.is_a?(PlaybookDraft::Proposal) ? "proposal" : "no_proposal"
+        {kind => answer.to_h.transform_keys(&:to_s)}
+      end
+
+      def model_response(state)
+        raw = state.fetch(:raw_response)
+        raise ProtocolError, "episode has no model response to validate" if raw.nil? || raw.empty?
+
+        raw
+      end
+
       def validated_document(state)
         frame = required_frame(state.fetch(:frame))
-        raw = state.fetch(:raw_response)
-        if raw.nil? || raw.empty?
-          raise ProtocolError, "episode has no model response to validate"
-        end
-
         catalog = DiagnosisCatalog.from_list(frame.fetch("catalog"))
-        document = ReasoningDocument.parse(raw, catalog:)
+        document = ReasoningDocument.parse(model_response(state), catalog:)
         ground_evidence!(document, frame)
-        intent_catalog = IntentCatalog.verify_wire(
-          state.fetch(:wire).fetch("intent_catalog_json"),
-          state.fetch(:wire).fetch("intent_catalog_sha256")
-        )
+        intent_catalog = verified_intent_catalog(state.fetch(:wire))
         validate_recommended_intent_types!(document, state, intent_catalog)
+        refuse_unwritable_parameters!(document, intent_catalog)
+        refuse_more_than_one_action!(document)
         refuse_action_without_diagnosis!(document, intent_catalog)
         document
       end
@@ -622,9 +644,13 @@ module Tamoz
         if result.unknown?
           raise EffectUnknownError, "episode #{subject} call outcome is unknown"
         end
-        if result.failed?
-          raise ProtocolError, "episode #{subject} call failed"
-        end
+        raise EpisodeCallFailedError, failed_call_message(result, subject) if result.failed?
+      end
+
+      def failed_call_message(result, subject)
+        error = result.outcome.error || {}
+        cause = error.values_at("class", "code", "status").compact.join(" ")
+        ["episode #{subject} call failed", cause].reject(&:empty?).join(": ")
       end
 
       def endpoint_for(role)
@@ -635,6 +661,31 @@ module Tamoz
         end
 
         ""
+      end
+
+      # The types a document may recommend: the watch plus the episode's allowed types the catalog knows.
+      def recommendable_types(state, catalog)
+        allowed = Array(state.fetch(:episode).fetch("allowed_intent_types", [])).map(&:to_s)
+        ([Tamoz::Core::INTENT_WATCH_TYPE] + allowed.select { |type| catalog.include?(type) }).uniq
+      end
+
+      # The frame lists only what the episode's risk ceiling lets act; a higher type would become a watch.
+      def recommendable_intents(state)
+        catalog = verified_intent_catalog(state.fetch(:wire))
+        ceiling = String(state.fetch(:episode).fetch("risk_ceiling", "")).upcase
+        recommendable_types(state, catalog).filter_map do |type|
+          catalog.entry(type) if catalog.include?(type) && !risk_above_ceiling?(catalog.risk_for(type), ceiling)
+        end
+      end
+
+      def repair_directive_for(state, error)
+        return error.message if draft?(state)
+
+        ReasoningDocumentShape.repair_directive(error.message)
+      end
+
+      def verified_intent_catalog(wire)
+        IntentCatalog.verify_wire(wire.fetch("intent_catalog_json"), wire.fetch("intent_catalog_sha256"))
       end
 
       def verified_diagnosis_catalog(wire)
@@ -677,9 +728,7 @@ module Tamoz
       end
 
       def validate_recommended_intent_types!(document, state, catalog)
-        allowed = Array(state.fetch(:episode).fetch("allowed_intent_types", [])).map(&:to_s)
-        valid_types = ([Tamoz::Core::INTENT_WATCH_TYPE] +
-                       allowed.select { |type| catalog.include?(type) }).uniq
+        valid_types = recommendable_types(state, catalog)
         Array(document.recommended_intents).each do |intent|
           next if valid_types.include?(intent.type)
 
@@ -687,6 +736,28 @@ module Tamoz
                 "reasoning_document/intent_type_not_allowed: '#{intent.type}' is not an " \
                 "allowed intent type; use exactly one of: #{valid_types.join(", ")}"
         end
+      end
+
+      # The decision builder refuses both, after validate, where no repair is left. It ignores a watch's values.
+      def refuse_unwritable_parameters!(document, catalog)
+        Array(document.recommended_intents).each do |intent|
+          next if intent.type == Tamoz::Core::INTENT_WATCH_TYPE
+
+          writable = catalog.include?(intent.type) ? catalog.entry(intent.type).model_writable_fields : []
+          field = (intent.parameters || {}).keys.find { |key| !writable.include?(key) }
+          next unless field
+
+          raise ProtocolError, "reasoning_document/intent_parameter_not_writable: #{intent.type}.#{field}; " \
+                               "write only #{writable.empty? ? "no parameters" : writable.join(", ")}"
+        end
+      end
+
+      def refuse_more_than_one_action!(document)
+        actions = Array(document.recommended_intents).map(&:type) - [Tamoz::Core::INTENT_WATCH_TYPE]
+        return if actions.length <= Tamoz::Core::MAX_ACTIONABLE_INTENTS
+
+        raise ProtocolError, "reasoning_document/too_many_actions: #{actions.length}; recommend at most " \
+                             "#{Tamoz::Core::MAX_ACTIONABLE_INTENTS} intent besides #{Tamoz::Core::INTENT_WATCH_TYPE}"
       end
 
       # An unknown cause allows only what needs no cause: a watch or another R0 intent.

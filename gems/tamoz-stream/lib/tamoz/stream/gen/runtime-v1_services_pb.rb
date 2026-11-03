@@ -25,6 +25,12 @@ module Agenticstream
           # Executes one immutable, bounded episode. The final event must be Terminal.
           # Cancellation of the RPC is the primary cancellation mechanism.
           rpc :Execute, ::Agenticstream::Runtime::V1::EpisodeRequest, stream(::Agenticstream::Runtime::V1::EpisodeEvent)
+          # Drafts one playbook rule from verified cases of one key. Called only when
+          # the worker announced the "draft_playbook_rule" feature in its handshake.
+          # The final event is exactly one PlaybookProposal or NoProposal; the
+          # runtime checks, envelopes, replays and stores a proposal, and a human
+          # approves it before it can answer a case.
+          rpc :DraftPlaybookRule, ::Agenticstream::Runtime::V1::DraftRequest, stream(::Agenticstream::Runtime::V1::DraftEvent)
         end
 
         Stub = Service.rpc_stub_class

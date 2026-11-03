@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "stringio"
 require "tamoz/agent"
 require "tamoz/sqlite"
 require "tamoz/stream/episode_worker"
@@ -163,6 +164,105 @@ class StreamEpisodeLoopTest < Minitest::Test
       _events, terminal, _state = run_episode(composition, request_with_budget(composition, "repair2", nil))
       assert_equal :TERMINAL_STATUS_FAILED, terminal.status
       assert_equal 2, endpoint.observed.length, "no third provider call after two malformed responses"
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_a_document_rejected_after_repair_names_the_node_and_code_on_the_wire_and_in_the_log
+    invented = JSON.generate("protocol" => "tamoz.episode-diagnosis/v2", "diagnosis" => "low_dissolved_oxygen")
+    with_fixture_endpoint([invented, invented]) do |endpoint|
+      log = StringIO.new
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, log:)
+      events, terminal, _state = run_episode(composition, request_with_budget(composition, "rejected", nil))
+      diagnostic = events.filter_map(&:diagnostic).last
+      reason = "validate rejected the model's document after one repair: reasoning_document/unknown_key"
+
+      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+      assert_equal ["episode_document_rejected", reason], [diagnostic.code, diagnostic.message]
+      assert_equal "tamoz-stream-worker: episode loop-rejected attempt at-1 ended TERMINAL_STATUS_FAILED: " \
+                   "node validate: episode_document_rejected: #{reason}\n", log.string
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_a_refused_model_call_names_its_status_on_the_wire_and_in_the_log
+    refusal = {status: 429, body: JSON.generate("error" => {"message" => "provider secret detail"})}
+    with_fixture_endpoint([refusal]) do |endpoint|
+      log = StringIO.new
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, log:)
+      events, terminal, _state = run_episode(composition, request_with_budget(composition, "refused", nil))
+      diagnostic = events.filter_map(&:diagnostic).last
+      reason = "episode model call failed: Tamoz::Agent::ModelCallError http_failure 429"
+
+      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+      assert_equal ["episode_call_failed", reason], [diagnostic.code, diagnostic.message]
+      assert_includes log.string, "node reason: episode_call_failed: #{reason}\n"
+      refute_includes log.string, "provider secret detail"
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def rate_limit_refusal
+    {status: 429, body: JSON.generate("error" => {"code" => "1302", "message" => "Rate limit reached for requests"})}
+  end
+
+  def test_a_rate_limited_model_call_is_retried_within_the_budget_and_the_episode_decides
+    budget = Agenticstream::Runtime::V1::EpisodeBudget.new(max_provider_retries: 2)
+    pauses = []
+    with_fixture_endpoint([rate_limit_refusal, final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, pause: pauses.method(:push))
+      _events, terminal, state = run_episode(composition, request_with_budget(composition, "retried", budget))
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+      assert_equal 2, endpoint.observed.length
+      assert_equal [2], pauses
+      assert_equal 1, state.fetch(:budget_state).fetch("provider_retries_used")
+      assert_equal 1, state.fetch(:budget_state).fetch("model_calls_used")
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_a_model_call_rate_limited_beyond_the_retry_budget_fails_the_episode
+    budget = Agenticstream::Runtime::V1::EpisodeBudget.new(max_provider_retries: 2)
+    pauses = []
+    with_fixture_endpoint([rate_limit_refusal]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url, pause: pauses.method(:push))
+      events, terminal, _state = run_episode(composition, request_with_budget(composition, "exhausted", budget))
+      diagnostic = events.filter_map(&:diagnostic).last
+
+      assert_equal :TERMINAL_STATUS_FAILED, terminal.status
+      assert_equal "episode_call_failed", diagnostic.code
+      assert_equal 3, endpoint.observed.length, "the first request and two retries"
+      assert_equal [2, 6], pauses
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_the_frame_lists_only_the_intents_the_episode_may_recommend
+    with_fixture_endpoint([final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      _events, terminal, state = run_episode(composition, request_with_budget(composition, "intents", nil))
+      system = state.fetch(:frame).fetch("system")
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+      assert_includes system, "- start_aerator (risk R1)"
+      assert_includes system, "- install_watch_condition (risk R0)"
+      refute_includes system, "- halt_feeding"
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_the_frame_leaves_out_intents_above_the_risk_ceiling
+    with_fixture_endpoint([final_response]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      request = request_with_budget(composition, "ceiling", nil)
+      request.risk_ceiling = :RISK_CLASS_R0
+      _events, _terminal, _state = run_episode(composition, request)
+      state = composition.fetch(:app).state(thread: "episode.loop-ceiling", namespace: [request.tenant_id]).state.to_h
+      system = state.fetch(:frame).fetch("system")
+
+      assert_includes system, "- install_watch_condition (risk R0)"
+      refute_includes system, "- start_aerator"
       composition.fetch(:adapter).close
     end
   end

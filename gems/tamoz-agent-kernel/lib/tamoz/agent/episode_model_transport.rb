@@ -39,8 +39,13 @@ module Tamoz
 
       Response = Data.define(
         :content, :request_digest, :response_digest, :usage, :settings_digest,
-        :provider_configuration_digest
+        :provider_configuration_digest, :provider_retries
       )
+
+      # A rate-limited or briefly unavailable provider answers before it acts, so the same request may be sent again.
+      RETRYABLE_STATUSES = %w[429 503].freeze
+      RETRY_PAUSES = [2, 6].freeze
+      MAX_RETRY_PAUSE = 30
 
       # The tool-calling request settings. A conversation carries native tool
       # calls, so it never asks for JSON mode.
@@ -58,9 +63,10 @@ module Tamoz
 
       attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window, :timeout_seconds
 
+      # pause: receives the seconds to wait before a retried request; tests pass a recorder.
       def initialize(endpoint:, model:, provider: "episode_model_transport", api_key: nil,
                      timeout_seconds: 120, gateway: nil, safety: :unsafe,
-                     provider_configuration_digest: nil, context_window: nil)
+                     provider_configuration_digest: nil, context_window: nil, pause: nil)
         @endpoint = endpoint.to_s.sub(%r{/+\z}, "")
         raise ConfigurationError, "episode model endpoint is required" if @endpoint.empty?
 
@@ -74,6 +80,7 @@ module Tamoz
         @safety = safety.to_sym
         @provider_configuration_digest = provider_configuration_digest || configuration_digest
         @context_window = context_window
+        @pause = pause || ->(seconds) { sleep(seconds) }
         freeze
       end
 
@@ -108,7 +115,8 @@ module Tamoz
         raise ConfigurationError, "tool-calling conversations do not run through the witness gateway" if @gateway
 
         request_bytes = build_conversation(messages:, tools:, tool_choice:)
-        receive_conversation(exchange(request_bytes, logical_call_id: "model.converse.#{stage}"), request_bytes)
+        envelope_bytes, = exchange(request_bytes, logical_call_id: "model.converse.#{stage}")
+        receive_conversation(envelope_bytes, request_bytes)
       end
 
       def build_conversation(messages:, tools: [], tool_choice: "auto")
@@ -185,27 +193,46 @@ module Tamoz
       # worker's egress is the witness gateway: the request + logical call id
       # + frame digest travel to the gateway, which rehashes, forwards to the
       # provider, and signs the binding record.
-      def call(request_bytes, logical_call_id: nil, frame_digest: nil)
-        envelope_bytes = exchange(request_bytes, logical_call_id:, frame_digest:)
-        build_model_response(envelope_bytes, request_bytes:)
+      # max_retries bounds how often a 429 or 503 is sent again; the retries used travel in the response.
+      def call(request_bytes, logical_call_id: nil, frame_digest: nil, max_retries: 0)
+        envelope_bytes, retries = exchange(request_bytes, logical_call_id:, frame_digest:, max_retries:)
+        build_model_response(envelope_bytes, request_bytes:, retries:)
       rescue Tamoz::Core::ProtocolError, Tamoz::Core::JCS::Error, JSON::ParserError, KeyError, TypeError
         raise model_error("invalid_response", body: envelope_bytes)
       end
 
       private
 
-      def exchange(request_bytes, logical_call_id: nil, frame_digest: nil)
-        return gateway_exchange(request_bytes, logical_call_id:, frame_digest:) if @gateway
+      # Returns [envelope_bytes, retries_used].
+      def exchange(request_bytes, logical_call_id: nil, frame_digest: nil, max_retries: 0)
+        return [gateway_exchange(request_bytes, logical_call_id:, frame_digest:), 0] if @gateway
 
         headers = {"Content-Type" => "application/json"}
         headers["Authorization"] = "Bearer #{@api_key}" unless @api_key.to_s.empty?
-        response = post_completion_request(request_bytes, headers:)
-        envelope_bytes = response.body.to_s
-        raise http_error(response, envelope_bytes) unless response.is_a?(Net::HTTPSuccess)
-
-        envelope_bytes
+        send_with_retries(request_bytes, headers, max_retries)
       rescue URI::InvalidURIError, SocketError, SystemCallError => e
         raise model_error("transport_failure", body_bytes: e.message.to_s.bytesize)
+      end
+
+      def send_with_retries(request_bytes, headers, max_retries)
+        retries = 0
+        loop do
+          response = post_completion_request(request_bytes, headers:)
+          return [response.body.to_s, retries] if response.is_a?(Net::HTTPSuccess)
+          raise http_error(response, response.body.to_s) unless retries < max_retries && retryable?(response)
+
+          @pause.call(retry_pause(response, retries))
+          retries += 1
+        end
+      end
+
+      def retryable?(response) = RETRYABLE_STATUSES.include?(response.code.to_s)
+
+      def retry_pause(response, retries)
+        advised = Integer(response["Retry-After"], exception: false)
+        return [advised, MAX_RETRY_PAUSE].min if advised&.positive?
+
+        RETRY_PAUSES.fetch(retries, RETRY_PAUSES.last)
       end
 
       def http_error(response, body)
@@ -328,14 +355,15 @@ module Tamoz
         raise model_error("invalid_response", body:)
       end
 
-      def build_model_response(envelope_bytes, request_bytes:)
+      def build_model_response(envelope_bytes, request_bytes:, retries:)
         Response.new(
           content: extract_content(envelope_bytes),
           request_digest: request_digest(request_bytes),
           response_digest: "sha256:#{Digest::SHA256.hexdigest(envelope_bytes)}",
           usage: usage_from(extract_usage_hash(envelope_bytes)),
           settings_digest: settings_digest,
-          provider_configuration_digest:
+          provider_configuration_digest:,
+          provider_retries: retries
         )
       end
 

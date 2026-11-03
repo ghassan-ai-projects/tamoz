@@ -71,9 +71,9 @@ module BenchmarkFamilies
   end
 
   # Built after the helpers so the module_function methods are defined.
-  FAMILIES = DomainLoader.domains.to_h do |domain_name|
+  FAMILIES = DomainLoader.domains.filter_map do |domain_name|
     domain = DomainLoader.load(domain_name)
     data = domain.benchmark_family
-    [data.fetch("family_id"), family_for(domain, data)]
-  end.freeze
+    [data.fetch("family_id"), family_for(domain, data)] unless data.empty?
+  end.to_h.freeze
 end

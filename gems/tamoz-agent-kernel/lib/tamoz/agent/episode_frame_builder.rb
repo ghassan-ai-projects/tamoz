@@ -2,6 +2,7 @@
 
 require "tamoz/core"
 require "tamoz/agent/errors"
+require "tamoz/agent/reasoning_document_shape"
 
 module Tamoz
   module Agent
@@ -25,11 +26,11 @@ module Tamoz
       MAX_TOOL_RESULT_BYTES = 16 * 1024
       TOOL_PROTOCOL = <<~TEXT.chomp
         TOOLS: when the given facts cannot settle the diagnosis, return a tool turn instead of a verdict:
-        {"protocol":"tamoz.episode-diagnosis/v2","tool_requests":[{"name":"<tool>","arguments":{},"purpose":"<the missing datum, and why it decides the diagnosis>"}]}
-        A tool turn carries no other field. This episode allows %<budget>d tool calls in total.
+        #{ReasoningDocumentShape.tool_example}
+        A turn is either a tool turn or a terminal answer, never both: a tool turn carries no other key, a terminal answer no tool_requests. This episode allows %<budget>d tool calls in total.
         Each result returns as a tool:<index> entry in tool_results. A successful result is a provided fact you may cite; an error result is not. Never assume a value you did not gather.
         A result that does not show the cause is not evidence that there is none: while tool calls remain, query again with different or broader terms (synonyms, related names) before concluding unknown.
-        If the evidence still cannot settle it, put most probability on unknown and add "evidence_gaps":[{"datum":"<what is missing>","why":"<why it matters>"}] to the terminal answer.
+        If the evidence still cannot settle it, put most probability on unknown and add "evidence_gaps":#{ReasoningDocumentShape.value("evidence_gaps")} to the terminal answer.
         AVAILABLE TOOLS:
       TEXT
       FINAL_DIRECTIVE = "FINAL CALL: no further tool call or model call is available. Return a terminal " \
@@ -62,11 +63,12 @@ module Tamoz
       end
 
       # tooling: nil leaves the system section byte-identical to a tool-less episode.
-      def build(snapshot:, prompt:, prompt_version: nil, prompt_sha256: nil,
+      # intents: the IntentCatalog entries the model may recommend.
+      def build(snapshot:, prompt:, prompt_version: nil, prompt_sha256: nil, intents: [],
                 skills: [], memory: [], tool_results: [], repair_directive: nil, tooling: nil)
         verify_prompt!(prompt, prompt_version, prompt_sha256)
         facts = build_facts(snapshot)
-        system = build_system(prompt, tooling)
+        system = build_system(prompt, intents, tooling)
         sections = build_user(facts, skills, memory, tool_results, repair_directive)
         sections["budget_directive"] = FINAL_DIRECTIVE if tooling&.final
         user = Tamoz::Core.jcs(sections)
@@ -115,7 +117,7 @@ module Tamoz
         entries
       end
 
-      def build_system(prompt, tooling)
+      def build_system(prompt, intents, tooling)
         lines = [String(prompt)]
         lines << "OBJECTIVE: #{@objective}" unless @objective.empty?
         lines << "DIAGNOSIS CODES (output exactly these codes in " \
@@ -124,13 +126,35 @@ module Tamoz
         @catalog.entries.each do |entry|
           lines << "- #{entry.code}: #{entry.description}"
         end
+        lines.concat(intent_lines(intents)) unless intents.empty?
         lines << "EVIDENCE: cite facts with the fact:<id> prefixes, tools with " \
                  "tool:<index>, memory with memory:<digest>, and skills with " \
                  "skill:<name> — all only for entries given in the user message."
-        lines << "OUTPUT: strict JSON object matching the " \
-                 "tamoz.episode-diagnosis/v2 protocol; no prose around it."
+        lines.concat(ReasoningDocumentShape.output_lines)
         lines.concat(tool_lines(tooling)) if tooling
         lines.join("\n")
+      end
+
+      def intent_lines(intents)
+        ["INTENTS (recommended_intents may use only these types):"] +
+          intents.map { |entry| intent_line(entry) } +
+          ["Recommend at most #{Tamoz::Core::MAX_ACTIONABLE_INTENTS} intent besides " \
+           "#{Tamoz::Core::INTENT_WATCH_TYPE}. When #{DiagnosisCatalog::UNKNOWN} is the most probable code, recommend only an R0 intent or none."]
+      end
+
+      def intent_line(entry)
+        summary = ["- #{entry.type} (risk #{entry.risk_class})", entry.description.delete_suffix(".")]
+        "#{summary.reject(&:empty?).join(": ")}. Parameters you write: #{writable_parameters(entry)}"
+      end
+
+      def writable_parameters(entry)
+        writable = entry.model_writable_fields
+        return "none" if writable.empty?
+
+        properties = entry.parameter_schema.fetch("properties", {}).slice(*writable)
+        required = Array(entry.parameter_schema["required"]) & writable
+        text = Tamoz::Core.jcs(properties)
+        required.empty? ? text : "#{text}, required: #{required.join(", ")}"
       end
 
       def tool_lines(tooling)

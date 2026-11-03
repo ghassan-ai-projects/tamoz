@@ -24,7 +24,7 @@ module Tamoz
       # diagnosis_catalog_sha256 and this type's #digest are the same value.
       DIGEST_DOMAIN = :diagnosis_catalog
       ENTRY_KEYS = %w[code description].freeze
-      CODE_PATTERN = /\A[a-z][a-z0-9_]{0,63}\z/
+      CODE_PATTERN = /\A[a-z][a-z0-9_]{0,62}\z/
       MAX_ENTRIES = 64
       MAX_DESCRIPTION_BYTES = 512
 

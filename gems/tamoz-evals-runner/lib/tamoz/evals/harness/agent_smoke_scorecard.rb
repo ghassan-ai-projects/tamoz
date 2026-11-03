@@ -14,16 +14,6 @@ module Tamoz
           unnecessary_mutations repeated_action_stops
         ].freeze
 
-        Report = Data.define(:document) do
-          def initialize(document:)
-            super(document: DeepFreeze.call(document))
-          end
-
-          def passed? = document.fetch("decision") == "pass"
-          def to_h = document
-          def to_json = CanonicalJSON.dump(document)
-        end
-
         def initialize(corpus:, auditor: AgentRunAudit.new)
           @corpus = corpus
           @auditor = auditor
@@ -37,7 +27,7 @@ module Tamoz
           end
           document = build_report(artifacts, case_reports)
           document["content_digest"] = CanonicalJSON.content_digest(document, domain: REPORT_DOMAIN)
-          Report.new(document:)
+          ScorecardReport.new(document:)
         rescue InvalidArtifactError, ExecutionError
           raise
         rescue StandardError

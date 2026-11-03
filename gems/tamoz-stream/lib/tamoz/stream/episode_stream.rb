@@ -181,9 +181,11 @@ module Tamoz
       def initialize(stream)
         @stream = stream
         @last_diagnostic_code = nil
+        @last_failure = nil
       end
 
-      attr_reader :stream, :last_diagnostic_code
+      # last_failure: the failing node, typed code and safe message of the last graph error, for the worker log.
+      attr_reader :stream, :last_diagnostic_code, :last_failure
 
       # The Context emitter entry point. Model events are forbidden here — the
       # only model events on the wire come from receipts via the trusted
@@ -212,7 +214,7 @@ module Tamoz
         end
       end
 
-      def cumulative_usage(receipts)
+      def self.cumulative_usage(receipts)
         totals = USAGE_FIELDS.to_h { |field| [field, 0] }
         Array(receipts).each do |receipt|
           usage = wire_usage(receipt["usage"])
@@ -247,12 +249,14 @@ module Tamoz
       # so a consumer can act on the real reason.
       def diagnostic(data)
         code = typed_code(data["error_class"].to_s)
+        message = data.fetch("safe_message", "graph step failed")
         @last_diagnostic_code = code
-        @stream.diagnostic(
-          code:,
-          message: data.fetch("safe_message", "graph step failed"),
-          retryable: false
-        )
+        @last_failure = "node #{data.fetch('node', 'unknown')}: #{code}#{untyped_class(code, data)}: #{message}"
+        @stream.diagnostic(code:, message:, retryable: false)
+      end
+
+      def untyped_class(code, data)
+        code == "graph_step_failed" ? " (#{data['error_class']})" : ""
       end
 
       def typed_code(error_class_name)
@@ -282,14 +286,14 @@ module Tamoz
       def model_completed_part(data)
         @stream.model_completed(
           ordinal: Integer(data.fetch("ordinal")),
-          usage: wire_usage(data["usage"]),
+          usage: self.class.wire_usage(data["usage"]),
           response_sha256: data["response_sha256"]
         )
       end
 
       # nil usage (unavailable) crosses as nil — the wire claims nothing it
       # cannot prove. Present usage is mapped 1:1 from the receipt projection.
-      def wire_usage(usage)
+      def self.wire_usage(usage)
         return nil if usage.nil?
 
         fields = USAGE_FIELDS.to_h { |field| [field, Integer(usage.fetch(field.to_s, 0))] }

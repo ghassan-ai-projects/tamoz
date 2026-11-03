@@ -43,6 +43,7 @@ module Tamoz
       def outcome_projection(document)
         {
           primary_hypothesis: String(document.fetch("primary_hypothesis", "")),
+          diagnosis_code: document.fetch("selected_code"),
           confidence: document.fetch("raw_confidence", 0.0),
           summary: summary(document),
           facts_used: Array(document.fetch("evidence_refs")).map { |ref| {"evidence" => ref} },
@@ -53,7 +54,7 @@ module Tamoz
       end
 
       def summary(document)
-        text = "selected #{document.fetch("selected_code", "unknown")} " \
+        text = "selected #{document.fetch("selected_code")} " \
                "at confidence #{document.fetch("raw_confidence", 0.0)}"
         gaps = Array(document["evidence_gaps"]).map { |gap| gap.fetch("datum") }
         gaps.empty? ? text : "#{text}; missing: #{gaps.join("; ")}"

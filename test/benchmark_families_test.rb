@@ -7,8 +7,11 @@ require "support/benchmark_families"
 # DomainLoader must build a family, including hyphenated identifiers such as
 # `cold-chain` (audit D3 — the old const_get boundary rejected them).
 class BenchmarkFamiliesTest < Minitest::Test
-  def test_a_family_is_built_for_every_discovered_domain
-    DomainLoader.domains.each do |domain_name|
+  def test_a_family_is_built_for_every_discovered_domain_that_declares_one
+    declaring = DomainLoader.domains.reject { |name| DomainLoader.load(name).benchmark_family.empty? }
+    refute_includes declaring, 'pump-station', 'the drafting-only domain declares no diagnosis family'
+    assert_includes DomainLoader.domains, 'pump-station'
+    declaring.each do |domain_name|
       family_id = DomainLoader.load(domain_name).benchmark_family.fetch("family_id")
       assert BenchmarkFamilies::FAMILIES.key?(family_id),
              "no benchmark family built for domain #{domain_name.inspect} (family_id #{family_id.inspect})"

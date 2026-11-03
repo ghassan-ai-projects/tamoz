@@ -43,6 +43,18 @@ class StreamArtifactManifestTest < Minitest::Test
     [digest.delete_prefix("sha256:")].pack("H*")
   end
 
+  def test_a_manifest_refuses_memory_digests_that_do_not_match_the_recalled_projections
+    envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request(episode_id: "ep-mem"), nil)
+    runner = Tamoz::Stream::EpisodeRunner.new(durable_runner: nil, worker: nil)
+    recalled = {situation_memory: [{"digest" => MEMORY_DIGEST}], memory_record_digests: [MEMORY_DIGEST]}
+
+    assert_kind_of Agenticstream::Runtime::V1::ArtifactManifest,
+                   runner.send(:build_artifact_manifest, envelope, recalled)
+    assert_raises(Tamoz::Stream::EpisodeStreamStateError) do
+      runner.send(:build_artifact_manifest, envelope, recalled.merge(memory_record_digests: ["sha256:#{"f" * 64}"]))
+    end
+  end
+
   def test_the_terminal_carries_the_artifact_manifest
     envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(
       EpisodeComposition.wire_request(episode_id: "ep-art"), nil

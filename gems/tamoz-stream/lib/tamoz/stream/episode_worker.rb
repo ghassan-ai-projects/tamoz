@@ -28,6 +28,7 @@ module Tamoz
       # their feature here when the client is wired; until then a runtime that
       # requires one is refused at the handshake, exactly like the Go worker.
       SUPPORTED_FEATURES = [].freeze
+      DRAFT_FEATURE = "draft_playbook_rule"
       SUPPORTED_KINDS = %i[EPISODE_KIND_DIAGNOSE EPISODE_KIND_RECONSIDER].freeze
 
       # P8 (no hidden fallback): the worker declares its provider mode at
@@ -52,6 +53,13 @@ module Tamoz
         self
       end
 
+      def bind_draft_runner(runner)
+        @draft_runner = runner
+        self
+      end
+
+      def supported_features = @draft_runner ? SUPPORTED_FEATURES + [DRAFT_FEATURE] : SUPPORTED_FEATURES
+
       def worker_name = WORKER_NAME
 
       def worker_version = @worker_version
@@ -73,7 +81,7 @@ module Tamoz
           contract_version: CONTRACT_VERSION,
           worker_name: WORKER_NAME,
           worker_version: @worker_version,
-          supported_features: SUPPORTED_FEATURES.dup,
+          supported_features: supported_features.dup,
           max_request_bytes: MAX_REQUEST_BYTES,
           max_event_bytes: MAX_EVENT_BYTES
         )
@@ -89,6 +97,22 @@ module Tamoz
         validate_stream(@runner.run(request, call))
       end
 
+      def draft_playbook_rule(request, _call)
+        validate_protocol_version!(request)
+        raise GRPC::Unimplemented, "this worker does not draft playbook rules" unless @draft_runner
+        raise GRPC::FailedPrecondition, "a fixture provider cannot draft a playbook rule" if @provider_mode == :fixture
+        if request.to_proto.bytesize > MAX_REQUEST_BYTES
+          raise GRPC::ResourceExhausted, "draft request exceeds #{MAX_REQUEST_BYTES} bytes"
+        end
+
+        @draft_runner.run(request).each do |event|
+          if event.to_proto.bytesize > MAX_EVENT_BYTES
+            raise GRPC::ResourceExhausted,
+                  "draft event exceeds #{MAX_EVENT_BYTES} bytes"
+          end
+        end
+      end
+
       private
 
       def validate_contract!(request)
@@ -102,7 +126,7 @@ module Tamoz
                 "the tamoz worker only serves non-interactive episodes"
         end
         request.requested_features.each do |feature|
-          next if SUPPORTED_FEATURES.include?(feature)
+          next if supported_features.include?(feature)
 
           raise GRPC::FailedPrecondition,
                 "unsupported required feature #{feature.inspect}"

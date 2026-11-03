@@ -133,12 +133,7 @@ class StreamEpisodeStreamTest < Minitest::Test
   end
 
   def test_cumulative_usage_sums_available_receipt_projections
-    stream = Stream::EpisodeStream.new(
-      Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)
-    )
-    adapter = Stream::EpisodeStreamAdapter.new(stream)
-
-    usage = adapter.cumulative_usage([
+    usage = Stream::EpisodeStreamAdapter.cumulative_usage([
       {"usage" => {
         "input_tokens" => 5, "output_tokens" => 3, "cached_input_tokens" => 2,
         "reasoning_tokens" => 1, "cost_microunits" => 7
@@ -168,6 +163,18 @@ class StreamEpisodeStreamTest < Minitest::Test
       )
     end
     assert_match(/forbidden model event/, error.message)
+  end
+
+  def test_an_untyped_graph_error_names_its_class_in_the_worker_log_line
+    stream = Stream::EpisodeStream.new(
+      Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)
+    )
+    adapter = Stream::EpisodeStreamAdapter.new(stream)
+    adapter.emit(:error, [], {"error_class" => "Tamoz::Core::ToolError", "node" => "reason",
+                              "safe_message" => "A workflow step failed."})
+
+    assert_equal "node reason: graph_step_failed (Tamoz::Core::ToolError): A workflow step failed.",
+                 adapter.last_failure
   end
 
   def test_the_trusted_channel_projects_receipt_parts_into_the_wire

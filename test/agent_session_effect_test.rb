@@ -627,7 +627,8 @@ class AgentSessionEffectTest < Minitest::Test
           response_digest: "sha256:#{'e' * 64}",
           usage: Tamoz::Agent::ModelCall::Usage.unavailable,
           settings_digest: transport.settings_digest,
-          provider_configuration_digest: transport.provider_configuration_digest
+          provider_configuration_digest: transport.provider_configuration_digest,
+          provider_retries: 0
         )
       end
     end.new
