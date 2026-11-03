@@ -123,7 +123,9 @@ class StreamDraftPlaybookRuleTest < Minitest::Test
     with_worker(proposal_bytes('features.a > 2.2'), proposal_bytes('features.a > 2.9')) do |worker, endpoint|
       event = draft(worker).first
 
-      assert_equal 'graph_step_failed', event.diagnostic.code
+      assert_equal ['episode_document_rejected',
+                    "validate rejected the model's document after one repair: playbook_draft/when_fails_case"],
+                   [event.diagnostic.code, event.diagnostic.message]
       assert_equal 2, endpoint.observed.length
       assert_equal 2 * 42, event.usage.input_tokens, 'both journaled calls are counted'
     end
