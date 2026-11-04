@@ -42,7 +42,7 @@ OptionParser.new do |parser|
   parser.on("--input-manifest PATH", "external runner input manifest") { |path| options[:input_manifest] = path }
   parser.on("--accept", "deliberately replace the committed pin") { options[:accept] = true }
 end.parse!(ARGV)
-input_manifest = options[:input_manifest] || ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+input_manifest = options[:input_manifest] || ENV.fetch("TAMOZ_RUNNER_INPUT_MANIFEST", nil)
 raise ManifestMismatchError, "runner input manifest is required" unless input_manifest
 
 def read_utf8(path) = File.read(path, encoding: Encoding::UTF_8)

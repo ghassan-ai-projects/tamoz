@@ -111,6 +111,7 @@ class OpenclawMissionControlsTest < Minitest::Test
 
       assert(statuses(result).values.all?('ready'), "oracle must reach ready everywhere: #{statuses(result)}")
       mission_faults = readiness_reasons(directory, result).grep(/\Amission_/)
+
       assert_empty mission_faults, "the gate must find no mission fault in a clean run: #{mission_faults}"
     end
   end

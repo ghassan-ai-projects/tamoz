@@ -172,8 +172,8 @@ module WebsearchAdapter
 
     def egress_circuit(policy)
       @egress_circuit ||= W::EgressCircuit.new(threshold: policy.circuit.fetch("threshold"),
-                                        scope_id: W::DEFAULT_SERVER_ID,
-                                        budget_breach: policy.circuit.fetch("budget_breach"))
+                                               scope_id: W::DEFAULT_SERVER_ID,
+                                               budget_breach: policy.circuit.fetch("budget_breach"))
     end
 
     def recorded_web

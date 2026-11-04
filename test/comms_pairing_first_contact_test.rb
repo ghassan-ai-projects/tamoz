@@ -77,6 +77,7 @@ class CommsPairingFirstContactTest < Minitest::Test
                    'an unknown code refuses bounded'
 
       seed_consumed_challenge(store, code: 'CONSUMED')
+
       assert_equal NO_MATCH_REPLY, drive_command(gateway, transport, '/start CONSUMED', id: 4),
                    'a consumed code no longer matches'
 
@@ -109,7 +110,7 @@ class CommsPairingFirstContactTest < Minitest::Test
 
   def test_operator_approval_admits_the_next_message_through_the_real_gateway
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
-      code = contact(gateway, transport, 1, now: NOW)
+      contact(gateway, transport, 1, now: NOW)
       digest = store.pairing_challenges(status: 'pending', now: NOW).first.fetch('challenge_digest')
 
       outcome = store.approve_pairing(
@@ -121,9 +122,11 @@ class CommsPairingFirstContactTest < Minitest::Test
                    store.binding(correspondent_id: CORRESPONDENT_ID, surface_id: SURFACE_ID).fetch('status')
 
       transport.batch([update(2, text: 'now we are paired, make it blue')])
+
       assert_equal :served, gateway.serve_once(now: NOW + 20, drain: false)
 
       thread = Comms::Admission.thread_id(SURFACE_ID, CONVERSATION_ID)
+
       assert_equal 1, checkpoints.request_history(thread_id: thread).length,
                    'the next message enqueues a real turn'
       assert_empty store.pairing_challenges(status: 'pending', now: NOW + 20),
@@ -135,6 +138,7 @@ class CommsPairingFirstContactTest < Minitest::Test
     with_gateway do |gateway, transport, store|
       contact(gateway, transport, 1, now: NOW)
       digest = store.pairing_challenges(status: 'pending', now: NOW).first.fetch('challenge_digest')
+
       assert_equal :approved,
                    store.approve_pairing(challenge_digest: digest, binding_wire: operator_binding_wire,
                                          now: NOW + 10)
@@ -247,7 +251,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   # ===== helpers =====
 
   # One unbound contact through the real loop; returns the code it named.
-  def contact(gateway, transport, id, text: 'hello there', now:)
+  def contact(gateway, transport, id, now:, text: 'hello there')
     transport.batch([update(id, text:)])
     outcome = gateway.serve_once(now:, drain: false)
 

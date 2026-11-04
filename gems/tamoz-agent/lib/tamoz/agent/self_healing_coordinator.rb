@@ -7,7 +7,7 @@ module Tamoz
     # fingerprint-keyed counter here is that bound, refused before the protocol runs.
     class SelfHealingCoordinator
       MAX_DURABLE_ATTEMPTS = 3
-      ATTEMPTS_NAMESPACE = "tamoz.healing.attempts"
+      ATTEMPTS_NAMESPACE = 'tamoz.healing.attempts'
 
       Decision = Data.define(:state, :reason, :remediation) do
         def recovered? = state == :recovered
@@ -22,25 +22,23 @@ module Tamoz
         @clock = clock
         @max_durable_attempts = Integer(max_durable_attempts)
         @remediation = remediation
-        raise ArgumentError, "max_durable_attempts must be >= 1" if @max_durable_attempts < 1
+        raise ArgumentError, 'max_durable_attempts must be >= 1' if @max_durable_attempts < 1
       end
 
       def remediate(record, toolbox:, critic: nil, original_invariant: nil,
                     minimal_change: nil, stop_conditions: [], perform: nil,
                     reconcile: nil, compensation: nil, escalation_sink: nil)
-        unless record.is_a?(Healing::FailureRecord)
-          raise ArgumentError, "remediate requires a Healing::FailureRecord"
-        end
+        raise ArgumentError, 'remediate requires a Healing::FailureRecord' unless record.is_a?(Healing::FailureRecord)
 
         rule = match_rule(record)
-        return escalated("no_matching_rule") unless rule
+        return escalated('no_matching_rule') unless rule
 
         fingerprint = record.fingerprint
         attempts = durable_attempts(fingerprint)
-        return escalated("durable_attempt_bound_exceeded") if attempts >= @max_durable_attempts
+        return escalated('durable_attempt_bound_exceeded') if attempts >= @max_durable_attempts
 
         circuit = build_circuit(rule)
-        return escalated("circuit_open") if circuit.open?
+        return escalated('circuit_open') if circuit.open?
 
         # Persist before running so a crash mid-remediation cannot reset the bound.
         record_attempt(fingerprint, attempts)
@@ -70,7 +68,7 @@ module Tamoz
 
       def durable_attempts(fingerprint)
         entry = @store.get(ATTEMPTS_NAMESPACE, fingerprint)
-        entry ? Integer(entry.value.fetch("attempts")) : 0
+        entry ? Integer(entry.value.fetch('attempts')) : 0
       end
 
       def record_attempt(fingerprint, current)
@@ -84,7 +82,7 @@ module Tamoz
       def write_attempts(fingerprint, value)
         @store.put(
           ATTEMPTS_NAMESPACE, fingerprint,
-          {"attempts" => value, "updated_at_ms" => now_ms},
+          { 'attempts' => value, 'updated_at_ms' => now_ms },
           if_version: @store.head_version(ATTEMPTS_NAMESPACE, fingerprint)
         )
       end

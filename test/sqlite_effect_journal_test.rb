@@ -87,11 +87,11 @@ class SQLiteEffectJournalTest < Minitest::Test
       ) do |writer|
         first = prepare_effect(
           writer.effects, execution_id:, task_id: "task.first", request_id: "request.first",
-          safety: :idempotent
+                          safety: :idempotent
         )
         second = prepare_effect(
           writer.effects, execution_id:, task_id: "task.second", request_id: "request.second",
-          safety: :idempotent
+                          safety: :idempotent
         )
 
         census = store.effect_census

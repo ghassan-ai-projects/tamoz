@@ -53,7 +53,7 @@ OptionParser.new do |parser|
   parser.banner = "Usage: script/benchmark_release --input-manifest PATH [--accept]"
   parser.on("--input-manifest PATH", "external runner input manifest") { |path| input_manifest = path }
 end.parse!(ARGV)
-input_manifest ||= ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+input_manifest ||= ENV.fetch("TAMOZ_RUNNER_INPUT_MANIFEST", nil)
 abort "missing required option: --input-manifest PATH" unless input_manifest
 Tamoz::Evals::Runner::InputManifest.from_path(
   input_manifest,

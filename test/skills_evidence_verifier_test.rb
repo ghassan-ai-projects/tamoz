@@ -38,14 +38,14 @@ class SkillsEvidenceVerifierTest < Minitest::Test
       'review' => { 'status' => 'proposed', 'reviewer' => nil, 'decided_at' => nil, 'note' => nil } }.merge(overrides)
   end
 
-  def verify(findings: [finding], sha: Digest::SHA256.hexdigest(POLICY), report: "F-001 pending review\n", **options)
+  def verify(findings: [finding], sha: Digest::SHA256.hexdigest(POLICY), report: "F-001 pending review\n", **)
     document = { 'audit' => { 'title' => 'Access', 'criteria_source' => 'criteria.md' },
                  'sources' => [{ 'path' => 'policy.md', 'sha256' => sha }],
                  'criteria' => [{ 'id' => 'C1', 'text' => 'Passwords must be at least 12 characters.' }],
                  'findings' => findings }
     File.write(File.join(@root, 'audit', 'findings.json'), JSON.generate(document))
     File.write(File.join(@root, 'audit', 'REPORT.md'), report) if report
-    EvidenceAudit::Verifier.new('audit/findings.json', root: @root, **options).call
+    EvidenceAudit::Verifier.new('audit/findings.json', root: @root, **).call
   end
 
   def assert_problem(pattern, result) = assert(result.problems.any? { |line| line.match?(pattern) }, result.problems)
@@ -63,7 +63,8 @@ class SkillsEvidenceVerifierTest < Minitest::Test
   end
 
   def test_a_fabricated_quote_fails
-    assert_problem(/not in the file verbatim/, verify(findings: [cite('quote' => 'Passwords must contain at least 12 characters')]))
+    assert_problem(/not in the file verbatim/,
+                   verify(findings: [cite('quote' => 'Passwords must contain at least 12 characters')]))
   end
 
   def test_a_misplaced_quote_fails_and_says_where_it_is
@@ -117,27 +118,28 @@ class SkillsEvidenceVerifierTest < Minitest::Test
   end
 
   def test_conflicting_conclusions_on_one_criterion_fail
-    twin = finding("id" => "F-002", "conclusion" => "no_exception", "severity" => "info")
+    twin = finding('id' => 'F-002', 'conclusion' => 'no_exception', 'severity' => 'info')
 
     assert_problem(/C1 has conflicting conclusions/, verify(findings: [finding, twin], report: "F-001 F-002\n"))
   end
 
   def test_more_than_three_citations_fail
-    carpet = finding("evidence" => Array.new(4) { finding["evidence"].first })
+    carpet = finding('evidence' => Array.new(4) { finding['evidence'].first })
 
     assert_problem(/at most 3 passages in evidence/, verify(findings: [carpet]))
   end
 
   def test_a_source_path_that_resolves_into_audit_is_refused
-    File.write(File.join(@root, "audit", "notes.md"), "Passwords must contain at least 8 characters\n")
-    document = { "path" => "./audit/notes.md", "sha256" => "x" }
-    result = verify.tap { }
-    json = JSON.parse(File.read(File.join(@root, "audit", "findings.json")))
-    json["sources"] << document.merge("sha256" => Digest::SHA256.hexdigest(File.read(File.join(@root, "audit", "notes.md"))))
-    File.write(File.join(@root, "audit", "findings.json"), JSON.generate(json))
+    File.write(File.join(@root, 'audit', 'notes.md'), "Passwords must contain at least 8 characters\n")
+    document = { 'path' => './audit/notes.md', 'sha256' => 'x' }
+    result = verify.tap {}
+    json = JSON.parse(File.read(File.join(@root, 'audit', 'findings.json')))
+    json['sources'] << document.merge('sha256' => Digest::SHA256.hexdigest(File.read(File.join(@root, 'audit',
+                                                                                               'notes.md'))))
+    File.write(File.join(@root, 'audit', 'findings.json'), JSON.generate(json))
 
     assert_empty result.problems
     assert_problem(/must be relative, inside the workspace and outside audit/,
-                   EvidenceAudit::Verifier.new("audit/findings.json", root: @root).call)
+                   EvidenceAudit::Verifier.new('audit/findings.json', root: @root).call)
   end
 end

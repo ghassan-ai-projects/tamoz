@@ -396,5 +396,4 @@ class AgentScorecardTest < Minitest::Test
   def gate(report, id)
     report.to_h.fetch("hard_gates").find { |entry| entry.fetch("id") == id }.fetch("status")
   end
-
 end

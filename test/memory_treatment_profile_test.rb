@@ -406,7 +406,7 @@ class MemoryTreatmentProfileTest < Minitest::Test
       status = Tamoz::Evals::Runner::CLI.run(
         ["treatment", "memory", "--input-manifest", manifest],
         out:, err:,
-        treatment_factory: -> {
+        treatment_factory: lambda {
           Tamoz::Evals::Harness::MemoryTreatmentProfile.new(
             corpus: RunnerInputs.memory_corpus
           )

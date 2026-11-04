@@ -28,7 +28,9 @@ module Tamoz
         end
 
         def dispositions(facts, update_id)
-          facts['inbound'].select { |row| row['update_id'] == update_id }.map { |row| [row['disposition'], row['reason']] }
+          facts['inbound'].select do |row|
+            row['update_id'] == update_id
+          end.map { |row| [row['disposition'], row['reason']] }
         end
 
         def task_word(internal_state)
@@ -51,8 +53,10 @@ module Tamoz
 
         def confirmed_answer_texts(facts, conversation_id)
           rows_of_kind(facts, nil)
-            .select { |row| row['conversation_id'] == conversation_id &&
-                             row['status'] == 'succeeded' && TERMINAL_KINDS.include?(row['kind']) }
+            .select do |row|
+            row['conversation_id'] == conversation_id &&
+              row['status'] == 'succeeded' && TERMINAL_KINDS.include?(row['kind'])
+          end
             .map { |row| row['text'] }
         end
 
@@ -91,7 +95,7 @@ module Tamoz
 
         def c1(facts, conversation:)
           replied = facts['outbox'].any? { |row| row['conversation_id'] == conversation }
-          admitted = dispositions(facts, facts['driven_update_ids'].first) == [['request', 'accepted']] &&
+          admitted = dispositions(facts, facts['driven_update_ids'].first) == [%w[request accepted]] &&
                      !requests_for(facts, conversation).empty?
           parity = core_parity_document(facts)
           {
@@ -196,8 +200,12 @@ module Tamoz
                                     .group_by { |row| row['update_id'] }.values
                                     .all? { |rows| rows.length == 1 }
           one_request_per_turn = facts['requests'].length == facts['driven_text_turns'].to_i
-          conflicting && facts['duplicate_observed'] == true &&
-            one_anchor_per_identity && one_request_per_turn ? PASS : FAIL
+          if conflicting && facts['duplicate_observed'] == true &&
+             one_anchor_per_identity && one_request_per_turn
+            PASS
+          else
+            FAIL
+          end
         end
 
         def conflict_merged?(facts)
@@ -227,7 +235,9 @@ module Tamoz
           consumed = facts['prompt_consumed'] == true
           denied_terminal = rows_of_kind(facts, 'answer').any? { |row| row['text'].to_s.include?('Denied') } ||
                             rows_of_kind(facts, 'failed').length >= 1
-          effect_ran = facts['effects'].any? { |row| row['operation'].include?('apply_patch') && row['status'] == 'succeeded' }
+          effect_ran = facts['effects'].any? do |row|
+            row['operation'].include?('apply_patch') && row['status'] == 'succeeded'
+          end
           authority = authority_stability_score(facts)
           {
             'metrics' => {
@@ -339,8 +349,12 @@ module Tamoz
           {
             'metrics' => {
               'no_blind_retry' => no_blind ? PASS : FAIL,
-              'unknown_preservation' => unknown_rows.length >= 1 && unknown_rows.first['receipt'].nil? &&
-                                        unknown_preserved ? PASS : FAIL,
+              'unknown_preservation' => if unknown_rows.length >= 1 && unknown_rows.first['receipt'].nil? &&
+                                           unknown_preserved
+                                          PASS
+                                        else
+                                          FAIL
+                                        end,
               'owner_fencing' => stale_refused ? PASS : FAIL,
               'delivery_axis' => throttled_retried && failed_auth ? PASS : FAIL
             },
@@ -426,7 +440,7 @@ module Tamoz
           resolved ? PASS : FAIL
         end
 
-        def leg_reference_resolves?(facts, leg)
+        def leg_reference_resolves?(_facts, leg)
           leg['request_row_present'] &&
             leg['reference'] == Tamoz::Comms::Lifecycle::RequestRef.for(leg['request_id'])
         end
@@ -435,10 +449,14 @@ module Tamoz
           pairs = paired_legs(facts)
           return FAIL if pairs.empty?
 
-          pairs.all? do |telegram, cli|
+          if pairs.all? do |telegram, cli|
             reason = telegram['terminal_reason'].to_s
             !reason.empty? && reason == cli['terminal_reason'].to_s
-          end ? PASS : FAIL
+          end
+            PASS
+          else
+            FAIL
+          end
         end
 
         def history_confirmed_deliveries(facts)
@@ -464,13 +482,12 @@ module Tamoz
                              'a CLI-submitted request has no comms conversation scope, so ' \
                              'store.request_status cannot resolve it; thread-scoped resolution is compared instead')
           ]
-          document = {
+          {
             'status' => 'scored',
             'compared' => compared,
             'score' => compared.value?(FAIL) ? FAIL : PASS,
             'edges' => edges
           }
-          document
         end
 
         # The conversation projection counts comms-admitted requests only, so
@@ -515,10 +532,14 @@ module Tamoz
           events = facts.fetch('cancellations', [])
           return FAIL if events.empty?
 
-          events.all? do |event|
+          if events.all? do |event|
             event['terminal_reason'] == 'cancelled_by_user' &&
-              event['payloads_match'] == true && event['terminal_delivered'] == true
-          end ? PASS : FAIL
+            event['payloads_match'] == true && event['terminal_delivered'] == true
+          end
+            PASS
+          else
+            FAIL
+          end
         end
 
         # C8 ----------------------------------------------------------------
@@ -538,20 +559,31 @@ module Tamoz
           {
             'metrics' => {
               'cancellation_honesty' =>
-                failures.empty? &&
-                checked.all? { |check| check['wording_consistent'] && check['history_clean'] } &&
-                checked.all? { |check| check['command_accepted'] } ? PASS : FAIL,
+                if failures.empty? &&
+                   checked.all? { |check| check['wording_consistent'] && check['history_clean'] } &&
+                   checked.all? { |check| check['command_accepted'] }
+                  PASS
+                else
+                  FAIL
+                end,
               'restart_safety' =>
                 checked.all? { |check| check['restart_ok'] } ? PASS : FAIL,
               'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture')
             },
             'hard_zero' => {
-              'false_stopped_claim' => c8_stopped_claimed_against_completion?(checked) ?
-                                         'failed' : 'passed',
+              'false_stopped_claim' => if c8_stopped_claimed_against_completion?(checked)
+                                         'failed'
+                                       else
+                                         'passed'
+                                       end,
               'race_misresolved' => failures.include?('race_misresolved') ? 'failed' : 'passed',
               'cancellation_state_lost' =>
-                (failures.include?('cancellation_state_lost') ||
-                 checked.any? { |check| !check['command_accepted'] }) ? 'failed' : 'passed'
+                if failures.include?('cancellation_state_lost') ||
+                   checked.any? { |check| !check['command_accepted'] }
+                  'failed'
+                else
+                  'passed'
+                end
             },
             'timelines' => checked.flat_map { |check| check['timelines'] },
             'wordings' => checked.flat_map { |check| check['wordings'] },
@@ -571,20 +603,18 @@ module Tamoz
           wordings = run.fetch('terminal_wordings')
           pairs = c8_wording_pairs(timelines, wordings)
           failures = c8_timeline_failures(timelines)
-          unless run['approval_prompt_recorded'] == true || name != 'clean_stop'
-            failures << 'cancellation_state_lost'
-          end
+          failures << 'cancellation_state_lost' unless run['approval_prompt_recorded'] == true || name != 'clean_stop'
           {
             'timelines' => timelines,
             'wordings' => wordings,
             'pairs' => pairs,
             'wording_consistent' => pairs.length == timelines.length &&
-                                    pairs.all? { |timeline, wording| c8_wording_matches?(timeline, wording) },
+              pairs.all? { |timeline, wording| c8_wording_matches?(timeline, wording) },
             'history_clean' => c8_history_clean?(run, conversation),
             'restart_ok' => name != 'raced_restart' ||
-                            run.fetch('restart_boundary').values.all?(true),
+              run.fetch('restart_boundary').values.all?(true),
             'command_accepted' => run['cancel_command_accepted'] == true &&
-                                  (name != 'clean_stop' || run['observation_stamp_accepted'] == true),
+              (name != 'clean_stop' || run['observation_stamp_accepted'] == true),
             'failures' => failures.uniq
           }
         end
@@ -617,8 +647,8 @@ module Tamoz
                                                          timeline['state'] == 'terminal'
             failures << 'race_misresolved' unless timeline['requested_le_observed'] == true
             failures << 'race_misresolved' unless timeline['terminal_word'] == expected
-            if timeline['settled'] && !timeline['settle_le_observed'].nil?
-              failures << 'race_misresolved' unless timeline['settle_le_observed'] == true
+            if timeline['settled'] && !timeline['settle_le_observed'].nil? && !(timeline['settle_le_observed'] == true)
+              failures << 'race_misresolved'
             end
             failures
           end

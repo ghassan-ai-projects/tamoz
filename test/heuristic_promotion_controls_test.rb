@@ -29,6 +29,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
     decision = EvaluationReport.decide(
       report_body(dev_candidate: 6, dev_baseline: 3, holdout_candidate: 5, holdout_baseline: 3)
     )
+
     assert decision.fetch('passed'), decision.fetch('reasons').inspect
   end
 
@@ -38,6 +39,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
     decision = EvaluationReport.decide(
       report_body(dev_candidate: 8, dev_baseline: 3, holdout_candidate: 2, holdout_baseline: 4)
     )
+
     refute decision.fetch('passed')
     assert(decision.fetch('reasons').any? { |reason| reason.include?('holdout margin') })
   end
@@ -47,6 +49,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
     decision = EvaluationReport.decide(
       report_body(dev_candidate: 3, dev_baseline: 3, holdout_candidate: 5, holdout_baseline: 3)
     )
+
     refute decision.fetch('passed')
     assert(decision.fetch('reasons').any? { |reason| reason.include?('development margin') })
   end
@@ -60,6 +63,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
     decision = EvaluationReport.decide(
       report_body(dev_candidate: 6, dev_baseline: 3, holdout_candidate: 4, holdout_baseline: 4)
     )
+
     assert decision.fetch('passed'),
            'a neutral holdout currently passes — the bar is no-regression, not improvement'
     assert_equal 0, decision.fetch('holdout_margin')
@@ -78,7 +82,8 @@ class HeuristicPromotionControlsTest < Minitest::Test
           rollback_snapshot_digest: "sha256:#{'a' * 64}", regression_tasks: RunnerInputs.regression_tasks
         )
         bundle = pipeline.run
-        assert bundle.promotable?, 'the oracle bundle must be promotable before we perturb it'
+
+        assert_predicate bundle, :promotable?, 'the oracle bundle must be promotable before we perturb it'
         body = EvaluationReport.verify!(bundle.report)
         resolver = ->(seal) { seal == EvaluationReport.seal(body) ? bundle.report : nil }
         yield engine, bundle, resolver
@@ -99,6 +104,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
       transition_id = result.fetch('transition').transition_id
       engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
       engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
+
       assert_equal 'tamoz.agent.session/3', engine.transitions.active.fetch('active_version')
     end
   end
@@ -108,7 +114,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
   def test_forged_report_is_refused
     with_promotion do |engine, bundle, _resolver|
       assert_raises(Improvement::EvaluatorTamperError) do
-        promote(engine, bundle, ->(_seal) { nil })
+        promote(engine, bundle, ->(_seal) {})
       end
     end
   end
@@ -151,6 +157,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
         expected_snapshot_digest: rollback.fetch('target_snapshot_digest'),
         expected_injection_digest: rollback.fetch('injection_digest')
       )
+
       assert proof.fetch('byte_identical')
     end
   end

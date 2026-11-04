@@ -6,10 +6,14 @@ require_relative '../agenteval/skills/optimizer'
 class AgentevalSkillsOptimizerTest < Minitest::Test
   OPT = Agenteval::SkillsPack::Optimizer
   CURRENT = File.read(File.join(Agenteval::SkillsPack::SKILL_DIR, 'SKILL.md'), encoding: Encoding::UTF_8)
-  SHORTER = CURRENT.sub(/## Rules that are not negotiable.*\z/m, "## Rules that are not negotiable\n\n- No quote, no finding.\n")
+  SHORTER = CURRENT.sub(/## Rules that are not negotiable.*\z/m,
+                        "## Rules that are not negotiable\n\n- No quote, no finding.\n")
 
-  def row(id, solved:, tokens: 100) = { 'scenario' => id, 'solved' => solved, 'gates' => [], 'matched' => solved ? 1 : 0,
-                                        'planted' => 1, 'clean_misjudged' => 0, 'prompt_tokens' => tokens }
+  def row(id, solved:,
+          tokens: 100)
+    { 'scenario' => id, 'solved' => solved, 'gates' => [], 'matched' => solved ? 1 : 0,
+      'planted' => 1, 'clean_misjudged' => 0, 'prompt_tokens' => tokens }
+  end
 
   # Scores a skill directory by whether its SKILL.md is the shorter rewrite; `heldout_helps` decides held-out.
   def evaluator(heldout_helps:, seen:)
@@ -18,7 +22,11 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
       better = File.read(File.join(dir, 'SKILL.md'), encoding: Encoding::UTF_8) == SHORTER
       ids.map do |id|
         held = OPT::HELDOUT.include?(id)
-        row(id, solved: held ? (better ? heldout_helps : !heldout_helps) || !better : true, tokens: better ? 50 : 100)
+        row(id, solved: if held
+                          (better ? heldout_helps : !heldout_helps) || !better
+                        else
+                          true
+                        end, tokens: better ? 50 : 100)
       end
     end
   end
@@ -27,7 +35,10 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
     prompts = []
     seen = []
     Dir.mktmpdir('opt') do |staging|
-      result = OPT.new(propose: ->(prompt) { prompts << prompt; proposal }, staging:,
+      result = OPT.new(propose: lambda { |prompt|
+        prompts << prompt
+        proposal
+      }, staging:,
                        evaluate: evaluator(heldout_helps:, seen:), variants: 1).call
       yield result, prompts, seen
     end
@@ -40,7 +51,7 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
       staged = File.read(File.join(result.best, 'SKILL.md'), encoding: Encoding::UTF_8)
 
       assert_equal SHORTER, staged
-      assert File.exist?("#{result.best}.candidate.json")
+      assert_path_exists "#{result.best}.candidate.json"
     end
   end
 
@@ -76,9 +87,14 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
 
   def test_a_losing_draft_is_not_promotable_and_a_refused_trial_stops_the_run
     run_optimizer(SHORTER, heldout_helps: false) do |result, _, _|
-      refute File.exist?("#{result.best}.candidate.json"), 'only an accepted rewrite is staged'
+      refute_path_exists "#{result.best}.candidate.json", 'only an accepted rewrite is staged'
     end
-    refused = ->(_dir, ids) { ids.map { |id| row(id, solved: false).merge('provider_failure' => 'model_out_of_credit') } }
+    refused = lambda { |_dir, ids|
+      ids.map do |id|
+        row(id, solved: false).merge('provider_failure' => 'model_out_of_credit')
+      end
+    }
+
     Dir.mktmpdir('opt') do |staging|
       assert_raises(Agenteval::SkillsPack::ProviderUnavailable) do
         OPT.new(propose: ->(_) { SHORTER }, evaluate: refused, staging:, variants: 1).call
@@ -93,7 +109,7 @@ class AgentevalSkillsOptimizerLoadTest < Minitest::Test
     script = 'require_relative "agenteval/skills/optimizer"; print Tamoz::Skills.respond_to?(:lint) && Tamoz::Skills::Error.name'
     out, err, status = Open3.capture3(RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', '-e', script, chdir: ROOT.to_s)
 
-    assert status.success?, err
+    assert_predicate status, :success?, err
     assert_equal 'Tamoz::Skills::Error', out
   end
 end

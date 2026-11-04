@@ -736,12 +736,14 @@ module Tamoz
       end
 
       def model_content(value, request:, configuration_digest:)
-        return ModelCallProjection.validate!(
-          value,
-          request_digest: request["request_digest"],
-          settings_digest: model_settings_digest,
-          provider_configuration_digest: configuration_digest
-        ).fetch("content") if value.is_a?(Hash) && value.key?("content")
+        if value.is_a?(Hash) && value.key?("content")
+          return ModelCallProjection.validate!(
+            value,
+            request_digest: request["request_digest"],
+            settings_digest: model_settings_digest,
+            provider_configuration_digest: configuration_digest
+          ).fetch("content")
+        end
 
         value
       end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
+require 'digest'
+require 'json'
 
 module Tamoz
   module Evals
@@ -29,33 +29,31 @@ module Tamoz
         def document(manifest, descriptor, label:)
           path = path_for(manifest, descriptor, label:)
           bytes = File.binread(path)
-          expected = descriptor["sha256"] if descriptor.is_a?(Hash)
+          expected = descriptor['sha256'] if descriptor.is_a?(Hash)
           if expected && Digest::SHA256.hexdigest(bytes) != expected
             raise ExecutionError, "#{label} digest does not match its manifest"
           end
 
           JSON.parse(bytes, create_additions: false)
-        rescue JSON::ParserError, Errno::ENOENT, Errno::EACCES => error
-          raise ExecutionError, "#{label} is invalid: #{error.message}"
+        rescue JSON::ParserError, Errno::ENOENT, Errno::EACCES => e
+          raise ExecutionError, "#{label} is invalid: #{e.message}"
         end
 
         def path_for(manifest, descriptor, label:)
           raise ExecutionError, "#{label} requires an external input manifest" unless manifest
 
-          value = descriptor.is_a?(Hash) ? descriptor.fetch("path") : descriptor
+          value = descriptor.is_a?(Hash) ? descriptor.fetch('path') : descriptor
           manifest.path_for(String(value), label:)
         rescue KeyError, TypeError
           raise ExecutionError, "#{label} path is invalid"
         end
 
         def case_paths(manifest, descriptor, root, label:)
-          if root
-            return Dir[File.join(absolute_root!(root, label), "*.case.json")].sort.freeze
-          end
+          return Dir[File.join(absolute_root!(root, label), '*.case.json')].sort.freeze if root
 
           value = document(manifest, descriptor, label:)
           entries = if value.is_a?(Hash)
-                      value.fetch("case_paths", value.fetch("cases"))
+                      value.fetch('case_paths', value.fetch('cases'))
                     else
                       value
                     end

@@ -111,7 +111,7 @@ module Tamoz
         return entries unless settings.skill
 
         append(entries, 'guidance', toolbox.execute('load_skill', { 'skill' => settings.skill }), pinned: true,
-                                                                                         source: 'skill')
+                                                                                                  source: 'skill')
       end
 
       def skills? = header.tool_names.include?('load_skill')

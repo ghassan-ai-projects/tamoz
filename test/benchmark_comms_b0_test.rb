@@ -85,13 +85,15 @@ class BenchmarkCommsB0Test < Minitest::Test
       assert_equal 'ready', record.fetch('status'), record['reason']
       assert_equal 1, record.dig('metrics', 'parity')
       parity = record.fetch('parity')
+
       assert_equal 'scored', parity.fetch('status')
       assert_equal 1, parity.fetch('score')
       CoreParityFacts.each do |fact|
         assert_equal 1, parity.dig('compared', fact), "C1 #{fact} must be compared and equal"
       end
       edges = parity.fetch('edges')
-      assert edges.any? { |edge| edge['fact'] == 'conversation_scoped_cli_reference' }
+
+      assert(edges.any? { |edge| edge['fact'] == 'conversation_scoped_cli_reference' })
       edges.each do |edge|
         assert_equal 'unavailable', edge.fetch('status')
         assert_instance_of String, edge.fetch('reason')
@@ -107,9 +109,11 @@ class BenchmarkCommsB0Test < Minitest::Test
       assert_equal 'ready', record.fetch('status'), record['reason']
       assert_equal 1, record.dig('metrics', 'parity')
       parity = record.fetch('parity')
+
       assert_equal 'scored', parity.fetch('status')
       assert_equal({ 'status_semantics' => 1, 'cancel_semantics' => 1 }, parity.fetch('compared'))
       facts = parity.fetch('edges').map { |edge| edge.fetch('fact') }
+
       assert_includes facts, 'command_sweep_breadth'
       assert_includes facts, 'pairing_and_admission'
     end
@@ -136,8 +140,10 @@ class BenchmarkCommsB0Test < Minitest::Test
       assert_equal 'passed', record.dig('hard_zero', 'parity_by_text')
       assert_equal 'passed', record.dig('hard_zero', 'surface_outcome_divergence')
       cancellation = parity.fetch('cancellation')
+
       assert_equal 1, cancellation.fetch('score')
       event = cancellation.fetch('observed').first
+
       assert_equal true, event.fetch('payloads_match')
       assert_equal true, event.fetch('terminal_delivered')
       assert_equal 'cancelled_by_user', event.fetch('terminal_reason')
@@ -273,7 +279,8 @@ class BenchmarkCommsB0Test < Minitest::Test
       assert_equal false, completed_wording.fetch('claims_stopped')
 
       edges = artifact.fetch('result').fetch('edges')
-      assert edges.any? { |edge| edge['fact'] == 'engine_observed_before_settle' }
+
+      assert(edges.any? { |edge| edge['fact'] == 'engine_observed_before_settle' })
     end
   end
 
@@ -331,7 +338,7 @@ class BenchmarkCommsB0Test < Minitest::Test
         artifact_root_base: directory
       )
 
-      refute readiness.publishable?, 'a fixture run must never be publishable'
+      refute_predicate readiness, :publishable?, 'a fixture run must never be publishable'
       assert_includes readiness.reasons, 'fixture_or_fake_provider'
     end
   end

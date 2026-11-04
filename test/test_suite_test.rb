@@ -226,8 +226,8 @@ class TestSuiteTest < Minitest::Test
   end
 
   def minitest_source(name, body)
-    "require 'minitest/autorun'\nclass #{name} < Minitest::Test\n" \
-      "  def test_runs\n    #{body}\n    assert true\n  end\nend\n"
+    "require 'minitest/autorun'\nclass #{name} < Minitest::Test\n  " \
+      "def test_runs\n    #{body}\n    assert true\n  end\nend\n"
   end
 
   def with_sources(sources)

@@ -37,7 +37,7 @@ class ModelTransportParityTest < Minitest::Test
       observations = endpoint.observed
 
       assert_equal first.request_digest, second.request_digest
-      assert_equal observations.map { |row| row.fetch('request_digest') }.uniq.length, 1
+      assert_equal 1, observations.map { |row| row.fetch('request_digest') }.uniq.length
       assert_equal first.response_digest, observations.fetch(0).fetch('response_digest')
       assert_equal second.response_digest, observations.fetch(1).fetch('response_digest')
       refute_equal first.response_digest, second.response_digest
@@ -122,7 +122,7 @@ class ModelTransportParityTest < Minitest::Test
       endpoint: 'http://example.test/v1', model: 'model', provider: 'openai'
     )
 
-    partial = transport.send(:usage_from, {'prompt_tokens' => 42})
+    partial = transport.send(:usage_from, { 'prompt_tokens' => 42 })
     malformed = transport.send(:usage_from, nil)
 
     refute partial.available
@@ -168,6 +168,6 @@ class ModelTransportParityTest < Minitest::Test
   end
 
   def digest
-    "sha256:#{"a" * 64}"
+    "sha256:#{'a' * 64}"
   end
 end

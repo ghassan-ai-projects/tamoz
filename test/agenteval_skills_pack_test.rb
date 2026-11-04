@@ -27,6 +27,7 @@ class AgentevalSkillsPackTest < Minitest::Test
   def test_recall_uses_where_the_quote_is_not_where_the_finding_claims
     blind = PACK::Graders.method(:located)
     PACK::Graders.define_singleton_method(:located) { |citation, _lines| citation['lines'] }
+
     refute_empty PACK.prove.grep(/broad_citer solved/)
   ensure
     PACK::Graders.define_singleton_method(:located, blind)

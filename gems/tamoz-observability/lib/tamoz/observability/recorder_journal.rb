@@ -175,7 +175,11 @@ module Tamoz
         end
 
         def current_file_bytes
-          @io ? @io_bytes : (File.file?(path) ? File.size(path) : 0)
+          if @io
+            @io_bytes
+          else
+            (File.file?(path) ? File.size(path) : 0)
+          end
         end
 
         def rotate_files

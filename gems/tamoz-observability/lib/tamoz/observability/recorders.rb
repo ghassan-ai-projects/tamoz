@@ -62,7 +62,7 @@ module Tamoz
 
         private
 
-        def synchronize(&block) = @mutex.synchronize(&block)
+        def synchronize(&) = @mutex.synchronize(&)
 
         def store(signal)
           synchronize do

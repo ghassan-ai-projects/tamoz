@@ -9,14 +9,14 @@ module Tamoz
       class HeuristicImprovementPipeline
         Bundle = Data.define(:candidate, :report, :provenance, :decision) do
           def generated? = !candidate.nil?
-          def passed? = generated? && decision.fetch("passed") == true
+          def passed? = generated? && decision.fetch('passed') == true
           def promotable? = passed? && !provenance.nil? && provenance.complete?
 
           # The on-disk hand-off `tamoz improve promote` reads back.
           def to_h
             {
-              "candidate" => candidate&.to_h, "report" => report,
-              "provenance" => provenance&.to_h, "decision" => decision
+              'candidate' => candidate&.to_h, 'report' => report,
+              'provenance' => provenance&.to_h, 'decision' => decision
             }
           end
         end
@@ -25,7 +25,7 @@ module Tamoz
                        behavior_version_before:, behavior_version_after:,
                        rollback_snapshot_digest:, regression_tasks: [])
           if String(generator_principal) == String(evaluator_principal)
-            raise ArgumentError, "the evaluator principal must differ from the generator principal"
+            raise ArgumentError, 'the evaluator principal must differ from the generator principal'
           end
 
           @corpus = corpus
@@ -73,32 +73,32 @@ module Tamoz
             candidate_id: candidate.heuristic_id,
             source_trajectories: generator.source_refs(trajectory_paths: @corpus.train_trajectory_paths),
             corpus_boundary: {
-              "train_digest" => @corpus.train_digest, "holdout_digest" => @corpus.holdout_digest,
-              "train_ids" => @corpus.train_ids, "holdout_ids" => @corpus.holdout_ids, "disjoint" => true
+              'train_digest' => @corpus.train_digest, 'holdout_digest' => @corpus.holdout_digest,
+              'train_ids' => @corpus.train_ids, 'holdout_ids' => @corpus.holdout_ids, 'disjoint' => true
             },
             affected_behavior: {
-              "surface" => "planning",
-              "behavior_version_before" => @behavior_version_before,
-              "behavior_version_after" => @behavior_version_after
+              'surface' => 'planning',
+              'behavior_version_before' => @behavior_version_before,
+              'behavior_version_after' => @behavior_version_after
             },
             policy_risk: {
-              "gate_classes" => improvement::EvaluationReport::HEURISTIC_GATE_CLASSES,
-              "risk_class" => "reversible_local_prompt_region", "reversible" => true, "grants_authority" => false
+              'gate_classes' => improvement::EvaluationReport::HEURISTIC_GATE_CLASSES,
+              'risk_class' => 'reversible_local_prompt_region', 'reversible' => true, 'grants_authority' => false
             },
             artifact_digests: {
-              "candidate_digest" => candidate.digest,
-              "snapshot_digest" => Tamoz::Agent::Memory::BehaviorTransition.snapshot_digest(candidate.snapshot),
-              "generator_digest" => generator.digest
+              'candidate_digest' => candidate.digest,
+              'snapshot_digest' => Tamoz::Agent::Memory::BehaviorTransition.snapshot_digest(candidate.snapshot),
+              'generator_digest' => generator.digest
             },
             evaluation_lineage: {
-              "report_digest" => improvement::EvaluationReport.seal(body),
-              "evaluator_principal" => @evaluator_principal, "generator_principal" => @generator_principal,
-              "development_score" => body.fetch("development").fetch("candidate").fetch("passed"),
-              "holdout_score" => body.fetch("holdout").fetch("candidate").fetch("passed"),
-              "paired_task_digest" => body.fetch("paired_task_digest")
+              'report_digest' => improvement::EvaluationReport.seal(body),
+              'evaluator_principal' => @evaluator_principal, 'generator_principal' => @generator_principal,
+              'development_score' => body.fetch('development').fetch('candidate').fetch('passed'),
+              'holdout_score' => body.fetch('holdout').fetch('candidate').fetch('passed'),
+              'paired_task_digest' => body.fetch('paired_task_digest')
             },
             rollback_target: {
-              "behavior_version" => @behavior_version_before, "snapshot_digest" => @rollback_snapshot_digest
+              'behavior_version' => @behavior_version_before, 'snapshot_digest' => @rollback_snapshot_digest
             },
             created_by: @promoter_principal, recorded_at:
           )

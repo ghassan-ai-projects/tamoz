@@ -131,9 +131,7 @@ module Tamoz
         rescue KeyError, TypeError
           raise ExecutionError, "SQLite scenario driver definition is invalid"
         end
-
       end
-
     end
   end
 end

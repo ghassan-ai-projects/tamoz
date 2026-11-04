@@ -17,9 +17,9 @@ module Tamoz
           allowed_tools:,
           evidence:,
           metadata:,
-          planning_context:
+          planning_context:, &block
         )
-          event_context = {"phase" => phase.to_s}.merge(metadata)
+          event_context = { 'phase' => phase.to_s }.merge(metadata)
           feedback = []
           # D-8 Fix C (RC-3): track the last attempt's feedback layer so the
           # PlanRejectedError discloses a bounded summary of STRUCTURAL-layer issues
@@ -41,20 +41,18 @@ module Tamoz
               )
             )
             plan = Plan.parse(raw)
-            emit(:plan_drafted, event_context.merge("attempt" => attempt, "plan" => plan.to_h)) do |event|
-              yield event
-            end
+            emit(:plan_drafted, event_context.merge('attempt' => attempt, 'plan' => plan.to_h), &block)
 
             structural_issues = structural_issues(plan, phase:, allowed_tools:)
             emit(
               :plan_reviewed,
               event_context.merge(
-                "attempt" => attempt,
-                "layer" => "structural",
-                "decision" => structural_issues.empty? ? "accept" : "revise",
-                "issues" => structural_issues
-              )
-            ) { |event| yield event }
+                'attempt' => attempt,
+                'layer' => 'structural',
+                'decision' => structural_issues.empty? ? 'accept' : 'revise',
+                'issues' => structural_issues
+              ), &block
+            )
             unless structural_issues.empty?
               feedback = structural_issues
               last_layer = :structural
@@ -62,17 +60,14 @@ module Tamoz
             end
 
             review = semantic_review(task, plan, phase:, evidence:, planning_context:)
-            emit(:plan_reviewed, review.merge(event_context).merge("attempt" => attempt, "layer" => "semantic")) do |event|
-              yield event
-            end
-            if review.fetch("decision") == "accept"
-              emit(:plan_accepted, event_context.merge("attempt" => attempt, "plan" => plan.to_h)) do |event|
-                yield event
-              end
+            emit(:plan_reviewed,
+                 review.merge(event_context).merge('attempt' => attempt, 'layer' => 'semantic'), &block)
+            if review.fetch('decision') == 'accept'
+              emit(:plan_accepted, event_context.merge('attempt' => attempt, 'plan' => plan.to_h), &block)
               return [plan, Tamoz::Core.deep_freeze(review)]
             end
 
-            feedback = review.fetch("issues")
+            feedback = review.fetch('issues')
             last_layer = :semantic
           rescue ProtocolError => e
             feedback = [e.message]
@@ -80,12 +75,12 @@ module Tamoz
             emit(
               :plan_reviewed,
               event_context.merge(
-                "attempt" => attempt,
-                "layer" => "protocol",
-                "decision" => "revise",
-                "issues" => feedback
-              )
-            ) { |event| yield event }
+                'attempt' => attempt,
+                'layer' => 'protocol',
+                'decision' => 'revise',
+                'issues' => feedback
+              ), &block
+            )
           end
 
           raise PlanRejectedError, plan_rejected_message(last_layer, feedback)
@@ -99,7 +94,7 @@ module Tamoz
           return "#{prefix}: the plan did not pass review; the last feedback is not discloseable" \
             unless last_layer == :structural
 
-          "#{prefix}: #{feedback.first(3).join("; ")}"
+          "#{prefix}: #{feedback.first(3).join('; ')}"
         end
 
         def structural_issues(plan, phase:, allowed_tools:)

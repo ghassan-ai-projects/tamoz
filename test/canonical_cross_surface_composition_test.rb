@@ -129,7 +129,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
 
     code_b = pairing_code(fixture, 102, USER_B, CONVERSATION_B)
     pending_b = fixture.store.pairing_challenges(status: 'pending', now: fixture.now)
-                             .find { |row| row.fetch('conversation_id') == CONVERSATION_B }
+                       .find { |row| row.fetch('conversation_id') == CONVERSATION_B }
 
     assert pending_b, 'conversation B challenge missing'
     refute PairingChallenge.verify?(
@@ -188,7 +188,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     work_until_terminal(fixture, conversation)
     drain_all(fixture)
     leg_snapshot(fixture, conversation:, request_id: fixture.request_ids_for(conversation).last,
-                        delivery_baseline: baseline)
+                          delivery_baseline: baseline)
   end
 
   def admitted_cli_turn(fixture, conversation, purpose, task)
@@ -215,7 +215,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     request_id = fixture.request_ids_for(conversation).last
     reference = Lifecycle::RequestRef.for(request_id)
     cancel_reply = control_reply(fixture, raw_update(131, '/cancel', user_id: USER_A,
-                                                     conversation_id: CONVERSATION_A))
+                                                                     conversation_id: CONVERSATION_A))
 
     assert_equal 'Stopping…', cancel_reply&.fetch('text')
 
@@ -235,9 +235,9 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
                                                      user_id: USER_A, conversation_id: CONVERSATION_A))
     text = status_reply&.fetch('text').to_s
 
-    assert text.include?(reference), text
-    assert text.include?('Terminal: stopped at the cancellation boundary.'), text
-    refute text.include?('completed before the cancellation took effect'), text
+    assert_includes text, reference, text
+    assert_includes text, 'Terminal: stopped at the cancellation boundary.', text
+    refute_includes text, 'completed before the cancellation took effect', text
     drain_all(fixture)
   end
 
@@ -285,7 +285,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     tighten_surface_limit(fixture, max_inbound_bytes: 4096)
     requests_before = fixture.request_ids_for(conversation).length
     refusal = control_reply(fixture, raw_update(150, 'x' * 6000, user_id: USER_B,
-                                                conversation_id: conversation))
+                                                                 conversation_id: conversation))
 
     assert_equal "That message exceeds this channel's size limit.", refusal&.fetch('text')
     assert_equal requests_before, fixture.request_ids_for(conversation).length,
@@ -371,7 +371,7 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     assert_equal :unknown_ref, fixture.request_status(CONVERSATION_B, ref_a)
 
     foreign_reply = control_reply(fixture, raw_update(170, "/status #{ref_b}", user_id: USER_A,
-                                                      conversation_id: CONVERSATION_A))
+                                                                               conversation_id: CONVERSATION_A))
 
     assert_equal Gateway::UNKNOWN_REF_REPLY, foreign_reply&.fetch('text')
     drain_all(fixture)
@@ -384,11 +384,11 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
     end
 
     assert_equal 4, answers_b.length
-    assert_equal 1, answers_b.count { |row| row['status'] == 'unknown' }
+    assert_equal(1, answers_b.count { |row| row['status'] == 'unknown' })
     assert_equal 3, Oracles.confirmed_answer_texts(facts, CONVERSATION_B).length
 
-    assert_equal [['request', 'accepted']], Oracles.dispositions(facts, 140)
-    assert_equal [['rejected', 'inbound_too_large']], Oracles.dispositions(facts, 150)
+    assert_equal [%w[request accepted]], Oracles.dispositions(facts, 140)
+    assert_equal [%w[rejected inbound_too_large]], Oracles.dispositions(facts, 150)
 
     effect_keys = fixture.effect_census.map { |row| row[:effect_key] }
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-evals-runner/lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-evals/lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-core/lib', __dir__))
 
-require "tamoz/evals/runner"
+require 'tamoz/evals/runner'
 require 'optparse'
 
 options = { artifact_base: Dir.pwd }

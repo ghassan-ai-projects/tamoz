@@ -1,11 +1,11 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-evals-runner/lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-evals/lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-core/lib', __dir__))
 
-require "tamoz/evals/runner"
+require 'tamoz/evals/runner'
 require 'optparse'
 require 'open3'
 require 'pathname'
@@ -43,13 +43,13 @@ begin
   external_adapter = Tamoz::Evals::Runner::InputAdapters.openclaw_fixture!
   runner_factory = Tamoz::Evals::Runner::InputAdapters.comms_runner_factory
   unless runner_factory.respond_to?(:call)
-    raise Tamoz::Evals::ExecutionError, "openclaw benchmark requires an external comms runner"
+    raise Tamoz::Evals::ExecutionError, 'openclaw benchmark requires an external comms runner'
   end
-rescue Tamoz::Evals::Runner::InputManifest::Invalid => error
-  warn error.message
+rescue Tamoz::Evals::Runner::InputManifest::Invalid => e
+  warn e.message
   exit Tamoz::Evals::CLI::USAGE_ERROR
-rescue Tamoz::Evals::ExecutionError => error
-  warn error.message
+rescue Tamoz::Evals::ExecutionError => e
+  warn e.message
   exit Tamoz::Evals::CLI::INFRASTRUCTURE_FAILURE
 end
 

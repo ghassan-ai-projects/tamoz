@@ -20,25 +20,30 @@ module Tamoz
         when 'check' then check_skills(snapshot)
         when 'path' then skill_path(snapshot, argv.first)
         when 'show' then show_skill(snapshot, argv.first)
-        else raise OptionParser::InvalidArgument, "skills #{action} (expected list, check, path, show, new, create or promote)"
+        else raise OptionParser::InvalidArgument,
+                   "skills #{action} (expected list, check, path, show, new, create or promote)"
         end
       end
 
       def list_skills(snapshot, options)
-        return (@out.puts(JSON.generate(skills_document(snapshot))) || 0) if options[:json]
+        return @out.puts(JSON.generate(skills_document(snapshot))) || 0 if options[:json]
 
         @out.puts 'No skills configured: pass --skills DIR and/or --bundled-skills.' if snapshot.sources.empty?
         snapshot.records.each_value do |record|
           @out.puts "#{record.id} [#{record.source_trust}] #{record.tree_digest}"
           @out.puts "  #{record.description}"
         end
-        snapshot.rejections.each { |entry| @out.puts "rejected #{entry.source_id}/#{entry.entry}: #{entry.code} — #{entry.detail}" }
+        snapshot.rejections.each do |entry|
+          @out.puts "rejected #{entry.source_id}/#{entry.entry}: #{entry.code} — #{entry.detail}"
+        end
         0
       end
 
       def check_skills(snapshot)
         issues = snapshot.records.values.flat_map { |record| Tamoz::Skills.lint(record).map { |line| "#{record.id} #{line}" } }
-        issues += snapshot.rejections.map { |entry| "#{entry.source_id}/#{entry.entry} rejected: #{entry.code} — #{entry.detail}" }
+        issues += snapshot.rejections.map do |entry|
+          "#{entry.source_id}/#{entry.entry} rejected: #{entry.code} — #{entry.detail}"
+        end
         issues.each { |line| @out.puts line }
         @out.puts "#{snapshot.records.length} skill(s) meet the bar" if issues.empty?
         issues.empty? ? 0 : 1
@@ -92,7 +97,9 @@ module Tamoz
       # thread into a private staging workspace; the draft is staged only when it meets the authoring bar.
       def create_skill(name, options, thread)
         raise OptionParser::MissingArgument, 'skills create NAME --from-session THREAD' if thread.to_s.empty?
-        raise OptionParser::InvalidArgument, "#{name.inspect} is not a skill name" unless Tamoz::Skills::NAME_PATTERN.match?(name)
+        unless Tamoz::Skills::NAME_PATTERN.match?(name)
+          raise OptionParser::InvalidArgument, "#{name.inspect} is not a skill name"
+        end
 
         validate_thread_id!(thread)
         trajectory = verified_trajectory(options, thread)
@@ -110,7 +117,7 @@ module Tamoz
         end
 
         manifest = SkillInstallation.stage_draft(File.join(workspace, name), created_by: 'tamoz.skill-creator',
-                                                                                source: "session:#{thread}")
+                                                                             source: "session:#{thread}")
         @out.puts "staged candidate #{manifest['name']} #{manifest['tree_digest']}"
         @out.puts "review #{File.join(workspace, name)}, then: tamoz skills promote #{File.join(workspace, name)} " \
                   '--approver YOUR-NAME --skills DIR'
@@ -123,14 +130,17 @@ module Tamoz
         state = view.state
         verification = state[:verification] || {}
         unless state[:terminal_reason] == 'done' && verification['satisfied'] == true
-          raise ArgumentError, "thread #{thread} did not finish verified (#{state[:terminal_reason]}); only verified work becomes a skill"
+          raise ArgumentError,
+                "thread #{thread} did not finish verified (#{state[:terminal_reason]}); only verified work becomes a skill"
         end
 
         Tamoz::Core.scrub_secrets(trajectory_text(state, verification))
       end
 
       def trajectory_text(state, verification)
-        tools = Array(state[:work_entries]).select { |entry| entry['kind'] == 'tool_result' }.map { |entry| entry['name'] }
+        tools = Array(state[:work_entries]).select do |entry|
+          entry['kind'] == 'tool_result'
+        end.map { |entry| entry['name'] }
         checks = Array(state[:work_checks]).map { |check| "#{check['name']}: #{check['passed'] ? 'passed' : 'failed'}" }
         plan = state[:work_plan]
         <<~MARKDOWN
@@ -164,11 +174,14 @@ module Tamoz
 
       def promote_skill(candidate, options, approver)
         raise OptionParser::MissingArgument, 'skills promote CANDIDATE_DIR --skills DIR' unless options[:skills_dir]
-        raise ArgumentError, "skills root #{options[:skills_dir]} does not exist" unless File.directory?(options[:skills_dir])
+        unless File.directory?(options[:skills_dir])
+          raise ArgumentError,
+                "skills root #{options[:skills_dir]} does not exist"
+        end
 
         entry = SkillInstallation.new(options[:skills_dir]).install(candidate, approver: approver.to_s)
         @out.puts "installed #{entry['name']} #{entry['tree_digest']}, approved by #{entry['approver']}" \
-                  "#{entry['retired'] ? "; previous version kept in #{entry['retired']}" : ''}"
+                  "#{"; previous version kept in #{entry['retired']}" if entry['retired']}"
         0
       end
 

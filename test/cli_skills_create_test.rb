@@ -54,7 +54,8 @@ class CliSkillsCreateTest < Minitest::Test
       manifest = Dir[File.join(sessions, 'skill-drafts', '*', 'set-constant.candidate.json')].first
 
       refute_nil manifest
-      assert_equal %w[tamoz.skill-creator session:fix-value], JSON.parse(File.read(manifest)).values_at('created_by', 'source')
+      assert_equal %w[tamoz.skill-creator session:fix-value],
+                   JSON.parse(File.read(manifest)).values_at('created_by', 'source')
       assert_includes File.read(File.join(File.dirname(manifest), 'trajectory.md')), 'Set VALUE to 2'
     end
   end

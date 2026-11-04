@@ -89,7 +89,7 @@ class AgentRequestRoutingTest < Minitest::Test
     decision = Tamoz::Agent.build(model:, root: Dir.pwd, routing: :experimental).respond('hi')
 
     assert_nil decision
-    assert_equal [:route], model.calls.map { |call| call.fetch(:stage) }
+    assert_equal([:route], model.calls.map { |call| call.fetch(:stage) })
   end
 
   def test_respond_handles_an_unsafe_direct_route_without_an_event_block
@@ -100,7 +100,7 @@ class AgentRequestRoutingTest < Minitest::Test
     decision = Tamoz::Agent.build(model:, root: Dir.pwd, routing: :experimental).respond('Read note.txt')
 
     assert_nil decision
-    assert_equal [:route], model.calls.map { |call| call.fetch(:stage) }
+    assert_equal([:route], model.calls.map { |call| call.fetch(:stage) })
   end
 
   def test_respond_returns_an_explicit_non_direct_route
@@ -112,7 +112,7 @@ class AgentRequestRoutingTest < Minitest::Test
     decision = Tamoz::Agent.build(model:, root: Dir.pwd, routing: :experimental).respond('hi')
 
     assert_equal 'read_only_work', decision.route
-    assert_equal [:route], model.calls.map { |call| call.fetch(:stage) }
+    assert_equal([:route], model.calls.map { |call| call.fetch(:stage) })
   end
 
   def test_direct_response_corpus_is_one_call_and_evidence_free

@@ -360,9 +360,7 @@ module Tamoz
             true
           end
         end
-
       end
-
     end
   end
 end

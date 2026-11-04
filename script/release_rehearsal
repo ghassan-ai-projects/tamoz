@@ -56,7 +56,7 @@ OptionParser.new do |parser|
   parser.on("--input-manifest PATH", "external runner input manifest") { |path| options[:input_manifest] = path }
   parser.on("--keep", "keep the clean clone") { options[:keep] = true }
 end.parse!(ARGV)
-RUNNER_INPUT_MANIFEST = options[:input_manifest] || ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+RUNNER_INPUT_MANIFEST = options[:input_manifest] || ENV.fetch("TAMOZ_RUNNER_INPUT_MANIFEST", nil)
 
 # The steps this rehearsal performs, declared once. The run asserts that the
 # steps it actually recorded equal this list, so a step that stops running —

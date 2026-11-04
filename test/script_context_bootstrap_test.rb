@@ -14,7 +14,7 @@ class ScriptContextBootstrapTest < Minitest::Test
   # No RUBYLIB, no RUBYOPT, and none of the BUNDLE*/BUNDLER* variables `bundle exec` exports: the
   # child resolves tamoz/* from the script's bootstrap alone, as a person running it from a shell does.
   BARE_ENV = ENV.keys.grep(/\ABUNDLE/).to_h { |key| [key, nil] }
-                .merge('RUBYOPT' => nil, 'RUBYLIB' => nil).freeze
+                                      .merge('RUBYOPT' => nil, 'RUBYLIB' => nil).freeze
 
   # Named, not discovered. The probe RUNS each script, and `script/` also holds generators whose
   # whole job is to write committed artifacts — `generate_legacy_session_fixture` rewrites

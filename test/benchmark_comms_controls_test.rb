@@ -135,6 +135,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
   def test_cheap_control_fails_every_scenario
     convs = conversations
+
     SCENARIOS.each do |id|
       refute cell_passes?(id, cheap_facts(@base.fetch(id), convs[:a])), "cheap control must fail #{id}"
     end
@@ -148,6 +149,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
         facts = adversary_facts(id, name, dup_facts(@base.fetch(id)))
         scored = score(id, facts)
+
         assert_equal 'failed', scored.fetch('hard_zero').fetch(name),
                      "adversary must trip #{id}.#{name}"
       end
@@ -159,6 +161,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
     UNTRIPPABLE.each_key do |(id, name)|
       facts = adversary_facts(id, name, dup_facts(@base.fetch(id)))
       scored = score(id, facts)
+
       assert_equal 'passed', scored.fetch('hard_zero').fetch(name),
                    "#{id}.#{name} is recorded UNTRIPPABLE but fired — remove it from the list"
     end
@@ -271,7 +274,10 @@ class BenchmarkCommsControlsTest < Minitest::Test
   # C8
   def adversary_c8_false_stopped_claim(facts, _c)
     run = facts.fetch('clean_stop')
-    run.fetch('cancellation_timelines').each { |t| t['settled'] = true; t['terminal_word'] = 'stopped' }
+    run.fetch('cancellation_timelines').each do |t|
+      t['settled'] = true
+      t['terminal_word'] = 'stopped'
+    end
     run.fetch('terminal_wordings').each { |w| w['claims_stopped'] = true }
     facts
   end

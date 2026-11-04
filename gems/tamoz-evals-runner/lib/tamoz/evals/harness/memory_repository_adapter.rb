@@ -241,10 +241,10 @@ module Tamoz
         # deterministically.
         def vocabulary
           @vocabulary ||= @seed_records.values
-                                   .flat_map { |seed_record| seed_record.fetch("match_keys") }
-                                   .map(&:downcase)
-                                   .uniq
-                                   .freeze
+                                       .flat_map { |seed_record| seed_record.fetch("match_keys") }
+                                       .map(&:downcase)
+                                       .uniq
+                                       .freeze
         end
 
         # The prompt's words that belong to the seeded vocabulary (case-

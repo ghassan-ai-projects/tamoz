@@ -656,7 +656,6 @@ module Tamoz
         def request_id = @identifiers.fetch("request_id")
         def execution_a = @identifiers.fetch("execution_a")
         def execution_b = @identifiers.fetch("execution_b")
-
       end
 
       private_constant :SQLiteScenarioRuntime

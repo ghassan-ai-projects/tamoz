@@ -21,7 +21,7 @@ module ScenarioDriverInputs
         'mission_id' => mission_id,
         'driver_mode' => 'contradiction',
         'setup' => {
-          'fixture' => {'path' => 'scenario/status.json', 'status' => 'active'}
+          'fixture' => { 'path' => 'scenario/status.json', 'status' => 'active' }
         },
         'steps' => [
           {

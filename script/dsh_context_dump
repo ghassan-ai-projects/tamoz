@@ -18,7 +18,7 @@ expect_edits = options['expect-edits'].to_i
 expect_writes = options['expect-writes'].to_i
 out = options['out']
 home = ENV.fetch('DSH_HOME', File.expand_path('~/.dsh'))
-session_id = ENV['DSH_SESSION_ID']
+session_id = ENV.fetch('DSH_SESSION_ID', nil)
 
 def header_of(path)
   IO.popen(['zstd', '-dc', path], err: File::NULL) { |s| s.first(3) }.to_a.filter_map do |line|
@@ -34,7 +34,7 @@ end
 def candidates(home)
   Dir[File.join(home, 'sessions', '*', '*', 'session*.jsonl.zstd')]
     .group_by { |path| File.dirname(path) }
-    .map { |directory, paths| paths.max_by { |path| File.basename(path) } }
+    .map { |_directory, paths| paths.max_by { |path| File.basename(path) } }
     .select { |path| File.mtime(path) > Time.now - 3600 }
     .sort_by { |path| -File.mtime(path).to_f }
 end

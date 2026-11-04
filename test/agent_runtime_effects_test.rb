@@ -131,6 +131,7 @@ class AgentRuntimeEffectsTest < Minitest::Test
       assert_equal :failed, first.status
       assert_equal :failed, second.status
       replayed = runtime.send(:journaled_model_failure, second)
+
       assert_instance_of Tamoz::Agent::ModelCallError, replayed
       assert_equal error.message, replayed.message
       assert_equal error.code, replayed.code

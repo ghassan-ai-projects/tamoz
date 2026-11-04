@@ -75,14 +75,16 @@ module Tamoz
         pin = File.join(@sessions.resolve_session_dir(options), "#{thread_id}.harness.json")
         if File.exist?(pin)
           pinned = pinned_harness(pin, options[:subagents])
-          raise OptionParser::InvalidArgument, "this thread's skill was pinned at its first turn (#{pinned[:skill] || 'none'})" if
-            options[:skill] && options[:skill] != pinned[:skill]
+          if options[:skill] && options[:skill] != pinned[:skill]
+            raise OptionParser::InvalidArgument,
+                  "this thread's skill was pinned at its first turn (#{pinned[:skill] || 'none'})"
+          end
 
           return pinned
         end
         raise OptionParser::InvalidArgument, '--subagents applies only to tamoz code and tamoz investigate' if
           options[:subagents] && !options[:work_routing]
-        raise OptionParser::InvalidArgument, %q(--skill applies only to tamoz code and tamoz investigate) if
+        raise OptionParser::InvalidArgument, '--skill applies only to tamoz code and tamoz investigate' if
           options[:skill] && !options[:work_routing]
         return {} unless options[:work_routing]
 

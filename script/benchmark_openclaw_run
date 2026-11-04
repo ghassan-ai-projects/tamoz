@@ -1,9 +1,9 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-evals-runner/lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-evals/lib', __dir__))
+$LOAD_PATH.unshift(File.expand_path('../gems/tamoz-core/lib', __dir__))
 
 require 'digest'
 require 'json'
@@ -93,14 +93,14 @@ executor = if options[:scenario] &&
              )
              definitions = Tamoz::Evals::Runner::InputAdapters.scenario_definitions
              scenario_driver = Tamoz::Evals::Benchmark.const_get(:ScenarioDriver, false)
-             unless scenario_driver.implemented?(
-                      options.fetch(:scenario), scenario_definitions: definitions
-                    )
-               adapter
-             else
+             if scenario_driver.implemented?(
+               options.fetch(:scenario), scenario_definitions: definitions
+             )
                scenario_driver.new(
                  adapter:, scenario: options.fetch(:scenario), scenario_definitions: definitions
                )
+             else
+               adapter
              end
            else
              adapter

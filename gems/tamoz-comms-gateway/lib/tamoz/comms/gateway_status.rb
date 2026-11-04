@@ -44,7 +44,7 @@ module Tamoz
           return [nil, true] if parts == ['--diagnostic']
           return [parts.first, false] if parts.length == 1
           return [parts.first, true] if parts.length == 2 && parts.last == '--diagnostic' &&
-                                      valid_reference?(parts.first)
+                                        valid_reference?(parts.first)
 
           [:invalid, false]
         end

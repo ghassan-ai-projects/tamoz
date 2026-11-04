@@ -59,7 +59,7 @@ module Tamoz
         # The dispatcher's contract fixes this keyword list.
         # rubocop:disable Metrics/ParameterLists
         def prepare(execution_id:, task_id:, call_index:, operation:, safety:, request:,
-                    request_id: nil, logical_key:)
+                    logical_key:, request_id: nil)
           call = Call.new(
             logical_key:, execution_id:, task_id:, call_index:, operation:, safety:, request:
           )

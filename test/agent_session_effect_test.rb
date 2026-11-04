@@ -244,11 +244,11 @@ class AgentSessionEffectTest < Minitest::Test
           )
           first = effects.model_call(
             context, stage: :plan, system: "system", prompt: "prompt",
-            call_index: 0, iteration: 0, sub_operation: 0
+                     call_index: 0, iteration: 0, sub_operation: 0
           )
           second = effects.model_call(
             context, stage: :plan, system: "system", prompt: "prompt",
-            call_index: 0, iteration: 0, sub_operation: 0
+                     call_index: 0, iteration: 0, sub_operation: 0
           )
 
           assert_equal "model answer", first.value
@@ -290,7 +290,7 @@ class AgentSessionEffectTest < Minitest::Test
           first = effects.dispatch(
             context,
             { "tool" => "read_file", "operation" => "tool.read_file", "safety" => "read_only",
-              "plan_digest" => "sha256:#{"a" * 64}"},
+              "plan_digest" => "sha256:#{'a' * 64}"},
             step,
             iteration: 0,
             sub_operation: 0
@@ -298,7 +298,7 @@ class AgentSessionEffectTest < Minitest::Test
           second = effects.dispatch(
             context,
             { "tool" => "read_file", "operation" => "tool.read_file", "safety" => "read_only",
-              "plan_digest" => "sha256:#{"b" * 64}"},
+              "plan_digest" => "sha256:#{'b' * 64}"},
             step,
             iteration: 0,
             sub_operation: 0

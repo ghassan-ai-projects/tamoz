@@ -66,7 +66,7 @@ module Tamoz
         return stored if stored.fetch("bytes") == bytes
 
         raise ArtifactStoreError,
-              "artifact digest collision: #{stored.fetch("digest")} resolves to different bytes"
+              "artifact digest collision: #{stored.fetch('digest')} resolves to different bytes"
       end
 
       def retain_new_artifact(digest, bytes, media_type)

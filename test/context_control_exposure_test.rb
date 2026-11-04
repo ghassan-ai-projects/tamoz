@@ -80,12 +80,14 @@ class ContextControlExposureTest < Minitest::Test
 
       compact_line = surface.reply_for(103)
       context_line = surface.reply_for(104)
+
       assert_equal 'Transcript compacted; 1 fragments externalized behind pinned digests.', compact_line
       assert_includes context_line, 'earlier summary pinned'
       assert_includes context_line, 'fragments visible 0 of 1 (1 truncated by controls)'
 
       pinned = surface.captured.fetch('context').last
                       .dig('layers', 'transcript', 'earlier_summary_pinned')
+
       assert_equal true, pinned
 
       cli_thread = 'th_compact_cli'
@@ -118,6 +120,7 @@ class ContextControlExposureTest < Minitest::Test
       surface.command('/context', 106)
 
       think_document = surface.captured.fetch('think').last
+
       assert_equal 'high', think_document.fetch('preferences').fetch('reasoning_depth')
       assert_equal successor, think_document.fetch('thread_id')
       assert_equal successor, surface.captured.fetch('context').last.fetch('thread_id')
@@ -170,9 +173,7 @@ class ContextControlExposureTest < Minitest::Test
 
   def drive(gateway, store, transport, text, id)
     transport.batch([update(id, text:)])
-    unless gateway.serve_once(now: NOW + id, drain: false) == :served
-      raise "command #{id} did not serve"
-    end
+    raise "command #{id} did not serve" unless gateway.serve_once(now: NOW + id, drain: false) == :served
 
     row = nil
     store.outbox_rows(surface_id: SURFACE_ID,

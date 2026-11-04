@@ -184,14 +184,14 @@ class MemorySpecTest < Minitest::Test
       elsewhere = @engine.knowledge.forget(target: fact.record.memory_id, quote: 'forget release-notes',
                                            user_messages: ['forget release-notes'], owner: 'alice', project: 'other')
 
-      assert_equal %w[quote_does_not_name_it not_found], [unnamed, elsewhere].map { |receipt| receipt.fetch('reason') }
+      assert_equal(%w[quote_does_not_name_it not_found], [unnamed, elsewhere].map { |receipt| receipt.fetch('reason') })
 
       twice = Array.new(2) do
         @engine.knowledge.forget(target: 'release-notes', quote: 'forget release-notes',
                                  user_messages: ['forget release-notes'], owner: 'alice', project: 'proj')
       end
 
-      assert_equal [true, true], twice.map { |receipt| receipt.fetch('forgotten') }
+      assert_equal([true, true], twice.map { |receipt| receipt.fetch('forgotten') })
       assert twice.last.fetch('already')
       assert_equal 2, @engine.repository.current_version(@engine.namespace, 'knowledge', fact.record.memory_id)
     end

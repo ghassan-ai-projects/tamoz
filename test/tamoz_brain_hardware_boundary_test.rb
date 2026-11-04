@@ -55,6 +55,7 @@ class TamozBrainHardwareBoundaryTest < Minitest::Test
 
   def test_the_brain_names_no_hardware_mechanism
     files = production_ruby_files
+
     refute_empty files, 'expected to scan tamoz production Ruby'
 
     violations = files.flat_map do |path|
@@ -70,7 +71,7 @@ class TamozBrainHardwareBoundaryTest < Minitest::Test
     end
 
     assert_empty violations,
-                 "tamoz is the brain and must not know about hardware (ADR-038: do not give Tamoz the " \
+                 'tamoz is the brain and must not know about hardware (ADR-038: do not give Tamoz the ' \
                  "serial port). A hardware-mechanism token leaked into production code:\n#{violations.join("\n")}"
   end
 end
