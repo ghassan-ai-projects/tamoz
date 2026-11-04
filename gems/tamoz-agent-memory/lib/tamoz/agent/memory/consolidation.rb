@@ -15,7 +15,8 @@ module Tamoz
       # confidence, taint, budget. Rerun-idempotency keys on the candidate
       # identity so a rerun cannot reinforce the same evidence.
       class Consolidation
-        DETERMINISTIC_GATES = %i[provenance scope recurrence diversity confidence taint budget].freeze
+        include ConsolidationGates
+
         MAX_PREIMAGE_BYTES = 16_384
 
         def initialize(engine)
@@ -95,52 +96,6 @@ module Tamoz
         end
 
         private
-
-        Candidate = Data.define(:candidate, :gates, :reason)
-
-        def evaluate_gates(candidates)
-          accepted = []
-          rejected = []
-          candidates.each do |candidate|
-            gates, reason = deterministic_gates(candidate)
-            if reason
-              rejected << Candidate.new(candidate:, gates: gates, reason: reason)
-            else
-              accepted << Candidate.new(candidate:, gates: gates, reason: nil)
-            end
-          end
-          {accepted:, rejected:, passed_gates: DETERMINISTIC_GATES}
-        end
-
-        def deterministic_gates(candidate)
-          gates = []
-          return [gates, "provenance: no source references"] if candidate.source_refs.empty?
-          gates << :provenance
-          return [gates, "scope: tenant scope missing"] if candidate.scopes.fetch("tenant", "").empty?
-          gates << :scope
-          # Evidence quality OR recurrence for the risk class: recurrence is
-          # measured as the number of distinct supporting sources.
-          recurrence = candidate.source_refs.length.to_f
-          if recurrence < 2.0 && candidate.klass != :policy
-            return [gates, "recurrence: insufficient evidence quality"]
-          end
-          gates << :recurrence
-          if candidate.source_refs.map { |ref| ref["identity"] }.uniq.length < 2
-            return [gates, "diversity: single-source synthesis"]
-          end
-          gates << :diversity
-          if candidate.confidence.to_f < 0.5
-            return [gates, "confidence: below threshold"]
-          end
-          gates << :confidence
-          return [gates, "taint: recalled content cannot consolidate"] if candidate.recalled?
-          gates << :taint
-          if candidate.statement.bytesize > @limits.fetch(:max_statement_bytes)
-            return [gates, "budget: statement exceeds limit"]
-          end
-          gates << :budget
-          [gates, nil]
-        end
 
         def consumed?(candidate)
           key = checkpoint_key(candidate)

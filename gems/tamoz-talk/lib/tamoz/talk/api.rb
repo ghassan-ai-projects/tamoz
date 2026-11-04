@@ -16,22 +16,31 @@ module Tamoz
       end
 
       def call(request, body, limits)
-        route = [request.method, request.path]
-        case route
+        route(request, body, limits)
+      rescue JSON::ParserError, Comms::ValidationError, KeyError, TypeError, ArgumentError
+        json(400, error: 'malformed request')
+      end
+
+      private
+
+      def route(request, body, limits)
+        case [request.method, request.path]
         in ['POST', '/v1/messages'] then message(read_json(body, limits, request))
         in ['POST', '/v1/utterances'] then utterance(request, body.call(limits.fetch(request.path)))
         in ['POST', '/v1/decisions'] then decision(read_json(body, limits, request))
+        else route_reads(request)
+        end
+      end
+
+      def route_reads(request)
+        case [request.method, request.path]
         in ['GET', '/v1/events'] then events(request.query)
         in ['GET', %r{\A/v1/speech/(\d{1,16})\z}] then speech(Integer(request.path.split('/').last, 10))
         in ['GET', '/v1/trace'] if @trace then json(200, @hub.trace)
         in [_, '/v1/messages' | '/v1/utterances' | '/v1/decisions' | '/v1/events'] then json(405, error: 'method')
         else json(404, error: 'not found')
         end
-      rescue JSON::ParserError, Comms::ValidationError, KeyError, TypeError, ArgumentError
-        json(400, error: 'malformed request')
       end
-
-      private
 
       def message(fields)
         text = fields.fetch('text')

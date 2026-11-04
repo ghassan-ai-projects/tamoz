@@ -289,7 +289,7 @@ module Tamoz
           def self.read_file_entries(file, since_ms:, thread_id:, kind:)
             identity = file_identity(file)
             File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
-              parse_entry(line, identity, index, since_ms:, thread_id:, kind:)
+              parse_entry(line, "#{identity}:#{index}", since_ms:, thread_id:, kind:)
             end
           rescue Errno::ENOENT
             []
@@ -302,13 +302,13 @@ module Tamoz
           end
           private_class_method :file_identity
 
-          def self.parse_entry(line, file_identity, index, since_ms:, thread_id:, kind:)
+          def self.parse_entry(line, origin, since_ms:, thread_id:, kind:)
             return nil if line.strip.empty?
 
             document = JSON.parse(line)
             return nil unless matches_filters?(document, since_ms:, thread_id:, kind:)
 
-            [document, "#{file_identity}:#{index}"]
+            [document, origin]
           rescue JSON::ParserError
             nil
           end

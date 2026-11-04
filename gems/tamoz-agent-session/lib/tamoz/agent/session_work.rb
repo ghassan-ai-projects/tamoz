@@ -32,12 +32,8 @@ module Tamoz
 
       # :reek:DuplicateMethodCall
       def opened(base, context, attachment)
-        previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
-                                                                      execution_id: context.execution_id) || {}
-        if attachment
-          reading = @attachment.read(attachment, window: work(base).window, context:,
-                                                 last_answer: last_answer(context))
-        end
+        previous = previous_turn(context)
+        reading = read_attachment(base, context, attachment)
         brief = @memory.brief(told(base, reading))
         entries = opening(base, context, previous, brief, reading)
         base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries,
@@ -81,6 +77,17 @@ module Tamoz
         tools = WorkTools.new(services: @services, work:, memory: @memory)
         Lane.new(work:, gate: WorkGate.new(services: @services, work:, tools:),
                  compaction: WorkCompaction.new(services: @services, work:), nudge: WorkNudge.new(work:))
+      end
+
+      def previous_turn(context)
+        @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
+                                                           execution_id: context.execution_id) || {}
+      end
+
+      def read_attachment(base, context, attachment)
+        return unless attachment
+
+        @attachment.read(attachment, window: work(base).window, context:, last_answer: last_answer(context))
       end
 
       def lane(state) = @lanes.fetch(state[:research]&.fetch('mode') == 'lead' ? :lead : nil)

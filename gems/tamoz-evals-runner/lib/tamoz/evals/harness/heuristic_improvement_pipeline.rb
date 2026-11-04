@@ -72,36 +72,55 @@ module Tamoz
           improvement::Provenance.new(
             candidate_id: candidate.heuristic_id,
             source_trajectories: generator.source_refs(trajectory_paths: @corpus.train_trajectory_paths),
-            corpus_boundary: {
-              'train_digest' => @corpus.train_digest, 'holdout_digest' => @corpus.holdout_digest,
-              'train_ids' => @corpus.train_ids, 'holdout_ids' => @corpus.holdout_ids, 'disjoint' => true
-            },
-            affected_behavior: {
-              'surface' => 'planning',
-              'behavior_version_before' => @behavior_version_before,
-              'behavior_version_after' => @behavior_version_after
-            },
-            policy_risk: {
-              'gate_classes' => improvement::EvaluationReport::HEURISTIC_GATE_CLASSES,
-              'risk_class' => 'reversible_local_prompt_region', 'reversible' => true, 'grants_authority' => false
-            },
-            artifact_digests: {
-              'candidate_digest' => candidate.digest,
-              'snapshot_digest' => Tamoz::Agent::Memory::BehaviorTransition.snapshot_digest(candidate.snapshot),
-              'generator_digest' => generator.digest
-            },
-            evaluation_lineage: {
-              'report_digest' => improvement::EvaluationReport.seal(body),
-              'evaluator_principal' => @evaluator_principal, 'generator_principal' => @generator_principal,
-              'development_score' => body.fetch('development').fetch('candidate').fetch('passed'),
-              'holdout_score' => body.fetch('holdout').fetch('candidate').fetch('passed'),
-              'paired_task_digest' => body.fetch('paired_task_digest')
-            },
-            rollback_target: {
-              'behavior_version' => @behavior_version_before, 'snapshot_digest' => @rollback_snapshot_digest
-            },
-            created_by: @promoter_principal, recorded_at:
+            corpus_boundary:, affected_behavior:, policy_risk: policy_risk(improvement),
+            artifact_digests: artifact_digests(generator, candidate),
+            evaluation_lineage: evaluation_lineage(improvement, body),
+            rollback_target:, created_by: @promoter_principal, recorded_at:
           )
+        end
+
+        def corpus_boundary
+          {
+            'train_digest' => @corpus.train_digest, 'holdout_digest' => @corpus.holdout_digest,
+            'train_ids' => @corpus.train_ids, 'holdout_ids' => @corpus.holdout_ids, 'disjoint' => true
+          }
+        end
+
+        def affected_behavior
+          {
+            'surface' => 'planning',
+            'behavior_version_before' => @behavior_version_before,
+            'behavior_version_after' => @behavior_version_after
+          }
+        end
+
+        def policy_risk(improvement)
+          {
+            'gate_classes' => improvement::EvaluationReport::HEURISTIC_GATE_CLASSES,
+            'risk_class' => 'reversible_local_prompt_region', 'reversible' => true, 'grants_authority' => false
+          }
+        end
+
+        def artifact_digests(generator, candidate)
+          {
+            'candidate_digest' => candidate.digest,
+            'snapshot_digest' => Tamoz::Agent::Memory::BehaviorTransition.snapshot_digest(candidate.snapshot),
+            'generator_digest' => generator.digest
+          }
+        end
+
+        def evaluation_lineage(improvement, body)
+          {
+            'report_digest' => improvement::EvaluationReport.seal(body),
+            'evaluator_principal' => @evaluator_principal, 'generator_principal' => @generator_principal,
+            'development_score' => body.fetch('development').fetch('candidate').fetch('passed'),
+            'holdout_score' => body.fetch('holdout').fetch('candidate').fetch('passed'),
+            'paired_task_digest' => body.fetch('paired_task_digest')
+          }
+        end
+
+        def rollback_target
+          { 'behavior_version' => @behavior_version_before, 'snapshot_digest' => @rollback_snapshot_digest }
         end
       end
     end

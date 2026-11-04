@@ -9,18 +9,7 @@ module Tamoz
         @events = events
       end
 
-      def append_noncommitting(
-        checkpoint,
-        writer:,
-        status:,
-        pending:,
-        interrupts:,
-        attempts:,
-        resume_values:,
-        total_tasks:,
-        failure:,
-        request_transition:
-      )
+      def append_noncommitting(checkpoint, writer:, barrier:, failure:, request_transition:)
         compiled.append_checkpoint(
           writer:,
           thread: checkpoint.thread_id,
@@ -29,15 +18,10 @@ module Tamoz
           mode: :advance,
           execution_id: checkpoint.execution_id,
           state: checkpoint.state,
-          status:,
           logical_step: checkpoint.logical_step,
           frontier: checkpoint.frontier,
-          pending:,
-          interrupts:,
-          resume_values:,
-          attempts:,
+          **barrier,
           failure:,
-          total_tasks:,
           request_transition:
         )
       end
@@ -80,12 +64,7 @@ module Tamoz
         failed = append_noncommitting(
           checkpoint,
           writer:,
-          status: :failed,
-          pending:,
-          interrupts:,
-          attempts:,
-          resume_values:,
-          total_tasks:,
+          barrier: { status: :failed, pending:, interrupts:, attempts:, resume_values:, total_tasks: },
           failure: failure_descriptors(errors),
           request_transition: failed_request_transition(writer, checkpoint, request_id)
         )
@@ -108,12 +87,7 @@ module Tamoz
         paused = append_noncommitting(
           checkpoint,
           writer:,
-          status: :paused,
-          pending:,
-          interrupts:,
-          attempts:,
-          resume_values:,
-          total_tasks:,
+          barrier: { status: :paused, pending:, interrupts:, attempts:, resume_values:, total_tasks: },
           failure: nil,
           request_transition: paused_request_transition(writer, checkpoint, request_id)
         )

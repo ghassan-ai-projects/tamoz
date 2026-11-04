@@ -32,8 +32,7 @@ module Tamoz
           return spoken(result.text[0, limit], event, request, context, attachment['spoken_back'] ? last_answer : nil)
         end
 
-        material = result.outcome == :read ? material(attachment, result, limit) : unreadable(attachment, result)
-        Reading.new(material:, event:, request:, task: nil)
+        Reading.new(material: opening_material(attachment, result, limit), event:, request:, task: nil)
       end
 
       # Tamoz's own reply heard back through a speaker is material, never the user's request.
@@ -116,6 +115,10 @@ module Tamoz
           { 'type' => 'text', 'text' => labels.fetch('image_instruction') },
           { 'type' => 'image_url', 'image_url' => { 'url' => "data:#{type};base64,#{[bytes].pack('m0')}" } }
         ] }]
+      end
+
+      def opening_material(attachment, result, limit)
+        result.outcome == :read ? material(attachment, result, limit) : unreadable(attachment, result)
       end
 
       def material(attachment, result, limit)

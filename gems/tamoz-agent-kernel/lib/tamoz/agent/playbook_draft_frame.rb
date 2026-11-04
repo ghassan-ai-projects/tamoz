@@ -29,16 +29,24 @@ module Tamoz
       def build(draft, repair_directive: nil)
         cases = bounded_entries(draft.fetch('cases'), 'case')
         rules = bounded_entries(draft.fetch('current_rules'), 'rule')
-        refuse "too_many_cases: #{cases.length}" if cases.length > PlaybookDraft::MAX_CASES
-        if cases.length + rules.length > EpisodeFrameBuilder::MAX_FACTS
-          refuse "too_many_entries: #{cases.length + rules.length}"
-        end
+        refuse_too_many!(cases, rules)
 
         system = system_section(draft, rules)
+        user = user_section(cases, repair_directive)
+        Frame.new(system:, user:, digest: Tamoz::Core.digest(FRAME_DOMAIN, { 'system' => system, 'user' => user }))
+      end
+
+      def refuse_too_many!(cases, rules)
+        refuse "too_many_cases: #{cases.length}" if cases.length > PlaybookDraft::MAX_CASES
+        return unless cases.length + rules.length > EpisodeFrameBuilder::MAX_FACTS
+
+        refuse "too_many_entries: #{cases.length + rules.length}"
+      end
+
+      def user_section(cases, repair_directive)
         user = { 'cases' => cases }
         user['repair_directive'] = repair_directive if repair_directive
-        user = Tamoz::Core.jcs(user)
-        Frame.new(system:, user:, digest: Tamoz::Core.digest(FRAME_DOMAIN, { 'system' => system, 'user' => user }))
+        Tamoz::Core.jcs(user)
       end
 
       def system_section(draft, rules)

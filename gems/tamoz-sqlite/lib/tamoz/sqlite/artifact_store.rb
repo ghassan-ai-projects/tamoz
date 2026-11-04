@@ -30,28 +30,7 @@ module Tamoz
       end
 
       def retain(digest:, bytes:, media_type: "application/json")
-        normalized = Tamoz::Core.normalize_digest(String(digest))
-        unless Tamoz::Core.valid_digest?(normalized)
-          raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
-        end
-        unless bytes.is_a?(String) && !bytes.empty?
-          raise ArtifactStoreError, "artifact retention requires a String document"
-        end
-        if bytes.bytesize > MAX_ARTIFACT_BYTES
-          raise ArtifactStoreError,
-                "artifact exceeds the #{MAX_ARTIFACT_BYTES} byte ceiling"
-        end
-        # The STRICT bytes column is TEXT: wire documents arrive as binary
-        # (ASCII-8BIT) strings — tag them UTF-8 without altering the bytes, so
-        # the admission rehash stays byte-exact.
-        bytes = bytes.dup.force_encoding(Encoding::UTF_8)
-        # Rehash on admission: the store verifies the bytes match the digest —
-        # a corrupted or lying caller is refused, never stored.
-        unless normalized == "sha256:#{Digest::SHA256.hexdigest(bytes)}"
-          raise ArtifactStoreError,
-                "artifact digest mismatch on admission: #{normalized}"
-        end
-
+        normalized, bytes = admitted(digest, bytes)
         @adapter.__send__(:transaction, operation: "artifact.retain") do |tx|
           tx.execute(
             "artifact.retain.upsert",
@@ -100,6 +79,33 @@ module Tamoz
             "SELECT COUNT(*) FROM tamoz_artifacts WHERE tenant_id = ?", [@tenant]
           )
         end
+      end
+
+      private
+
+      def admitted(digest, bytes)
+        normalized = Tamoz::Core.normalize_digest(String(digest))
+        unless Tamoz::Core.valid_digest?(normalized)
+          raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
+        end
+        unless bytes.is_a?(String) && !bytes.empty?
+          raise ArtifactStoreError, "artifact retention requires a String document"
+        end
+        if bytes.bytesize > MAX_ARTIFACT_BYTES
+          raise ArtifactStoreError,
+                "artifact exceeds the #{MAX_ARTIFACT_BYTES} byte ceiling"
+        end
+        # The STRICT bytes column is TEXT: wire documents arrive as binary
+        # (ASCII-8BIT) strings — tag them UTF-8 without altering the bytes, so
+        # the admission rehash stays byte-exact.
+        bytes = bytes.dup.force_encoding(Encoding::UTF_8)
+        # Rehash on admission: the store verifies the bytes match the digest —
+        # a corrupted or lying caller is refused, never stored.
+        unless normalized == "sha256:#{Digest::SHA256.hexdigest(bytes)}"
+          raise ArtifactStoreError,
+                "artifact digest mismatch on admission: #{normalized}"
+        end
+        [normalized, bytes]
       end
     end
   end

@@ -20,6 +20,7 @@ module Tamoz
           planning_context:, &block
         )
           event_context = { 'phase' => phase.to_s }.merge(metadata)
+          inputs = { phase:, allowed_tools:, evidence:, planning_context: }
           feedback = []
           # D-8 Fix C (RC-3): track the last attempt's feedback layer so the
           # PlanRejectedError discloses a bounded summary of STRUCTURAL-layer issues
@@ -27,63 +28,39 @@ module Tamoz
           # yields the generic phrase.
           last_layer = nil
           max_plan_attempts.times do |offset|
-            attempt = offset + 1
-            raw = model_generate(
-              stage: :plan,
-              system: PLAN_SYSTEM,
-              prompt: planning_prompt(
-                task,
-                phase,
-                allowed_tools,
-                evidence,
-                feedback,
-                planning_context
-              )
-            )
-            plan = Plan.parse(raw)
-            emit(:plan_drafted, event_context.merge('attempt' => attempt, 'plan' => plan.to_h), &block)
-
-            structural_issues = structural_issues(plan, phase:, allowed_tools:)
-            emit(
-              :plan_reviewed,
-              event_context.merge(
-                'attempt' => attempt,
-                'layer' => 'structural',
-                'decision' => structural_issues.empty? ? 'accept' : 'revise',
-                'issues' => structural_issues
-              ), &block
-            )
-            unless structural_issues.empty?
-              feedback = structural_issues
-              last_layer = :structural
-              next
-            end
-
-            review = semantic_review(task, plan, phase:, evidence:, planning_context:)
-            emit(:plan_reviewed,
-                 review.merge(event_context).merge('attempt' => attempt, 'layer' => 'semantic'), &block)
-            if review.fetch('decision') == 'accept'
-              emit(:plan_accepted, event_context.merge('attempt' => attempt, 'plan' => plan.to_h), &block)
-              return [plan, Tamoz::Core.deep_freeze(review)]
-            end
-
-            feedback = review.fetch('issues')
-            last_layer = :semantic
-          rescue ProtocolError => e
-            feedback = [e.message]
-            last_layer = :protocol
-            emit(
-              :plan_reviewed,
-              event_context.merge(
-                'attempt' => attempt,
-                'layer' => 'protocol',
-                'decision' => 'revise',
-                'issues' => feedback
-              ), &block
-            )
+            accepted, feedback, last_layer =
+              plan_attempt(task, inputs, feedback, event_context.merge('attempt' => offset + 1), &block)
+            return accepted if accepted
           end
 
           raise PlanRejectedError, plan_rejected_message(last_layer, feedback)
+        end
+
+        def plan_attempt(task, inputs, feedback, context, &)
+          plan = Plan.parse(
+            model_generate(stage: :plan, system: PLAN_SYSTEM, prompt: planning_prompt(task, inputs, feedback))
+          )
+          emit(:plan_drafted, context.merge('plan' => plan.to_h), &)
+
+          issues = structural_issues(plan, **inputs.slice(:phase, :allowed_tools))
+          emit(:plan_reviewed,
+               context.merge('layer' => 'structural', 'decision' => issues.empty? ? 'accept' : 'revise',
+                             'issues' => issues), &)
+          return [nil, issues, :structural] unless issues.empty?
+
+          semantic_attempt(task, plan, inputs, context, &)
+        rescue ProtocolError => e
+          emit(:plan_reviewed, context.merge('layer' => 'protocol', 'decision' => 'revise', 'issues' => [e.message]), &)
+          [nil, [e.message], :protocol]
+        end
+
+        def semantic_attempt(task, plan, inputs, context, &)
+          review = semantic_review(task, plan, **inputs.slice(:phase, :evidence, :planning_context))
+          emit(:plan_reviewed, review.merge(context).merge('layer' => 'semantic'), &)
+          return [nil, review.fetch('issues'), :semantic] unless review.fetch('decision') == 'accept'
+
+          emit(:plan_accepted, context.merge('plan' => plan.to_h), &)
+          [[plan, Tamoz::Core.deep_freeze(review)], nil, nil]
         end
 
         # D-8 Fix C (RC-3): bounded structural-only rejection disclosure, mirroring
@@ -121,14 +98,14 @@ module Tamoz
           Deliberation.parse_review(raw)
         end
 
-        def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context)
+        def planning_prompt(task, inputs, feedback)
           Deliberation.planning_prompt(
             task,
-            phase,
-            allowed_tools,
-            evidence,
+            inputs.fetch(:phase),
+            inputs.fetch(:allowed_tools),
+            inputs.fetch(:evidence),
             feedback,
-            planning_context,
+            inputs.fetch(:planning_context),
             toolbox:
           )
         end

@@ -76,17 +76,19 @@ module Tamoz
 
         static_names = static_headers.keys.map(&:downcase)
         value.each_with_object({}) do |(name, ref), result|
-          validate_header_name!(name)
-          if static_names.include?(name.downcase)
-            raise ValidationError, "credential_headers cannot duplicate static header #{name.inspect}"
-          end
-          unless ref.is_a?(String) && credential_refs.include?(ref)
-            raise ValidationError,
-                  "credential_headers entry #{name.inspect} must reference a name in credential_refs"
-          end
-
+          validate_credential_header!(name, ref, credential_refs, static_names)
           result[name.dup.freeze] = ref.dup.freeze
         end.freeze
+      end
+
+      def validate_credential_header!(name, ref, credential_refs, static_names)
+        validate_header_name!(name)
+        if static_names.include?(name.downcase)
+          raise ValidationError, "credential_headers cannot duplicate static header #{name.inspect}"
+        end
+        return if ref.is_a?(String) && credential_refs.include?(ref)
+
+        raise ValidationError, "credential_headers entry #{name.inspect} must reference a name in credential_refs"
       end
 
       def validate_header_name!(name)

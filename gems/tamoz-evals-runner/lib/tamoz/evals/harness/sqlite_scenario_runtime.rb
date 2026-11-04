@@ -627,27 +627,35 @@ module Tamoz
         end
 
         def validate_runtime_inputs!
-          unless @graph.is_a?(Hash) &&
-                 @graph.fetch("name").is_a?(String) &&
-                 @graph.fetch("version").is_a?(String) &&
-                 @graph_factory.respond_to?(:call) &&
-                 @identifiers.is_a?(Hash) &&
-                 @preparers.is_a?(Hash) &&
-                 @failure_payload.is_a?(Array)
-            raise ExecutionError, "SQLite scenario runtime inputs are invalid"
-          end
-          required = %w[thread_id owner_a owner_b request_id execution_a execution_b]
-          unless required.all? { |key| @identifiers[key].is_a?(String) }
-            raise ExecutionError, "SQLite scenario runtime identifiers are invalid"
-          end
-          # Fail fast at construction if a catalog id maps to a preparer this
-          # class does not implement, so a manifest typo is a named ExecutionError
-          # here rather than a NoMethodError far away at dispatch time.
-          unless @preparers.values.all? { |value| value.is_a?(String) && respond_to?(value.to_sym, true) }
-            raise ExecutionError, "SQLite scenario preparers are invalid"
-          end
+          raise ExecutionError, "SQLite scenario runtime inputs are invalid" unless runtime_inputs_valid?
+          raise ExecutionError, "SQLite scenario runtime identifiers are invalid" unless identifiers_valid?
+          raise ExecutionError, "SQLite scenario preparers are invalid" unless preparers_valid?
         rescue KeyError, TypeError
           raise ExecutionError, "SQLite scenario runtime inputs are invalid"
+        end
+
+        def runtime_inputs_valid?
+          graph_valid? &&
+            @graph_factory.respond_to?(:call) &&
+            @identifiers.is_a?(Hash) &&
+            @preparers.is_a?(Hash) &&
+            @failure_payload.is_a?(Array)
+        end
+
+        def graph_valid?
+          @graph.is_a?(Hash) && @graph.fetch("name").is_a?(String) && @graph.fetch("version").is_a?(String)
+        end
+
+        def identifiers_valid?
+          required = %w[thread_id owner_a owner_b request_id execution_a execution_b]
+          required.all? { |key| @identifiers[key].is_a?(String) }
+        end
+
+        # Fail fast at construction if a catalog id maps to a preparer this
+        # class does not implement, so a manifest typo is a named ExecutionError
+        # here rather than a NoMethodError far away at dispatch time.
+        def preparers_valid?
+          @preparers.values.all? { |value| value.is_a?(String) && respond_to?(value.to_sym, true) }
         end
 
         def thread_id = @identifiers.fetch("thread_id")

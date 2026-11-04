@@ -1,12 +1,15 @@
 # frozen_string_literal: true
 
 require 'optparse'
+require_relative 'cli_improve_promote_commands'
 
 module Tamoz
   module Agent
     # `tamoz improve --corpus DIR [--principal ID] [--json]` (generate), or
     # `tamoz improve promote --bundle FILE --approval human:<actor> [--actor ID]`.
     module CLIImprovementCommands
+      include CLIImprovePromoteCommands
+
       def cmd_improve(options, argv)
         argv = Array(argv)
         return cmd_improve_promote(options, argv.drop(1)) if argv.first == 'promote'
@@ -17,6 +20,15 @@ module Tamoz
           return 2
         end
 
+        generate_candidate(corpus, principal, as_json)
+      rescue Improvement::ImprovementError, Tamoz::Tools::ToolError => e
+        @err.puts "improve: #{e.class.name.split('::').last}: #{e.message}"
+        1
+      end
+
+      private
+
+      def generate_candidate(corpus, principal, as_json)
         root = File.realpath(corpus)
         toolbox = Toolbox.new(root:, allow_changes: false)
         trajectory_paths = Dir.children(root).select { |name| name.end_with?('.json') }.sort
@@ -29,84 +41,6 @@ module Tamoz
         candidate = generator.generate(trajectory_paths:)
         render_candidate(candidate, corpus:, count: trajectory_paths.length, as_json:)
         0
-      rescue Improvement::ImprovementError, Tamoz::Tools::ToolError => e
-        @err.puts "improve: #{e.class.name.split('::').last}: #{e.message}"
-        1
-      end
-
-      # Records a promotion through the gem's own gates (report verifies/resolves,
-      # no self-promotion, human gate, holdout passed, provenance complete). ADR-023:
-      # it activates at the next thread's first intake, never an in-flight thread.
-      def cmd_improve_promote(options, argv)
-        bundle_path, approval, actor = parse_promote_options(argv)
-        unless bundle_path && File.exist?(bundle_path)
-          @err.puts 'improve promote: --bundle FILE is required and must exist'
-          return 2
-        end
-        unless approval.to_s.start_with?('human:')
-          @err.puts 'improve promote: --approval "human:<actor>" is required'
-          return 2
-        end
-
-        bundle = JSON.parse(File.read(bundle_path))
-        candidate = load_candidate(bundle.fetch('candidate'))
-        provenance = load_provenance(bundle.fetch('provenance'))
-        report = bundle.fetch('report')
-        body = Improvement::EvaluationReport.verify!(report)
-        resolver = ->(seal) { seal == Improvement::EvaluationReport.seal(body) ? report : nil }
-
-        with_worker_runtime(options) do |runtime|
-          engine = runtime.memory_engine
-          unless engine
-            @err.puts 'improve promote: memory is not enabled for this runtime'
-            next 1
-          end
-          result = Improvement::Promotion.new(engine).promote(
-            candidate:, provenance:, report:, human_gate_evidence: approval,
-            actor: actor || 'operator', evidence_resolver: resolver
-          )
-          transition = result.fetch('transition')
-          state = result.fetch('activated') ? 'activated' : "pending activation at the next thread's first intake"
-          @out.puts "improve promote: recorded #{transition.transition_id} (#{state})."
-          0
-        end
-      rescue KeyError => e
-        @err.puts "improve promote: malformed bundle (missing #{e.message})"
-        2
-      rescue Improvement::ImprovementError => e
-        @err.puts "improve promote: refused — #{e.class.name.split('::').last}: #{e.message}"
-        1
-      end
-
-      private
-
-      def parse_promote_options(argv)
-        bundle = nil
-        approval = nil
-        actor = nil
-        OptionParser.new do |value|
-          value.banner = 'Usage: tamoz improve promote --bundle FILE --approval human:<actor> [--actor ID]'
-          value.on('--bundle FILE', 'The vetted candidate bundle from the improvement pipeline') do |path|
-            bundle = path
-          end
-          value.on('--approval EVIDENCE', 'Human approval, e.g. human:operator-1') { |evidence| approval = evidence }
-          value.on('--actor ID', 'The promoting principal (default: operator)') { |id| actor = id }
-        end.parse!(Array(argv).dup)
-        [bundle, approval, actor]
-      end
-
-      def load_candidate(hash)
-        Improvement::Heuristic.new(
-          heuristic_id: hash.fetch('heuristic_id'), surface: hash.fetch('surface').to_sym,
-          precursor_tool: hash.fetch('precursor_tool'), subject_tool: hash.fetch('subject_tool'),
-          support: hash.fetch('support'), trials: hash.fetch('trials'),
-          confidence: hash.fetch('confidence'), statement: hash.fetch('statement'),
-          generator_principal: hash.fetch('generator_principal')
-        )
-      end
-
-      def load_provenance(hash)
-        Improvement::Provenance.new(**hash.transform_keys(&:to_sym))
       end
 
       def parse_improve_options(argv, options)

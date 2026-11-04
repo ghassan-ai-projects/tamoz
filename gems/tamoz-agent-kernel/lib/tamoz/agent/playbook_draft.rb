@@ -26,14 +26,7 @@ module Tamoz
       class << self
         # cases: {episode_id => features at decision time}.
         def parse(bytes, cases:, allowed_features:)
-          refuse 'not_string' unless bytes.is_a?(String)
-          reject_oversize(bytes.bytesize, 'document', MAX_BYTES)
-          reject_bad_utf8(bytes)
-          root = strict_parse(bytes)
-          refuse 'not_object' unless root.is_a?(Hash)
-          reject_unknown_keys(root, %w[protocol proposal no_proposal], 'top_level')
-          refuse "protocol: #{root['protocol'].inspect}" unless root['protocol'] == PROTOCOL
-          refuse 'exactly_one_answer' unless root.key?('proposal') ^ root.key?('no_proposal')
+          root = parse_root(bytes)
 
           if root.key?('proposal')
             parse_proposal(root['proposal'], cases, allowed_features)
@@ -43,6 +36,19 @@ module Tamoz
         end
 
         private
+
+        def parse_root(bytes)
+          refuse 'not_string' unless bytes.is_a?(String)
+          reject_oversize(bytes.bytesize, 'document', MAX_BYTES)
+          reject_bad_utf8(bytes)
+          root = strict_parse(bytes)
+          refuse 'not_object' unless root.is_a?(Hash)
+          reject_unknown_keys(root, %w[protocol proposal no_proposal], 'top_level')
+          refuse "protocol: #{root['protocol'].inspect}" unless root['protocol'] == PROTOCOL
+          refuse 'exactly_one_answer' unless root.key?('proposal') ^ root.key?('no_proposal')
+
+          root
+        end
 
         def parse_proposal(proposal, cases, allowed_features)
           refuse 'proposal_not_object' unless proposal.is_a?(Hash)

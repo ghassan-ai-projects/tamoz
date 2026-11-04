@@ -48,16 +48,13 @@ module Tamoz
       def extract(command, path, seconds)
         reader, writer = IO.pipe
         deadline = clock + seconds
-        pid = Process.spawn({ 'PATH' => ENV.fetch('PATH', ''), 'LANG' => 'C.UTF-8' }, command, '-q', '-enc', 'UTF-8',
-                            '-l', PDF_PAGES.to_s, path, '-',
-                            unsetenv_others: true, in: File::NULL, out: writer, err: File::NULL,
-                            pgroup: true, rlimit_cpu: seconds.ceil, rlimit_core: 0)
+        pid = spawn_reader(command, path, seconds, writer)
         writer.close
         output, finished = drained(reader, deadline)
         stop(pid) unless finished == :eof
         status = reaped(pid, deadline)
         pid = nil
-        return [:unreadable, nil] unless finished == :limit || (finished == :eof && status.success?)
+        return [:unreadable, nil] unless completed?(finished, status)
 
         [:read, output]
       rescue Errno::ENOENT, Errno::EACCES
@@ -65,6 +62,19 @@ module Tamoz
       rescue SystemCallError
         [:unreadable, nil]
       ensure
+        release(reader, writer, pid)
+      end
+
+      def spawn_reader(command, path, seconds, writer)
+        Process.spawn({ 'PATH' => ENV.fetch('PATH', ''), 'LANG' => 'C.UTF-8' }, command, '-q', '-enc', 'UTF-8',
+                      '-l', PDF_PAGES.to_s, path, '-',
+                      unsetenv_others: true, in: File::NULL, out: writer, err: File::NULL,
+                      pgroup: true, rlimit_cpu: seconds.ceil, rlimit_core: 0)
+      end
+
+      def completed?(finished, status) = finished == :limit || (finished == :eof && status.success?)
+
+      def release(reader, writer, pid)
         reader&.close
         writer&.close unless writer.nil? || writer.closed?
         abandon(pid) if pid

@@ -86,11 +86,7 @@ module Tamoz
         entries = append(entries, 'guidance', scrub(guidance.text), pinned: true, source: guidance.sources.join(' ')) if
           guidance
         entries = skill_entries(entries)
-        entries = append(entries, 'memory', scrub(carried[:memory]), pinned: true) if carried[:memory]
-        if carried[:checkpoint]
-          entries = append(entries, 'checkpoint', thread_checkpoint(carried[:checkpoint]), pinned: true,
-                                                                                           source: 'thread')
-        end
+        entries = carried_entries(entries, carried)
         entries = append(entries, 'user', scrub(transcript_text(transcript)), pinned: true) unless transcript.empty?
         if previous_answer
           previous = format(Harness::PromptPack.fetch('previous_turn'), answer: previous_answer)
@@ -102,6 +98,13 @@ module Tamoz
       end
 
       def scrub(text) = Tamoz::Core.scrub_secrets(text)
+
+      def carried_entries(entries, carried)
+        entries = append(entries, 'memory', scrub(carried[:memory]), pinned: true) if carried[:memory]
+        return entries unless carried[:checkpoint]
+
+        append(entries, 'checkpoint', thread_checkpoint(carried[:checkpoint]), pinned: true, source: 'thread')
+      end
 
       # The catalog is shown exactly when load_skill is on the surface; a user-invoked skill follows it.
       def skill_entries(entries)

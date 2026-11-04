@@ -10,7 +10,6 @@ module Tamoz
     # :reek:MissingSafeMethod :reek:UtilityFunction -- operations are boundary
     # commands and have no useful non-raising twins.
     # rubocop:disable Metrics/AbcSize
-    # rubocop:disable Metrics/MethodLength
     class StateOperations
       def initialize(compiled)
         @compiled = compiled
@@ -57,7 +56,8 @@ module Tamoz
 
           compatible!(source)
           candidate = updated_state(source, update)
-          checkpoint = append_updated_checkpoint(source, latest, candidate, writer:, thread:, execution_id:)
+          attributes = updated_attributes(source, latest, candidate, execution_id)
+          checkpoint = append_checkpoint(writer:, thread:, **attributes)
           snapshot(checkpoint)
         end
       end
@@ -116,14 +116,12 @@ module Tamoz
         )
       end
 
-      def append_updated_checkpoint(source, latest, candidate, writer:, thread:, execution_id:)
+      def updated_attributes(source, latest, candidate, execution_id)
         historical = source.id != latest.id
         frontier = source.frontier.map do |entry|
           historical ? entry.with(activation_checkpoint_id: nil) : entry
         end.freeze
-        append_checkpoint(
-          writer:,
-          thread:,
+        {
           namespace: [],
           expected_base_id: source.id,
           mode: historical ? :fork : :advance,
@@ -138,7 +136,7 @@ module Tamoz
           attempts: historical ? {} : source.attempts,
           failure: nil,
           total_tasks: historical ? 0 : source.total_tasks
-        )
+        }
       end
 
       def updated_state(source, update)
@@ -171,6 +169,5 @@ module Tamoz
       end
     end
     # rubocop:enable Metrics/AbcSize
-    # rubocop:enable Metrics/MethodLength
   end
 end

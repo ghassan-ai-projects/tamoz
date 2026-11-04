@@ -11,6 +11,9 @@ module Tamoz
         request_digest content response_digest usage settings_digest
         provider_configuration_digest provider_retries
       ].freeze
+      DIGEST_FIELDS = %w[
+        request_digest response_digest settings_digest provider_configuration_digest
+      ].freeze
       RESPONSE_FIELDS = %i[
         content request_digest response_digest usage settings_digest
         provider_configuration_digest provider_retries
@@ -22,23 +25,11 @@ module Tamoz
                         provider_configuration_digest: nil)
         verify_response_shape!(response)
         request_digest ||= response.request_digest
-        verify_binding!('request_digest', response.request_digest, request_digest)
-        verify_binding!('settings_digest', response.settings_digest, settings_digest)
-        verify_binding!(
-          'provider_configuration_digest', response.provider_configuration_digest,
-          provider_configuration_digest
+        verify_bindings!(
+          response, request_digest: request_digest, settings_digest: settings_digest,
+                    provider_configuration_digest: provider_configuration_digest
         )
-
-        projection = {
-          'request_digest' => request_digest,
-          'content' => response.content,
-          'response_digest' => response.response_digest,
-          'usage' => usage_projection(response.usage),
-          'settings_digest' => response.settings_digest,
-          'provider_configuration_digest' => response.provider_configuration_digest,
-          'provider_retries' => response.provider_retries
-        }
-        validate!(projection)
+        validate!(response_projection(response, request_digest))
       rescue ModelReceiptError => e
         raise ModelCallError.new(code: 'invalid_projection', body_bytes: e.message.bytesize)
       end
@@ -49,18 +40,10 @@ module Tamoz
           raise ModelReceiptError, 'model_projection/shape'
         end
 
-        ModelCall.require_digest!('model_projection.request_digest', projection['request_digest'])
-        ModelCall.require_digest!('model_projection.response_digest', projection['response_digest'])
-        ModelCall.require_digest!('model_projection.settings_digest', projection['settings_digest'])
-        ModelCall.require_digest!(
-          'model_projection.provider_configuration_digest',
-          projection['provider_configuration_digest']
-        )
-        verify_binding!('request_digest', projection['request_digest'], request_digest)
-        verify_binding!('settings_digest', projection['settings_digest'], settings_digest)
-        verify_binding!(
-          'provider_configuration_digest', projection['provider_configuration_digest'],
-          provider_configuration_digest
+        DIGEST_FIELDS.each { |field| ModelCall.require_digest!("model_projection.#{field}", projection[field]) }
+        verify_projection_bindings!(
+          projection, request_digest: request_digest, settings_digest: settings_digest,
+                      provider_configuration_digest: provider_configuration_digest
         )
         raise ModelReceiptError, 'model_projection/content' unless projection['content'].is_a?(String)
 
@@ -82,6 +65,39 @@ module Tamoz
           'cost_microunits' => usage.cost_microunits
         }
       end
+
+      def response_projection(response, request_digest)
+        {
+          'request_digest' => request_digest,
+          'content' => response.content,
+          'response_digest' => response.response_digest,
+          'usage' => usage_projection(response.usage),
+          'settings_digest' => response.settings_digest,
+          'provider_configuration_digest' => response.provider_configuration_digest,
+          'provider_retries' => response.provider_retries
+        }
+      end
+      private_class_method :response_projection
+
+      def verify_bindings!(response, request_digest:, settings_digest:, provider_configuration_digest:)
+        verify_binding!('request_digest', response.request_digest, request_digest)
+        verify_binding!('settings_digest', response.settings_digest, settings_digest)
+        verify_binding!(
+          'provider_configuration_digest', response.provider_configuration_digest,
+          provider_configuration_digest
+        )
+      end
+      private_class_method :verify_bindings!
+
+      def verify_projection_bindings!(projection, request_digest:, settings_digest:, provider_configuration_digest:)
+        verify_binding!('request_digest', projection['request_digest'], request_digest)
+        verify_binding!('settings_digest', projection['settings_digest'], settings_digest)
+        verify_binding!(
+          'provider_configuration_digest', projection['provider_configuration_digest'],
+          provider_configuration_digest
+        )
+      end
+      private_class_method :verify_projection_bindings!
 
       def verify_binding!(name, actual, expected)
         return if expected.nil? || actual == expected

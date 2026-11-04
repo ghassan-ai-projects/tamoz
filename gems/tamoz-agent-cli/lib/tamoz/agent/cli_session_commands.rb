@@ -73,22 +73,31 @@ module Tamoz
       # resume or continue builds the same header and body without repeating the flags.
       def work_harness(options, thread_id)
         pin = File.join(@sessions.resolve_session_dir(options), "#{thread_id}.harness.json")
-        if File.exist?(pin)
-          pinned = pinned_harness(pin, options[:subagents])
-          if options[:skill] && options[:skill] != pinned[:skill]
-            raise OptionParser::InvalidArgument,
-                  "this thread's skill was pinned at its first turn (#{pinned[:skill] || 'none'})"
-          end
+        return pinned_work_harness(options, pin) if File.exist?(pin)
 
-          return pinned
-        end
-        raise OptionParser::InvalidArgument, '--subagents applies only to tamoz code and tamoz investigate' if
-          options[:subagents] && !options[:work_routing]
-        raise OptionParser::InvalidArgument, '--skill applies only to tamoz code and tamoz investigate' if
-          options[:skill] && !options[:work_routing]
+        reject_work_flags_off_the_work_route!(options)
         return {} unless options[:work_routing]
 
         fresh_harness(options, pin)
+      end
+
+      def pinned_work_harness(options, pin)
+        pinned = pinned_harness(pin, options[:subagents])
+        if options[:skill] && options[:skill] != pinned[:skill]
+          raise OptionParser::InvalidArgument,
+                "this thread's skill was pinned at its first turn (#{pinned[:skill] || 'none'})"
+        end
+
+        pinned
+      end
+
+      def reject_work_flags_off_the_work_route!(options)
+        return if options[:work_routing]
+
+        raise OptionParser::InvalidArgument, '--subagents applies only to tamoz code and tamoz investigate' if
+          options[:subagents]
+        raise OptionParser::InvalidArgument, '--skill applies only to tamoz code and tamoz investigate' if
+          options[:skill]
       end
 
       def fresh_harness(options, pin)
