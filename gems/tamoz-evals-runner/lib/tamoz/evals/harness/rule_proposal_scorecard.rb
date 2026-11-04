@@ -155,8 +155,7 @@ module Tamoz
         end
 
         def report(cases)
-          proposals = cases.reject { |entry| entry.fetch('abstain_expected') }
-          abstentions = cases.select { |entry| entry.fetch('abstain_expected') }
+          abstentions, proposals = cases.partition { |entry| entry.fetch('abstain_expected') }
           {
             'report_type' => REPORT_TYPE, 'format_version' => 1, 'content_digest' => 'pending',
             'subject' => @subject,

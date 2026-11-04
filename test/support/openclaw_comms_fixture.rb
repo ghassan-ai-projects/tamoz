@@ -164,13 +164,6 @@ module Tamoz
           end
         end
 
-        private def bind_cli_thread(thread_id)
-          bound = @runtime.thread_profile(thread_id)
-          return if bound == PROFILE_ID
-
-          @runtime.bind_thread_profile(thread_id, PROFILE_ID)
-        end
-
         PLAN_STEPS = [
           { 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
             'steps' => [
@@ -278,7 +271,7 @@ module Tamoz
 
         def view(thread_id)
           session = @runtime.session_for(thread_id)
-          session && session.view(thread: thread_id)
+          session&.view(thread: thread_id)
         end
 
         def status(conversation_id)
@@ -355,6 +348,13 @@ module Tamoz
         end
 
         private
+
+        def bind_cli_thread(thread_id)
+          bound = @runtime.thread_profile(thread_id)
+          return if bound == PROFILE_ID
+
+          @runtime.bind_thread_profile(thread_id, PROFILE_ID)
+        end
 
         def provision_runtime_directory(approval_ask)
           @workspace = File.join(@directory, 'workspace')

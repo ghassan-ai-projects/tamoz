@@ -221,7 +221,7 @@ module TalkChecks
     return nil if offset + 4 > bytes.bytesize
 
     b1, b2, b3 = bytes.getbyte(offset + 1), bytes.getbyte(offset + 2), bytes.getbyte(offset + 3) # rubocop:disable Style/ParallelAssignment
-    return nil unless bytes.getbyte(offset) == 0xFF && (b1 & 0xE0) == 0xE0 && b3
+    return nil unless bytes.getbyte(offset) == 0xFF && b1.allbits?(0xE0) && b3
 
     version = (b1 >> 3) & 3
     layer = (b1 >> 1) & 3

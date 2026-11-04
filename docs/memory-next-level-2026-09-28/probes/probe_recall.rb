@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '../../../test/test_helper'
 M = Tamoz::Agent::Memory
 Dir.mktmpdir do |dir|

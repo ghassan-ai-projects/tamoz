@@ -647,7 +647,7 @@ module Tamoz
                                                          timeline['state'] == 'terminal'
             failures << 'race_misresolved' unless timeline['requested_le_observed'] == true
             failures << 'race_misresolved' unless timeline['terminal_word'] == expected
-            if timeline['settled'] && !timeline['settle_le_observed'].nil? && !(timeline['settle_le_observed'] == true)
+            if timeline['settled'] && !timeline['settle_le_observed'].nil? && timeline['settle_le_observed'] != true
               failures << 'race_misresolved'
             end
             failures

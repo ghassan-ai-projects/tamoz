@@ -11,7 +11,7 @@
 require 'json'
 
 options = {}
-ARGV.each_slice(2) { |key, value| options[key.sub(/\A--/, '')] = value }
+ARGV.each_slice(2) { |key, value| options[key.delete_prefix('--')] = value }
 label = options.fetch('label', 'dump')
 expect_reads = options['expect-reads'].to_i
 expect_edits = options['expect-edits'].to_i

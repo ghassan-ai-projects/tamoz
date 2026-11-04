@@ -83,7 +83,7 @@ module Tamoz
       # Classify the last typed failure in a durable turn's observation list
       # (`view.state[:observations]`), or nil when there is none.
       def assess_observations(observations)
-        entries = Array(observations).select { |entry| entry.is_a?(Hash) }
+        entries = Array(observations).grep(Hash)
         failure = entries.reverse.find { |entry| entry['failure'] }
         return assess_tool_failure(failure.fetch('failure')) if failure
 

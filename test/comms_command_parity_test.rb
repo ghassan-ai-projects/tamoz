@@ -332,7 +332,7 @@ class CommsCommandParityTest < Minitest::Test
 
   # Every delivery row the gateway appends lands here, so assertions read the
   # exact wires without re-deriving outbox filters.
-  def capture = (@parity_capture ||= [])
+  def capture = (@capture ||= [])
 
   def last_reply = capture.last.fetch('text')
 

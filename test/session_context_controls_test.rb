@@ -236,7 +236,8 @@ class SessionContextControlsTest < Minitest::Test
     Dir.mktmpdir('tamoz-context-compact') do |directory|
       workspace = File.join(directory, 'workspace')
       FileUtils.mkdir_p(workspace)
-      initial = ("#{'p' * 60}\n" * 300) + "value = 1\n"
+      filler = "#{'p' * 60}\n" * 300
+      initial = "#{filler}value = 1\n"
       File.write(File.join(workspace, 'app.rb'), initial)
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'tamoz.sqlite3'))
       store = adapter.bind_artifact_store(tenant: 'tenant.controls')
@@ -285,8 +286,8 @@ class SessionContextControlsTest < Minitest::Test
         frame = planning_context.compact_for(latest_state(session), :read_only).context
 
         assert_equal pinned, frame.dig('conversation', 'earlier_summary', 'digest')
-        assert_equal true, session.context_report(thread: THREAD).document
-                                  .dig('layers', 'transcript', 'earlier_summary_pinned')
+        assert_same true, session.context_report(thread: THREAD).document
+                                 .dig('layers', 'transcript', 'earlier_summary_pinned')
       ensure
         adapter&.close
       end
@@ -301,7 +302,8 @@ class SessionContextControlsTest < Minitest::Test
     Dir.mktmpdir('tamoz-context-compact-replay') do |directory|
       workspace = File.join(directory, 'workspace')
       FileUtils.mkdir_p(workspace)
-      initial = ("#{'p' * 60}\n" * 300) + "value = 1\n"
+      filler = "#{'p' * 60}\n" * 300
+      initial = "#{filler}value = 1\n"
       File.write(File.join(workspace, 'app.rb'), initial)
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'tamoz.sqlite3'))
       store = adapter.bind_artifact_store(tenant: 'tenant.replay')

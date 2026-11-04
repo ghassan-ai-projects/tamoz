@@ -54,7 +54,7 @@ end
 
 if $PROGRAM_NAME == __FILE__
   root, directory = ARGV
-  Dir["#{root}/gems/*/lib"].reject { |lib| lib.match?(%r{/gems/tamoz-(telegram|talk)/}) }.each { $LOAD_PATH << _1 }
+  Dir["#{root}/gems/*/lib"].grep_v(%r{/gems/tamoz-(telegram|talk)/}).each { $LOAD_PATH << _1 }
   require 'fileutils'
   require 'json'
   require 'stringio'

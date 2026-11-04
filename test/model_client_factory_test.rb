@@ -6,7 +6,7 @@ require_relative 'support/local_model_endpoint'
 class ModelClientFactoryTest < Minitest::Test
   Factory = Tamoz::Agent::ModelClientFactory
   Role = Tamoz::Agent::ModelCall::ModelRole
-  DIGEST = "sha256:#{'c' * 64}"
+  DIGEST = "sha256:#{'c' * 64}".freeze
 
   PROVIDERS = {
     'openai' => ['OPENAI_API_KEY', 'https://api.openai.com/v1'],

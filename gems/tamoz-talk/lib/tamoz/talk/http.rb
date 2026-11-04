@@ -49,7 +49,7 @@ module Tamoz
         end
         raise Refused, 431 if ending > MAX_HEAD_BYTES
 
-        [parse_head(buffer.byteslice(0, ending)), buffer.byteslice(ending + 4..)]
+        [parse_head(buffer.byteslice(0, ending)), buffer.byteslice((ending + 4)..)]
       end
 
       def read_body(socket, request, early, max_bytes:, deadline: monotonic + BODY_DEADLINE_S)

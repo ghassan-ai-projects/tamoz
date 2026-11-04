@@ -59,7 +59,7 @@ class TalkGatewayTest < Minitest::Test
          'SELECT update_id, disposition, reason FROM tamoz_comms_inbound ORDER BY update_id')
   end
 
-  def pass(gateway) = 2.times.map { gateway.serve_once(drain: false) }
+  def pass(gateway) = Array.new(2) { gateway.serve_once(drain: false) }
 
   def test_text_voice_and_a_typed_approve_share_one_thread_and_decide_nothing
     with_runtime do |gateway_for, store|

@@ -56,7 +56,7 @@ module SelfInvestigationGrader
   def frequency_choice(diagnosis_json, vocabulary)
     counts = vocabulary.to_h { |token| [token, diagnosis_json.scan(token_pattern(token)).length] }
     best = counts.max_by { |token, count| [count, token] }
-    best && best.last.positive? ? best.first : nil
+    best&.last&.positive? ? best.first : nil
   end
 
   def ranked_choice(diagnosis, vocabulary)

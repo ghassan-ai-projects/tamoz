@@ -4,7 +4,7 @@
 require "fileutils"
 require "json"
 
-Dir[File.expand_path("../gems/*/lib", __dir__)].sort.each do |path|
+Dir[File.expand_path("../gems/*/lib", __dir__)].each do |path|
   $LOAD_PATH.unshift(path)
 end
 require "tamoz/evals"

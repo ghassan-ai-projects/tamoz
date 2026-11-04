@@ -23,7 +23,7 @@ class TalkBoundaryTest < Minitest::Test
 
   def test_speech_is_synthesized_only_by_the_gateway_voice_and_the_start_probe
     callers = Dir[ROOT.join('gems/*/lib/**/*.rb')].select do |path|
-      File.read(path, encoding: 'UTF-8').match?(/\.speak\(/)
+      File.read(path, encoding: 'UTF-8').include?('.speak(')
     end
 
     assert_equal(%w[gems/tamoz-agent-cli/lib/tamoz/agent/cli_comms_shared.rb

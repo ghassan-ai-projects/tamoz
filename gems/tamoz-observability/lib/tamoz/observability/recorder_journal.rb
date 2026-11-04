@@ -191,14 +191,20 @@ module Tamoz
         end
 
         def delete_current_file
-          File.delete(path) if File.exist?(path)
+          delete_if_present(path)
+        end
+
+        def delete_if_present(file)
+          File.delete(file)
+        rescue Errno::ENOENT
+          nil
         end
 
         def shift_numbered_backups
           (@max_files - 1).downto(1) do |index|
             source = index == 1 ? path : "#{path}.#{index - 1}"
             target = "#{path}.#{index}"
-            File.delete(target) if File.exist?(target)
+            delete_if_present(target)
             File.rename(source, target) if File.exist?(source)
           end
         end

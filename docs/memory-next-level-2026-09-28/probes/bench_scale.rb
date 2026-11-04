@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative '../../../test/test_helper'
 require_relative '../../../test/support/memory_spec'
 require 'benchmark'
@@ -5,7 +7,7 @@ class B; include MemorySpec; end
 b = B.new
 M = Tamoz::Agent::Memory
 WORDS = %w[deploy parser login cache invoice vendor build release slug queue retry index report token schema widget
-           config]
+           config].freeze
 Dir.mktmpdir do |d|
   now = Time.at(1_800_000_000)
   e, a = b.memory_engine_at(d, clock: -> { now })
@@ -18,7 +20,7 @@ Dir.mktmpdir do |d|
   end
   [[2_000, 8_000]].each do |kn, ex|
     t = Benchmark.realtime do
-      kn.times { |i| add.call(i, :knowledge, i % 5 == 0 ? :preference : :procedure) }
+      kn.times { |i| add.call(i, :knowledge, (i % 5).zero? ? :preference : :procedure) }
       ex.times do |i|
         add.call(i, :experience, :episode)
       end

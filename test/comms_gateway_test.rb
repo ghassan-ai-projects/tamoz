@@ -1052,7 +1052,7 @@ class CommsGatewayTest < Minitest::Test
   def test_every_fixed_control_reply_constant_fits_the_delivery_ceiling
     replies = Tamoz::Comms::Gateway.constants.sort
                                    .filter_map { |name| Tamoz::Comms::Gateway.const_get(name) }
-                                   .select { |value| value.is_a?(String) }
+                                   .grep(String)
 
     refute_empty replies
     replies.each do |reply|

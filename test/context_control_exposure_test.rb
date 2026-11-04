@@ -13,7 +13,7 @@ class ContextControlExposureTest < Minitest::Test
   Records = Tamoz::Agent::SessionRecords
 
   TURN_TEXT = 'make the header blue'
-  LONG_TEXT = "repaint the whole page #{'x' * 1500}"
+  LONG_TEXT = "repaint the whole page #{'x' * 1500}".freeze
   VOLATILE_FIELDS = %w[thread_id checkpoint_id sequence audit_digest].freeze
 
   def test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields
@@ -88,7 +88,7 @@ class ContextControlExposureTest < Minitest::Test
       pinned = surface.captured.fetch('context').last
                       .dig('layers', 'transcript', 'earlier_summary_pinned')
 
-      assert_equal true, pinned
+      assert_same true, pinned
 
       cli_thread = 'th_compact_cli'
       seed_cli_turn(surface, cli_thread, LONG_TEXT)
@@ -97,7 +97,7 @@ class ContextControlExposureTest < Minitest::Test
       composition = surface.run_cli(['context', cli_thread])
 
       assert_equal 1, compacted.fetch('truncated_fragments')
-      assert_equal true, composition.dig('layers', 'transcript', 'earlier_summary_pinned')
+      assert_same true, composition.dig('layers', 'transcript', 'earlier_summary_pinned')
       assert_equal 0, composition.dig('layers', 'transcript', 'fragments_visible')
     end
   end
@@ -180,7 +180,7 @@ class ContextControlExposureTest < Minitest::Test
                       statuses: %w[pending claimed succeeded]).each do |candidate|
       row = candidate if candidate.fetch('reply_to') == id + 10_000
     end
-    row && row.fetch('text')
+    row&.fetch('text')
   end
 
   def meaning(document)
@@ -286,7 +286,7 @@ class ContextControlExposureTest < Minitest::Test
     def reply_for(id)
       row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
                  .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
-      row && row.fetch('text')
+      row&.fetch('text')
     end
 
     def current_thread

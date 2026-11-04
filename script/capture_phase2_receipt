@@ -212,5 +212,5 @@ receipt = {
   'manifest_failure_cases' => manifest_failure_cases
 }
 
-File.write(OUTPUT_PATH, JSON.pretty_generate(receipt) + "\n")
+File.write(OUTPUT_PATH, "#{JSON.pretty_generate(receipt)}\n")
 puts "wrote #{OUTPUT_PATH}"

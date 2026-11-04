@@ -131,7 +131,7 @@ transcribe_all = lambda do |name, variants|
   heard[name] = TalkScenarios.heard_summary(name, all).merge(rows: all.map do |row|
     row.slice(:script, :voice, :variant, :hypothesis)
   end)
-  puts "#{name}: #{heard[name].reject { |key, _| %i[rows worst].include?(key) }}"
+  puts "#{name}: #{heard[name].except(:rows, :worst)}"
 end
 if blocked.empty?
   transcribe_all.call('heard_clean', ['clean']) if selected.call('heard_clean')
@@ -188,7 +188,7 @@ while blocked.empty? && run < max_runs
               end
       attempts[name] += found.length
       results[name].concat(found)
-      puts "  #{name}: #{found.map { |entry| entry.outcome }.tally}"
+      puts "  #{name}: #{found.map(&:outcome).tally}"
     rescue StandardError => e
       results[name] << TalkScenarios.result(name, 'run', :invalid, "#{e.class}: #{e.message[0, 200]}")
       attempts[name] += 1

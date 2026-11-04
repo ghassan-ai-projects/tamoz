@@ -87,5 +87,5 @@ lines << ''
 lines << '- [`README.md`](./README.md) — the ADR catalog'
 lines << '- [`../architecture/invariants.md`](../architecture/invariants.md) — the invariant contract'
 
-File.write(OUT, lines.join("\n") + "\n")
+File.write(OUT, "#{lines.join("\n")}\n")
 puts "wrote #{OUT} (#{inforce} in-force ADRs, #{covered} with tests)"

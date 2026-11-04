@@ -57,7 +57,7 @@ class TalkHubTest < Minitest::Test
     # The inbox itself redelivers until a cursor confirms, so one submission serves any number of polls.
     def stage_text(text, **) = @hub.inbox.submit(@hub.normalizer.text(update_id: @update_id += 1, text:), timeout_s: 0)
 
-    def released?(_ids, _cursor) = @hub.inbox.size.zero?
+    def released?(_ids, _cursor) = !@hub.inbox.size.positive?
 
     def stage_attachment(bytes)
       envelope = @hub.normalizer.utterance(update_id: @update_id += 1, audio: bytes, duration_s: 1)

@@ -304,8 +304,7 @@ module TelegramChatScenarios
   end
 
   attachment_spec.fetch('scenarios').each_key do |name|
-    define_method(name) { |eval| attachment(eval, name) }
-    module_function name
+    define_singleton_method(name) { |eval| attachment(eval, name) }
   end
 
   def stranger(eval)

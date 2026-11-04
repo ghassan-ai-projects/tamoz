@@ -77,10 +77,10 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
   def metrics_ready?(scored)
     scored.fetch('metrics')
-          .reject { |name, _| REPORTED_ONLY_METRICS.include?(name) }
+          .except(*REPORTED_ONLY_METRICS)
           .values
           .reject { |value| value.is_a?(Hash) && value['status'] == 'unavailable' }
-          .all? { |value| value == Oracles::PASS }
+          .all?(Oracles::PASS)
   end
 
   # Mirrors OpenclawCommsRunner#score: a snapshot the oracle cannot score (an

@@ -365,7 +365,7 @@ module Tamoz
         end
 
         def case_paths_for(name, label = name)
-          return Dir[File.join(@case_root, '*.case.json')].sort.freeze if @case_root
+          return Dir[File.join(@case_root, '*.case.json')].freeze if @case_root
 
           descriptor = ExternalInputs.required_manifest_value(
             @input_manifest,
@@ -804,8 +804,8 @@ module Tamoz
             resume_status = harness.resume(thread_id:, input: "y\ny\n")
             evidence = harness.durable_evidence(thread_id:, workspace:)
 
-            terminal = resume_status == 0 ? 'completed' : 'failed'
-            result = CliOutcome.new(satisfied: resume_status == 0, answer: nil)
+            terminal = resume_status.zero? ? 'completed' : 'failed'
+            result = CliOutcome.new(satisfied: resume_status.zero?, answer: nil)
             oracle_success = begin
               resume_after_kill_oracle(
                 result, killed_clean:, workspace:, history: evidence.fetch(:history),
@@ -2350,7 +2350,7 @@ module Tamoz
               # success.
               proofs['delivery_is_not_execution_success'] =
                 occurrences.any? { |o| o.state == :enqueued } &&
-                !occurrences.any? { |o| o.state == :succeeded }
+                occurrences.none? { |o| o.state == :succeeded }
             ensure
               adapter.close
             end

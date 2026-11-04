@@ -233,7 +233,7 @@ class ObservabilityRuntimeTest < Minitest::Test
     assert_equal 0, fanout.flush(deadline_ms: 10)
     # health reports the child as unavailable rather than injecting :dropped.
     assert_equal({'enabled' => false, 'error' => 'unavailable'}, fanout.health.fetch('0'))
-    assert_equal true, fanout.health.fetch('1').fetch('enabled')
+    assert_same true, fanout.health.fetch('1').fetch('enabled')
     assert_nil fanout.close
   end
 end

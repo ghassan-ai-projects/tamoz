@@ -978,12 +978,13 @@ module Tamoz
       # output, and model output is never echoed to the channel.
       # :reek:UtilityFunction -- a pure function of the error class.
       def crashed_text(error)
-        if error.is_a?(PlanRejectedError)
+        case error
+        when PlanRejectedError
           'I could not form a plan for that request that passed my own review. ' \
-            'Try rephrasing it or adding more detail about what you want done.'
-        elsif error.is_a?(Tamoz::CheckpointConflictError)
+          'Try rephrasing it or adding more detail about what you want done.'
+        when Tamoz::CheckpointConflictError
           'That request stopped safely. Check its status before retrying.'
-        elsif error.is_a?(Tamoz::CheckpointVersionError)
+        when Tamoz::CheckpointVersionError
           'This conversation was started by an older version of me and cannot continue. Send /new to start a fresh one.'
         else
           ChatReply::FAILED

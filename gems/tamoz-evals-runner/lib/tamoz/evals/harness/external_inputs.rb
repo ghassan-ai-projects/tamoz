@@ -49,7 +49,7 @@ module Tamoz
         end
 
         def case_paths(manifest, descriptor, root, label:)
-          return Dir[File.join(absolute_root!(root, label), '*.case.json')].sort.freeze if root
+          return Dir[File.join(absolute_root!(root, label), '*.case.json')].freeze if root
 
           value = document(manifest, descriptor, label:)
           entries = if value.is_a?(Hash)

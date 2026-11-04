@@ -312,7 +312,7 @@ module RunnerInputs
         'arguments' => { 'path' => path }, 'verification' => 'the step produced evidence' }
     end
     {
-      train: 4.times.map do |index|
+      train: Array.new(4) do |index|
         path = "lib/#{('a'.ord + index).chr}.rb"
         { 'trajectory_id' => "t.00#{index + 1}", 'verified' => true, 'outcome' => 'satisfied',
           'steps' => [step.call('s1', 'read_file', path, 'read the target'), step.call('s2', 'apply_patch', path, 'patch the target')] }

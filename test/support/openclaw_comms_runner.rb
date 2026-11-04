@@ -80,7 +80,7 @@ module Tamoz
           FileUtils.mkdir_p(directory)
           artifacts = @scenarios.map { |scenario_id| run_scenario(scenario_id, directory) }
           manifest = build_manifest(artifacts)
-          write_atomic(directory.join(MANIFEST_FILENAME), CanonicalJSON.dump(manifest) + "\n")
+          write_atomic(directory.join(MANIFEST_FILENAME), "#{CanonicalJSON.dump(manifest)}\n")
           Result.new(manifest:, artifacts: artifacts.freeze)
         end
 
@@ -117,7 +117,7 @@ module Tamoz
                    end
           document = artifact_document(scenario_id, record)
           path = "#{scenario_id}.json"
-          write_atomic(directory.join(path), CanonicalJSON.dump(document) + "\n")
+          write_atomic(directory.join(path), "#{CanonicalJSON.dump(document)}\n")
           # pending_seam is an honest seam gap, not an oracle failure.
           @failed = true if %w[failed blocked].include?(record['status'])
           {
@@ -160,10 +160,10 @@ module Tamoz
         REPORTED_ONLY_METRICS = %w[update_count latency_to_ack latency_to_terminal].freeze
 
         def metrics_ready?(scored)
-          scored['metrics'].reject { |name, _| REPORTED_ONLY_METRICS.include?(name) }
+          scored['metrics'].except(*REPORTED_ONLY_METRICS)
                            .values
                            .reject { |value| value.is_a?(Hash) && value['status'] == 'unavailable' }
-                           .all? { |value| value == OpenclawCommsOracles::PASS }
+                           .all?(OpenclawCommsOracles::PASS)
         end
 
         def oracle_for(scenario_id, facts)
@@ -230,7 +230,7 @@ module Tamoz
             'scenarios' => @scenarios,
             'surfaces_driven' => @scenarios.to_h { |scenario_id| [scenario_id, surfaces_driven(scenario_id)] },
             'pending_seam' => artifacts.select { |artifact| artifact.dig('record', 'status') == 'pending_seam' }
-                                       .map { |artifact| [artifact.fetch('scenario_id'), artifact] }.to_h,
+                                       .to_h { |artifact| [artifact.fetch('scenario_id'), artifact] },
             'results' => artifacts.to_h do |artifact|
               [artifact.fetch('scenario_id'),
                artifact.fetch('record').fetch('status')]
@@ -938,7 +938,7 @@ module Tamoz
           row = fixture.outbox.select do |candidate|
             OpenclawCommsOracles::TERMINAL_KINDS.include?(candidate['kind'])
           end.min_by { |candidate| candidate.fetch('created_at_ms') }
-          row && row.fetch('created_at_ms')
+          row&.fetch('created_at_ms')
         end
 
         # Every terminal delivery, not just a completion: F25-COR-01 routes a

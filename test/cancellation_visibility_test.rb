@@ -148,7 +148,7 @@ class CancellationVisibilityTest < Minitest::Test
       )
       begin
         store = runtime.adapter.bind_comms_store(runtime.checkpoints)
-        insert_request!(store, request_id: ('c' * 63) + '1')
+        insert_request!(store, request_id: "#{'c' * 63}1")
         worker = Tamoz::Agent::Worker.new(
           runtime:,
           session_builder: ->(thread) { runtime.session_for(thread) },
@@ -156,13 +156,13 @@ class CancellationVisibilityTest < Minitest::Test
         )
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('d' * 63) + '1', operation: :turn,
+          thread_id: THREAD, request_id: "#{'d' * 63}1", operation: :turn,
           payload: { 'task' => 'Read note.txt' }, delivery: :queue
         )
 
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, ('c' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
 
         assert_nil stamps.fetch('observed_at_ms'),
                    'a settled ordinary turn is not a cancellation observation'
@@ -173,7 +173,7 @@ class CancellationVisibilityTest < Minitest::Test
         # would actually land in the store. Consumed after the genuine cancel,
         # first-write-wins would hide any misclassification.
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('g' * 63) + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'g' * 63}1", operation: :redirect,
           payload: { 'task' => 'Read note.txt' }, delivery: :redirect
         )
 
@@ -186,19 +186,19 @@ class CancellationVisibilityTest < Minitest::Test
 
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, ('c' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
 
         assert_nil stamps.fetch('observed_at_ms'),
                    'a redirect without a cancel task is not an observation'
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('e' * 63) + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'e' * 63}1", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
 
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, ('c' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
 
         refute_nil stamps.fetch('observed_at_ms'), 'consuming the cancel stamps observed'
         observed = stamps.fetch('observed_at_ms')
@@ -218,13 +218,13 @@ class CancellationVisibilityTest < Minitest::Test
         assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('h' * 63) + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'h' * 63}1", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
 
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, ('c' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
 
         assert_equal observed, stamps.fetch('observed_at_ms'),
                      'a replayed observation never moves the stamp'
@@ -248,10 +248,10 @@ class CancellationVisibilityTest < Minitest::Test
       )
       begin
         store = runtime.adapter.bind_comms_store(runtime.checkpoints)
-        insert_request!(store, request_id: ('f' * 63) + '1')
+        insert_request!(store, request_id: "#{'f' * 63}1")
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('a' * 63) + '1', operation: :turn,
+          thread_id: THREAD, request_id: "#{'a' * 63}1", operation: :turn,
           payload: { 'task' => 'Read note.txt' }, delivery: :queue
         )
         first = Tamoz::Agent::Worker.new(
@@ -263,7 +263,7 @@ class CancellationVisibilityTest < Minitest::Test
         assert first.poll_once
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('b' * 63) + '9', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'b' * 63}9", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
         # Exactly what a kill between claim and execution leaves behind: the
@@ -292,7 +292,7 @@ class CancellationVisibilityTest < Minitest::Test
         assert recovering.poll_once
 
         assert_includes events, 'request.recovered', 'the redirect was re-entered by recover'
-        stamps = cancellation_stamps(store, ('f' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'f' * 63}1")
 
         refute_nil stamps.fetch('observed_at_ms'),
                    'the recover-path observation stamped the timeline'
@@ -322,9 +322,9 @@ class CancellationVisibilityTest < Minitest::Test
       )
       begin
         store = first.adapter.bind_comms_store(first.checkpoints)
-        insert_request!(store, request_id: ('9' * 63) + '1')
+        insert_request!(store, request_id: "#{'9' * 63}1")
         first.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('8' * 63) + '1', operation: :turn,
+          thread_id: THREAD, request_id: "#{'8' * 63}1", operation: :turn,
           payload: { 'task' => 'Read note.txt' }, delivery: :queue
         )
         crashing = Tamoz::Agent::Worker.new(
@@ -339,7 +339,7 @@ class CancellationVisibilityTest < Minitest::Test
           thread_id: THREAD, request_id: 'cancel-crash', payload: CANCEL_PAYLOAD, now: requested_at
         )
         first.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: ('7' * 63) + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'7' * 63}1", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
       ensure
@@ -361,14 +361,14 @@ class CancellationVisibilityTest < Minitest::Test
         assert worker.poll_once, 'the recovered occurrence made progress'
 
         store = second.adapter.bind_comms_store(second.checkpoints)
-        stamps = cancellation_stamps(store, ('9' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'9' * 63}1")
 
         assert_nil stamps.fetch('observed_at_ms'),
                    'recovering the crashed turn consumed no cancel operation'
 
         assert worker.poll_once, 'the queued cancel redirect was consumed'
 
-        stamps = cancellation_stamps(store, ('9' * 63) + '1')
+        stamps = cancellation_stamps(store, "#{'9' * 63}1")
 
         refute_nil stamps.fetch('observed_at_ms')
         assert_operator stamps.fetch('observed_at_ms'), :>=, stamps.fetch('requested_at_ms')
@@ -452,7 +452,7 @@ class CancellationVisibilityTest < Minitest::Test
     assert_equal :served, gateway.serve_once(now: NOW + id, drain: false)
     row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending claimed succeeded])
                .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
-    row && row.fetch('text')
+    row&.fetch('text')
   end
 
   def with_engine
@@ -565,7 +565,7 @@ class CancellationVisibilityTest < Minitest::Test
     reference = "r#{'a' * 10}"
     rt.with_store do |store|
       store.__send__(:transaction, 'test.view.insert') do |tx|
-        binds = [('a' * 63) + '1', 'telegram-ops', 1, CONVERSATION, THREAD, 'ops', 1, 'admitted',
+        binds = ["#{'a' * 63}1", 'telegram-ops', 1, CONVERSATION, THREAD, 'ops', 1, 'admitted',
                  ms(NOW), ms(NOW)]
         tx.execute('test.view.insert', <<~SQL, binds)
           INSERT INTO tamoz_comms_requests (

@@ -111,7 +111,7 @@ SERIAL_TESTS = %w[
 TEST_LANES = TestSuite.lanes(slow: SLOW_TESTS, serial: SERIAL_TESTS,
                              autonomy: AUTONOMY_TESTS, manual: MANUAL_TESTS)
 LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
-            .sort.flat_map { |path| ["-I", path] }.freeze
+            .flat_map { |path| ["-I", path] }.freeze
 
 def test_command(files, warnings: false)
   options = warnings ? ["-w"] : []
@@ -721,8 +721,8 @@ namespace :agenteval do
 
   desc "Compare the newest run against the committed baseline (non-zero on a regression)"
   task :compare do
-    committed = Dir[File.join(BASELINES, "baseline-*.json")].sort
-    local = Dir[File.join(REPORTS, "*.json")].sort
+    committed = Dir[File.join(BASELINES, "baseline-*.json")]
+    local = Dir[File.join(REPORTS, "*.json")]
     raise "need a committed baseline under #{BASELINES} or two local reports" if committed.empty? && local.length < 2
 
     after = local.last
@@ -841,7 +841,7 @@ namespace :agenteval do
 
   desc "Promote the newest run to the committed baseline"
   task :baseline do
-    latest = Dir[File.join(REPORTS, "*.json")].sort.last
+    latest = Dir[File.join(REPORTS, "*.json")].last
     raise "no run under #{REPORTS} to promote" if latest.nil?
 
     target = File.join(BASELINES, "baseline-#{File.mtime(latest).utc.strftime("%Y%m%d")}.json")

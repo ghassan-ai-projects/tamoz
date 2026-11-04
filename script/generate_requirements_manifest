@@ -843,7 +843,7 @@ end
 
 def parse_adrs
   rows = []
-  Dir.glob(File.join(ROOT, "documentation", "adr", "adr-*.md")).sort.each do |path|
+  Dir.glob(File.join(ROOT, "documentation", "adr", "adr-*.md")).each do |path|
     text = read_utf8(path)
     header = text.match(/\A# (ADR-\d+) — (.+)$/)
     next unless header

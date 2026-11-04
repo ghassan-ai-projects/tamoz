@@ -817,8 +817,7 @@ class AgentCLITest < Minitest::Test
 
       assert_equal 0, status
       events = out.string.lines.map { |line| JSON.parse(line) }
-      stream_events = events.select { |event| event.key?("run_id") }
-      synthetic_events = events.reject { |event| event.key?("run_id") }
+      stream_events, synthetic_events = events.partition { |event| event.key?("run_id") }
 
       refute_empty stream_events
       first = stream_events.first

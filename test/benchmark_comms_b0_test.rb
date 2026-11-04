@@ -144,8 +144,8 @@ class BenchmarkCommsB0Test < Minitest::Test
       assert_equal 1, cancellation.fetch('score')
       event = cancellation.fetch('observed').first
 
-      assert_equal true, event.fetch('payloads_match')
-      assert_equal true, event.fetch('terminal_delivered')
+      assert_same true, event.fetch('payloads_match')
+      assert_same true, event.fetch('terminal_delivered')
       assert_equal 'cancelled_by_user', event.fetch('terminal_reason')
     end
   end
@@ -187,7 +187,7 @@ class BenchmarkCommsB0Test < Minitest::Test
   end
 
   def test_artifacts_are_byte_identical_across_two_runs
-    digests = 2.times.map do
+    digests = Array.new(2) do
       with_runner do |runner, directory|
         runner.run
         files = %w[manifest.json C1.json C2.json C3.json C4.json C5.json C6.json C7.json C8.json C9.json]
@@ -258,7 +258,7 @@ class BenchmarkCommsB0Test < Minitest::Test
       # never settled.
       assert_equal 'terminal', clean.fetch('state')
       assert_equal 'stopped', clean.fetch('terminal_word')
-      assert_equal false, clean.fetch('settled')
+      assert_same false, clean.fetch('settled')
       assert clean.fetch('requested_present')
       assert clean.fetch('observed_present')
       assert clean.fetch('requested_le_observed')
@@ -273,10 +273,10 @@ class BenchmarkCommsB0Test < Minitest::Test
       stopped_wording = wordings.find { |wording| wording.fetch('reference') == clean.fetch('reference') }
       completed_wording = wordings.find { |wording| wording.fetch('reference') == raced.fetch('reference') }
 
-      assert_equal true, stopped_wording.fetch('claims_stopped')
-      assert_equal false, stopped_wording.fetch('claims_completed_before_effect')
-      assert_equal true, completed_wording.fetch('claims_completed_before_effect')
-      assert_equal false, completed_wording.fetch('claims_stopped')
+      assert_same true, stopped_wording.fetch('claims_stopped')
+      assert_same false, stopped_wording.fetch('claims_completed_before_effect')
+      assert_same true, completed_wording.fetch('claims_completed_before_effect')
+      assert_same false, completed_wording.fetch('claims_stopped')
 
       edges = artifact.fetch('result').fetch('edges')
 

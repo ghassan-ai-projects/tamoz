@@ -50,7 +50,7 @@ class HeuristicImprovementPipelineTest < Minitest::Test
 
   def test_evaluator_must_differ_from_generator
     error = assert_raises(ArgumentError) do
-      with_pipeline(generator: 'same', evaluator: 'same') { |pipeline| pipeline.run }
+      with_pipeline(generator: 'same', evaluator: 'same', &:run)
     end
     assert_match(/evaluator principal must differ/, error.message)
   end

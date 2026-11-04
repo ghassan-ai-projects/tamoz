@@ -24,7 +24,7 @@ class CommsLifecycleTest < Minitest::Test
       assert_kind_of String, line, code
       refute_empty line, code
     end
-    assert_empty(Lifecycle::REASONS.keys.reject { |code| code.is_a?(Symbol) })
+    assert_empty(Lifecycle::REASONS.keys.grep_v(Symbol))
   end
 
   def test_task_translation_table_is_exact
@@ -85,15 +85,15 @@ class CommsLifecycleTest < Minitest::Test
     assert_match(/\Ar[0-9a-f]{10}\z/, reference)
     assert_equal reference, Lifecycle::RequestRef.for(request_id.dup)
     assert_equal request_id[0, 10], reference[1, 10]
-    refute_equal reference, Lifecycle::RequestRef.for('0' + ('f' * 63)),
+    refute_equal reference, Lifecycle::RequestRef.for("0#{'f' * 63}"),
                  'different identities derive different references'
   end
 
   def test_the_sqlite_row_shape_derives_the_identical_reference
     holder = Class.new { include Tamoz::SQLite::CommsStoreRows }.new
 
-    assert_equal Lifecycle::RequestRef.for('abcdef1234' + ('e' * 54)),
-                 holder.request_ref('abcdef1234' + ('e' * 54))
+    assert_equal Lifecycle::RequestRef.for("abcdef1234#{'e' * 54}"),
+                 holder.request_ref("abcdef1234#{'e' * 54}")
   end
 end
 # rubocop:enable Minitest/MultipleAssertions

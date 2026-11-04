@@ -90,7 +90,7 @@ module Tamoz
 
       def last_preference(controls, control_name, key)
         found = controls.reverse.find { |record| record.fetch('control') == control_name }
-        found && found.dig('preferences', key)
+        found&.dig('preferences', key)
       end
 
       # The cumulative durable-transcript prefix recorded by the latest

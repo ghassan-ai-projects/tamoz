@@ -63,5 +63,5 @@ lines << ''
 lines << '- [`README.md`](./README.md) — the ADR catalog and its amendment-chain list'
 lines << '- [`catalog.json`](./catalog.json) — the machine-readable edges'
 
-File.write(File.join(ADR_DIR, 'relationships.md'), lines.join("\n") + "\n")
+File.write(File.join(ADR_DIR, 'relationships.md'), "#{lines.join("\n")}\n")
 puts "wrote relationships.md (#{involved.size} nodes, #{edges.size} edges)"

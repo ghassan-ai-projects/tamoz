@@ -197,7 +197,7 @@ class CallbackAckCrashTest < Minitest::Test
         bind_thread_to_conversation(store, now: base - 120)
         runtime.bind_thread_profile(THREAD_ID, 'trusted')
 
-        rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--thread', "#{THREAD_ID}", '--profile', 'trusted'],
+        rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--thread', THREAD_ID, '--profile', 'trusted'],
                factory: edit_factory)
 
         worker = new_worker(runtime)

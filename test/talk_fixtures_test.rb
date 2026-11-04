@@ -46,7 +46,7 @@ class TalkFixturesTest < Minitest::Test
 
   def test_the_committed_recordings_match_their_pinned_digests
     pinned = JSON.parse(File.read(File.expand_path('fixtures/talk/digests.json', __dir__)))
-    files = Dir[File.join(WAV_DIR, '*.wav')].sort
+    files = Dir[File.join(WAV_DIR, '*.wav')]
 
     assert_equal(pinned.keys.sort, files.map { |path| File.basename(path) })
     assert_operator files.length, :<=, 12
