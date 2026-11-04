@@ -43,7 +43,7 @@ clause or has a dedicated test yet.
 | [038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md) | Physical action is typed intent plus current-state policy, never model effect | F | `tamoz-stream` | 50 | `tamoz_brain_hardware_boundary_test.rb` |
 | [039](./adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md) | Tamoz is supervisory; certified safety and real-time control stay external | F | `tamoz-stream` | 51 | `documentation_surface_test.rb` |
 | [040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) | One monorepo, multiple independently publishable gems | C | — | — | — |
-| [041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) | Communication channels are a contract gem plus per-transport adapter gems | C | `tamoz-comms`, `tamoz-core`, `tamoz-telegram` | — | `dependency_isolation_test.rb`<br>`documentation_surface_test.rb` |
+| [041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) | Communication channels are a contract gem plus per-transport adapter gems | C | `tamoz-agent-cli`, `tamoz-comms`, `tamoz-core`, `tamoz-talk`, `tamoz-telegram` | — | `dependency_isolation_test.rb`<br>`documentation_surface_test.rb` |
 | [042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) | The channel gateway is a separate process in the connector zone | F | `tamoz-agent`, `tamoz-comms-gateway` | 56, 57 | `comms_evidence_gated_approval_test.rb`<br>`documentation_surface_test.rb` |
 | [044](./adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md) | Observability is a contract gem plus per-exporter adapter gems | C | `tamoz-core`, `tamoz-observability`, `tamoz-otel` | — | `documentation_surface_test.rb` |
 | [045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md) | The observability gems add no durable table and no second source of truth | C | `tamoz-observability`, `tamoz-sqlite` | 61 | `documentation_surface_test.rb` |
@@ -58,7 +58,7 @@ clause or has a dedicated test yet.
 | [055](./adr-055-two-repo-authority-split.md) | The continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker | F | `tamoz-stream` | 49, 50, 51 | — |
 | [056](./adr-056-skills-gem.md) | Skills are a gem, `tamoz-skills`, reached through one facade | C | `tamoz-core`, `tamoz-skills`, `tamoz-tools` | — | — |
 | [057](./adr-057-a-user-stop-ends-the-turn-it-never-aborts-the-graph.md) | A user's stop ends the turn; it never aborts the graph | F | `tamoz-agent`, `tamoz-agent-session`, `tamoz-cancellation` | 14, 15, 53 | — |
-| [058](./adr-058-domain-knowledge-is-digest-pinned-data-never-code.md) | Domain knowledge is digest-pinned data, never code | C | — | — | — |
+| [058](./adr-058-domain-knowledge-is-digest-pinned-data-never-code.md) | Domain knowledge is digest-pinned data, never code | C | — | — | `channel_kind_containment_test.rb` |
 | [059](./adr-059-no-backward-compatibility-before-1-0.md) | No backward compatibility before 1.0 | C | `tamoz-sqlite` | — | `no_env_model_readers_test.rb` |
 | [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-observability`, `tamoz-sqlite` | 59, 60, 61 | — |
 | [061](./adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md) | The talk channel is a browser surface; its voice is presentation, its record is text | F | `tamoz-agent-session`, `tamoz-comms`, `tamoz-talk` | 56, 57 | — |
@@ -67,7 +67,7 @@ clause or has a dedicated test yet.
 ## Coverage snapshot
 
 - In-force ADRs: **53**
-- With at least one referencing test: **15**
+- With at least one referencing test: **16**
 - With a named invariant clause: **35**
 
 ## Next reads

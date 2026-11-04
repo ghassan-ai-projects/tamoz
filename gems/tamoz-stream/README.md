@@ -30,3 +30,14 @@ store.admit(envelope, clock:) # => {"outcome" => "admitted", ...}
   independently controlled interlock (read-only `InterlockReader`).
 - The connector zone never receives model/tool/effector credentials; replay
   workers resolve no credentials.
+
+## The episode worker
+
+`bin/tamoz-stream-worker` serves `agenticstream.runtime.v1.EpisodeWorker`
+(`Handshake`, `Execute`) over a Unix socket (`--socket`) or, in development, a
+TCP port (`--port`). Started with `--draft-model-policy ROLE` it also serves
+`DraftPlaybookRule` and announces the handshake feature
+`draft_playbook_rule`: `Tamoz::Stream::DraftRunner` admits one key and 1 to 20
+verified cases of it, and answers with a typed proposal or a typed decline. A
+proposal has no mode or activation; the stream owns both. See
+[`documentation/design/streaming.md`](../../documentation/design/streaming.md).

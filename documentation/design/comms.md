@@ -6,7 +6,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 ## 1. Decision
 
-Communication channels ship as **three gems**:
+Communication channels ship as **four gems**:
 
 | Gem | Responsibility | Runtime dependencies |
 |---|---|---|

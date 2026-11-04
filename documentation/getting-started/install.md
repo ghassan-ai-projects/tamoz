@@ -44,7 +44,7 @@ rbenv exec bundle exec rake ci
 file, and the whole test suite. It must be green before you trust anything else
 on this page.
 
-## The twenty-nine gems
+## The thirty-two gems
 
 Tamoz is a monorepo of independently publishable gems. Each one installs and
 runs with only its declared dependencies — proven per gem by

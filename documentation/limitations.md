@@ -207,6 +207,26 @@ corpus. That is a development measurement, not a guarantee:
 - **An `unknown` answer cannot act above R0**, even where the action does not
   depend on the cause; the intent catalog cannot yet say which actions do.
 
+### Playbook-rule drafting is unproven beyond one fixture
+
+`DraftPlaybookRule` (see [design/streaming.md](design/streaming.md)) is graded by
+the rule-proposal scorecard on one simulated pump-station fixture. The first
+real-model run (Z.ai `glm-5.3-flash`, 5 runs) passed under a quarter of its 40
+case-runs (the plan records 9, its per-case table sums to 6); after the fixture
+and prompt were revised it passed 13 of 25 (a different corpus, so the two do
+not compare). The remaining failures are mostly discrimination: for bearing wear
+and sensor drift, whose look-alikes share the vibration rise, the condition
+appears to leave out the feature that tells them apart (inferred from the
+look-alikes; the report does not record the condition). One run also proposed a
+rule where a decline was expected.
+
+- **One sample per case per run, no confidence bound**, one model, one fixture.
+  The prompt was tuned after seeing the first run, so the second number shows
+  the prompt works on this fixture, not that the model generalises.
+- **Open on the stream side:** a failed draft retried under the same `draft_id`
+  returns the recorded failure, and the stream ignores the worker's diagnostic
+  events (`docs/RULE_PROMOTION_PLAN.md` §9).
+
 ## Retired and absent capability areas
 
 ### The P14 streaming-input engine is retired
