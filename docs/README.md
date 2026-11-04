@@ -26,14 +26,13 @@ the source, tests, and the curated documentation before acting on them.
 | Gem-boundary implementation | `gem-boundary-implementation-2026-08-26/` |
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |
 | Authoritative design package | `design-v0.1/` (CI-validated, see `rake design:validate`) |
-| Quality program records | `QUALITY_PROGRAM.md`, `QUALITY_PROGRAM_STATE.md`, `CODING_STANDARD.md` |
-| Templates | [`templates/QUALITY_BAR.md`](templates/QUALITY_BAR.md) — the bar every task sets before it starts and grades in a loop |
+| Quality program records | `QUALITY_PROGRAM.md`, `QUALITY_PROGRAM_STATE.md` (retired 2026-11-04) |
 
 ## Policy
 
 - **New public documentation goes in `documentation/`**, organized by topic and
   reachable from its index. Do not add user-facing pages here.
-- **Working artifacts stay here.** Plans, reviews, audits and evidence are the
+- **Working artifacts stay here.** Plans, quality bars, reviews, audits and evidence are the
   project's history; they are not rewritten for a public audience. Canonical
   contracts consumed by scripts or tests belong in `documentation/` and are
   linked from its index.

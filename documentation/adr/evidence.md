@@ -122,6 +122,8 @@ Checked 2026-10-01 (source inspection).
 | Human resolution is audited and fenced | `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb` | `test/sqlite_effect_journal_test.rb` — `test_human_resolution_refuses_a_foreign_writer_row_scope` | — |
 | Speech of delivered text is presentation, outside any node; only a speaking gateway's injected synthesizer speaks (and `start`'s one probe) | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_comms_shared.rb` (`voice_synthesizer`) | `test/talk_boundary_test.rb` — `test_speech_is_synthesized_only_by_the_gateway_voice_and_the_start_probe` | Checked 2026-10-10 (tests run) |
 
+Added 2026-11-04: starting and resolving an effect validate the active lease (`gems/tamoz-sqlite/lib/tamoz/sqlite/effect_lifecycle.rb`, `gems/tamoz-sqlite/lib/tamoz/sqlite/effect_reconciler.rb`; source inspection). Tests run: a stale fence cannot grant an attempt (`test/agent_session_effect_test.rb` — `test_a_stale_fence_cannot_grant_a_further_attempt`); truth stays recordable after lease loss (`test/agent_session_effect_test.rb` — `test_a_completed_reconciliation_is_recordable_after_lease_loss`; `unknown` by source inspection).
+
 ## ADR-017
 
 Checked 2026-10-01 (source inspection).
@@ -593,3 +595,31 @@ Checked 2026-10-04 (deterministic tests, *run* that day; mutation-checked where 
 | A window's end bounds what is counted | diagnosis | `test/self_diagnosis_test.rb` — `test_rows_after_the_window_end_are_not_counted` | Status rules (unknown effects, unsettled occurrences) report current state regardless of window |
 | An unanswered approval never reads as approved | `gems/tamoz-observability/lib/tamoz/observability/explanation.rb` | `test/agent_cli_self_diagnosis_test.rb` — `test_explain_attributes_policy_and_actor_and_marks_unanswered_approval` (red when a missing answer defaults) | Shared worker databases link approvals to turns by time |
 | The `tamoz mcp` observe tools are read-only MCP tools probes can back | `gems/tamoz-agent-cli/lib/tamoz/agent/mcp_server.rb` | `test/mcp_server_test.rb` — `test_lists_three_read_only_tools`, `test_the_probe_catalog_accepts_probes_over_the_observe_tools`, `test_serves_mcp_over_stdio` | Whether a real model finds causes is a real-model run, recorded in `docs/observability-self-diagnosis-2026-10-04/EVAL.md`; the grader's controls are `test/self_investigation_grader_test.rb` |
+
+## ADR-063
+
+Checked 2026-11-04 (tests run).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| The CLI keeps an existing thread on its pinned digest | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_authority.rb` | `test/agent_cli_profile_test.rb` — `test_changed_profile_keeps_the_pinned_authority_of_an_existing_thread` *(run)* | CLI path |
+| A child refuses a changed parent profile | `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb` (`child_profile_for`) | `test/agent_child_task_runtime_test.rb` — `test_child_resume_refuses_a_changed_parent_profile` *(run)* | |
+| The worker refuses a thread whose profile changed | same (`validate_thread_profile`) | `test/agent_worker_profile_digest_test.rb` — `test_a_widened_on_disk_profile_is_refused_for_a_bound_thread` *(run)* | |
+| A binding with no digest is refused | same | Source inspection | No test; not verified by a run |
+| The gateway opens a new thread for changed authority | `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_admission.rb` | Source inspection | Not verified by a run |
+| A role's digest mismatch fails closed | `Tamoz::Agent::ProfileRoleUnavailableError` | `test/agent_model_receipt_test.rb` — `test_resolve_role_profile_digest_mismatch_fails_closed` *(run)* | |
+
+## ADR-064
+
+Checked 2026-11-04 (tests run).
+
+| Claim | Enforced by | Evidence | Limit |
+|---|---|---|---|
+| A handoff is private and gone once deleted | `gems/tamoz-core/lib/tamoz/core/attachment_spool.rb` | `test/core_attachment_spool_test.rb` — `test_a_handoff_is_private_read_back_exactly_and_gone_once_deleted` *(run)* | |
+| Bytes that changed are refused | same | `test/core_attachment_spool_test.rb` — `test_bytes_that_no_longer_match_their_digest_are_refused` *(run)* | |
+| A name cannot leave the folder | same | `test/core_attachment_spool_test.rb` — `test_a_name_cannot_leave_the_folder` *(run)* | |
+| A sweep removes what waited too long | same | `test/core_attachment_spool_test.rb` — `test_a_sweep_removes_only_what_waited_too_long` *(run)* | The 24-hour value by source inspection |
+| The file is gone once the turn has read it | `gems/tamoz-agent-session/lib/tamoz/agent/session_work.rb` | `test/chat_attachment_test.rb` — `test_a_text_file_reaches_the_model_as_material_before_the_question` *(run)* | Plumbing test with a scripted model |
+| Missing bytes are explained, not invented | `gems/tamoz-agent-session/lib/tamoz/agent/work_attachment.rb` | `test/chat_attachment_test.rb` — `test_bytes_no_longer_stored_are_explained_not_invented` *(run)* | Plumbing test with a scripted model |
+
+Deletion on a refused request (`gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_attachments.rb`) was checked by source inspection only.

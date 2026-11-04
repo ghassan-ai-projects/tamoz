@@ -635,14 +635,14 @@ Exit:
 
 For every slice:
 
-1. Read `docs/QUALITY_PROGRAM_STATE.md` and verify the current gate policy; it may
-   have changed since this plan.
+1. Read `AGENTS.md` and verify the current gate policy; it may have changed since
+   this plan.
 2. Run local Enola impact analysis when available, then pin a baseline before edits.
 3. Add characterization or failing behavior tests first and mutation-prove the key
    assertion.
 4. Implement the smallest cohesive change. No generic router, manager, event bus, or
    callback framework.
-5. Review the diff against `docs/CODING_STANDARD.md`: correctness, authority,
+5. Review the diff against `documentation/governance/coding-standard.md`: correctness, authority,
    durability, recovery, privacy, performance, API growth, and generated artifacts.
 6. Run focused tests, then the everyday gate:
    `rake ci`, `rubocop`, and

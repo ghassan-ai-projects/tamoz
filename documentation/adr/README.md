@@ -73,6 +73,7 @@ decision is not built; the ADR says which part.
 | [022](./adr-022-reviewed-plan-gate.md) | Every task action requires a reviewed, digest-bound plan | F | Partial |
 | [030](./adr-030-one-local-capability-catalog-governs-all-sources.md) | One local capability catalog governs all sources | F | Complete |
 | [053](./adr-053-approval-gem.md) | Approval policy is data, decided by one gem, `tamoz-approval` | F | Complete |
+| [063](./adr-063-authority-is-pinned-by-digest-when-bound-and-never-re-derived-by-id.md) | Authority is pinned by digest when it is bound, and never re-derived by id | F | Complete — thread and child profiles |
 | [049](./adr-049-chat-approval-is-evidence-gated-and-bound-to-one-exact-prompt.md) | Chat approval is evidence-gated and bound to one exact prompt | F | Complete |
 | [029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md) | MCP is native at the edge and uses the official Ruby SDK | F | Complete |
 | [054](./adr-054-websearch-capability-source.md) | Websearch is the fourth capability source, a reserved MCP server with governed egress | F | Complete |
@@ -124,6 +125,7 @@ decision is not built; the ADR says which part.
 | [042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) | The channel gateway is a separate process in the connector zone | F | Complete |
 | [061](./adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md) | The talk channel is a browser surface; its voice is presentation, its record is text | F | Complete |
 | [062](./adr-062-a-runtime-is-one-agent-and-channels-are-ways-in.md) | A runtime is one agent; channels are ways in to it | F | Partial — the live runtime moves in P7 |
+| [064](./adr-064-a-received-channel-file-is-a-temporary-handoff-never-stored.md) | A received channel file is a temporary handoff, never stored | F | Complete |
 
 ### Observability
 

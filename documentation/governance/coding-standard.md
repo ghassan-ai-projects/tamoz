@@ -26,10 +26,10 @@ defaults are stricter than several Q6 ceilings), the toolchain wins.
 
 Every slice is gated by:
 
-- `rubocop` — zero offenses; Q6 ceilings live in `.rubocop.yml` (method ≤ 20 lines,
+- `rubocop` — zero offenses in code you changed; whole-repo zero is the target. Q6 ceilings live in `.rubocop.yml` (method ≤ 20 lines,
   class/module ≤ 250, ABC ≤ 20, cyclomatic ≤ 8, perceived ≤ 8, parameters ≤ 5,
-  nesting ≤ 3). Legacy debt lives only in the committed `.rubocop_todo.yml` as
-  per-file excludes — never directory or glob exclusions, never added to pass CI.
+  nesting ≤ 3). Recorded legacy debt lives in the committed `.rubocop_todo.yml` as
+  per-file excludes — never directory or glob exclusions, never added to pass a gate.
 - `reek` — no new smell in changed production code. The ratchet is context-named
   (`Tamoz::Agent::Session#initialize`), so a new smell in a listed file still fires.
 - `enola check --fail-on=cycles,layers --min-confidence=0.8 .` — no new cycle, layer
@@ -40,8 +40,9 @@ Every slice is gated by:
 
 You may not weaken a gate, scorecard, invariant, or test to obtain a pass.
 
-**One gate, one command.** What runs before a commit and what runs in CI are the same
-checks. A rule that only a reviewer can catch is a rule that will be broken; prefer
+**Where each gate runs.** CI runs only `rake ci`: no RuboCop or reek, and `quality:architecture`
+skips itself without enola. Those three are checked only by the local run.
+A rule that only a reviewer can catch is a rule that will be broken; prefer
 moving it into the gate over restating it here.
 
 **An exception is written at the site, not hidden in a file.** A justified deviation
@@ -231,7 +232,7 @@ consumers or a clearly isolated responsibility.
 
 ## 9. Testing (Minitest)
 
-- The detailed suite contract is [Testing standard](test-quality/TESTING_STANDARD.md).
+- The detailed suite contract is [Testing standard](testing-standard.md).
 - Behavior-first: test through the narrowest stable boundary. Do not test private
   implementation merely to raise coverage.
 - Characterization tests precede any hotspot extraction; each must fail under at least
@@ -255,12 +256,13 @@ consumers or a clearly isolated responsibility.
 
 ## 11. Documentation and comments
 
-Four different things, four different rules.
+Default to no comments: name things so the code reads without them. Four different
+things, four different rules. `AGENTS.md` holds the same rule.
 
-**Public API documentation is required.** `Style/Documentation` is on for production
-code. Every public class and module says what it *is*, in the reader's terms, before
-how it works. A public entry point adds its contract — what it returns, what it
-raises, what it guarantees — and one example that would actually run.
+**Every public class and module says what it is, in one line.** `Style/Documentation`
+is on for production code. No multi-line headers on new classes or methods: a public
+entry point's contract — what it returns, what it raises, what it guarantees — and one
+example that would actually run go in its gem's README or a reference page.
 
 **Internals are marked, not documented.** `# :nodoc:` on something public only by Ruby
 visibility keeps the generated surface honest and tells the next reader it is not a
@@ -269,8 +271,9 @@ promise.
 **Inline narration stays banned.** A comment restating the line below it is noise, and
 it rots first. Improve the name instead.
 
-**"Why" comments earn their place** — safety invariants, non-obvious failure models,
-rejected alternatives, and the history that explains a guard. `tool_error.rb` (why the
+**"Why" comments earn their place, in one or two lines** — safety invariants, non-obvious
+failure models, rejected alternatives. No narrative of the bug a fix replaced and no ADR
+citation as decoration; history belongs in commits and PR bodies. `tool_error.rb` (why the
 base class is terminal by construction) and `documentation_surface_test.rb` (why the
 README is derived from the real surface) are the model. This is what the next
 maintainer cannot recover from the code.
@@ -280,15 +283,15 @@ a reader believes it. Where a claim can be checked against the code, check it.
 
 ## 12. Commit checklist
 
-- [ ] `rubocop` zero; no new `reek` smell in changed production code; `enola check` PASS
+- [ ] `rubocop` zero in code you changed; no new `reek` smell in changed production code; `enola check` PASS
 - [ ] Focused tests and the fast gate green; `ci_full` both locales only when the slice
       touches durability, MCP, packaging, or committed evidence artifacts
 - [ ] Names follow §3.1 — no new spelling for an existing concept; check verbs used
       with their meanings
 - [ ] No public API, wire-format, digest, event-order, or error-identity change without
       a separate approved feature decision — and none without its migration note
-- [ ] New public class or entry point documents what it is, what it raises, and one
-      real example; internals marked `# :nodoc:`
+- [ ] New public class says what it is in one line; a new entry point's contract and a
+      real example are in its gem's README or a reference page; internals marked `# :nodoc:`
 - [ ] No new abstraction without two real consumers or a clearly isolated responsibility
 - [ ] A new boundary is asserted in the same commit, with its reason
 - [ ] Any deviation is disabled inline at the site with a reason; `.rubocop_todo.yml`

@@ -63,12 +63,14 @@ clause or has a dedicated test yet.
 | [060](./adr-060-tamoz-diagnoses-itself-read-only-from-its-durable-record.md) | Tamoz diagnoses itself read-only, from its durable record, by rules that are data | F | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-observability`, `tamoz-sqlite` | 59, 60, 61 | — |
 | [061](./adr-061-the-talk-channel-is-a-browser-surface-whose-voice-is-presentation.md) | The talk channel is a browser surface; its voice is presentation, its record is text | F | `tamoz-agent-session`, `tamoz-comms`, `tamoz-talk` | 56, 57 | — |
 | [062](./adr-062-a-runtime-is-one-agent-and-channels-are-ways-in.md) | A runtime is one agent; channels are ways in to it | F | `tamoz-agent`, `tamoz-agent-cli` | — | — |
+| [063](./adr-063-authority-is-pinned-by-digest-when-bound-and-never-re-derived-by-id.md) | Authority is pinned by digest when it is bound, and never re-derived by id | F | `tamoz-agent`, `tamoz-agent-cli`, `tamoz-comms-gateway` | 35, 40 | — |
+| [064](./adr-064-a-received-channel-file-is-a-temporary-handoff-never-stored.md) | A received channel file is a temporary handoff, never stored | F | `tamoz-agent-session`, `tamoz-comms-gateway`, `tamoz-core` | 56, 57 | — |
 
 ## Coverage snapshot
 
-- In-force ADRs: **53**
+- In-force ADRs: **55**
 - With at least one referencing test: **16**
-- With a named invariant clause: **35**
+- With a named invariant clause: **37**
 
 ## Next reads
 

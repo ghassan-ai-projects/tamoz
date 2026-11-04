@@ -33,6 +33,12 @@ named and dated; never by the author).
 | Review log | one reviewer before commit | one per package | one per package, lens pairs |
 | Loop log | required | required | required |
 
+**Doc-only row.** A change to documentation alone that alters no rule, ADR, invariant, policy or generated
+artifact needs only section 0, its documentation checks and the loop log: no seam section, no snapshot, no
+detached-worktree proof, no reviewer. Check: `rake docs:check`. Never doc-only: `AGENTS.md`, `.agent/`,
+`documentation/{adr,governance,benchmark}/`, the invariants, gem READMEs, prompts, any rename or move. If unsure, it
+is not doc-only.
+
 ## 0. Outcome and fence
 
 **Outcome (one sentence):** <the property that will be true when this is done, stated so a check can

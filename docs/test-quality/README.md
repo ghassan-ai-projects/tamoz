@@ -1,6 +1,6 @@
 # Test suite review and improvement
 
-Start with the [quality bar](QUALITY_BAR.md), [testing standard](TESTING_STANDARD.md), and
+Start with the [quality bar](QUALITY_BAR.md), [testing standard](../../documentation/governance/testing-standard.md), and
 [library research](RESEARCH.md). The audit covers root, gem and evaluation tests.
 
 ## Plan

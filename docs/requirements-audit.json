@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-10-10T20:06:37Z",
-  "manifest_requirements": 566,
-  "named_cases_run": 297,
+  "generated_at": "2026-11-04T14:53:04Z",
+  "manifest_requirements": 568,
+  "named_cases_run": 303,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 3,
     "missing": 14,
-    "pass": 538
+    "pass": 540
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -904,6 +904,44 @@
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "Accepted 2026-10-10",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "ADR-063",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "Authority is pinned by digest when it is bound, and never re-derived by id",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_worker_profile_digest_test.rb#test_a_widened_on_disk_profile_is_refused_for_a_bound_thread",
+      "supporting_tests": [
+        "test/agent_cli_profile_test.rb#test_changed_profile_keeps_the_pinned_authority_of_an_existing_thread",
+        "test/agent_child_task_runtime_test.rb#test_child_resume_refuses_a_changed_parent_profile"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-11-04",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "ADR-064",
+      "category": "adr",
+      "source": "documentation/adr",
+      "title": "A received channel file is a temporary handoff, never stored",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/chat_attachment_test.rb#test_a_text_file_reaches_the_model_as_material_before_the_question",
+      "supporting_tests": [
+        "test/core_attachment_spool_test.rb#test_a_handoff_is_private_read_back_exactly_and_gone_once_deleted",
+        "test/core_attachment_spool_test.rb#test_a_sweep_removes_only_what_waited_too_long"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "Accepted 2026-11-04",
       "evidence_result": "pass",
       "owner_signature": null
     },

@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 566 | 297 | 14 | **no** |
+| 568 | 303 | 14 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 3 |
 | missing | 14 |
-| pass | 538 |
+| pass | 540 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -92,6 +92,8 @@ generating run.
 | `ADR-059` | adr | yes | pass | `test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected` |
 | `ADR-061` | adr | yes | pass | `test/talk_end_to_end_test.rb#test_a_spoken_question_is_heard_answered_and_spoken_and_text_status_and_stop_work` |
 | `ADR-062` | adr | yes | pass | `test/child_environments_test.rb#test_the_worker_holds_its_models_and_sources_keys_and_nothing_else` |
+| `ADR-063` | adr | yes | pass | `test/agent_worker_profile_digest_test.rb#test_a_widened_on_disk_profile_is_refused_for_a_bound_thread` |
+| `ADR-064` | adr | yes | pass | `test/chat_attachment_test.rb#test_a_text_file_reaches_the_model_as_material_before_the_question` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |

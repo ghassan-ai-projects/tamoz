@@ -6,7 +6,7 @@ found unfinished per-file reviews and corrected the SQLite diagnosis recorded be
 
 **Task:** Review and improve every test · **Owner:** repository owner · **Size:** L
 **Set:** 2026-10-04, before implementation · **Branch:** improve-the-tests
-**Plan:** [README](README.md) · **Standards:** [TESTING_STANDARD](TESTING_STANDARD.md)
+**Plan:** [README](README.md) · **Standards:** [TESTING_STANDARD](../../documentation/governance/testing-standard.md)
 **Governing rules:** ADR-016, ADR-024, ADR-052, ADR-058, ADR-059; coding standard §9.
 
 Statuses: PASS requires a current check; FAIL identifies a defect; OPEN means unfinished;

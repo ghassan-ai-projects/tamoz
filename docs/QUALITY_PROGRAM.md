@@ -1,7 +1,7 @@
 # Tamoz Quality Program — Goal Charter
 
 **Status:** ACTIVE (started 2026-08-06)
-**Live state / resume point:** [`QUALITY_PROGRAM_STATE.md`](QUALITY_PROGRAM_STATE.md) — update it at every slice.
+**Retired state record (2026-11-04):** [`QUALITY_PROGRAM_STATE.md`](QUALITY_PROGRAM_STATE.md); current rules are in `AGENTS.md`.
 **Owner:** Staff+ architecture & code-quality owner. **This document is the goal.** The state file records progress against it.
 
 ---
@@ -31,13 +31,13 @@ executed in slices, each gated and committed separately.
 
 The autonomy slice (A1) is closed and committed (`1b060f1`, "leave the tree clean for
 refactoring"); the tree at HEAD `d9d156b` is clean. Quality work starts from that checkpoint.
-Never absorb `.claude`, `.cursor`, `.github/instructions`, `AGENTS.md`, `.enola`, or
-`agenteval/` files without explicit ownership.
+Never absorb `.claude`, `.cursor`, `.github/instructions`, `.enola`, or `agenteval/` files
+without explicit ownership.
 
 ## Quality principles
 
 The repository's Ruby/Rails best-practice contract is
-[`docs/CODING_STANDARD.md`](CODING_STANDARD.md) — every refactoring slice follows it.
+[`documentation/governance/coding-standard.md`](../documentation/governance/coding-standard.md) — every refactoring slice follows it.
 The principles below are its backbone:
 
 - Behavior before structure: characterization tests precede extraction.

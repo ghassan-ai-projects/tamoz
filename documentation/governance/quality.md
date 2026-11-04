@@ -47,10 +47,15 @@ rather than let them grow. They live under `rake quality:*`:
 
 ## The governing documents
 
-Two documents define how this bar is applied:
+These documents define how this bar is applied:
 
-- [docs/CODING_STANDARD.md](../../docs/CODING_STANDARD.md) — the repository's
-  Ruby/Rails coding contract; every code change follows it.
+- [coding-standard.md](coding-standard.md) — the repository's Ruby/Rails coding
+  contract; every code change follows it.
+- [testing-standard.md](testing-standard.md) — how tests are written and reviewed.
+- [quality-bar-template.md](quality-bar-template.md) — the bar every task sets
+  before it starts and grades in a loop.
+- [subagent-orchestration.md](subagent-orchestration.md) — how work is delegated
+  to subagents.
 - [docs/QUALITY_PROGRAM.md](../../docs/QUALITY_PROGRAM.md) — the charter for the
   quality program that owns the ratchets and their baselines.
 

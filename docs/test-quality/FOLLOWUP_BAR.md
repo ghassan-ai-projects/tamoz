@@ -1,7 +1,7 @@
 # Branch test review — follow-up quality bar
 
 **Task:** Finish the review of `improve-the-tests` · **Size:** L · **Set:** 2026-10-04 before edits.
-**Owner:** repository owner · **Standards:** [testing standard](TESTING_STANDARD.md).
+**Owner:** repository owner · **Standards:** [testing standard](../../documentation/governance/testing-standard.md).
 **Prior evidence:** [original bar](QUALITY_BAR.md), which this follow-up re-verifies.
 
 **Later CI finding:** Linux CI exposed a developer-home manifest dependency missed

@@ -75,7 +75,7 @@ runtime behavior are recorded as evidence gaps rather than filled with
 assumptions. Static tools identify places to inspect; they do not prove a
 behavioral defect by themselves.
 
-The standing repository protocol in [`docs/subagent-orchestration.md`](../../subagent-orchestration.md)
+The standing repository protocol in [`docs/subagent-orchestration.md`](../../../documentation/governance/subagent-orchestration.md)
 governs ownership, bounded briefs, logging, and housekeeping. Analysts do not
 edit production code, tests, configuration, generated artifacts, or unrelated
 docs; they do not commit. Created audit files are mode `0644`, and no scratch
