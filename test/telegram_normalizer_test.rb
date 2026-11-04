@@ -20,16 +20,33 @@ class TelegramNormalizerTest < Minitest::Test
     }
   end
 
+  def parsed_command(subject, update_id, text)
+    wire = subject.normalize(message_update(update_id:, message_id: update_id, text:)).wire
+    Tamoz::Comms::Commands.parse(wire.fetch('text'))
+  end
+
   def test_a_command_addressed_to_this_bot_drops_the_suffix_and_any_other_bot_keeps_it
     own = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1, bot_username: 'ops_bot')
-    ours = own.normalize(message_update(update_id: 1, message_id: 1, text: '/cancel@ops_bot now')).wire
-    theirs = own.normalize(message_update(update_id: 2, message_id: 2, text: '/cancel@other_bot now')).wire
 
-    assert_equal 'cancel', Tamoz::Comms::Commands.parse(ours.fetch('text')).command
-    assert_nil Tamoz::Comms::Commands.parse(theirs.fetch('text'))
-    unknown = normalizer.normalize(message_update(update_id: 3, message_id: 3, text: '/cancel@ops_bot')).wire
+    assert_equal 'cancel', parsed_command(own, 1, '/cancel@ops_bot now').command
+    assert_nil parsed_command(own, 2, '/cancel@other_bot now')
+    assert_nil parsed_command(normalizer, 3, '/cancel@ops_bot'), 'without its own name a bot strips no suffix'
+  end
 
-    assert_nil Tamoz::Comms::Commands.parse(unknown.fetch('text')), 'without its own name a bot strips no suffix'
+  def digest_of(update)
+    normalizer.normalize(update).wire.fetch('raw_payload_hash')
+  end
+
+  def callback_update(update_id, query_id, message_id, data: 'deny:abc', date: nil)
+    message = { 'chat' => { 'id' => 222_222_22, 'type' => 'private' }, 'message_id' => message_id }
+    message['date'] = date if date
+    { 'update_id' => update_id,
+      'callback_query' => { 'id' => query_id, 'from' => { 'id' => 111_111_11 }, 'message' => message,
+                            'data' => data } }
+  end
+
+  def attachment_of(fields)
+    normalizer.normalize(attachment_update(fields)).wire.fetch('attachment')
   end
 
   # Same bytes normalized twice MUST collide on the same digest — that is
@@ -71,8 +88,7 @@ class TelegramNormalizerTest < Minitest::Test
       message_update(update_id: 5002, message_id: 43, text: '/help')
     ).wire
 
-    assert_equal 'command', command.fetch('kind')
-    assert_equal 43, command.fetch('message_id')
+    assert_equal ['command', 43], command.values_at('kind', 'message_id')
   end
 
   def test_the_envelope_wire_round_trips_the_message_id
@@ -82,32 +98,17 @@ class TelegramNormalizerTest < Minitest::Test
   end
 
   def test_callback_preserves_the_originating_message_id_and_digests_its_fields
-    callback = { 'update_id' => 5003,
-                 'callback_query' => { 'id' => 'q-9', 'from' => { 'id' => 111_111_11 },
-                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
-                                                      'message_id' => 2001 },
-                                       'data' => 'deny:abc' } }
-    wire = normalizer.normalize(callback).wire
+    wire = normalizer.normalize(callback_update(5003, 'q-9', 2001)).wire
 
-    assert_equal 2001, wire.fetch('callback_message_id')
-    refute_equal 5003, wire.fetch('callback_message_id')
-    digest = wire.fetch('raw_payload_hash')
-
-    replayed = normalizer.normalize(callback).wire.fetch('raw_payload_hash')
-    changed = normalizer.normalize(
-      callback.merge('callback_query' => callback.fetch('callback_query').merge('data' => 'approve:abc'))
-    ).wire.fetch('raw_payload_hash')
-
-    assert_equal digest, replayed, 'identical callback bytes keep one digest'
-    refute_equal digest, changed, 'a callback data change must change the digest'
+    assert_equal [2001, true], [wire.fetch('callback_message_id'), wire.fetch('callback_message_id') != 5003]
+    assert_equal wire.fetch('raw_payload_hash'), digest_of(callback_update(5003, 'q-9', 2001)),
+                 'identical callback bytes keep one digest'
+    refute_equal wire.fetch('raw_payload_hash'), digest_of(callback_update(5003, 'q-9', 2001, data: 'approve:abc')),
+                 'a callback data change must change the digest'
   end
 
   def test_callback_observes_the_originating_message_date
-    callback = { 'update_id' => 5008,
-                 'callback_query' => { 'id' => 'q-11', 'from' => { 'id' => 111_111_11 },
-                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
-                                                      'message_id' => 2003, 'date' => 1_752_700_812 },
-                                       'data' => 'deny:abc' } }
+    callback = callback_update(5008, 'q-11', 2003, date: 1_752_700_812)
 
     observed = normalizer.normalize(callback).wire.fetch('observed_time')
 
@@ -115,11 +116,7 @@ class TelegramNormalizerTest < Minitest::Test
   end
 
   def test_callback_without_a_source_date_uses_ingestion_time
-    callback = { 'update_id' => 5009,
-                 'callback_query' => { 'id' => 'q-12', 'from' => { 'id' => 111_111_11 },
-                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
-                                                      'message_id' => 2004 },
-                                       'data' => 'deny:abc' } }
+    callback = callback_update(5009, 'q-12', 2004)
     before = Time.now.utc
     observed = Time.parse(normalizer.normalize(callback).wire.fetch('observed_time'))
     after = Time.now.utc
@@ -158,20 +155,15 @@ class TelegramNormalizerTest < Minitest::Test
       message_update(update_id: 5006, message_id: 46, reply_to: 45)
     ).wire
 
-    assert_equal 5006, wire.fetch('update_id')
-    assert_equal 46, wire.fetch('message_id')
-    assert_equal 45, wire.fetch('reply_to')
-    assert_nil wire.fetch('callback_message_id')
-    assert_equal [5006, 46, 45], [wire.fetch('update_id'), wire.fetch('message_id'), wire.fetch('reply_to')].uniq,
-                 'the three ids must be distinct values on this fixture'
+    ids = wire.values_at('update_id', 'message_id', 'reply_to')
 
-    callback = normalizer.normalize(
-      'update_id' => 5007,
-      'callback_query' => { 'id' => 'q-10', 'from' => { 'id' => 111_111_11 },
-                            'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
-                                           'message_id' => 2002 },
-                            'data' => 'deny:abc' }
-    ).wire
+    assert_equal [5006, 46, 45], ids
+    assert_nil wire.fetch('callback_message_id')
+    assert_equal [5006, 46, 45], ids.uniq, 'the three ids must be distinct values on this fixture'
+  end
+
+  def test_a_callback_carries_its_update_id_beside_the_originating_message_id
+    callback = normalizer.normalize(callback_update(5007, 'q-10', 2002)).wire
 
     assert_equal [5007, 2002], [callback.fetch('update_id'), callback.fetch('callback_message_id')]
   end
@@ -197,12 +189,10 @@ class TelegramNormalizerTest < Minitest::Test
                                                     'file_size' => 2048 } }, caption: 'summarize this'
                                 )).wire
 
-    assert_equal 'attachment', wire.fetch('kind')
-    assert_equal 'summarize this', wire.fetch('text')
+    assert_equal ['attachment', 'summarize this', 2], wire.values_at('kind', 'text', 'parser_version')
     assert_equal({ 'kind' => 'document', 'file_id' => 'D1', 'file_unique_id' => 'u-d1',
                    'media_type' => 'application/pdf', 'name' => 'report.pdf', 'size_bytes' => 2048,
                    'duration_s' => nil }, wire.fetch('attachment'))
-    assert_equal 2, wire.fetch('parser_version')
   end
 
   def test_a_photo_picks_its_largest_size_and_an_image_document_is_an_image
@@ -222,19 +212,13 @@ class TelegramNormalizerTest < Minitest::Test
   end
 
   def test_voice_and_audio_are_voice_attachments_with_a_duration
-    voice = normalizer.normalize(attachment_update(
-                                   'voice' => { 'file_id' => 'V', 'file_unique_id' => 'u-v', 'duration' => 12,
-                                                'mime_type' => 'audio/ogg' }
-                                 )).wire.fetch('attachment')
-    audio = normalizer.normalize(attachment_update(
-                                   'audio' => { 'file_id' => 'A', 'file_unique_id' => 'u-a', 'duration' => 200,
-                                                'file_name' => 'memo.mp3', 'mime_type' => 'audio/mpeg' }
-                                 )).wire.fetch('attachment')
+    voice = attachment_of('voice' => { 'file_id' => 'V', 'file_unique_id' => 'u-v', 'duration' => 12,
+                                       'mime_type' => 'audio/ogg' })
+    audio = attachment_of('audio' => { 'file_id' => 'A', 'file_unique_id' => 'u-a', 'duration' => 200,
+                                       'file_name' => 'memo.mp3', 'mime_type' => 'audio/mpeg' })
 
-    forwarded = normalizer.normalize(attachment_update(
-                                       'voice' => { 'file_id' => 'F', 'file_unique_id' => 'u-f', 'duration' => 9 },
-                                       'forward_origin' => { 'type' => 'user', 'date' => 1 }
-                                     )).wire.fetch('attachment')
+    forwarded = attachment_of('voice' => { 'file_id' => 'F', 'file_unique_id' => 'u-f', 'duration' => 9 },
+                              'forward_origin' => { 'type' => 'user', 'date' => 1 })
 
     assert_equal ['voice', 12, 'audio/ogg'], voice.values_at('kind', 'duration_s', 'media_type')
     assert_equal ['audio', 200, 'memo.mp3'], audio.values_at('kind', 'duration_s', 'name'),
@@ -259,9 +243,9 @@ class TelegramNormalizerTest < Minitest::Test
                                                                   'file_name' => name, 'mime_type' => 'x' * 300 })).wire
     attachment = wire.fetch('attachment')
 
-    assert_operator attachment.fetch('name').bytesize, :<=, 255
-    assert_predicate attachment.fetch('name'), :valid_encoding?
-    assert_equal 255, attachment.fetch('media_type').bytesize
+    cut = attachment.fetch('name')
+
+    assert_equal [true, true, 255], [cut.bytesize <= 255, cut.valid_encoding?, attachment.fetch('media_type').bytesize]
     assert_equal wire, Tamoz::Comms::InboundEnvelope.from_wire(wire).wire
   end
 

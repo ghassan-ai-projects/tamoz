@@ -7,16 +7,15 @@ require_relative 'test_helper'
 # at the human gate (it never promotes).
 class HeuristicImprovementPipelineTest < Minitest::Test
   Harness = Tamoz::Evals::Harness
+  Pipeline = Harness::HeuristicImprovementPipeline
   Improvement = Tamoz::Agent::Improvement
 
   def with_pipeline(generator: 'principal.generator', evaluator: 'principal.evaluator')
     Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) do |corpus|
-      yield Harness::HeuristicImprovementPipeline.new(
-        corpus:, generator_principal: generator, evaluator_principal: evaluator,
-        promoter_principal: 'principal.operator',
-        behavior_version_before: 'tamoz.agent.session/1',
-        behavior_version_after: 'tamoz.agent.session/2',
-        rollback_snapshot_digest: "sha256:#{'a' * 64}",
+      yield Pipeline.new(
+        corpus:, principals: Pipeline::Principals.new(generator:, evaluator:, promoter: 'principal.operator'),
+        change: Pipeline::BehaviorChange.new(before: 'tamoz.agent.session/1', after: 'tamoz.agent.session/2',
+                                             rollback_snapshot_digest: "sha256:#{'a' * 64}"),
         regression_tasks: RunnerInputs.regression_tasks
       )
     end
@@ -29,6 +28,13 @@ class HeuristicImprovementPipelineTest < Minitest::Test
       assert_predicate bundle, :generated?, 'the corpus should yield a candidate'
       assert_predicate bundle, :passed?, 'the candidate should pass its paired holdout evaluation'
       assert_predicate bundle, :promotable?, 'a passed candidate with complete provenance is promotion-ready'
+    end
+  end
+
+  def test_the_bundle_provenance_is_complete_and_its_report_verifies
+    with_pipeline do |pipeline|
+      bundle = pipeline.run
+
       assert_predicate bundle.provenance, :complete?
       assert_operator bundle.decision.fetch('holdout_margin'), :>=, 0
       # The report is the sealed artifact production verifies — re-verify it here.
@@ -62,27 +68,11 @@ class HeuristicImprovementPipelineTest < Minitest::Test
     Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) do |corpus|
       with_engine do |engine|
         seed_baseline(engine)
-
-        pipeline = Harness::HeuristicImprovementPipeline.new(
-          corpus:, generator_principal: 'principal.generator', evaluator_principal: 'principal.evaluator',
-          promoter_principal: 'principal.operator',
-          behavior_version_before: 'tamoz.agent.session/2', behavior_version_after: 'tamoz.agent.session/3',
-          rollback_snapshot_digest: "sha256:#{'a' * 64}", regression_tasks: RunnerInputs.regression_tasks
-        )
-        bundle = pipeline.run
+        bundle = session_three_pipeline(corpus).run
 
         assert_predicate bundle, :promotable?
 
-        body = Improvement::EvaluationReport.verify!(bundle.report)
-        resolver = ->(seal) { seal == Improvement::EvaluationReport.seal(body) ? bundle.report : nil }
-        result = Improvement::Promotion.new(engine).promote(
-          candidate: bundle.candidate, provenance: bundle.provenance, report: bundle.report,
-          human_gate_evidence: 'human:operator-1', actor: 'principal.operator', evidence_resolver: resolver
-        )
-
-        transition_id = result.fetch('transition').transition_id
-        engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
-        engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
+        promote_and_activate(engine, bundle)
 
         assert_equal 'tamoz.agent.session/3', engine.transitions.active.fetch('active_version')
       end
@@ -98,6 +88,29 @@ class HeuristicImprovementPipelineTest < Minitest::Test
     ensure
       adapter&.close
     end
+  end
+
+  def session_three_pipeline(corpus)
+    Pipeline.new(
+      corpus:,
+      principals: Pipeline::Principals.new(generator: 'principal.generator', evaluator: 'principal.evaluator',
+                                           promoter: 'principal.operator'),
+      change: Pipeline::BehaviorChange.new(before: 'tamoz.agent.session/2', after: 'tamoz.agent.session/3',
+                                           rollback_snapshot_digest: "sha256:#{'a' * 64}"),
+      regression_tasks: RunnerInputs.regression_tasks
+    )
+  end
+
+  def promote_and_activate(engine, bundle)
+    body = Improvement::EvaluationReport.verify!(bundle.report)
+    resolver = ->(seal) { seal == Improvement::EvaluationReport.seal(body) ? bundle.report : nil }
+    result = Improvement::Promotion.new(engine).promote(
+      candidate: bundle.candidate, provenance: bundle.provenance, report: bundle.report,
+      human_gate_evidence: 'human:operator-1', actor: 'principal.operator', evidence_resolver: resolver
+    )
+    transition_id = result.fetch('transition').transition_id
+    engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
+    engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
   end
 
   def seed_baseline(engine)

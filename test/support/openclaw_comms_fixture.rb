@@ -12,6 +12,9 @@ require 'tamoz/comms/gateway'
 require 'tamoz/sqlite'
 require 'tamoz/telegram'
 
+require_relative 'openclaw_comms_provisioning'
+require_relative 'openclaw_comms_snapshot'
+
 module Tamoz
   module Evals
     module Benchmark
@@ -21,6 +24,9 @@ module Tamoz
       # ScriptedTransport (recorded requests, NO egress) and a deterministic
       # scripted provider. This is Track-A plumbing evidence only.
       class OpenclawCommsFixture
+        include OpenclawCommsProvisioning
+        include OpenclawCommsSnapshot
+
         SURFACE_ID = 'telegram-ops'
         SURFACE_REVISION = 1
         BOT_ID = 7_463_512_990
@@ -39,7 +45,7 @@ module Tamoz
             @responses = responses.transform_values { |queue| Array(queue).dup }
           end
 
-          def generate(stage:, system:, prompt:)
+          def generate(stage:, **)
             queue = @responses.fetch(stage) { raise "no scripted #{stage} response" }
             raise "no scripted #{stage} response" if queue.empty?
 
@@ -91,7 +97,7 @@ module Tamoz
             @updates = updates
           end
 
-          def poll(next_offset:, limit:, timeout_s:)
+          def poll(**)
             ids = @updates.map { |update| update.fetch('update_id') }
             {
               updates: @updates.map { |update| @normalizer.normalize(update).wire },
@@ -183,12 +189,16 @@ module Tamoz
         DEFAULT_MODEL_RESPONSES = { plan: DEFAULT_PLAN, review: [ACCEPTED_REVIEW],
                                     verify: VERIFY_OK }.freeze
 
+        VOICE_OPTIONS = %i[transcriber speech].freeze
+
         def initialize(model_factory: self.class.model_factory(**DEFAULT_MODEL_RESPONSES),
-                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil,
-                       speech: false)
+                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy, **voice)
+          unknown = voice.keys - VOICE_OPTIONS
+          raise ArgumentError, "unknown keywords: #{unknown.join(', ')}" unless unknown.empty?
+
           @now = Time.now.utc
-          @transcriber = transcriber
-          @speech = speech
+          @transcriber = voice[:transcriber]
+          @speech = voice.fetch(:speech, false)
           @directory = Dir.mktmpdir('tamoz-comms-b0')
           @model_factory = model_factory
           @routing = routing
@@ -282,27 +292,6 @@ module Tamoz
           @store.request_status(surface_id: SURFACE_ID, conversation_id: conversation_id, ref: ref, now: @now)
         end
 
-        def request_ids_for(conversation_id)
-          read_rows(
-            %w[request_id],
-            'SELECT request_id FROM tamoz_comms_requests WHERE conversation_id = ?
-             ORDER BY created_at_ms ASC, request_id ASC',
-            [conversation_id]
-          ).map { |row| row.fetch('request_id') }
-        end
-
-        # The durable cancellation-timeline inputs of every comms request:
-        # the requested/observed stamps and the projection state whose
-        # `completed` value decides whether a raced completion won the race.
-        def cancellation_stamp_rows
-          read_rows(
-            %w[request_id projection_state requested_at_ms observed_at_ms],
-            'SELECT request_id, projection_state, cancellation_requested_at_ms,
-                    cancellation_observed_at_ms
-             FROM tamoz_comms_requests ORDER BY created_at_ms ASC, request_id ASC'
-          )
-        end
-
         def history(conversation_id)
           @store.conversation_history(surface_id: SURFACE_ID, conversation_id:, thread_id: thread_for(conversation_id))
         end
@@ -327,26 +316,6 @@ module Tamoz
           )
         end
 
-        def snapshot(conversations: [CONVERSATION_A])
-          facts = {
-            'inbound' => inbound_rows,
-            'requests' => request_rows,
-            'outbox' => outbox_snapshot,
-            'history' => conversations.to_h do |conversation|
-              [conversation, history(conversation)]
-            end,
-            'status' => conversations.to_h { |conversation| [conversation, projection(status(conversation))] },
-            'session' => conversations.to_h do |conversation|
-              [conversation, view_snapshot(view(thread_for(conversation)))]
-            end,
-            'effects' => effect_rows,
-            'sends' => @transport.sends.map { |send| send.transform_keys(&:to_s) }
-          }
-          references = facts['requests'].filter_map { |row| row['request_ref'] }.uniq
-          facts['request_projections'] = resolved_request_projections(references, conversations)
-          facts
-        end
-
         private
 
         def bind_cli_thread(thread_id)
@@ -354,16 +323,6 @@ module Tamoz
           return if bound == PROFILE_ID
 
           @runtime.bind_thread_profile(thread_id, PROFILE_ID)
-        end
-
-        def provision_runtime_directory(approval_ask)
-          @workspace = File.join(@directory, 'workspace')
-          runtime_dir = File.join(@directory, 'runtime')
-          FileUtils.mkdir_p(@workspace)
-          FileUtils.mkdir_p(runtime_dir, mode: 0o700)
-          write_config(runtime_dir, approval_ask)
-          write_profile(runtime_dir)
-          runtime_dir
         end
 
         def deploy_surface_and_bind_correspondent(runtime_dir, admission_mode)
@@ -400,11 +359,6 @@ module Tamoz
           @worker = new_worker
         end
 
-        def seed_workspace_files
-          File.write(File.join(@workspace, 'note.txt'), "hello\n")
-          File.write(File.join(@workspace, 'other.txt'), "world\n")
-        end
-
         def new_worker
           Tamoz::Agent::Worker.new(
             runtime: @runtime,
@@ -427,150 +381,6 @@ module Tamoz
           return { direct: 'pairing', correspondents: [] } if mode == :pairing
 
           { direct: 'allowlist', correspondents: ["telegram:user:#{USER_BOUND}"] }
-        end
-
-        def effect_rows
-          effect_census.map do |row|
-            { 'thread_id' => row[:thread_id], 'effect_key' => row[:effect_key],
-              'operation' => row[:operation], 'status' => row[:status] }
-          end
-        end
-
-        def resolved_request_projections(references, conversations)
-          references.to_h do |reference|
-            resolved_projection = conversations.filter_map do |conversation|
-              resolved = request_status(conversation, reference)
-              next nil unless resolved.is_a?(Hash)
-
-              projection(resolved)
-            end.first
-            [reference, resolved_projection]
-          end.compact
-        end
-
-        def projection(projection_hash)
-          return nil unless projection_hash.is_a?(Hash)
-
-          projection_hash.except('queue_age_ms')
-        end
-
-        def view_snapshot(view)
-          return { 'status' => 'absent' } unless view
-
-          { 'status' => view.status.to_s,
-            'terminal_reason' => view.terminal && view.terminal['reason'],
-            'satisfied' => view.terminal && view.terminal['satisfied'] }
-        end
-
-        def inbound_rows
-          read_rows(%w[update_id disposition reason],
-                    'SELECT update_id, disposition, reason FROM tamoz_comms_inbound ORDER BY update_id ASC')
-        end
-
-        def request_rows
-          rows = read_rows(%w[request_id conversation_id projection_state],
-                           'SELECT request_id, conversation_id, projection_state FROM tamoz_comms_requests
-                            ORDER BY created_at_ms ASC, request_id ASC')
-          rows.map do |row|
-            row.merge('request_ref' => Tamoz::Comms::Lifecycle::RequestRef.for(row.fetch('request_id')))
-          end
-        end
-
-        def read_rows(columns, sql, params = [])
-          @runtime.adapter.__send__(:read, operation: 'benchmark.comms_fixture') do |txn|
-            txn.rows('benchmark.comms_fixture.select', sql, params).map do |row_array|
-              columns.zip(row_array).to_h
-            end
-          end
-        end
-
-        def outbox_snapshot
-          outbox.map do |row|
-            # The stored text is what history is compared against, so the
-            # snapshot must not truncate it.
-            row.except('expires_at_ms', 'claim_expires_at_ms', 'created_at_ms', 'updated_at_ms',
-                       'send_started_at_ms')
-          end
-        end
-
-        def write_config(runtime_dir, approval_ask)
-          document = {
-            'runtime' => { 'schema_version' => 2 },
-            'workspace' => { 'root' => @workspace },
-            'sources' => {}
-          }
-          if approval_ask
-            policy_dir = File.join(runtime_dir, 'policy')
-            write_ask_policy(policy_dir, **approval_ask)
-            document['approval'] = { 'profile' => 'unattended',
-                                     'policy_path' => File.join(policy_dir, 'base.yaml') }
-          end
-          File.write(File.join(runtime_dir, 'config.yaml'), Psych.dump(document))
-          File.chmod(0o600, File.join(runtime_dir, 'config.yaml'))
-        end
-
-        def write_ask_policy(policy_dir, timeout_s: 86_400, on_timeout: :park)
-          require 'fileutils'
-          FileUtils.mkdir_p(File.join(policy_dir, 'profiles'))
-          File.write(File.join(policy_dir, 'base.yaml'), <<~YAML)
-            version: 1
-            tool_tiers:
-              apply_patch:
-                tier: local_execute
-                verb: execute
-                grant_scopes: [once]
-              run_check:
-                tier: local_execute
-                verb: execute
-                grant_scopes: [once]
-            fallback_tier:
-              tier: read
-              verb: unknown
-              grant_scopes: [once]
-            tiers:
-              read:
-                default: allow
-              local_execute:
-                default: ask
-                grant_scopes: [once]
-            grant_keys:
-              local_execute: [verb, tool]
-            rules: []
-            evidence:
-              approve: filesystem_operator
-              deny: chat_bound
-            simulations: []
-            ask:
-              timeout_s: #{timeout_s}
-              on_timeout: #{on_timeout}
-          YAML
-          File.write(File.join(policy_dir, 'profiles', 'unattended.yaml'), <<~YAML)
-            profile:
-              name: unattended
-          YAML
-        end
-
-        def write_profile(runtime_dir)
-          tools = %w[list_directory read_file search_text apply_patch create_file]
-          digest = Tamoz::Agent::Toolbox.new(
-            root: @workspace, allow_changes: true, checks: {}, allowed_tools: tools
-          ).catalog_digest
-          document = {
-            'profile' => { 'schema_version' => 1, 'profile_id' => PROFILE_ID,
-                           'profile_version' => '1.0', 'canonical_root' => @workspace },
-            'roots' => { 'workspace' => @workspace },
-            'tools' => { 'allowed' => tools },
-            'policy' => {
-              'allow_changes' => true, 'default_check_safety' => 'read_only',
-              'graph_version' => '1', 'behavior_version' => '1.0',
-              'tool_catalog_digest' => digest, 'unattended_catalog_digest' => digest
-            }
-          }
-          directory = File.join(runtime_dir, 'profiles')
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          path = File.join(directory, "#{PROFILE_ID}.yaml")
-          File.write(path, Psych.dump(document))
-          File.chmod(0o600, path)
         end
       end
 
@@ -610,10 +420,7 @@ module Tamoz
         def model_responses
           {
             parity_answer: {
-              plan: [{ 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
-                       'steps' => [{ 'id' => 's1', 'purpose' => 'gather evidence', 'tool' => 'read_file',
-                                     'arguments' => { 'path' => 'note.txt' },
-                                     'verification' => 'the output is present' }] }],
+              plan: OpenclawCommsFixture::DEFAULT_PLAN,
               review: [OpenclawCommsFixture::ACCEPTED_REVIEW],
               verify: [
                 OpenclawCommsFixture::VERIFY_OK.first,
@@ -621,39 +428,30 @@ module Tamoz
                   'evidence' => ['note.txt'] }
               ]
             },
-            c7_approval: {
-              plan: [
-                { 'goal' => 'inspect then fix note.txt', 'done_when' => ['note.txt reads fixed'],
-                  'steps' => [{ 'id' => 'look', 'purpose' => 'read the note', 'tool' => 'read_file',
-                                'arguments' => { 'path' => 'note.txt' },
-                                'verification' => 'the output is present' }] },
-                { 'goal' => 'fix note.txt', 'done_when' => ['note.txt reads fixed'],
-                  'steps' => [{ 'id' => 'edit', 'purpose' => 'apply the exact replacement',
-                                'tool' => 'apply_patch',
-                                'arguments' => { 'path' => 'note.txt', 'before' => 'hello', 'after' => 'fixed' },
-                                'verification' => 'the receipt reports the new digest' }] }
-              ],
-              review: [OpenclawCommsFixture::ACCEPTED_REVIEW,
-                       OpenclawCommsFixture::ACCEPTED_REVIEW],
-              verify: [{ 'answer' => 'fixed', 'satisfied' => true, 'evidence' => ['note.txt'] }]
-            },
-            c8_waiting: {
-              plan: [
-                { 'goal' => 'inspect then fix note.txt', 'done_when' => ['the output is present'],
-                  'steps' => [{ 'id' => 'look', 'purpose' => 'read the note', 'tool' => 'read_file',
-                                'arguments' => { 'path' => 'note.txt' },
-                                'verification' => 'the output is present' }] },
-                { 'goal' => 'fix note.txt', 'done_when' => ['note.txt reads fixed'],
-                  'steps' => [{ 'id' => 'edit', 'purpose' => 'apply the exact replacement',
-                                'tool' => 'apply_patch',
-                                'arguments' => { 'path' => 'note.txt', 'before' => 'hello', 'after' => 'fixed' },
-                                'verification' => 'the receipt reports the new digest' }] }
-              ],
-              review: [OpenclawCommsFixture::ACCEPTED_REVIEW,
-                       OpenclawCommsFixture::ACCEPTED_REVIEW],
-              verify: [{ 'answer' => 'fixed', 'satisfied' => true, 'evidence' => ['note.txt'] }]
-            }
+            c7_approval: inspect_then_fix_responses('note.txt reads fixed'),
+            c8_waiting: inspect_then_fix_responses('the output is present')
           }
+        end
+
+        def inspect_then_fix_responses(first_done_when)
+          { plan: [inspect_plan(first_done_when), fix_plan],
+            review: [OpenclawCommsFixture::ACCEPTED_REVIEW, OpenclawCommsFixture::ACCEPTED_REVIEW],
+            verify: [{ 'answer' => 'fixed', 'satisfied' => true, 'evidence' => ['note.txt'] }] }
+        end
+
+        def inspect_plan(done_when)
+          { 'goal' => 'inspect then fix note.txt', 'done_when' => [done_when],
+            'steps' => [{ 'id' => 'look', 'purpose' => 'read the note', 'tool' => 'read_file',
+                          'arguments' => { 'path' => 'note.txt' },
+                          'verification' => 'the output is present' }] }
+        end
+
+        def fix_plan
+          { 'goal' => 'fix note.txt', 'done_when' => ['note.txt reads fixed'],
+            'steps' => [{ 'id' => 'edit', 'purpose' => 'apply the exact replacement',
+                          'tool' => 'apply_patch',
+                          'arguments' => { 'path' => 'note.txt', 'before' => 'hello', 'after' => 'fixed' },
+                          'verification' => 'the receipt reports the new digest' }] }
         end
 
         def crashing_responses

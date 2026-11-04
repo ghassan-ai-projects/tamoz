@@ -11,6 +11,7 @@ class CLIImprovePromoteTest < Minitest::Test
   include AutonomyCase
 
   Harness = Tamoz::Evals::Harness
+  Pipeline = Harness::HeuristicImprovementPipeline
 
   def enable_memory(runtime)
     path = File.join(runtime.dir, 'config.yaml')
@@ -23,11 +24,13 @@ class CLIImprovePromoteTest < Minitest::Test
   # (tamoz.agent.session/1).
   def write_bundle(path)
     Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) do |corpus|
-      bundle = Harness::HeuristicImprovementPipeline.new(
-        corpus:, generator_principal: 'principal.generator', evaluator_principal: 'principal.evaluator',
-        promoter_principal: 'principal.operator',
-        behavior_version_before: 'tamoz.agent.session/1', behavior_version_after: 'tamoz.agent.session/2',
-        rollback_snapshot_digest: "sha256:#{'a' * 64}", regression_tasks: RunnerInputs.regression_tasks
+      bundle = Pipeline.new(
+        corpus:,
+        principals: Pipeline::Principals.new(generator: 'principal.generator', evaluator: 'principal.evaluator',
+                                             promoter: 'principal.operator'),
+        change: Pipeline::BehaviorChange.new(before: 'tamoz.agent.session/1', after: 'tamoz.agent.session/2',
+                                             rollback_snapshot_digest: "sha256:#{'a' * 64}"),
+        regression_tasks: RunnerInputs.regression_tasks
       ).run
 
       assert_predicate bundle, :promotable?, 'the fixture bundle must be promotion-ready'

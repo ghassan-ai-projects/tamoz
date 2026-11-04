@@ -51,8 +51,7 @@ class CLIImproveTest < Minitest::Test
       candidate = payload.fetch('candidate')
 
       refute_nil candidate, 'three verified read_file→apply_patch trajectories clear the floor'
-      assert_equal 'read_file', candidate.fetch('precursor_tool')
-      assert_equal 'apply_patch', candidate.fetch('subject_tool')
+      assert_equal %w[read_file apply_patch], candidate.values_at('precursor_tool', 'subject_tool')
     end
   end
 end

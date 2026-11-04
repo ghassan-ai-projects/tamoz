@@ -64,7 +64,8 @@ class ObservabilityRuntimeTest < Minitest::Test
   def test_journal_rotates_and_preserves_private_permissions
     Dir.mktmpdir do |directory|
       journal = Observability::Recorder::Journal.new(
-        directory:, role: 'worker', queue_size: 4, max_file_bytes: 220, max_files: 2
+        directory:, role: 'worker',
+        limits: Observability::Recorder::Journal::Limits.new(queue_size: 4, max_file_bytes: 220, max_files: 2)
       )
       producer = Observability::Producer.new(recorder: journal)
       12.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x' * 20}) }
@@ -82,7 +83,7 @@ class ObservabilityRuntimeTest < Minitest::Test
   def test_journal_read_ignores_drop_health_sidecars
     Dir.mktmpdir do |directory|
       journal = Observability::Recorder::Journal.new(
-        directory:, role: 'worker', queue_size: 1, flush_interval_ms: 1_000
+        directory:, role: 'worker', limits: Observability::Recorder::Journal::Limits.new(queue_size: 1, flush_interval_ms: 1_000)
       )
       producer = Observability::Producer.new(recorder: journal)
       100.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x'}) }
@@ -98,7 +99,8 @@ class ObservabilityRuntimeTest < Minitest::Test
   def test_journal_health_sums_drops_and_names_an_unreadable_health_file
     Dir.mktmpdir do |directory|
       journal = Observability::Recorder::Journal.new(
-        directory:, role: 'worker', pid: 1, queue_size: 1, flush_interval_ms: 1_000
+        directory:, role: 'worker', pid: 1,
+        limits: Observability::Recorder::Journal::Limits.new(queue_size: 1, flush_interval_ms: 1_000)
       )
       producer = Observability::Producer.new(recorder: journal)
       10.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x'}) }
@@ -118,8 +120,8 @@ class ObservabilityRuntimeTest < Minitest::Test
     Dir.mktmpdir do |directory|
       2.times do
         journal = Observability::Recorder::Journal.new(
-          directory:, role: 'worker', pid: 7, max_file_bytes: 512, max_files: 1,
-          flush_interval_ms: 1
+          directory:, role: 'worker', pid: 7,
+          limits: Observability::Recorder::Journal::Limits.new(max_file_bytes: 512, max_files: 1, flush_interval_ms: 1)
         )
         producer = Observability::Producer.new(recorder: journal)
         12.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x' * 20}) }
@@ -222,7 +224,7 @@ class ObservabilityRuntimeTest < Minitest::Test
     raising = Class.new do
       def record(_signal) = raise 'boom'
       def health = raise 'boom'
-      def flush(deadline_ms:) = raise 'boom'
+      def flush(**) = raise 'boom'
       def close = raise 'boom'
     end.new
     healthy = Observability::Recorder::Memory.new

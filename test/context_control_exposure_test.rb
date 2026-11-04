@@ -19,23 +19,8 @@ class ContextControlExposureTest < Minitest::Test
   def test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields
     with_dual_surface do |surface|
       surface.admit(101, TURN_TEXT)
-
-      ['/think high', '/verbose detailed', '/reset', '/compact', '/usage', '/context']
-        .each_with_index do |text, index|
-        surface.command(text, 200 + index)
-      end
-
-      cli_thread = 'th_exposure_cli'
-      seed_cli_turn(surface, cli_thread, TURN_TEXT)
-      cli_commands = {
-        'think' => ['think', cli_thread, 'high'],
-        'verbose' => ['verbose', cli_thread, 'detailed'],
-        'reset' => ['reset', cli_thread],
-        'compact' => ['compact', cli_thread],
-        'usage' => ['usage', cli_thread],
-        'context' => ['context', cli_thread]
-      }
-      cli_documents = cli_commands.transform_values { |argv| surface.run_cli(argv) }
+      run_gateway_controls(surface)
+      cli_documents = run_cli_controls(surface)
 
       %w[think verbose reset compact usage context].each do |name|
         gateway_document = surface.captured.fetch(name).last
@@ -216,6 +201,27 @@ class ContextControlExposureTest < Minitest::Test
   end
 
   private
+
+  def run_gateway_controls(surface)
+    ['/think high', '/verbose detailed', '/reset', '/compact', '/usage', '/context']
+      .each_with_index do |text, index|
+      surface.command(text, 200 + index)
+    end
+  end
+
+  def run_cli_controls(surface)
+    cli_thread = 'th_exposure_cli'
+    seed_cli_turn(surface, cli_thread, TURN_TEXT)
+    cli_commands = {
+      'think' => ['think', cli_thread, 'high'],
+      'verbose' => ['verbose', cli_thread, 'detailed'],
+      'reset' => ['reset', cli_thread],
+      'compact' => ['compact', cli_thread],
+      'usage' => ['usage', cli_thread],
+      'context' => ['context', cli_thread]
+    }
+    cli_commands.transform_values { |argv| surface.run_cli(argv) }
+  end
 
   def drive(gateway, store, transport, text, id)
     transport.batch([update(id, text:)])

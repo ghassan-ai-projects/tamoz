@@ -8,17 +8,24 @@ module LoopbackPass
 
   def run(root)
     kind = LoopbackChannel::Kind.new
-    kinds = LoopbackChannel.kinds(kind)
-    env = { 'ZAI_API_KEY' => 'chat-key', 'LOOPBACK_TOKEN' => 'loop' }
-    FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
-    runtime = File.join(root, 'runtime')
-    cli(runtime, env, kinds, 'setup', '--workspace', workspace, '--chat', 'zai/glm-5.3-flash')
-    cli(runtime, env, kinds, 'channel', 'add', 'loopback')
+    context = [File.join(root, 'runtime'), { 'ZAI_API_KEY' => 'chat-key', 'LOOPBACK_TOKEN' => 'loop' },
+               LoopbackChannel.kinds(kind)]
+    prepare_runtime(root, context)
     kind.channel.transport.say(inbound)
-    admitted = cli(runtime, env, kinds, 'comms', 'serve', '--once')
-    append_reply(runtime, env)
-    delivered = cli(runtime, env, kinds, 'comms', 'serve', '--once')
-    listed = JSON.parse(cli(runtime, env, kinds, 'comms', 'list', '--json').fetch(1))
+    admitted = cli(*context, 'comms', 'serve', '--once')
+    append_reply(context[0], context[1])
+    delivered = cli(*context, 'comms', 'serve', '--once')
+    summary(kind, admitted, delivered, cli(*context, 'comms', 'list', '--json'))
+  end
+
+  def prepare_runtime(root, context)
+    FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
+    cli(*context, 'setup', '--workspace', workspace, '--chat', 'zai/glm-5.3-flash')
+    cli(*context, 'channel', 'add', 'loopback')
+  end
+
+  def summary(kind, admitted, delivered, listing)
+    listed = JSON.parse(listing.fetch(1))
     { 'admitted' => admitted.first, 'delivered' => delivered.first,
       'threads' => listed.flat_map { |row| row.fetch('conversations').map { |route| route.fetch('thread_id') } },
       'replies' => kind.channel.transport.delivered.map(&:text) }

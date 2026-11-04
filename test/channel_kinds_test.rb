@@ -44,14 +44,12 @@ class ChannelKindsTest < Minitest::Test
 
   def test_a_new_kind_is_added_and_started_with_only_its_own_code
     with_runtime do |runtime, kind|
-      status, out, err = tamoz(runtime, 'channel', 'add', 'loopback', kinds: LoopbackChannel.kinds(kind))
+      added = tamoz(runtime, 'channel', 'add', 'loopback', kinds: LoopbackChannel.kinds(kind))
+      started = tamoz(runtime, 'start', kinds: LoopbackChannel.kinds(kind))
 
-      assert_equal 0, status, err
-      assert_includes out, 'Loopback ready.'
-      status, out, err = tamoz(runtime, 'start', kinds: LoopbackChannel.kinds(kind))
-
-      assert_equal 0, status, err
-      assert_includes out, 'Tamoz is starting loopback with zai/glm-5.3-flash.'
+      assert_equal [0, 0], [added[0], started[0]], [added[2], started[2]].join
+      assert_includes added[1], 'Loopback ready.'
+      assert_includes started[1], 'Tamoz is starting loopback with zai/glm-5.3-flash.'
     end
   end
 
@@ -99,7 +97,14 @@ class ChannelKindsTest < Minitest::Test
       assert_includes tamoz(runtime, 'start', kinds: shipped)[2], '"loopback" is not a channel kind'
       assert_includes tamoz(runtime, 'comms', 'serve', '--once', kinds: shipped)[2], '"loopback" is not a channel kind'
       assert_includes tamoz(runtime, 'comms', 'doctor', kinds: shipped)[1], '"loopback" is not a channel kind'
-      assert_equal 64, tamoz(runtime, 'channel', 'add', 'loopback', kinds: shipped)[0]
+    end
+  end
+
+  def test_adding_a_kind_the_registry_does_not_know_is_a_usage_error
+    with_runtime do |runtime, kind|
+      tamoz(runtime, 'channel', 'add', 'loopback', kinds: LoopbackChannel.kinds(kind))
+
+      assert_equal 64, tamoz(runtime, 'channel', 'add', 'loopback', kinds: Tamoz::Agent::CHANNEL_KINDS)[0]
     end
   end
 
@@ -174,17 +179,28 @@ class ChannelKindsTest < Minitest::Test
   end
 
   def test_a_missing_adapter_is_named_at_every_entry_point
+    with_missing_adapter do |runtime, kinds, message|
+      assert_includes tamoz(runtime, 'start', kinds:)[2], message
+      assert_includes tamoz(runtime, 'comms', 'serve', '--once', kinds:)[2], message
+      assert_includes tamoz(runtime, 'comms', 'doctor', kinds:)[1], message
+    end
+  end
+
+  def test_a_missing_adapter_is_named_when_a_channel_is_added
+    with_missing_adapter do |runtime, kinds, message|
+      assert_includes tamoz(runtime, 'channel', 'add', 'loopback', kinds:)[2], message
+    end
+  end
+
+  private
+
+  def with_missing_adapter
     with_runtime do |runtime, kind|
       tamoz(runtime, 'channel', 'add', 'loopback', kinds: LoopbackChannel.kinds(kind))
       missing = Tamoz::Agent::ChannelKind.new(name: 'loopback', library: 'tamoz/no_such_adapter',
                                               namespace: 'Tamoz::NoSuchAdapter')
-      kinds = Tamoz::Agent::CHANNEL_KINDS.merge('loopback' => missing)
-      message = 'the loopback channel (tamoz-no_such_adapter) is not installed'
-
-      assert_includes tamoz(runtime, 'start', kinds:)[2], message
-      assert_includes tamoz(runtime, 'comms', 'serve', '--once', kinds:)[2], message
-      assert_includes tamoz(runtime, 'comms', 'doctor', kinds:)[1], message
-      assert_includes tamoz(runtime, 'channel', 'add', 'loopback', kinds:)[2], message
+      yield runtime, Tamoz::Agent::CHANNEL_KINDS.merge('loopback' => missing),
+            'the loopback channel (tamoz-no_such_adapter) is not installed'
     end
   end
 end

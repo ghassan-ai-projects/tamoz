@@ -30,28 +30,40 @@ class CliSkillsCreateTest < Minitest::Test
     [status, err.string]
   end
 
+  def tamoz_ok(argv, turns)
+    status, err = tamoz(argv, turns)
+
+    assert_equal 0, status, err
+  end
+
+  def fix_value_workspace(dir)
+    workspace = File.join(dir, 'ws')
+    sessions = File.join(dir, 'sessions')
+    FileUtils.mkdir_p(File.join(workspace, 'lib'))
+    FileUtils.mkdir_p(sessions, mode: 0o700)
+    File.write(File.join(workspace, 'lib', 'value.rb'), "VALUE = 1\n")
+    [workspace, sessions]
+  end
+
+  def fix_value_turns(workspace)
+    [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
+     ->(_) { { calls: [patch_call(workspace, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
+     { calls: [['run_check', { 'name' => 'test' }]] }, { content: 'Set VALUE to 2; the test check passed.' }]
+  end
+
+  def draft_turns
+    [{ calls: [plan_call(paths: %w[set-constant], checks: [])] },
+     { calls: [['create_file', { 'path' => 'set-constant/SKILL.md', 'content' => SKILL }]] },
+     { content: 'Drafted set-constant.' }]
+  end
+
   def test_a_verified_thread_becomes_a_staged_candidate
     Dir.mktmpdir('tamoz-create') do |dir|
-      workspace = File.join(dir, 'ws')
-      sessions = File.join(dir, 'sessions')
-      FileUtils.mkdir_p(File.join(workspace, 'lib'))
-      FileUtils.mkdir_p(sessions, mode: 0o700)
-      File.write(File.join(workspace, 'lib', 'value.rb'), "VALUE = 1\n")
-      source = [{ calls: [plan_call] }, { calls: [read_call('lib/value.rb')] },
-                ->(_) { { calls: [patch_call(workspace, 'lib/value.rb', 'VALUE = 1', 'VALUE = 2')] } },
-                { calls: [['run_check', { 'name' => 'test' }]] }, { content: 'Set VALUE to 2; the test check passed.' }]
-      status, err = tamoz(['--root', workspace, '--session-dir', sessions, '--session', 'fix-value', '--allow-changes',
-                           '--check', 'test=true', 'code', 'Set VALUE to 2'], source)
-
-      assert_equal 0, status, err
-      draft = [{ calls: [plan_call(paths: %w[set-constant], checks: [])] },
-               { calls: [['create_file', { 'path' => 'set-constant/SKILL.md', 'content' => SKILL }]] },
-               { content: 'Drafted set-constant.' }]
-      status, err = tamoz(['--session-dir', sessions, 'skills', 'create', 'set-constant',
-                           '--from-session', 'fix-value'],
-                          draft)
-
-      assert_equal 0, status, err
+      workspace, sessions = fix_value_workspace(dir)
+      tamoz_ok(['--root', workspace, '--session-dir', sessions, '--session', 'fix-value', '--allow-changes',
+                '--check', 'test=true', 'code', 'Set VALUE to 2'], fix_value_turns(workspace))
+      tamoz_ok(['--session-dir', sessions, 'skills', 'create', 'set-constant', '--from-session', 'fix-value'],
+               draft_turns)
       manifest = Dir[File.join(sessions, 'skill-drafts', '*', 'set-constant.candidate.json')].first
 
       refute_nil manifest

@@ -26,8 +26,11 @@ class CliSkillsCommandTest < Minitest::Test
 
     assert_equal 0, status
     assert_match(%r{bundled/evidence-audit \[bundled\] sha256:\h{64}}, out)
-    assert_includes out, 'operator/thin [operator]'
-    assert_includes out, 'rejected operator/broken: skill_manifest_missing'
+    missing = ['operator/thin [operator]', 'rejected operator/broken: skill_manifest_missing'].reject do |line|
+      out.include?(line)
+    end
+
+    assert_empty missing, out
   end
 
   def test_check_fails_on_a_skill_below_the_bar_and_passes_on_the_bundled_ones
@@ -79,25 +82,32 @@ class CliSkillsCommandTest < Minitest::Test
     assert_match(/skill_unknown/, run.call('--bundled-skills', '--skill', 'nope').last)
   end
 
-  def test_new_show_and_promote_author_a_skill_through_a_named_person
+  def stage_new_skill
     drafts = File.join(@dir, 'drafts')
     FileUtils.mkdir_p(drafts)
     installed = File.join(@dir, 'installed')
     FileUtils.mkdir_p(installed)
     status, out, = tamoz('skills', 'new', 'tidy-notes', '--dir', drafts)
     directory = out.strip
-
-    assert_equal 0, status
     Tamoz::Agent::SkillInstallation.stage(directory, created_by: 'tamoz.skill-creator', source: 'test')
-    refused, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'tamoz.skill-creator')
+    [status, directory, installed]
+  end
+
+  def test_new_show_and_promote_author_a_skill_through_a_named_person
+    status, directory, installed = stage_new_skill
     promoted, promote_out, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'dana')
     shown, show_out, = tamoz('--skills', installed, 'skills', 'show', 'tidy-notes')
 
-    refute_equal 0, refused
-    assert_equal 0, promoted
+    assert_equal [0, 0, 0], [status, promoted, shown]
     assert_match(/installed tidy-notes sha256:\h{64}, approved by dana/, promote_out)
-    assert_equal 0, shown
     assert_includes show_out, 'authoring bar: met'
+  end
+
+  def test_a_skill_cannot_be_promoted_by_its_own_creator
+    _, directory, installed = stage_new_skill
+    refused, = tamoz('--skills', installed, 'skills', 'promote', directory, '--approver', 'tamoz.skill-creator')
+
+    refute_equal 0, refused
   end
 
   def test_create_refuses_a_thread_that_did_not_finish_verified

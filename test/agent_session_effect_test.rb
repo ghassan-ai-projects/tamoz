@@ -618,7 +618,7 @@ class AgentSessionEffectTest < Minitest::Test
       define_method(:provider_configuration_digest) { transport.provider_configuration_digest }
       define_method(:safety) { :unsafe }
 
-      define_method(:generate) do |stage:, system:, prompt:|
+      define_method(:generate) do |system:, prompt:, **|
         @calls += 1
         request_bytes = transport.build_request(system:, prompt:)
         Tamoz::Agent::EpisodeModelTransport::Response.new(

@@ -9,23 +9,25 @@ class ModelSpeechTest < Minitest::Test
   def with_endpoint(status: '200 OK', type: 'audio/mpeg', body: MP3)
     server = TCPServer.new('127.0.0.1', 0)
     seen = Queue.new
-    thread = Thread.new do
-      socket = server.accept
-      head = +''
-      head << socket.gets until head.end_with?("\r\n\r\n")
-      seen << [head, socket.read(head[/content-length: (\d+)/i, 1].to_i)]
-      socket.write("HTTP/1.1 #{status}\r\nContent-Type: #{type}\r\nContent-Length: #{body.bytesize}\r\n" \
-                   "Connection: close\r\n\r\n".b + body.b)
-      socket.close
-    rescue IOError, SystemCallError
-      nil
-    end
+    thread = Thread.new { answer_once(server, seen, "HTTP/1.1 #{status}\r\nContent-Type: #{type}\r\n", body) }
     yield Tamoz::Agent::EpisodeModelTransport.new(endpoint: "http://127.0.0.1:#{server.addr[1]}/v1",
                                                   model: 'hexgrad/kokoro-82m', provider: 'openrouter',
                                                   api_key: 'tts-key'), seen
   ensure
     thread&.join(2)
     server&.close
+  end
+
+  def answer_once(server, seen, status_and_type, body)
+    socket = server.accept
+    head = +''
+    head << socket.gets until head.end_with?("\r\n\r\n")
+    seen << [head, socket.read(head[/content-length: (\d+)/i, 1].to_i)]
+    socket.write("#{status_and_type}Content-Length: #{body.bytesize}\r\n" \
+                 "Connection: close\r\n\r\n".b + body.b)
+    socket.close
+  rescue IOError, SystemCallError
+    nil
   end
 
   def test_the_text_and_voice_go_in_one_json_request_and_mp3_comes_back
@@ -35,9 +37,17 @@ class ModelSpeechTest < Minitest::Test
 
       assert_equal MP3, speech.audio
       assert_match(%r{\APOST /v1/audio/speech }, head)
-      assert_match(/authorization: Bearer tts-key/i, head)
       assert_equal({ 'model' => 'hexgrad/kokoro-82m', 'input' => 'Pond 7 is fine.', 'voice' => 'af_heart',
                      'response_format' => 'mp3' }, JSON.parse(body))
+    end
+  end
+
+  def test_the_speech_request_is_authorized_and_its_digest_is_reported
+    with_endpoint do |transport, seen|
+      speech = transport.speak(text: 'Pond 7 is fine.', voice: 'af_heart')
+      head, = seen.pop
+
+      assert_match(/authorization: Bearer tts-key/i, head)
       assert_equal transport.speech_digest('Pond 7 is fine.', 'af_heart'), speech.request_digest
     end
   end

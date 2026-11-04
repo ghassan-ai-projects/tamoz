@@ -2,7 +2,7 @@
 
 require_relative 'test_helper'
 
-# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class CommsPairingFirstContactTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -153,26 +153,34 @@ class CommsPairingFirstContactTest < Minitest::Test
 
   # ===== harness =====
 
+  def record_appended_deliveries(adapter, appended)
+    adapter.singleton_class.define_method(:bind_comms_store) do |*bound|
+      super(*bound).tap do |store|
+        store.singleton_class.define_method(:append_delivery) do |delivery_wire, **arguments|
+          appended << delivery_wire
+          super(delivery_wire, **arguments)
+        end
+      end
+    end
+  end
+
+  def pairing_checkpoints(adapter)
+    definition = Tamoz.graph(name: 'pairing', version: '1') do
+      state :ready, default: true
+      node(:finish, implementation_name: 'pairing.finish', version: '1') { |_s, _c| { ready: true } }
+      edge Tamoz::START, :finish
+      edge :finish, Tamoz::END
+    end
+    definition.compile(checkpointer: adapter).checkpointer
+  end
+
   def with_gateway
     Dir.mktmpdir('tamoz-pairing') do |directory|
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
       begin
         appended = []
-        adapter.singleton_class.define_method(:bind_comms_store) do |*bound|
-          super(*bound).tap do |store|
-            store.singleton_class.define_method(:append_delivery) do |delivery_wire, **arguments|
-              appended << delivery_wire
-              super(delivery_wire, **arguments)
-            end
-          end
-        end
-        definition = Tamoz.graph(name: 'pairing', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'pairing.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
+        record_appended_deliveries(adapter, appended)
+        checkpoints = pairing_checkpoints(adapter)
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         transport = ScriptedTransport.new
@@ -221,7 +229,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   class ScriptedTransport
     def batch(updates) = (@updates = updates)
 
-    def poll(next_offset:, limit:, timeout_s:)
+    def poll(**)
       ids = @updates.map { |update| update.fetch('update_id') }
       { updates: @updates.map { |update| normalize(update) }, next_offset: ids.max && (ids.max + 1) }
     end
@@ -324,4 +332,4 @@ class CommsPairingFirstContactTest < Minitest::Test
     (now.utc.to_r * 1000).to_i
   end
 end
-# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize

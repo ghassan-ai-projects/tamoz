@@ -61,18 +61,20 @@ class ThermalLabFactsTest < Minitest::Test
   end
 
   def test_the_prompt_binds_capability_gating
-    assert_includes ThermalLabDomain::PROMPT, 'fan_01_capability'
-    assert_includes ThermalLabDomain::PROMPT, 'request_evidence'
-    assert_includes ThermalLabDomain::PROMPT, 'For set_indicator, the action-specific field is state'
+    bound = ['fan_01_capability', 'request_evidence', 'For set_indicator, the action-specific field is state']
+
+    assert_empty bound.reject { |text| ThermalLabDomain::PROMPT.include?(text) }, 'the prompt must carry each phrase'
     refute_includes ThermalLabDomain::PROMPT, '\"parameters\": {\"hypothesis\": \"<value>\"}'
   end
 
   def test_led_intent_uses_the_agentic_selector_field
     entry = ThermalLabDomain::INTENT_CATALOG.find { |candidate| candidate.fetch('type') == 'set_indicator' }
 
-    assert_equal ['state'], entry.fetch('model_writable_fields')
-    assert_equal ['state'], entry.fetch('parameter_schema').fetch('required')
-    assert_equal %w[off watch alert], entry.fetch('parameter_schema').fetch('properties').fetch('state').fetch('enum')
+    schema = entry.fetch('parameter_schema')
+
+    assert_equal [['state'], ['state'], %w[off watch alert]],
+                 [entry.fetch('model_writable_fields'), schema.fetch('required'),
+                  schema.fetch('properties').fetch('state').fetch('enum')]
 
     document = ThermalLabDomain.document(
       selected: 'already_corrected', hypothesis: 'watch the indicator',

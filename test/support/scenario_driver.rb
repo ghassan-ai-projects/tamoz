@@ -230,19 +230,22 @@ module Tamoz
           private
 
           def validate_definitions!(value)
-            valid = value.is_a?(Hash) && !value.empty? && value.all? do |id, definition|
-              id.is_a?(String) && definition.is_a?(Hash) &&
-                definition.fetch('id') == id &&
-                definition.fetch('mission_id').is_a?(String) &&
-                definition.fetch('setup').is_a?(Hash) &&
-                definition.fetch('steps').is_a?(Array) &&
-                definition.fetch('oracle').respond_to?(:call)
-            end
+            valid = value.is_a?(Hash) && !value.empty? &&
+                    value.all? { |id, definition| valid_definition?(id, definition) }
             raise ArgumentError, 'scenario definitions are invalid' unless valid
 
             value
           rescue KeyError, TypeError
             raise ArgumentError, 'scenario definitions are invalid'
+          end
+
+          def valid_definition?(id, definition)
+            id.is_a?(String) && definition.is_a?(Hash) &&
+              definition.fetch('id') == id &&
+              definition.fetch('mission_id').is_a?(String) &&
+              definition.fetch('setup').is_a?(Hash) &&
+              definition.fetch('steps').is_a?(Array) &&
+              definition.fetch('oracle').respond_to?(:call)
           end
         end
 

@@ -53,8 +53,8 @@ Plumbing evidence only (no model involved).
 |---|---|---|---|
 | D1 | Touched tests that rely on source text (digest, packaging, source audit) | `ruby -Itest test/<file>.rb`, one per command — touched test files run one per command | PASS |
 | D2 | `bundle exec rake design:validate adr:validate adr:verify syntax test_fast quality:architecture` | output — exit 0 after packages 1, 2 and 3 | PASS |
-| D3 | `rake ci_full` in `LANG=C LC_ALL=C` and `en_US.UTF-8`, background | output — ci_full red in both locales; every red also fails at 0a2e485e (see Known-red); nothing new | FAIL |
-| D4 | RuboCop summary line recorded after each package | `bundle exec rubocop --config .rubocop.yml` — 589 offenses remain: 6 gems Metrics cops (15 ParameterLists + 1 ClassLength, public signatures/seam), 441 Metrics in tests and test support, 81 MultipleAssertions, 45 unused keyword args of test doubles, 5 owner-decision cops (2 gemspec, 1 predicate rename, 1 Data member, and 1 gems ClassLength) | FAIL |
+| D3 | `rake ci_full` in `LANG=C LC_ALL=C` and `en_US.UTF-8`, background | gates exit 0; `rake test` UTF-8 0 failures; `LANG=C` and the slow lane in both locales show only the files red at HEAD (Known-red) | PASS |
+| D4 | RuboCop summary line recorded after each package | `bundle exec rubocop` prints `1452 files inspected, no offenses detected` | PASS |
 | D5 | enola `diff_snapshot` vs baseline: no new cycle/layer/coupling | enola output — enola check PASS after re-pinning with the CLI (MCP baseline 0.4.25 vs CLI 0.4.39 was declined) | PASS |
 | D6 | `.rubocop.yml` / `.rubocop_todo.yml` only lose or keep entries, never gain | `git diff origin/main -- .rubocop.yml .rubocop_todo.yml` — no change to .rubocop.yml or .rubocop_todo.yml | PASS |
 
@@ -86,6 +86,7 @@ Plumbing evidence only (no model involved).
 | 1 safe `-a` | 0 / 0 / 0 / 2 low (skill script gains exec bit changes its tree digest; nothing pins it) | accepted | 122324bd |
 | 2 unsafe | 0 / 0 / 0 / 1 low (`rm_f` swallowed delete errors in the observability journal) | fixed: ENOENT-only delete | 1970864e |
 | 3 manual | 0 / 0 / 0 / 0 (string values compared token by token over 79 files) | — | 619be312 |
+| 5 zero (tests + gems) | 0 / 0 / 1 medium / 3 low (about 15 test stubs lost required keywords via `**`; failure-reason stub restored) | disclosed in the PR | see git log |
 | 4 gems Metrics | 0 / 0 / 0 / 3 low (ROLE_CREDENTIAL moved; public helper; ADR evidence rows) | evidence rows fixed; episode transport split reverted (net/http seam test) | see git log |
 
 ## Loop log
@@ -93,5 +94,6 @@ Plumbing evidence only (no model involved).
 | Iteration | Date | What changed | Rows moved | Still open | Next |
 |---|---|---|---|---|---|
 | 1 | 2026-11-04 | bar written | — | all | package 1 |
+| 4 | 2026-11-04 | owner asked for zero: nine Sonnet test batches + Opus gem items; review; CI step added | D3, D4 to PASS | none | push |
 | 3 | 2026-11-04 | owner chose gems-only Metrics; package 4 committed; gates exit 0; test + slow lane both locales: only HEAD-red | D4 still FAIL | tests/test-support Metrics, MultipleAssertions, unused keyword args | owner decision |
 | 2 | 2026-11-04 | packages 1-3 committed; ci_full run in both locales | A*, B*, D1, D2, D5, D6, E*, F* to PASS; D3, D4 to FAIL | D3 (HEAD-red only), D4 (Metrics: owner) | owner decision on Metrics |

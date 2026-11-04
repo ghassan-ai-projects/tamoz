@@ -134,16 +134,22 @@ class SkillsEvidenceVerifierTest < Minitest::Test
   end
 
   def test_a_source_path_that_resolves_into_audit_is_refused
-    File.write(File.join(@root, 'audit', 'notes.md'), "Passwords must contain at least 8 characters\n")
-    document = { 'path' => './audit/notes.md', 'sha256' => 'x' }
+    notes = File.join(@root, 'audit', 'notes.md')
+    File.write(notes, "Passwords must contain at least 8 characters\n")
     result = verify
-    json = JSON.parse(File.read(File.join(@root, 'audit', 'findings.json')))
-    json['sources'] << document.merge('sha256' => Digest::SHA256.hexdigest(File.read(File.join(@root, 'audit',
-                                                                                               'notes.md'))))
-    File.write(File.join(@root, 'audit', 'findings.json'), JSON.generate(json))
+    add_source('path' => './audit/notes.md', 'sha256' => Digest::SHA256.hexdigest(File.read(notes)))
 
     assert_empty result.problems
     assert_problem(/must be relative, inside the workspace and outside audit/,
                    EvidenceAudit::Verifier.new('audit/findings.json', root: @root).call)
+  end
+
+  private
+
+  def add_source(document)
+    path = File.join(@root, 'audit', 'findings.json')
+    json = JSON.parse(File.read(path))
+    json['sources'] << document
+    File.write(path, JSON.generate(json))
   end
 end

@@ -1,5 +1,7 @@
+# rubocop:disable Gemspec/RequiredRubyVersion -- gemspec_helper.rb sets required_ruby_version
 # frozen_string_literal: true
 
+# rubocop:enable Gemspec/RequiredRubyVersion
 require_relative '../gemspec_helper'
 require_relative 'lib/tamoz/talk/version'
 

@@ -77,55 +77,53 @@ class CommsPartiesTest < Minitest::Test
     assert_raises(Comms::ValidationError) { Comms::Admission.thread_id('s', 'talk:room:1') }
   end
 
+  def decide(correspondent:, conversation:, surface: talk_descriptor, surface_id: 'talk')
+    Comms::Admission.decide(envelope(correspondent:, conversation:, surface_id:), surface:)
+  end
+
+  def telegram_decision(conversation:, correspondent: 'telegram:user:1')
+    decide(correspondent:, conversation:, surface: telegram_descriptor, surface_id: 'telegram')
+  end
+
   def test_a_party_must_belong_to_its_surfaces_kind
-    talk = talk_descriptor
-    own = Comms::Admission.decide(envelope(correspondent: 'talk:user:1', conversation: 'talk:chat:1'), surface: talk)
-    foreign = Comms::Admission.decide(envelope(correspondent: 'telegram:user:1', conversation: 'telegram:chat:1'),
-                                      surface: talk)
-    supergroup = Comms::Admission.decide(envelope(correspondent: 'telegram:user:1',
-                                                  conversation: 'telegram:supergroup:-1001234567890',
-                                                  surface_id: 'telegram'), surface: telegram_descriptor)
+    own = decide(correspondent: 'talk:user:1', conversation: 'talk:chat:1')
+    supergroup = telegram_decision(conversation: 'telegram:supergroup:-1001234567890')
 
     assert_equal :group_chat, supergroup.reason
     %w[cli:user:1 os:chat:1].each { |id| assert_nil Comms::Parties.parse(id), id }
-    mixed = Comms::Admission.decide(envelope(correspondent: 'talk:user:1', conversation: 'telegram:chat:1'),
-                                    surface: talk)
-    stray_user = Comms::Admission.decide(envelope(correspondent: 'telegram:user:1', conversation: 'talk:chat:1'),
-                                         surface: talk)
-    reverse = Comms::Admission.decide(envelope(correspondent: 'talk:user:1', conversation: 'talk:chat:1',
-                                               surface_id: 'telegram'), surface: telegram_descriptor)
+    mismatches = [decide(correspondent: 'telegram:user:1', conversation: 'telegram:chat:1'),
+                  decide(correspondent: 'talk:user:1', conversation: 'telegram:chat:1'),
+                  decide(correspondent: 'telegram:user:1', conversation: 'talk:chat:1'),
+                  telegram_decision(correspondent: 'talk:user:1', conversation: 'talk:chat:1')]
 
     assert_equal :request, own.disposition
     assert_match(/\Atalk\./, own.thread_id)
-    [foreign, mixed, stray_user, reverse].each do |decision|
+    mismatches.each do |decision|
       assert_equal %i[rejected party_kind_mismatch], [decision.disposition, decision.reason]
     end
   end
 
+  def build_binding(surface_id:, correspondent:, conversation:)
+    Comms::Binding.new(surface_id:, surface_revision: 1, correspondent_id: correspondent,
+                       conversation_id: conversation, bound_at: Time.utc(2026, 10, 9), bound_by: 'operator')
+  end
+
   def test_only_chats_bind_while_telegram_groups_stay_admissible_to_be_refused
-    bound_at = Time.utc(2026, 10, 9)
-    Comms::Binding.new(surface_id: 'talk', surface_revision: 1, correspondent_id: 'talk:user:1',
-                       conversation_id: 'talk:chat:1', bound_at:, bound_by: 'operator')
+    build_binding(surface_id: 'talk', correspondent: 'talk:user:1', conversation: 'talk:chat:1')
     assert_raises(Comms::ValidationError) do
-      Comms::Binding.new(surface_id: 't', surface_revision: 1, correspondent_id: 'telegram:user:1',
-                         conversation_id: 'telegram:group:1', bound_at:, bound_by: 'operator')
+      build_binding(surface_id: 't', correspondent: 'telegram:user:1', conversation: 'telegram:group:1')
     end
     assert_raises(Comms::ValidationError) do
-      Comms::Binding.new(surface_id: 't', surface_revision: 1, correspondent_id: 'talk:user:1',
-                         conversation_id: 'telegram:chat:1', bound_at:, bound_by: 'operator')
+      build_binding(surface_id: 't', correspondent: 'talk:user:1', conversation: 'telegram:chat:1')
     end
-    group = Comms::Admission.decide(envelope(correspondent: 'telegram:user:1', conversation: 'telegram:group:9',
-                                             surface_id: 'telegram'), surface: telegram_descriptor)
+    group = telegram_decision(conversation: 'telegram:group:9')
 
     assert_equal :group_chat, group.reason
-    supergroup = Comms::Admission.decide(envelope(correspondent: 'telegram:user:1',
-                                                  conversation: 'telegram:supergroup:-1001234567890',
-                                                  surface_id: 'telegram'), surface: telegram_descriptor)
+    supergroup = telegram_decision(conversation: 'telegram:supergroup:-1001234567890')
 
     assert_equal :group_chat, supergroup.reason
     %w[cli:user:1 os:chat:1].each { |id| assert_nil Comms::Parties.parse(id), id }
-    mixed = Comms::Admission.decide(envelope(correspondent: 'loopback:user:1', conversation: 'telegram:chat:1',
-                                             surface_id: 'telegram'), surface: telegram_descriptor)
+    mixed = telegram_decision(correspondent: 'loopback:user:1', conversation: 'telegram:chat:1')
 
     assert_equal :party_kind_mismatch, mixed.reason
     assert_raises(Comms::ValidationError) { envelope(correspondent: 'talk:person:1', conversation: 'talk:chat:1') }
@@ -135,14 +133,15 @@ class CommsPartiesTest < Minitest::Test
     talk = Tamoz::Talk::Channel.new
 
     assert_equal 'talk', talk_descriptor.kind
-    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(port: nil)) }
-    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(port: 70_000)) }
-    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(hosts: ['x' * 254])) }
-    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(hosts: 'mac.tail.ts.net')) }
+    invalid = [{ port: nil }, { port: 70_000 }, { hosts: ['x' * 254] }, { hosts: 'mac.tail.ts.net' },
+               { hosts: %w[a.b a.b] }]
+
+    invalid.each do |options|
+      assert_raises(Comms::ValidationError, options.inspect) { talk.validate!(talk_descriptor(**options)) }
+    end
     ['*', 'mac.tail.ts.net:443', 'two words', ''].each do |host|
       assert_raises(Comms::ValidationError, host) { talk.validate!(talk_descriptor(hosts: [host])) }
     end
-    assert_raises(Comms::ValidationError) { talk.validate!(talk_descriptor(hosts: %w[a.b a.b])) }
   end
 
   def test_talk_decisions_carry_their_own_actor_and_source

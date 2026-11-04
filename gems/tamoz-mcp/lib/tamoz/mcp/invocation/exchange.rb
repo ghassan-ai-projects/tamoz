@@ -5,7 +5,13 @@ module Tamoz
     module Invocation
       # Runs the bounded MCP round trip and its read-only recovery path.
       class Exchange
-        def round_trip(descriptor:, arguments:, client:, supervisor:, effect_key:, headless:, url_policy:, input:)
+        def initialize(headless:, url_policy:)
+          @headless = headless
+          @url_policy = url_policy
+        end
+
+        def round_trip(descriptor:, arguments:, client:, supervisor:, input:)
+          effect_key = Invocation.effect_key(descriptor, arguments)
           begin
             response = transport_round_trip(
               descriptor: descriptor, arguments: arguments, client: client,
@@ -19,10 +25,7 @@ module Tamoz
             raise TransportErrors.new.malformed_response_error(descriptor)
           rescue MCP::Client::InputRequiredError => e
             supervisor.record_success
-            return interrupt_or_deny(
-              descriptor, e,
-              effect_key: effect_key, headless: headless, url_policy: url_policy
-            )
+            return interrupt_or_deny(descriptor, e, effect_key)
           end
 
           Result.new.succeeded_outcome(response, descriptor: descriptor, supervisor: supervisor, effect_key: effect_key)
@@ -115,15 +118,15 @@ module Tamoz
           )
         end
 
-        def interrupt_or_deny(descriptor, error, effect_key:, headless:, url_policy:)
-          return denied_outcome(descriptor, effect_key) if headless
+        def interrupt_or_deny(descriptor, error, effect_key)
+          return denied_outcome(descriptor, effect_key) if @headless
 
           interrupt = Elicitation.build(
             descriptor: descriptor,
             effect_key: effect_key,
             input_requests: error.input_requests,
             request_state: error.request_state,
-            url_policy: url_policy
+            url_policy: @url_policy
           )
           Outcome.new(
             status: :interrupt, observation: nil, interrupt: interrupt,

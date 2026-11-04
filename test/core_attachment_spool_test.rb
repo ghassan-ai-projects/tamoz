@@ -14,16 +14,17 @@ class CoreAttachmentSpoolTest < Minitest::Test
     with_spool do |spool, root|
       bytes = "%PDF-1.4\x00\xFF".b
       digest = spool.put(NAME, bytes)
+      folder = File.join(root, 'attachments')
 
       assert_equal bytes, spool.read(NAME, digest:)
-      assert_equal 0o700, File.stat(File.join(root, 'attachments')).mode & 0o777
-      assert_equal 0o600, File.stat(File.join(root, 'attachments', NAME)).mode & 0o777
+      assert_equal [0o700, 0o600], [mode_of(folder), mode_of(File.join(folder, NAME))]
       spool.delete(NAME)
 
-      assert_nil spool.read(NAME, digest:)
-      assert_empty Dir.children(File.join(root, 'attachments'))
+      assert_equal [nil, []], [spool.read(NAME, digest:), Dir.children(folder)]
     end
   end
+
+  def mode_of(path) = File.stat(path).mode & 0o777
 
   def test_bytes_that_no_longer_match_their_digest_are_refused
     with_spool do |spool, root|

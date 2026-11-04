@@ -9,9 +9,9 @@ module Tamoz
 
         def parse(head)
           line, fields = split_head(head)
-          method, target = request_line(line)
+          verb, target = request_line(line)
           path, query = target.split('?', 2)
-          Request.new(method:, path:, query: URI.decode_www_form(query.to_s).to_h, headers: headers(fields))
+          Request.new(verb:, path:, query: URI.decode_www_form(query.to_s).to_h, headers: headers(fields))
         rescue ArgumentError
           raise Refused, 400
         end

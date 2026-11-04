@@ -33,7 +33,7 @@ module Tamoz
         end
       end
 
-      Request = Data.define(:method, :path, :query, :headers) do
+      Request = Data.define(:verb, :path, :query, :headers) do
         def header(name) = headers[name.downcase]
 
         def content_length = headers.fetch('content-length', '0').to_i
@@ -62,11 +62,12 @@ module Tamoz
         body
       end
 
-      def write(socket, status, body = '', type: 'text/plain; charset=utf-8', headers: {}, deadline_s: WRITE_DEADLINE_S)
+      def write(socket, status, body = '', headers: {}, deadline_s: WRITE_DEADLINE_S)
         body = body.b
         head = "HTTP/1.1 #{status} #{REASONS.fetch(status)}\r\n"
-        { 'Content-Type' => type, 'Content-Length' => body.bytesize.to_s, 'Connection' => 'close',
-          'X-Content-Type-Options' => 'nosniff' }.merge(headers).each { |name, value| head << "#{name}: #{value}\r\n" }
+        { 'Content-Type' => 'text/plain; charset=utf-8', 'Content-Length' => body.bytesize.to_s,
+          'Connection' => 'close', 'X-Content-Type-Options' => 'nosniff' }
+          .merge(headers).each { |name, value| head << "#{name}: #{value}\r\n" }
         write_all(socket, head.b + "\r\n".b + body, monotonic + deadline_s)
       rescue IOError, SystemCallError
         nil

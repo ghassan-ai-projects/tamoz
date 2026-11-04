@@ -22,16 +22,17 @@ class AgentWorkerFailureReasonTest < Minitest::Test
   end
 
   class FailureRuntime
-    attr_reader :delivery_sink
+    attr_reader :delivery_sink, :failed_reasons
 
     def initialize
       @delivery_sink = FailureDeliverySink.new
+      @failed_reasons = []
     end
 
     def occurrence_age_milliseconds(_thread_id) = 7
     def child_task(_thread_id) = nil
     def close_occurrence(_thread_id) = nil
-    def durably_fail_request(_thread_id, _request_id, reason:) = nil
+    def durably_fail_request(_thread_id, _request_id, reason:) = @failed_reasons << reason
   end
 
   def worker
@@ -105,29 +106,23 @@ class AgentWorkerFailureReasonTest < Minitest::Test
     assert_equal 'failed', reason
   end
 
-  def test_checkpoint_conflict_crash_projects_a_safe_action_to_the_correspondent
+  def conflict_failure_outcome
     runtime = FailureRuntime.new
     events = []
-    worker = Tamoz::Agent::Worker.new(
-      runtime:,
-      session_builder: nil,
-      emitter: ->(event) { events << event }
-    )
+    worker = Tamoz::Agent::Worker.new(runtime:, session_builder: nil, emitter: ->(event) { events << event })
     entry = { thread_id: 'telegram.t', head_request_id: 'occ-1', head_status: :queued }
+    worker.send(:handle_thread_failure, entry, Tamoz::CheckpointConflictError.new('internal conflict details'))
+    [runtime.delivery_sink.deliveries.fetch(0), events]
+  end
 
-    worker.send(
-      :handle_thread_failure,
-      entry,
-      Tamoz::CheckpointConflictError.new('internal conflict details')
-    )
+  def test_checkpoint_conflict_crash_projects_a_safe_action_to_the_correspondent
+    delivery, events = conflict_failure_outcome
 
-    delivery = runtime.delivery_sink.deliveries.fetch(0)
-
-    assert_equal 'request.failed', delivery.fetch(:kind)
-    assert_equal 'That request stopped safely. Check its status before retrying.', delivery.fetch(:text)
-    refute_includes delivery.fetch(:text), 'CheckpointConflictError'
-    refute_includes delivery.fetch(:text), 'internal conflict details'
-    refute_includes delivery.fetch(:text), 'failed before it could finish'
+    assert_equal({ kind: 'request.failed',
+                   text: 'That request stopped safely. Check its status before retrying.' },
+                 delivery.slice(:kind, :text))
+    refute_match(/CheckpointConflictError|internal conflict details|failed before it could finish/,
+                 delivery.fetch(:text))
     assert_equal 'request.failed', events.fetch(0).fetch('event')
   end
 

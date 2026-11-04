@@ -9,18 +9,15 @@ module Tamoz
       #
       # :nodoc:
       module PlanReview
+        # What one phase's plan is drafted and reviewed against.
+        PlanInputs = Data.define(:phase, :allowed_tools, :evidence, :planning_context) do
+          def initialize(phase:, allowed_tools:, evidence: [], planning_context: {}) = super
+        end
+
         private
 
-        def accepted_plan(
-          task,
-          phase:,
-          allowed_tools:,
-          evidence:,
-          metadata:,
-          planning_context:, &block
-        )
-          event_context = { 'phase' => phase.to_s }.merge(metadata)
-          inputs = { phase:, allowed_tools:, evidence:, planning_context: }
+        def accepted_plan(task, inputs, metadata: {}, &block)
+          event_context = { 'phase' => inputs.phase.to_s }.merge(metadata)
           feedback = []
           # D-8 Fix C (RC-3): track the last attempt's feedback layer so the
           # PlanRejectedError discloses a bounded summary of STRUCTURAL-layer issues
@@ -42,7 +39,7 @@ module Tamoz
           )
           emit(:plan_drafted, context.merge('plan' => plan.to_h), &)
 
-          issues = structural_issues(plan, **inputs.slice(:phase, :allowed_tools))
+          issues = structural_issues(plan, phase: inputs.phase, allowed_tools: inputs.allowed_tools)
           emit(:plan_reviewed,
                context.merge('layer' => 'structural', 'decision' => issues.empty? ? 'accept' : 'revise',
                              'issues' => issues), &)
@@ -55,7 +52,8 @@ module Tamoz
         end
 
         def semantic_attempt(task, plan, inputs, context, &)
-          review = semantic_review(task, plan, **inputs.slice(:phase, :evidence, :planning_context))
+          review = semantic_review(task, plan, phase: inputs.phase, evidence: inputs.evidence,
+                                               planning_context: inputs.planning_context)
           emit(:plan_reviewed, review.merge(context).merge('layer' => 'semantic'), &)
           return [nil, review.fetch('issues'), :semantic] unless review.fetch('decision') == 'accept'
 
@@ -100,13 +98,7 @@ module Tamoz
 
         def planning_prompt(task, inputs, feedback)
           Deliberation.planning_prompt(
-            task,
-            inputs.fetch(:phase),
-            inputs.fetch(:allowed_tools),
-            inputs.fetch(:evidence),
-            feedback,
-            inputs.fetch(:planning_context),
-            toolbox:
+            task, inputs.phase, inputs.allowed_tools, inputs.evidence, feedback, inputs.planning_context, toolbox:
           )
         end
       end

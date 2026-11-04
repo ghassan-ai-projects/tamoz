@@ -798,46 +798,35 @@ class AgentCLITest < Minitest::Test
   # identity (run_id, task_id, sequence, emitted_at) so it survives the
   # round-trip, sequences increase within one run, and synthetic local events
   # (cli.session) carry no null-valued identity keys.
+  def assert_stream_event_identity(event)
+    assert_instance_of String, event.fetch("type")
+    refute_empty event.fetch("type")
+    assert_instance_of Integer, event.fetch("sequence")
+    assert_operator event.fetch("sequence"), :>=, 0
+    assert_kind_of Numeric, event.fetch("emitted_at")
+    assert event.key?("task_id")
+  end
+
+  def assert_sequences_increase(sequences)
+    assert_equal sequences.sort, sequences, "sequence must increase in emission order"
+    assert_equal sequences.uniq.size, sequences.size
+  end
+
   def test_json_envelope_preserves_stream_part_identity
     with_cli_workspace do |workspace, session_dir|
-      File.write(File.join(workspace, "note.txt"), "hello\n")
-      factory = ->(_options) do
-        ScriptedModel.new(
-          plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
-          review: [accepted_review],
-          verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
-        )
-      end
-
-      out = StringIO.new
-      status = run_cli(
-        ["--json", "ask", "read note.txt"],
-        session: "th", workspace:, session_dir:, out:, err: StringIO.new, factory:
-      )
+      status, events = run_json_ask_events(workspace, session_dir)
 
       assert_equal 0, status
-      events = out.string.lines.map { |line| JSON.parse(line) }
       stream_events, synthetic_events = events.partition { |event| event.key?("run_id") }
 
       refute_empty stream_events
       first = stream_events.first
       assert_instance_of String, first.fetch("run_id")
       refute_empty first.fetch("run_id")
-      stream_events.each do |event|
-        assert_instance_of String, event.fetch("type")
-        refute_empty event.fetch("type")
-        assert_instance_of Integer, event.fetch("sequence")
-        assert_operator event.fetch("sequence"), :>=, 0
-        assert_kind_of Numeric, event.fetch("emitted_at")
-        assert event.key?("task_id")
-      end
+      stream_events.each { |event| assert_stream_event_identity(event) }
 
-      run_sequences = Hash.new { |hash, key| hash[key] = [] }
-      stream_events.each { |event| run_sequences[event.fetch("run_id")] << event.fetch("sequence") }
-      run_sequences.each_value do |sequences|
-        assert_equal sequences.sort, sequences, "sequence must increase in emission order"
-        assert_equal sequences.uniq.size, sequences.size
-      end
+      run_sequences = sequences_by_run(stream_events)
+      run_sequences.each_value { |sequences| assert_sequences_increase(sequences) }
       assert_operator run_sequences.values.count { |sequences| sequences.size > 1 }, :>=, 1,
                       "at least one run must emit multiple sequenced events"
 
@@ -845,12 +834,37 @@ class AgentCLITest < Minitest::Test
       refute_nil session_event
       assert_includes stream_events.map { |event| event.fetch("run_id") },
                       session_event["data"]["request_id"]
-      synthetic_events.each do |event|
-        refute event.key?("task_id")
-        refute event.key?("sequence")
-        refute event.key?("emitted_at")
-      end
+      synthetic_events.each { |event| refute_stream_identity(event) }
     end
+  end
+
+  def sequences_by_run(stream_events)
+    run_sequences = Hash.new { |hash, key| hash[key] = [] }
+    stream_events.each { |event| run_sequences[event.fetch("run_id")] << event.fetch("sequence") }
+    run_sequences
+  end
+
+  def run_json_ask_events(workspace, session_dir)
+    File.write(File.join(workspace, "note.txt"), "hello\n")
+    factory = ->(_options) do
+      ScriptedModel.new(
+        plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
+        review: [accepted_review],
+        verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+      )
+    end
+    out = StringIO.new
+    status = run_cli(
+      ["--json", "ask", "read note.txt"],
+      session: "th", workspace:, session_dir:, out:, err: StringIO.new, factory:
+    )
+    [status, out.string.lines.map { |line| JSON.parse(line) }]
+  end
+
+  def refute_stream_identity(event)
+    refute event.key?("task_id")
+    refute event.key?("sequence")
+    refute event.key?("emitted_at")
   end
 
   def test_tool_error_exits_one_with_message
@@ -1054,7 +1068,7 @@ class AgentCLITest < Minitest::Test
       @error = error
     end
 
-    def generate(stage:, system:, prompt:)
+    def generate(stage:, **)
       raise @error if stage == :verify
 
       JSON.generate(@responses.fetch(stage))

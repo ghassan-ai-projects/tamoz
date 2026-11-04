@@ -82,15 +82,18 @@ class SkillsReachabilityTest < Minitest::Test
     end
   end
 
+  def assert_overlap_refused(root, workspace)
+    error = assert_raises(Tamoz::Skills::Error, root) { Tamoz::Skills.operator_snapshot(root:, workspace_root: workspace) }
+
+    assert_match(/overlaps the workspace/, error.message)
+  end
+
   def test_a_skills_root_and_the_workspace_may_not_contain_one_another_either_way
     Dir.mktmpdir('tamoz-k6') do |directory|
       workspace = File.join(directory, 'repo')
       FileUtils.mkdir_p(workspace)
-      [File.join(workspace, 'skills'), directory, workspace].each do |root|
-        error = assert_raises(Tamoz::Skills::Error, root) { Tamoz::Skills.operator_snapshot(root:, workspace_root: workspace) }
 
-        assert_match(/overlaps the workspace/, error.message)
-      end
+      [File.join(workspace, 'skills'), directory, workspace].each { |root| assert_overlap_refused(root, workspace) }
       assert_raises(Tamoz::Skills::Error) do
         Tamoz::Skills.operator_snapshot(bundled: true, workspace_root: File.dirname(Tamoz::Skills.bundled_root, 3))
       end

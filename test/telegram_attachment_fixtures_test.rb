@@ -41,14 +41,16 @@ class TelegramAttachmentFixturesTest < Minitest::Test
   def test_every_scenario_is_complete_and_names_a_known_capability
     suite = spec.fetch('suite')
 
-    spec.fetch('scenarios').each do |name, scenario|
-      assert_path_exists File.join(DIRECTORY, scenario.fetch('file')), name
-      assert_includes suite.fetch('capabilities'), scenario.fetch('needs'), name
-      assert_predicate scenario.fetch('budget_s'), :positive?, name
-      graded = GRADED_KEYS.any? { |key| scenario.key?(key) }
+    spec.fetch('scenarios').each { |name, scenario| assert_scenario_complete(suite, name, scenario) }
+  end
 
-      assert graded, "#{name} grades nothing about the reply"
-    end
+  def assert_scenario_complete(suite, name, scenario)
+    assert_path_exists File.join(DIRECTORY, scenario.fetch('file')), name
+    assert_includes suite.fetch('capabilities'), scenario.fetch('needs'), name
+    assert_predicate scenario.fetch('budget_s'), :positive?, name
+    graded = GRADED_KEYS.any? { |key| scenario.key?(key) }
+
+    assert graded, "#{name} grades nothing about the reply"
   end
 
   def test_the_answer_a_text_scenario_expects_is_really_in_its_file
@@ -82,9 +84,7 @@ class TelegramAttachmentFixturesTest < Minitest::Test
 
   def test_the_fake_bot_api_serves_files_to_the_real_transport
     fake = TelegramBotApiFake.new
-    client = Tamoz::Telegram::Client.new('123:eval', origin: fake.origin, read_timeout: 2.0)
-    normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
-    transport = Tamoz::Telegram::Transport.new(client:, normalizer:)
+    transport = real_transport(fake)
     fake.send_document(1001, 'MARIGOLD', name: 'notes.txt', mime_type: 'text/plain')
     big = fake.send_document(1001, 'x', name: 'big.txt', mime_type: 'text/plain', announced: 25_000_000)
     attachment = transport.poll(next_offset: nil, limit: 10, timeout_s: 0)[:updates].first.fetch('attachment')
@@ -96,6 +96,12 @@ class TelegramAttachmentFixturesTest < Minitest::Test
     assert_raises(Tamoz::Comms::TransientTransportError) { transport.fetch_attachment('nope', max_bytes: 100) }
   ensure
     fake&.stop
+  end
+
+  def real_transport(fake)
+    client = Tamoz::Telegram::Client.new('123:eval', origin: fake.origin, read_timeout: 2.0)
+    normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
+    Tamoz::Telegram::Transport.new(client:, normalizer:)
   end
 
   def test_a_forwarded_voice_note_arrives_as_someone_elses_audio

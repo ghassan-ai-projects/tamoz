@@ -37,34 +37,21 @@ options = {
   lane_config: "fast=flash,deep=pro,batch=flash",
   tenant: nil
 }
+WORKER_OPTIONS = [
+  [:profile, "--profile PATH", "Profile file carrying model_roles (the only model authority)"],
+  [:database, "--database PATH", "SQLite database for the durable checkpointer"],
+  [:tenant, "--tenant TENANT", "Configured tenant for this worker"],
+  [:socket, "--socket PATH", "UDS socket to bind (production; mTLS at the socket)"],
+  [:port, "--port N", Integer, "TCP port to bind (development)"],
+  [:worker_version, "--worker-version V", "Reported worker version"],
+  [:lane_config, "--lane-config SPEC", "lane=model triples, comma-separated"],
+  [:skills_source, "--skills-source PATH", "JSON map {name => rendered text} of the operator-approved skills"],
+  [:draft_model_policy, "--draft-model-policy ROLE",
+   "Profile role that drafts playbook rules; announces draft_playbook_rule"]
+].freeze
 parser = OptionParser.new do |opts|
-  opts.on("--profile PATH", "Profile file carrying model_roles (the only model authority)") do |value|
-    options[:profile] = value
-  end
-  opts.on("--database PATH", "SQLite database for the durable checkpointer") do |value|
-    options[:database] = value
-  end
-  opts.on("--tenant TENANT", "Configured tenant for this worker") do |value|
-    options[:tenant] = value
-  end
-  opts.on("--socket PATH", "UDS socket to bind (production; mTLS at the socket)") do |value|
-    options[:socket] = value
-  end
-  opts.on("--port N", Integer, "TCP port to bind (development)") do |value|
-    options[:port] = value
-  end
-  opts.on("--worker-version V", "Reported worker version") do |value|
-    options[:worker_version] = value
-  end
-  opts.on("--lane-config SPEC", "lane=model triples, comma-separated") do |value|
-    options[:lane_config] = value
-  end
-  opts.on("--skills-source PATH", "JSON map {name => rendered text} of the operator-approved skills") do |value|
-    options[:skills_source] = value
-  end
-  opts.on("--draft-model-policy ROLE",
-          "Profile role that drafts playbook rules; announces draft_playbook_rule") do |value|
-    options[:draft_model_policy] = value
+  WORKER_OPTIONS.each do |key, *arguments|
+    opts.on(*arguments) { |value| options[key] = value }
   end
 end
 parser.on("--runtime-dir PATH", "Operator runtime directory whose sources.probes the episodes may use") do |value|

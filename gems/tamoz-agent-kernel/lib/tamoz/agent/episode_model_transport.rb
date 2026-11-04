@@ -136,12 +136,13 @@ module Tamoz
         boundary = "tamoz-#{audio_digest[0, 32]}"
         headers = {"Content-Type" => "multipart/form-data; boundary=#{boundary}"}
         headers["Authorization"] = "Bearer #{@api_key}" unless @api_key.to_s.empty?
-        response = post_request(TRANSCRIPTION_PATH, transcription_body(audio, filename, media_type, boundary), headers:)
+        upload = Wire.transcription_body(@model, audio, filename, media_type, boundary)
+        response = post_request(TRANSCRIPTION_PATH, upload, headers:)
         body = response.body.to_s
         raise http_error(response, body) unless response.is_a?(Net::HTTPSuccess)
 
         Transcript.new(text: transcript_text(body), request_digest: transcription_digest(audio_digest),
-                       response_digest: "sha256:#{Digest::SHA256.hexdigest(body)}", provider_configuration_digest:)
+                       response_digest: Wire.sha256(body), provider_configuration_digest:)
       rescue URI::InvalidURIError => e
         raise model_error("transport_failure", body_bytes: e.message.to_s.bytesize)
       end
@@ -160,7 +161,7 @@ module Tamoz
         headers["Authorization"] = "Bearer #{@api_key}" unless @api_key.to_s.empty?
         status, type, audio = post_bounded(SPEECH_PATH, request, headers:, max_bytes: MAX_SPEECH_BYTES)
         raise model_error("http_failure", status:, body: audio) unless status.start_with?("2")
-        raise model_error("invalid_response", body: audio) unless type.start_with?("audio/mpeg") && mp3?(audio)
+        raise model_error("invalid_response", body: audio) unless type.start_with?("audio/mpeg") && Wire.mp3?(audio)
 
         Speech.new(audio:, media_type: "audio/mpeg", request_digest: speech_digest(text, voice))
       rescue URI::InvalidURIError => e
@@ -172,20 +173,14 @@ module Tamoz
                            {"model" => @model, "voice" => String(voice), "text" => String(text)})
       end
 
-      def conversation_settings_digest
-        "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(CONVERSATION_SETTINGS))}"
-      end
+      def conversation_settings_digest = Wire.sha256(Tamoz::Core.jcs(CONVERSATION_SETTINGS))
 
-      def request_digest(request_bytes)
-        "sha256:#{Digest::SHA256.hexdigest(request_bytes)}"
-      end
+      def request_digest(request_bytes) = Wire.sha256(request_bytes)
 
       # The digest of the frozen settings the request was made under — the
       # gateway signs it into the record and the receipt carries it, so the
       # verifier can cross-check the binding (never an always-nil knob).
-      def settings_digest
-        "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(SETTINGS))}"
-      end
+      def settings_digest = Wire.sha256(Tamoz::Core.jcs(SETTINGS))
 
       # Sends the canonical request bytes verbatim; returns the content string
       # and the exact response envelope bytes (digest-bound). The response
@@ -248,35 +243,14 @@ module Tamoz
         raise ProtocolError, "conversation response has no message" unless message.is_a?(Hash)
 
         Conversation.new(
-          content: String(message["content"] || ""), tool_calls: tool_calls_from(message["tool_calls"]),
-          finish_reason: String(choice["finish_reason"] || ""), usage: provider_usage(envelope["usage"]),
+          content: String(message["content"] || ""), tool_calls: Wire.tool_calls_from(message["tool_calls"]),
+          finish_reason: String(choice["finish_reason"] || ""), usage: Wire.provider_usage(envelope["usage"]),
           request_digest: request_digest(request_bytes),
-          response_digest: "sha256:#{Digest::SHA256.hexdigest(envelope_bytes)}",
+          response_digest: Wire.sha256(envelope_bytes),
           settings_digest: conversation_settings_digest, provider_configuration_digest:
         )
       rescue Tamoz::Core::ProtocolError, Tamoz::Core::JCS::Error, JSON::ParserError, KeyError, TypeError
         raise model_error("invalid_response", body: envelope_bytes)
-      end
-
-      def tool_calls_from(calls)
-        Array(calls).map do |call|
-          function = call.fetch("function")
-          arguments = function.fetch("arguments")
-          raise ProtocolError, "tool call arguments must be a JSON string" unless arguments.is_a?(String)
-
-          {"id" => String(call.fetch("id")), "name" => String(function.fetch("name")), "arguments" => arguments}
-        end
-      end
-
-      # The provider's own usage counts, integers only; the context engine interprets them.
-      def provider_usage(raw)
-        return nil unless raw.is_a?(Hash)
-
-        counts = raw.select { |_, value| value.is_a?(Integer) && value >= 0 }
-        details = raw["prompt_tokens_details"]
-        cached = details.is_a?(Hash) && details["cached_tokens"]
-        counts = counts.merge("prompt_tokens_details" => {"cached_tokens" => cached}) if cached.is_a?(Integer)
-        counts.empty? ? nil : counts
       end
 
       # P3: the gateway is the transport the effect adapter calls. The frozen
@@ -330,21 +304,6 @@ module Tamoz
         end
       end
 
-      def mp3?(audio)
-        return true if audio.start_with?("ID3".b)
-
-        audio.bytesize > 1 && audio.getbyte(0) == 0xFF && audio.getbyte(1).allbits?(0xE0)
-      end
-
-      def transcription_body(audio, filename, media_type, boundary)
-        name = filename.to_s.gsub(/[^A-Za-z0-9._-]/, "_")
-        media_type = "application/octet-stream" unless media_type.to_s.match?(%r{\A[\w.+-]+/[\w.+-]+\z})
-        head = "--#{boundary}\r\nContent-Disposition: form-data; name=\"model\"\r\n\r\n#{@model}\r\n" \
-               "--#{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"#{name}\"\r\n" \
-               "Content-Type: #{media_type}\r\n\r\n"
-        head.b + audio.b + "\r\n--#{boundary}--\r\n".b
-      end
-
       def transcript_text(body)
         parsed = Tamoz::Core.parse_json_strict(body)
         text = parsed.is_a?(Hash) && parsed["text"]
@@ -357,10 +316,10 @@ module Tamoz
 
       def build_model_response(envelope_bytes, request_bytes:, retries:)
         Response.new(
-          content: extract_content(envelope_bytes),
+          content: Wire.extract_content(envelope_bytes),
           request_digest: request_digest(request_bytes),
-          response_digest: "sha256:#{Digest::SHA256.hexdigest(envelope_bytes)}",
-          usage: usage_from(extract_usage_hash(envelope_bytes)),
+          response_digest: Wire.sha256(envelope_bytes),
+          usage: Wire.usage_from(Wire.extract_usage_hash(envelope_bytes)),
           settings_digest: settings_digest,
           provider_configuration_digest:,
           provider_retries: retries
@@ -385,46 +344,12 @@ module Tamoz
         bytes = body.to_s
         ModelCallError.new(
           code:, status:,
-          body_digest: body ? "sha256:#{Digest::SHA256.hexdigest(bytes)}" : nil,
+          body_digest: body ? Wire.sha256(bytes) : nil,
           body_bytes: body ? bytes.bytesize : body_bytes
         )
-      end
-
-      def extract_content(bytes)
-        parsed = Tamoz::Core.parse_json_strict(bytes)
-        raise ProtocolError, "episode model response is not an object" unless parsed.is_a?(Hash)
-
-        content = parsed.dig("choices", 0, "message", "content")
-        if content.nil? || !content.is_a?(String)
-          raise ProtocolError, "episode model response has no assistant content"
-        end
-
-        content
-      end
-
-      def extract_usage_hash(bytes)
-        parsed = Tamoz::Core.parse_json_strict(bytes)
-        parsed.is_a?(Hash) ? parsed.fetch("usage", {}) : {}
-      end
-
-      def usage_from(raw)
-        return ModelCall::Usage.unavailable unless raw.is_a?(Hash)
-
-        input = integer_field(raw, "prompt_tokens")
-        output = integer_field(raw, "completion_tokens")
-        return ModelCall::Usage.unavailable if input.nil? || output.nil?
-
-        ModelCall::Usage.of(
-          input_tokens: input.to_i,
-          output_tokens: output.to_i,
-          cost_microunits: 0
-        )
-      end
-
-      def integer_field(raw, key)
-        value = raw[key]
-        value.is_a?(Integer) && value >= 0 ? value : nil
       end
     end
   end
 end
+
+require_relative "episode_model_transport/wire"

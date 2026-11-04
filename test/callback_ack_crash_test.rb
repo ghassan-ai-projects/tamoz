@@ -193,55 +193,106 @@ class CallbackAckCrashTest < Minitest::Test
       @runtime_dir = rt.dir
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
 
-      with_channel_runtime(factory: edit_factory) do |runtime, store|
-        bind_thread_to_conversation(store, now: base - 120)
-        runtime.bind_thread_profile(THREAD_ID, 'trusted')
+      ack_a_press_before_the_crash(rt, base)
 
-        rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--thread', THREAD_ID, '--profile', 'trusted'],
-               factory: edit_factory)
-
-        worker = new_worker(runtime)
-        worker.poll_once
-
-        assert_equal :paused, runtime.session_for(THREAD_ID).view(thread: THREAD_ID).status
-
-        reference = pending_prompt_row(store)
-        transport = RecordingTransport.new
-        digest, prompt = activate_prompt(store, transport, reference, now: base - 60)
-
-        requests_before_ack = request_count(runtime.adapter, THREAD_ID)
-        transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-77', reference: reference,
-                                       callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
-        gateway = Comms::Gateway.new(checkpoints: runtime.checkpoints,
-                                     transport:, descriptor:, poller_owner: 'gateway:test')
-
-        assert_equal :served, gateway.serve_once(now: base, drain: false)
-
-        assert_equal ['cbq-77'], transport.acks, 'the press is acknowledged exactly once'
-        assert_equal [%w[decision consumed]], dispositions(store, 9),
-                     'the admission disposition is durable before anything else runs'
-        assert_equal 'consumed', store.prompt(reference_digest: digest).fetch('status')
-        # The real engine pins filesystem_operator evidence on this pause, so
-        # the chat-bound press can only ever resolve as a deny (ADR-049 INV-B).
-        assert_equal [%w[deny pending]], decision_rows(runtime.adapter)
-        assert_equal requests_before_ack, request_count(runtime.adapter, THREAD_ID),
-                     'the ack pass enqueues no resulting turn — the resume happens strictly later'
-      end
-
-      # The restart boundary: the first process is gone. The restarted worker
-      # finds the durable deny against the SAME pause, applies it, and the
-      # occurrence settles to its terminal projection.
-      with_channel_runtime(factory: edit_factory) do |restarted, _store|
-        new_worker(restarted).poll_once
-
-        view = restarted.session_for(THREAD_ID).view(thread: THREAD_ID)
-
-        assert_equal :completed, view.status,
-                     'the durable decision carries the restarted turn to its terminal state'
-        assert_equal [%w[deny consumed]], decision_rows(restarted.adapter),
-                     'the decision survives the crash boundary and is applied exactly once'
-      end
+      assert_restart_applies_the_durable_deny
     end
+  end
+
+  def ack_a_press_before_the_crash(runtime_fixture, base)
+    with_channel_runtime(factory: edit_factory) do |runtime, store|
+      reference = park_the_edit_turn(runtime_fixture, runtime, store, base)
+      transport = RecordingTransport.new
+      digest, prompt = activate_prompt(store, transport, reference, now: base - 60)
+
+      requests_before_ack = request_count(runtime.adapter, THREAD_ID)
+      transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-77', reference: reference,
+                                     callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
+      gateway = Comms::Gateway.new(checkpoints: runtime.checkpoints,
+                                   transport:, descriptor:, poller_owner: 'gateway:test')
+
+      assert_equal :served, gateway.serve_once(now: base, drain: false)
+
+      assert_press_acked_before_any_turn(runtime, store, transport, digest, requests_before_ack)
+    end
+  end
+
+  def park_the_edit_turn(runtime_fixture, runtime, store, base)
+    bind_thread_to_conversation(store, now: base - 120)
+    runtime.bind_thread_profile(THREAD_ID, 'trusted')
+
+    runtime_fixture.cli(['queue', 'add', '--task', 'Fix note.txt', '--thread', THREAD_ID, '--profile', 'trusted'],
+                        factory: edit_factory)
+
+    worker = new_worker(runtime)
+    worker.poll_once
+
+    assert_equal :paused, runtime.session_for(THREAD_ID).view(thread: THREAD_ID).status
+
+    pending_prompt_row(store)
+  end
+
+  def assert_press_acked_before_any_turn(runtime, store, transport, digest, requests_before_ack)
+    assert_equal ['cbq-77'], transport.acks, 'the press is acknowledged exactly once'
+    assert_equal [%w[decision consumed]], dispositions(store, 9),
+                 'the admission disposition is durable before anything else runs'
+    assert_equal 'consumed', store.prompt(reference_digest: digest).fetch('status')
+    # The real engine pins filesystem_operator evidence on this pause, so
+    # the chat-bound press can only ever resolve as a deny (ADR-049 INV-B).
+    assert_equal [%w[deny pending]], decision_rows(runtime.adapter)
+    assert_equal requests_before_ack, request_count(runtime.adapter, THREAD_ID),
+                 'the ack pass enqueues no resulting turn — the resume happens strictly later'
+  end
+
+  # The restart boundary: the first process is gone. The restarted worker
+  # finds the durable deny against the SAME pause, applies it, and the
+  # occurrence settles to its terminal projection.
+  def assert_restart_applies_the_durable_deny
+    with_channel_runtime(factory: edit_factory) do |restarted, _store|
+      new_worker(restarted).poll_once
+
+      view = restarted.session_for(THREAD_ID).view(thread: THREAD_ID)
+
+      assert_equal :completed, view.status,
+                   'the durable decision carries the restarted turn to its terminal state'
+      assert_equal [%w[deny consumed]], decision_rows(restarted.adapter),
+                   'the decision survives the crash boundary and is applied exactly once'
+    end
+  end
+
+  def callback_ack_store(adapter)
+    definition = Tamoz.graph(name: 'callback-ack', version: '1') do
+      state :ready, default: true
+      node(:finish, implementation_name: 'callback-ack.finish', version: '1') { |_s, _c| { ready: true } }
+      edge Tamoz::START, :finish
+      edge :finish, Tamoz::END
+    end
+    checkpoints = definition.compile(checkpointer: adapter).checkpointer
+    [checkpoints, adapter.bind_comms_store(checkpoints)]
+  end
+
+  def project_activated_prompt(adapter, checkpoints, store, transport, base)
+    sink = Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
+
+    assert_equal :accepted, sink.push(
+      thread_id: THREAD_ID, kind: 'request.approval_request', text: 'Approval requested.',
+      request_id: 'occurrence-1', interrupts: approval_interrupts
+    )
+    reference = pending_prompt_row(store)
+    digest, prompt = activate_prompt(store, transport, reference, now: base - 60)
+    [reference, digest, prompt]
+  end
+
+  def append_later_news(store, base)
+    store.append_delivery(
+      Comms::Delivery.build(
+        conversation_id: CONVERSATION_ID, kind: 'control', text: 'later news',
+        part_index: 0, part_count: 1, journaled: false,
+        render_version: Comms::Rendering::RENDER_VERSION,
+        content_digest: Comms::Rendering.content_digest('later news')
+      ).wire,
+      surface_id: SURFACE_ID, capacity: 50, now: base - 30
+    )
   end
 
   # Crash-ordering at the gateway itself: everything the pass would do after
@@ -252,39 +303,15 @@ class CallbackAckCrashTest < Minitest::Test
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
       base = Time.now.utc
       begin
-        definition = Tamoz.graph(name: 'callback-ack', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'callback-ack.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
-        store = adapter.bind_comms_store(checkpoints)
+        checkpoints, store = callback_ack_store(adapter)
         bind_thread_to_conversation(store, now: base - 120)
-
-        sink = Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
-
-        assert_equal :accepted, sink.push(
-          thread_id: THREAD_ID, kind: 'request.approval_request', text: 'Approval requested.',
-          request_id: 'occurrence-1', interrupts: approval_interrupts
-        )
-        reference = pending_prompt_row(store)
-
         transport = RecordingTransport.new
-        digest, prompt = activate_prompt(store, transport, reference, now: base - 60)
+        reference, digest, prompt = project_activated_prompt(adapter, checkpoints, store, transport, base)
 
         drainer = Comms::DeliveryDrainer.new(store:, transport:, descriptor:, owner: 'test:drainer',
                                              sleeper: ->(_seconds) {})
         transport.crash_deliveries = true
-        store.append_delivery(
-          Comms::Delivery.build(
-            conversation_id: CONVERSATION_ID, kind: 'control', text: 'later news',
-            part_index: 0, part_count: 1, journaled: false,
-            render_version: Comms::Rendering::RENDER_VERSION,
-            content_digest: Comms::Rendering.content_digest('later news')
-          ).wire,
-          surface_id: SURFACE_ID, capacity: 50, now: base - 30
-        )
+        append_later_news(store, base)
         transport.batch([callback_wire(update_id: 9, callback_id: 'cbq-88', reference: reference,
                                        callback_message_id: Integer(prompt.fetch('prompt_receipt')))])
         gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:,

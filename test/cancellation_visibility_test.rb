@@ -143,7 +143,7 @@ class CancellationVisibilityTest < Minitest::Test
       directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
       runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
         lease_ttl: 5.0
       )
       begin
@@ -243,7 +243,7 @@ class CancellationVisibilityTest < Minitest::Test
       directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
       runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
         lease_ttl: 5.0
       )
       begin
@@ -315,7 +315,7 @@ class CancellationVisibilityTest < Minitest::Test
       directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
       first = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: lambda { |profile:|
+        model_factory: lambda { |**|
           CrashingModel.new(after: :claim, **read_only_responses)
         },
         lease_ttl: 0.2
@@ -348,7 +348,7 @@ class CancellationVisibilityTest < Minitest::Test
 
       second = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
         lease_ttl: 5.0
       )
       begin

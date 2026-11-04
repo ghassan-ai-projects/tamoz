@@ -79,10 +79,8 @@ module Tamoz
               supervisor: supervisor,
               client_factory: client_factory
             )
-            Exchange.new.round_trip(
-              descriptor: descriptor, arguments: arguments, client: client,
-              supervisor: supervisor, effect_key: effect_key(descriptor, arguments),
-              headless: headless, url_policy: url_policy, input: nil
+            Exchange.new(headless:, url_policy:).round_trip(
+              descriptor: descriptor, arguments: arguments, client: client, supervisor: supervisor, input: nil
             )
           end
         end
@@ -103,10 +101,8 @@ module Tamoz
               supervisor: supervisor,
               client_factory: client_factory
             )
-            Exchange.new.round_trip(
-              descriptor: descriptor, arguments: arguments, client: client,
-              supervisor: supervisor, effect_key: effect_key(descriptor, arguments),
-              headless: headless, url_policy: url_policy, input: merge
+            Exchange.new(headless:, url_policy:).round_trip(
+              descriptor: descriptor, arguments: arguments, client: client, supervisor: supervisor, input: merge
             )
           end
         end

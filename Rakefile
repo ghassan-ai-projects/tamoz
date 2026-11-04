@@ -780,18 +780,22 @@ namespace :agenteval do
     key = agenteval_env_key("OPENROUTER_API_KEY")
     abort "OPENROUTER_API_KEY is not set; export it or use AGENTEVAL_PROVIDER=deepseek" if key.empty?
 
-    uri = URI("https://openrouter.ai/api/v1/key")
-    response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
-      request = Net::HTTP::Get.new(uri)
-      request["Authorization"] = "Bearer #{key}"
-      http.request(request)
-    end
+    response = openrouter_key_response(key)
     return if response.code.to_i == 200
 
     abort "OpenRouter refuses the configured key (HTTP #{response.code}: " \
           "#{response.body.to_s.strip[0, 140]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
   rescue SocketError, Timeout::Error, SystemCallError => e
     abort "OpenRouter is unreachable (#{e.class}); a real run needs the network"
+  end
+
+  def openrouter_key_response(key)
+    uri = URI("https://openrouter.ai/api/v1/key")
+    Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
+      request = Net::HTTP::Get.new(uri)
+      request["Authorization"] = "Bearer #{key}"
+      http.request(request)
+    end
   end
 
   def real_run_ready!

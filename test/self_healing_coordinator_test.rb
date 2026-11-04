@@ -42,12 +42,21 @@ class SelfHealingCoordinatorTest < Minitest::Test
   end
 
   def build_rule
-    Healing::HealingRule.new(
+    Healing::HealingRule.new(**rule_scope, **rule_protocol, **rule_guards)
+  end
+
+  def rule_scope
+    {
       rule_id: 'rule.stale-conditional-file-edit', version: 1,
       owner: 'human:owner', lifecycle_mode: :shadow,
       trigger: { 'categories' => %w[stale_precondition] },
       minimum_confidence: 1.0, risk_class: :low, effect_class: :reconcilable,
-      authorized_scopes: ['workspace'], authorized_resources: ['answer.txt'],
+      authorized_scopes: ['workspace'], authorized_resources: ['answer.txt']
+    }
+  end
+
+  def rule_protocol
+    {
       plan_review_policy: {
         'plan_required' => true, 'semantic_critic_required' => true,
         'human_approval_required' => true
@@ -57,14 +66,51 @@ class SelfHealingCoordinatorTest < Minitest::Test
         { 'form' => 'refresh_recompute', 'safety' => 'reconcilable', 'creates' => false }
       ],
       effect_identity: { 'domain' => Healing::EffectIdentity::DOMAIN },
-      budgets: { 'max_attempts' => 2, 'max_magnitude' => 1.0, 'max_cost' => 1.0, 'max_seconds' => 30.0 },
+      budgets: { 'max_attempts' => 2, 'max_magnitude' => 1.0, 'max_cost' => 1.0, 'max_seconds' => 30.0 }
+    }
+  end
+
+  def rule_guards
+    {
       verification_oracle: { 'kind' => 'configured_check', 'check_name' => 'answer', 'digest' => "sha256:#{'c' * 64}" },
       compensation: { 'kind' => 'restore_preimage' },
       circuit_conditions: %w[verification_failed_twice compensation_failed],
       reset_authority: 'human:owner',
       escalation_contract: { 'sink' => 'tamoz.escalations', 'recommended_next_action' => 're-read' },
       eval_suite: 'tamoz.evals.healing.stale-edit', created_at_ms: 1_700_000_000_000
+    }
+  end
+
+  def stored_attempts(store, record)
+    store.get(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint).value.fetch('attempts')
+  end
+
+  def run_at_durable_ceiling(store)
+    record = build_record
+    store.put(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint,
+              { 'attempts' => Coordinator::MAX_DURABLE_ATTEMPTS, 'updated_at_ms' => 0 }, if_version: nil)
+    remediation = FakeRemediation.new(outcome_state: :recovered)
+    decision = coordinator(store, registry_with(build_rule), remediation:).remediate(record, collaborators)
+    [record, decision, remediation]
+  end
+
+  def open_circuit_for(store, rule)
+    circuit = Tamoz::SQLite::CircuitStore.new(
+      store:, scope: :rule_target, scope_id: rule.rule_id, owner_id: rule.rule_id,
+      clock: -> { Time.at(1_700_000_000) }
     )
+    circuit.record_failure(kind: :verification_failed) until circuit.open?
+  end
+
+  def run_recovering_rule(store)
+    record = build_record
+    persisted = nil
+    remediation = FakeRemediation.new(
+      outcome_state: :recovered,
+      on_call: ->(_) { persisted = store.get(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint)&.value&.fetch('attempts') }
+    )
+    decision = coordinator(store, registry_with(build_rule), remediation:).remediate(record, collaborators)
+    [record, decision, remediation, persisted]
   end
 
   def build_record(category: :stale_precondition)
@@ -90,15 +136,16 @@ class SelfHealingCoordinatorTest < Minitest::Test
   end
 
   def collaborators
-    { toolbox: Object.new, critic: ->(_) {}, original_invariant: 'x',
-      minimal_change: 'y', stop_conditions: [], perform: -> {} }
+    Coordinator::Inputs.new(toolbox: Object.new, critic: ->(_) {}, original_invariant: 'x',
+                            minimal_change: 'y', stop_conditions: [], perform: -> {})
   end
 
   # An empty registry is the shipped default: nothing triggers, so wiring is a
   # safe no-op — the failure path escalates exactly as before healing was wired.
   def test_no_matching_rule_escalates
     with_store do |store|
-      decision = coordinator(store, Healing::RuleRegistry.new).remediate(build_record, toolbox: Object.new)
+      inputs = Coordinator::Inputs.new(toolbox: Object.new)
+      decision = coordinator(store, Healing::RuleRegistry.new).remediate(build_record, inputs)
 
       assert_predicate decision, :escalated?
       assert_equal 'no_matching_rule', decision.reason
@@ -109,19 +156,20 @@ class SelfHealingCoordinatorTest < Minitest::Test
   # the bound. At the ceiling the protocol is refused BEFORE it runs.
   def test_durable_attempt_bound_refuses_before_running
     with_store do |store|
-      record = build_record
-      store.put(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint,
-                { 'attempts' => Coordinator::MAX_DURABLE_ATTEMPTS, 'updated_at_ms' => 0 }, if_version: nil)
-
-      remediation = FakeRemediation.new(outcome_state: :recovered)
-      decision = coordinator(store, registry_with(build_rule), remediation:).remediate(record, **collaborators)
+      _record, decision, remediation = run_at_durable_ceiling(store)
 
       assert_predicate decision, :escalated?
       assert_equal 'durable_attempt_bound_exceeded', decision.reason
       assert_empty remediation.calls, 'the bounded protocol must not run once the durable ceiling is reached'
-      seeded = store.get(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint).value.fetch('attempts')
+    end
+  end
 
-      assert_equal Coordinator::MAX_DURABLE_ATTEMPTS, seeded, 'a refused attempt must not increment the counter'
+  def test_durable_attempt_bound_refusal_does_not_increment_the_counter
+    with_store do |store|
+      record, = run_at_durable_ceiling(store)
+
+      assert_equal Coordinator::MAX_DURABLE_ATTEMPTS, stored_attempts(store, record),
+                   'a refused attempt must not increment the counter'
     end
   end
 
@@ -129,14 +177,10 @@ class SelfHealingCoordinatorTest < Minitest::Test
   def test_open_durable_circuit_escalates
     with_store do |store|
       rule = build_rule
-      circuit = Tamoz::SQLite::CircuitStore.new(
-        store:, scope: :rule_target, scope_id: rule.rule_id, owner_id: rule.rule_id,
-        clock: -> { Time.at(1_700_000_000) }
-      )
-      circuit.record_failure(kind: :verification_failed) until circuit.open?
+      open_circuit_for(store, rule)
 
       remediation = FakeRemediation.new(outcome_state: :recovered)
-      decision = coordinator(store, registry_with(rule), remediation:).remediate(build_record, **collaborators)
+      decision = coordinator(store, registry_with(rule), remediation:).remediate(build_record, collaborators)
 
       assert_predicate decision, :escalated?
       assert_equal 'circuit_open', decision.reason
@@ -148,23 +192,22 @@ class SelfHealingCoordinatorTest < Minitest::Test
   # protocol with a durable-first increment, and a recovery clears the counter.
   def test_matching_rule_runs_protocol_and_clears_counter_on_recovery
     with_store do |store|
-      record = build_record
-      persisted = nil
-      remediation = FakeRemediation.new(
-        outcome_state: :recovered,
-        on_call: ->(_) { persisted = store.get(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint)&.value&.fetch('attempts') }
-      )
-      decision = coordinator(store, registry_with(build_rule), remediation:).remediate(record, **collaborators)
+      _record, decision, remediation, persisted = run_recovering_rule(store)
 
       assert_predicate decision, :recovered?
-      call = remediation.calls.fetch(0)
-
-      assert_equal 1, call.fetch(:attempt), 'the gem receives the durable attempt count, not a caller-owned 1'
+      assert_equal 1, remediation.calls.fetch(0).fetch(:attempt),
+                   'the gem receives the durable attempt count, not a caller-owned 1'
       assert_equal 1, persisted, 'durable-first: the increment is persisted before the protocol runs'
-      refute_nil call.fetch(:circuit), 'the durable circuit is passed in, not built fresh per call'
-      cleared = store.get(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint).value.fetch('attempts')
+    end
+  end
 
-      assert_equal 0, cleared, 'a recovered outcome clears the durable counter'
+  def test_recovery_passes_the_durable_circuit_in_and_clears_the_counter
+    with_store do |store|
+      record, _decision, remediation, = run_recovering_rule(store)
+
+      refute_nil remediation.calls.fetch(0).fetch(:circuit),
+                 'the durable circuit is passed in, not built fresh per call'
+      assert_equal 0, stored_attempts(store, record), 'a recovered outcome clears the durable counter'
     end
   end
 
@@ -174,7 +217,7 @@ class SelfHealingCoordinatorTest < Minitest::Test
     with_store do |store|
       record = build_record
       remediation = FakeRemediation.new(outcome_state: :escalated)
-      coordinator(store, registry_with(build_rule), remediation:).remediate(record, **collaborators)
+      coordinator(store, registry_with(build_rule), remediation:).remediate(record, collaborators)
       kept = store.get(Coordinator::ATTEMPTS_NAMESPACE, record.fingerprint).value.fetch('attempts')
 
       assert_equal 1, kept

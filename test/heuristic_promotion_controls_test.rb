@@ -13,6 +13,7 @@ require_relative 'test_helper'
 # an oracle passes, each adversary is blocked by the specific gate it targets.
 class HeuristicPromotionControlsTest < Minitest::Test
   Harness = Tamoz::Evals::Harness
+  Pipeline = Harness::HeuristicImprovementPipeline
   Improvement = Tamoz::Agent::Improvement
   EvaluationReport = Improvement::EvaluationReport
 
@@ -77,11 +78,13 @@ class HeuristicPromotionControlsTest < Minitest::Test
     Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) do |corpus|
       with_engine do |engine|
         seed_baseline(engine)
-        pipeline = Harness::HeuristicImprovementPipeline.new(
-          corpus:, generator_principal: 'principal.generator', evaluator_principal: 'principal.evaluator',
-          promoter_principal: 'principal.operator',
-          behavior_version_before: 'tamoz.agent.session/2', behavior_version_after: 'tamoz.agent.session/3',
-          rollback_snapshot_digest: "sha256:#{'a' * 64}", regression_tasks: RunnerInputs.regression_tasks
+        pipeline = Pipeline.new(
+          corpus:,
+          principals: Pipeline::Principals.new(generator: 'principal.generator', evaluator: 'principal.evaluator',
+                                               promoter: 'principal.operator'),
+          change: Pipeline::BehaviorChange.new(before: 'tamoz.agent.session/2', after: 'tamoz.agent.session/3',
+                                               rollback_snapshot_digest: "sha256:#{'a' * 64}"),
+          regression_tasks: RunnerInputs.regression_tasks
         )
         bundle = pipeline.run
 
@@ -102,10 +105,7 @@ class HeuristicPromotionControlsTest < Minitest::Test
 
   def test_oracle_bundle_promotes
     with_promotion do |engine, bundle, resolver|
-      result = promote(engine, bundle, resolver)
-      transition_id = result.fetch('transition').transition_id
-      engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
-      engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
+      finalize_canary(engine, promote(engine, bundle, resolver).fetch('transition').transition_id)
 
       assert_equal 'tamoz.agent.session/3', engine.transitions.active.fetch('active_version')
     end
@@ -142,18 +142,13 @@ class HeuristicPromotionControlsTest < Minitest::Test
   # Rollback returns the served injection region to the prior epoch byte-for-byte.
   def test_rollback_restores_the_prior_epoch_byte_identically
     with_promotion do |engine, bundle, resolver|
-      result = promote(engine, bundle, resolver)
-      transition_id = result.fetch('transition').transition_id
-      engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
-      engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
+      finalize_canary(engine, promote(engine, bundle, resolver).fetch('transition').transition_id)
 
       promotion = Improvement::Promotion.new(engine)
       rollback = promotion.rollback(
         reason: 'canary regressed', actor: 'principal.operator', human_gate_evidence: 'human:operator-1'
       )
-      target = rollback.fetch('transition')
-      engine.transitions.claim(transition_id: target.transition_id, owner: 'intake', attempt: 1)
-      engine.transitions.finalize(transition_id: target.transition_id, consumed_by: 'session.canary')
+      finalize_canary(engine, rollback.fetch('transition').transition_id)
 
       proof = promotion.assert_rolled_back_byte_identical!(
         expected_snapshot_digest: rollback.fetch('target_snapshot_digest'),
@@ -165,6 +160,11 @@ class HeuristicPromotionControlsTest < Minitest::Test
   end
 
   private
+
+  def finalize_canary(engine, transition_id)
+    engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
+    engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
+  end
 
   def with_engine
     Dir.mktmpdir('tamoz-promote-controls') do |dir|

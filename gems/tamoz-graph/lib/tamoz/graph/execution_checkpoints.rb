@@ -26,73 +26,51 @@ module Tamoz
         )
       end
 
-      def terminal_request_transition(
-        writer,
-        request_id:,
-        execution_id:,
-        action:,
-        graph_status:,
-        retryable: nil
-      )
-        return nil unless request_id
+      def terminal_request_transition(execution, checkpoint, action:, graph_status:, retryable: nil)
+        return nil unless execution.request_id
+
+        writer = execution.writer
         unless writer.respond_to?(:request_transition)
           raise ConfigurationError,
                 'durable request execution requires a request-capable writer'
         end
 
         writer.request_transition(
-          request_id:,
-          execution_id:,
+          request_id: execution.request_id,
+          execution_id: checkpoint.execution_id,
           action:,
           graph_status:,
           retryable:
         )
       end
 
-      def append_failed_checkpoint(
-        checkpoint,
-        writer:,
-        context:,
-        pending:,
-        interrupts:,
-        attempts:,
-        resume_values:,
-        total_tasks:,
-        errors:,
-        request_id:
-      )
+      def append_failed_checkpoint(checkpoint, step, execution, errors:)
         failed = append_noncommitting(
           checkpoint,
-          writer:,
-          barrier: { status: :failed, pending:, interrupts:, attempts:, resume_values:, total_tasks: },
+          writer: execution.writer,
+          barrier: barrier(:failed, step, execution),
           failure: failure_descriptors(errors),
-          request_transition: failed_request_transition(writer, checkpoint, request_id)
+          request_transition: terminal_request_transition(
+            execution, checkpoint, action: :failed, graph_status: :failed, retryable: false
+          )
         )
-        @events.emit_errors(context, errors)
-        @events.emit_checkpoint(context, failed)
+        @events.emit_errors(execution.context, errors)
+        @events.emit_checkpoint(execution.context, failed)
         failed
       end
 
-      def append_paused_checkpoint(
-        checkpoint,
-        writer:,
-        context:,
-        pending:,
-        interrupts:,
-        attempts:,
-        resume_values:,
-        total_tasks:,
-        request_id:
-      )
+      def append_paused_checkpoint(checkpoint, step, execution)
         paused = append_noncommitting(
           checkpoint,
-          writer:,
-          barrier: { status: :paused, pending:, interrupts:, attempts:, resume_values:, total_tasks: },
+          writer: execution.writer,
+          barrier: barrier(:paused, step, execution),
           failure: nil,
-          request_transition: paused_request_transition(writer, checkpoint, request_id)
+          request_transition: terminal_request_transition(
+            execution, checkpoint, action: :completed, graph_status: :paused
+          )
         )
-        @events.emit_interrupts(context, interrupts)
-        @events.emit_checkpoint(context, paused)
+        @events.emit_interrupts(execution.context, step.interruptions)
+        @events.emit_checkpoint(execution.context, paused)
         paused
       end
 
@@ -113,18 +91,9 @@ module Tamoz
 
       attr_reader :compiled
 
-      def failed_request_transition(writer, checkpoint, request_id)
-        terminal_request_transition(
-          writer, request_id:, execution_id: checkpoint.execution_id,
-                  action: :failed, graph_status: :failed, retryable: false
-        )
-      end
-
-      def paused_request_transition(writer, checkpoint, request_id)
-        terminal_request_transition(
-          writer, request_id:, execution_id: checkpoint.execution_id,
-                  action: :completed, graph_status: :paused
-        )
+      def barrier(status, step, execution)
+        { status:, pending: step.successes, interrupts: step.interruptions, attempts: step.attempts,
+          resume_values: execution.resume_values, total_tasks: step.total_tasks }
       end
     end
 

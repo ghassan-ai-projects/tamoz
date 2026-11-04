@@ -135,7 +135,9 @@ module Tamoz
       end
 
       def doctor_redaction_report(directory)
-        recorder = Tamoz::Observability::Recorder::Journal.new(directory:, role: "doctor", max_file_bytes: 1_024)
+        recorder = Tamoz::Observability::Recorder::Journal.new(
+          directory:, role: "doctor", limits: Tamoz::Observability::Recorder::Journal::Limits.new(max_file_bytes: 1_024)
+        )
         producer = Tamoz::Observability::Producer.new(recorder:)
         secret = Tamoz::Secret.new("doctor-secret")
         token = "doctor-token-shaped-value"

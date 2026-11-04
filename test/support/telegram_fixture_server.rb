@@ -4,6 +4,8 @@ require 'json'
 require 'socket'
 
 class TelegramFixtureServer
+  REPLY_DEFAULTS = { status: 200, body: nil, raw: nil }.freeze
+
   attr_reader :port, :requests
 
   def initialize(token: 'test-token')
@@ -25,10 +27,10 @@ class TelegramFixtureServer
   # @param body [Hash] the JSON body
   # @param times [Integer] how many requests this script answers; 0 = always
   # @param delay_s [Float] sleep before responding (for timeout tests)
-  def script(method, status: 200, body: nil, times: 0, delay_s: 0.0, raw: nil)
-    @lock.synchronize do
-      (@script[method] ||= []) << { status:, body:, remaining: times, delay_s:, raw: }
-    end
+  # @param reply [Hash] :status (default 200), :body, :raw
+  def script(method, times: 0, delay_s: 0.0, **reply)
+    entry = reply_entry(reply).merge(remaining: times, delay_s:)
+    @lock.synchronize { (@script[method] ||= []) << entry }
   end
 
   def stop
@@ -43,6 +45,14 @@ class TelegramFixtureServer
   end
 
   private
+
+  def reply_entry(reply)
+    entry = REPLY_DEFAULTS.merge(reply)
+    unknown = entry.keys - REPLY_DEFAULTS.keys
+    raise ArgumentError, "unknown keywords: #{unknown.join(', ')}" unless unknown.empty?
+
+    entry
+  end
 
   def accept_loop
     while @running

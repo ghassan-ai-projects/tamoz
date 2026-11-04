@@ -12,17 +12,9 @@ class SQLiteDeliveredMessagesTest < Minitest::Test
       store = adapter.bind_comms_store
       live, = card(store, 'live', at: Time.utc(2026, 10, 9, 10))
       _, consumed = card(store, 'consumed', at: Time.utc(2026, 10, 9, 10, 1))
-      decision = Comms::DecisionRecord.build(
-        thread_id: 'talk.talk.consumed', occurrence_id: 'consumed', interrupts: [],
-        interrupt_digest: consumed.interrupt_digest, direction: 'deny',
-        actor_kind: 'talk_user', actor_id: 'talk:user:1',
-        source: 'talk', decided_at: Time.utc(2026, 10, 9, 10, 2), ttl_s: 900
-      )
 
-      assert_equal :consumed, store.consume_prompt(reference_digest: consumed.reference_digest,
-                                                   decision_wire: decision.wire, now: Time.utc(2026, 10, 9, 10, 2))
-      5.times { |index| deliver(store, "recent #{index}", at: Time.utc(2026, 10, 9, 11, index)) }
-      deliver(store, 'other surface', at: Time.utc(2026, 10, 9, 12), surface_id: 'elsewhere')
+      assert_equal :consumed, consume_card(store, consumed)
+      deliver_recent_answers(store)
 
       texts = store.delivered_messages(surface_id: 'talk', limit: 3).map { |row| row.fetch('text') }
 
@@ -30,6 +22,22 @@ class SQLiteDeliveredMessagesTest < Minitest::Test
     ensure
       adapter&.close
     end
+  end
+
+  def consume_card(store, prompt)
+    decided_at = Time.utc(2026, 10, 9, 10, 2)
+    decision = Comms::DecisionRecord.build(
+      thread_id: 'talk.talk.consumed', occurrence_id: 'consumed', interrupts: [],
+      interrupt_digest: prompt.interrupt_digest, direction: 'deny',
+      actor_kind: 'talk_user', actor_id: 'talk:user:1',
+      source: 'talk', decided_at:, ttl_s: 900
+    )
+    store.consume_prompt(reference_digest: prompt.reference_digest, decision_wire: decision.wire, now: decided_at)
+  end
+
+  def deliver_recent_answers(store)
+    5.times { |index| deliver(store, "recent #{index}", at: Time.utc(2026, 10, 9, 11, index)) }
+    deliver(store, 'other surface', at: Time.utc(2026, 10, 9, 12), surface_id: 'elsewhere')
   end
 
   def card(store, name, at:)

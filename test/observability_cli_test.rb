@@ -60,7 +60,7 @@ class ObservabilityCLITest < Minitest::Test
 
   def write_journal(directory)
     journal = Tamoz::Observability::Recorder::Journal.new(
-      directory:, role: 'cli-test', max_file_bytes: 16_384
+      directory:, role: 'cli-test', limits: Tamoz::Observability::Recorder::Journal::Limits.new(max_file_bytes: 16_384)
     )
     producer = Tamoz::Observability::Producer.new(recorder: journal, clock: -> { 10 })
     producer.emit(

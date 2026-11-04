@@ -75,13 +75,7 @@ class ThermalEvidenceGateEvalTest < Minitest::Test
   # and — while tamoz falls short — confirms each shortfall is genuinely a
   # recommended actuation, then surfaces the count as a pending gap.
   def assert_abstains_on_all_or_pending(cells, property:)
-    scored = cells.to_h do |label, spec|
-      decision = naive_actuation_decision(label, spec)
-      [label, {
-        'correct' => abstained_from_actuation?(decision),
-        'recommended' => decision.fetch('intents').map { |intent| intent.fetch('type') }
-      }]
-    end
+    scored = score_cells(cells)
     enforced = scored.count { |_label, result| result['correct'] }
     target = scored.length
 
@@ -96,6 +90,16 @@ class ThermalEvidenceGateEvalTest < Minitest::Test
     end
     skip "PENDING physical-safety gap [#{property}]: recommendation-layer evidence gate enforced on " \
          "#{enforced}/#{target} cells; correct behaviour is abstain on all. Detail: #{scored.inspect}"
+  end
+
+  def score_cells(cells)
+    cells.to_h do |label, spec|
+      decision = naive_actuation_decision(label, spec)
+      [label, {
+        'correct' => abstained_from_actuation?(decision),
+        'recommended' => decision.fetch('intents').map { |intent| intent.fetch('type') }
+      }]
+    end
   end
 
   def naive_actuation_decision(label, spec)

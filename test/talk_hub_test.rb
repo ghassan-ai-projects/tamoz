@@ -30,11 +30,31 @@ class TalkHubTest < Minitest::Test
     )
   end
 
-  def delivery(text, kind: 'answer', part_index: 0, part_count: 1, markup: nil, operation: 'send_message',
-               reply_to: nil)
-    Comms::Delivery.build(conversation_id: 'talk:chat:1', kind:, text:, render_version: 1,
-                          content_digest: Digest::SHA256.hexdigest(text), part_index:, part_count:, markup:,
-                          operation:, reply_to:)
+  DELIVERY_DEFAULTS = { kind: 'answer', part_index: 0, part_count: 1, markup: nil, operation: 'send_message',
+                        reply_to: nil }.freeze
+
+  def delivery(text, **)
+    Comms::Delivery.build(conversation_id: 'talk:chat:1', text:, render_version: 1,
+                          content_digest: Digest::SHA256.hexdigest(text), **DELIVERY_DEFAULTS, **)
+  end
+
+  def page_events(hub)
+    hub.log.since(after: 0, epoch: nil, timeout_s: 0)['events']
+  end
+
+  def deliver_two_parts_and_a_control(hub)
+    [delivery('Part one.', part_count: 2),
+     delivery('Part two.', part_index: 1, part_count: 2),
+     delivery('Heard: «pond 7»', kind: 'control')].map { |item| hub.deliver(item) }
+  end
+
+  def speech_of(hub, receipt)
+    hub.speaker.speech(receipt.fetch('message_id'))
+  end
+
+  def deliver_approval_card(hub)
+    markup = JSON.generate('reference' => 'abc', 'actions' => %w[approve deny])
+    hub.deliver(delivery('Approve the change?', kind: 'approval_request', markup:))
   end
 
   # Stages browser input on an unstarted hub for the shared transport conformance suite.
@@ -115,26 +135,19 @@ class TalkHubTest < Minitest::Test
 
   def test_only_the_first_part_of_a_spoken_kind_is_spoken
     hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0, synthesize: ->(text) { "ID3#{text}".b })
-    first = hub.deliver(delivery('Part one.', part_count: 2))
-    second = hub.deliver(delivery('Part two.', part_index: 1, part_count: 2))
-    heard = hub.deliver(delivery('Heard: «pond 7»', kind: 'control'))
+    first, second, heard = deliver_two_parts_and_a_control(hub)
 
-    assert_equal "ID3Part one. #{Tamoz::Core::SpokenText::REST}", hub.speaker.speech(first.fetch('message_id'))
-    assert_equal :not_spoken, hub.speaker.speech(second.fetch('message_id'))
-    assert_equal :not_spoken, hub.speaker.speech(heard.fetch('message_id'))
-    spoken = hub.log.since(after: 0, epoch: nil, timeout_s: 0)['events'].map { |event| event['spoken'] }
-
-    assert_equal [true, false, false], spoken
+    assert_equal "ID3Part one. #{Tamoz::Core::SpokenText::REST}", speech_of(hub, first)
+    assert_equal(%i[not_spoken not_spoken], [second, heard].map { |receipt| speech_of(hub, receipt) })
+    assert_equal([true, false, false], page_events(hub).map { |event| event['spoken'] })
   end
 
   def test_an_approval_card_carries_its_reference_and_an_edit_keeps_the_message_id
     hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
-    card = hub.deliver(delivery('Approve the change?', kind: 'approval_request',
-                                                       markup: JSON.generate('reference' => 'abc',
-                                                                             'actions' => %w[approve deny])))
+    card = deliver_approval_card(hub)
     edit = hub.deliver(delivery('Approved.', kind: 'control', operation: 'edit_message',
                                              reply_to: card.fetch('message_id')))
-    events = hub.log.since(after: 0, epoch: nil, timeout_s: 0)['events']
+    events = page_events(hub)
 
     assert_equal [%w[approve deny], 'abc'], events.first.values_at('actions', 'reference')
     assert_equal card.fetch('message_id'), edit.fetch('message_id')

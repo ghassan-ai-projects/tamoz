@@ -4,15 +4,14 @@ module Tamoz
   module Mcp
     # Admits the operator-owned executable, workspace and inherited environment.
     class ProcessAdmission
-      def validate_process_surface!(transport:, command:, arguments:, env_allowlist:, working_directory:, workspace:)
-        if transport == :http
-          unless command.nil? && arguments.empty? && env_allowlist.empty? && working_directory.nil?
-            raise ValidationError,
-                  'HTTP MCP servers cannot configure a command, argv, environment, or working directory'
-          end
+      def validate_http_surface!(command:, arguments:, env_allowlist:, working_directory:)
+        return if command.nil? && arguments.empty? && env_allowlist.empty? && working_directory.nil?
 
-          return [nil, nil]
-        end
+        raise ValidationError, 'HTTP MCP servers cannot configure a command, argv, environment, or working directory'
+      end
+
+      def validate_process_location!(transport, command, working_directory, workspace)
+        return [nil, nil] if transport == :http
 
         [validate_command!(command, workspace), validate_working_directory!(working_directory, workspace)]
       end

@@ -565,19 +565,24 @@ class TelegramChatEval
   end
 
   def report
-    passed = @results.count { |result| result[:pass] }
-    blocked = @results.count { |result| result[:pass].nil? }
-    lines = ["# Telegram chat eval — #{label}", '',
-             "**#{passed}/#{@results.length - blocked} checks pass; #{blocked} blocked.**", '',
-             '| scenario | check | result | detail |', '|---|---|---|---|']
-    @results.each do |result|
-      verdict = VERDICT_LABELS.fetch(result[:pass])
-      lines << "| #{result[:scenario]} | #{result[:check]} | #{verdict} | " \
-               "#{result[:detail].to_s.tr('|', '/')[0, 140]} |"
-    end
+    lines = report_header
+    @results.each { |result| lines << result_row(result) }
     lines += ['', '## Transcript', '']
     @transcript.each { |turn| lines.concat(transcript_lines(turn)) }
     lines.join("\n")
+  end
+
+  def report_header
+    passed = @results.count { |result| result[:pass] }
+    blocked = @results.count { |result| result[:pass].nil? }
+    ["# Telegram chat eval — #{label}", '',
+     "**#{passed}/#{@results.length - blocked} checks pass; #{blocked} blocked.**", '',
+     '| scenario | check | result | detail |', '|---|---|---|---|']
+  end
+
+  def result_row(result)
+    "| #{result[:scenario]} | #{result[:check]} | #{VERDICT_LABELS.fetch(result[:pass])} | " \
+      "#{result[:detail].to_s.tr('|', '/')[0, 140]} |"
   end
 
   def transcript_lines(turn)

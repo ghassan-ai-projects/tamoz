@@ -73,17 +73,14 @@ module Tamoz
       # A real provider by default (real experience/answer evidence). Pass an
       # explicit model_factory (e.g. the fixture's scripted one) ONLY for a
       # deterministic plumbing test — such a run is never intelligence evidence.
-      def initialize(provider: nil, model: nil, model_factory: nil,
-                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil, speech: false)
+      def initialize(provider: nil, model: nil, model_factory: nil, admission_mode: :allowlist, **fixture_options)
         @provider = provider || ENV.fetch('AGENTEVAL_PROVIDER', 'deepseek')
         @model = model || ENV.fetch('AGENTEVAL_MODEL', 'deepseek-chat')
         @update_seq = 1_000
         @message_seq = 500
         @seen_out = 0
         @last_bot_message_id = nil
-        super(model_factory: model_factory || real_model_factory,
-              admission_mode: admission_mode, approval_ask: approval_ask,
-              routing:, transcriber:, speech:)
+        super(model_factory: model_factory || real_model_factory, admission_mode:, **fixture_options)
         bind_thread(Fixture::CONVERSATION_A) if admission_mode == :allowlist
       end
 

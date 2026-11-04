@@ -27,8 +27,8 @@ class BenchmarkHoldout
   PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
   CUTOFF = "2026-09-01T00:00:00Z"
 
-  def initialize(protocol_path: PROTOCOL_PATH, cases: 30, seed: 23, out_dir: nil, force: false, input_manifest: nil)
-    @protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
+  def initialize(cases: 30, seed: 23, out_dir: nil, force: false, input_manifest: nil)
+    @protocol = JSON.parse(File.read(PROTOCOL_PATH, encoding: Encoding::UTF_8))
     @cases = cases
     @seed = seed
     @out_dir = out_dir || File.expand_path(

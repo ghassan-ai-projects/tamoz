@@ -21,20 +21,33 @@ module Tamoz
           end
         end
 
-        def initialize(corpus:, generator_principal:, evaluator_principal:, promoter_principal:,
-                       behavior_version_before:, behavior_version_after:,
-                       rollback_snapshot_digest:, regression_tasks: [])
-          if String(generator_principal) == String(evaluator_principal)
-            raise ArgumentError, 'the evaluator principal must differ from the generator principal'
-          end
+        # Who generates, who evaluates, and who records the promotion; the evaluator is never the generator.
+        Principals = Data.define(:generator, :evaluator, :promoter) do
+          def initialize(generator:, evaluator:, promoter:)
+            if String(generator) == String(evaluator)
+              raise ArgumentError, 'the evaluator principal must differ from the generator principal'
+            end
 
+            super(generator: String(generator), evaluator: String(evaluator), promoter: String(promoter))
+          end
+        end
+
+        # The behavior version the candidate replaces, the one it becomes, and the snapshot a rollback restores.
+        BehaviorChange = Data.define(:before, :after, :rollback_snapshot_digest) do
+          def initialize(before:, after:, rollback_snapshot_digest:)
+            super(before: String(before), after: String(after),
+                  rollback_snapshot_digest: String(rollback_snapshot_digest))
+          end
+        end
+
+        def initialize(corpus:, principals:, change:, regression_tasks: [])
           @corpus = corpus
-          @generator_principal = String(generator_principal)
-          @evaluator_principal = String(evaluator_principal)
-          @promoter_principal = String(promoter_principal)
-          @behavior_version_before = String(behavior_version_before)
-          @behavior_version_after = String(behavior_version_after)
-          @rollback_snapshot_digest = String(rollback_snapshot_digest)
+          @generator_principal = principals.generator
+          @evaluator_principal = principals.evaluator
+          @promoter_principal = principals.promoter
+          @behavior_version_before = change.before
+          @behavior_version_after = change.after
+          @rollback_snapshot_digest = change.rollback_snapshot_digest
           @regression_tasks = regression_tasks
         end
 

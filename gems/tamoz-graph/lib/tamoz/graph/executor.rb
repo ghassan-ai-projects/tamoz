@@ -53,10 +53,7 @@ module Tamoz
         pending = current.pending.select { |task_id, _outcome| scheduled_by_id.key?(task_id) }
         to_execute = tasks.reject { |task| pending.key?(task.id) }
         enforce_task_limits!(current, tasks, to_execute)
-        results = @tasks.execute_tasks(
-          to_execute, current, writer: execution.writer, context: execution.context,
-                               concurrency: execution.concurrency, resume_values: execution.resume_values
-        )
+        results = @tasks.execute_tasks(to_execute, current, execution)
         attempts = current.attempts.merge(to_execute.to_h { |task| [task.id, task.attempt] }).freeze
         successes, interruptions, errors, pool_cancelled = @results.classify(to_execute, results)
         Step.new(logical_step:, tasks:, pending:, successes: pending.merge(successes).freeze,
@@ -75,23 +72,15 @@ module Tamoz
         return if step.interruptions.empty?
 
         return non_interactive_result(current, step, execution) if execution.context.interrupt_mode == :non_interactive
-        paused = @checkpoints.append_paused_checkpoint(current, **barrier_keywords(step, execution))
+        paused = @checkpoints.append_paused_checkpoint(current, step, execution)
         RunResult.new(status: :paused, snapshot: compiled.snapshot(paused),
                       interrupts: step.interruptions, errors: [].freeze)
       end
 
       def failed_result(current, step, execution)
-        failed = @checkpoints.append_failed_checkpoint(
-          current, **barrier_keywords(step, execution), errors: step.errors
-        )
+        failed = @checkpoints.append_failed_checkpoint(current, step, execution, errors: step.errors)
         RunResult.new(status: :failed, snapshot: compiled.snapshot(failed),
                       interrupts: failed.interrupts, errors: step.errors.freeze)
-      end
-
-      def barrier_keywords(step, execution)
-        { writer: execution.writer, context: execution.context, pending: step.successes,
-          interrupts: step.interruptions, attempts: step.attempts, resume_values: execution.resume_values,
-          total_tasks: step.total_tasks, request_id: execution.request_id }
       end
 
       def ordered_outcomes(current, step)
@@ -123,10 +112,7 @@ module Tamoz
       def completion_transition(current, frontier, execution)
         return unless frontier.empty?
 
-        @checkpoints.terminal_request_transition(
-          execution.writer, request_id: execution.request_id, execution_id: current.execution_id,
-                            action: :completed, graph_status: :completed
-        )
+        @checkpoints.terminal_request_transition(execution, current, action: :completed, graph_status: :completed)
       end
 
       def validate_outcome!(task, outcome, checkpoint, pending:)
@@ -181,9 +167,7 @@ module Tamoz
 
       def non_interactive_result(current, step, execution)
         node_failure = non_interactive_failure(step)
-        failed = @checkpoints.append_failed_checkpoint(
-          current, **barrier_keywords(step, execution), errors: [node_failure]
-        )
+        failed = @checkpoints.append_failed_checkpoint(current, step, execution, errors: [node_failure])
         RunResult.new(status: :failed, snapshot: compiled.snapshot(failed),
                       interrupts: step.interruptions, errors: [node_failure].freeze)
       end

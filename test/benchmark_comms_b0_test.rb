@@ -39,125 +39,112 @@ class BenchmarkCommsB0Test < Minitest::Test
     result.artifacts.to_h { |artifact| [artifact.fetch('scenario_id'), artifact.fetch('record')] }
   end
 
-  def test_pairing_first_contact_and_controls_score_end_to_end
-    with_runner(scenarios: ['C5']) do |runner, _|
-      records = scores(runner)
+  def with_record(scenario)
+    with_runner(scenarios: [scenario]) do |runner, directory|
+      yield scores(runner).fetch(scenario), directory
+    end
+  end
 
-      assert_equal 'ready', records.fetch('C5').fetch('status'), records.fetch('C5')['reason']
-      assert_equal 1, records.fetch('C5').dig('metrics', 'command_parity')
-      assert_equal 'passed', records.fetch('C5').dig('hard_zero', 'phantom_command'),
+  def assert_ready_with(record, metrics)
+    actual = metrics.to_h { |name, _| [name, record.dig('metrics', name)] }
+
+    assert_equal({ 'status' => 'ready' }.merge(metrics), { 'status' => record.fetch('status') }.merge(actual),
+                 record['reason'])
+  end
+
+  def core_facts_compared(parity)
+    parity.fetch('compared').slice(*CoreParityFacts)
+  end
+
+  def test_pairing_first_contact_and_controls_score_end_to_end
+    with_record('C5') do |record, _|
+      assert_ready_with record, 'command_parity' => 1, 'inbound_identity' => 1, 'authority_stability' => 1
+      assert_equal 'passed', record.dig('hard_zero', 'phantom_command'),
                    'every registry command, the six controls included, must answer a real outcome'
-      assert_equal 1, records.fetch('C5').dig('metrics', 'inbound_identity')
-      assert_equal 1, records.fetch('C5').dig('metrics', 'authority_stability')
     end
   end
 
   def test_slow_request_scores_end_to_end
-    with_runner(scenarios: ['C2']) do |runner, _|
-      records = scores(runner)
-      record = records.fetch('C2')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'context_inclusion')
+    with_record('C2') do |record, _|
+      assert_ready_with record, 'context_inclusion' => 1
       assert_equal 'passed', record.dig('hard_zero', 'unconfirmed_output_in_history')
     end
   end
 
   def test_truthful_history_scores_end_to_end
-    with_runner(scenarios: ['C1']) do |runner, _|
-      records = scores(runner)
-      record = records.fetch('C1')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'admitted')
-      assert_equal 1, record.dig('metrics', 'reference_stability')
-      assert_equal 1, record.dig('metrics', 'completion')
-      assert_equal 1, record.dig('metrics', 'delivery_axis')
-      assert_equal 1, record.dig('metrics', 'context_inclusion')
+    with_record('C1') do |record, _|
+      assert_ready_with record, 'admitted' => 1, 'reference_stability' => 1, 'completion' => 1, 'delivery_axis' => 1,
+                                'context_inclusion' => 1
     end
   end
 
   def test_c1_cross_surface_parity_compares_meaning_not_bytes
-    with_runner(scenarios: ['C1']) do |runner, _|
-      records = scores(runner)
-      record = records.fetch('C1')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'parity')
+    with_record('C1') do |record, _|
       parity = record.fetch('parity')
 
-      assert_equal 'scored', parity.fetch('status')
-      assert_equal 1, parity.fetch('score')
-      CoreParityFacts.each do |fact|
-        assert_equal 1, parity.dig('compared', fact), "C1 #{fact} must be compared and equal"
-      end
-      edges = parity.fetch('edges')
+      assert_ready_with record, 'parity' => 1
+      assert_equal({ 'status' => 'scored', 'score' => 1 }, parity.slice('status', 'score'))
+      assert_equal CoreParityFacts.to_h { |fact| [fact, 1] }, core_facts_compared(parity),
+                   'C1 core facts must be compared and equal'
+    end
+  end
 
-      assert(edges.any? { |edge| edge['fact'] == 'conversation_scoped_cli_reference' })
-      edges.each do |edge|
-        assert_equal 'unavailable', edge.fetch('status')
-        assert_instance_of String, edge.fetch('reason')
-      end
+  def test_c1_cross_surface_parity_names_its_unavailable_edges
+    with_record('C1') do |record, _|
+      edges = record.fetch('parity').fetch('edges')
+
+      assert_includes edges.map { |edge| edge['fact'] }, 'conversation_scoped_cli_reference'
+      assert_equal [['unavailable', String]], edges.map { |edge|
+        [edge.fetch('status'), edge.fetch('reason').class]
+      }.uniq
     end
   end
 
   def test_c5_controls_subset_parity_covers_status_and_cancel_only
-    with_runner(scenarios: ['C5']) do |runner, _|
-      records = scores(runner)
-      record = records.fetch('C5')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'parity')
+    with_record('C5') do |record, _|
       parity = record.fetch('parity')
-
-      assert_equal 'scored', parity.fetch('status')
-      assert_equal({ 'status_semantics' => 1, 'cancel_semantics' => 1 }, parity.fetch('compared'))
       facts = parity.fetch('edges').map { |edge| edge.fetch('fact') }
 
-      assert_includes facts, 'command_sweep_breadth'
-      assert_includes facts, 'pairing_and_admission'
+      assert_ready_with record, 'parity' => 1
+      assert_equal({ 'status' => 'scored', 'compared' => { 'status_semantics' => 1, 'cancel_semantics' => 1 } },
+                   parity.slice('status', 'compared'))
+      assert_empty %w[command_sweep_breadth pairing_and_admission] - facts
     end
   end
 
   def test_c6_flips_to_scored_cross_surface_parity_with_typed_unavailable_edges
-    with_runner(scenarios: ['C6']) do |runner, _|
-      records = scores(runner)
-      record = records.fetch('C6')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'parity')
-      assert_equal 1, record.dig('metrics', 'context_inclusion')
-      assert_equal 1, record.dig('metrics', 'reference_stability')
+    with_record('C6') do |record, _|
       parity = record.fetch('parity')
 
+      assert_ready_with record, 'parity' => 1, 'context_inclusion' => 1, 'reference_stability' => 1
       assert_equal 'scored', parity.fetch('status')
-      CoreParityFacts.each do |fact|
-        assert_equal 1, parity.dig('compared', fact), "C6 #{fact} must be compared and equal"
-      end
-      # parity_by_text is proven, not assumed: the two surfaces answered with
-      # different scripted texts while every meaning-level fact still matched.
-      assert parity.fetch('distinct_answer_texts')
-      assert_equal 'passed', record.dig('hard_zero', 'parity_by_text')
-      assert_equal 'passed', record.dig('hard_zero', 'surface_outcome_divergence')
-      cancellation = parity.fetch('cancellation')
+      assert_equal CoreParityFacts.to_h { |fact| [fact, 1] }, core_facts_compared(parity),
+                   'C6 core facts must be compared and equal'
+    end
+  end
 
-      assert_equal 1, cancellation.fetch('score')
+  def test_c6_proves_parity_by_text_rather_than_assuming_it
+    with_record('C6') do |record, _|
+      assert record.fetch('parity').fetch('distinct_answer_texts')
+      assert_equal({ 'parity_by_text' => 'passed', 'surface_outcome_divergence' => 'passed' },
+                   record.fetch('hard_zero').slice('parity_by_text', 'surface_outcome_divergence'))
+    end
+  end
+
+  def test_c6_cancellation_agrees_across_both_surfaces
+    with_record('C6') do |record, _|
+      cancellation = record.fetch('parity').fetch('cancellation')
       event = cancellation.fetch('observed').first
 
-      assert_same true, event.fetch('payloads_match')
-      assert_same true, event.fetch('terminal_delivered')
-      assert_equal 'cancelled_by_user', event.fetch('terminal_reason')
+      assert_equal 1, cancellation.fetch('score')
+      assert_equal({ 'payloads_match' => true, 'terminal_delivered' => true, 'terminal_reason' => 'cancelled_by_user' },
+                   event.slice('payloads_match', 'terminal_delivered', 'terminal_reason'))
     end
   end
 
   def test_c9_isolation_parity_holds_across_both_conversations
-    with_runner(scenarios: ['C9']) do |runner, _|
-      records = scores(runner)
-      record = records.fetch('C9')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'isolation')
-      assert_equal 1, record.dig('metrics', 'parity')
+    with_record('C9') do |record, _|
+      assert_ready_with record, 'isolation' => 1, 'parity' => 1
       assert_equal 'scored', record.dig('parity', 'status')
     end
   end
@@ -199,147 +186,113 @@ class BenchmarkCommsB0Test < Minitest::Test
                  'artifact bytes (manifest + parity artifacts) must be identical across two runs'
   end
 
+  SCENARIO_IDS = %w[C1 C2 C3 C4 C5 C6 C7 C8 C9].freeze
+
+  def read_fixture_json(directory, name)
+    JSON.parse(File.read(File.join(directory, 'fixtures/scenarios', name)))
+  end
+
   def test_all_nine_catalog_scenarios_score_with_an_empty_pending_seam
     with_runner do |runner, directory|
       result = runner.run
-      manifest = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/manifest.json')))
+      manifest = read_fixture_json(directory, 'manifest.json')
 
-      assert_equal %w[C1 C2 C3 C4 C5 C6 C7 C8 C9], manifest.fetch('scenarios')
-      assert_equal({}, manifest.fetch('pending_seam'),
-                   'every catalog scenario is expressible over landed seams; none may stay pending')
-      assert_empty result.manifest.fetch('pending_seam').keys
+      assert_equal SCENARIO_IDS, manifest.fetch('scenarios')
+      assert_equal [{}, {}], [manifest.fetch('pending_seam'), result.manifest.fetch('pending_seam')],
+                   'every catalog scenario is expressible over landed seams; none may stay pending'
+      assert_equal result.manifest.fetch('results'), manifest.fetch('results')
+    end
+  end
+
+  def test_the_manifest_declares_a_no_egress_fixture_run_and_the_surfaces_driven
+    with_runner do |runner, directory|
+      runner.run
+      manifest = read_fixture_json(directory, 'manifest.json')
+
       assert_equal(
         { 'C1' => %w[cli telegram], 'C2' => %w[telegram], 'C3' => %w[telegram], 'C4' => %w[telegram],
           'C5' => %w[cli telegram], 'C6' => %w[cli telegram], 'C7' => %w[telegram],
           'C8' => %w[telegram], 'C9' => %w[cli telegram] },
         manifest.fetch('surfaces_driven')
       )
-      assert_equal 'fixture', manifest.fetch('run_kind')
-      assert manifest.fetch('fixture')
+      assert_equal ['fixture', true], [manifest.fetch('run_kind'), manifest.fetch('fixture')]
       assert_includes manifest.fetch('transport'), 'no_egress'
-      %w[C1 C2 C3 C4 C5 C6 C7 C8 C9].each do |scenario|
-        artifact = JSON.parse(
-          File.read(File.join(directory, "fixtures/scenarios/#{scenario}.json"))
-        )
-
-        assert_equal 'fixture', artifact.fetch('run_kind')
-        assert artifact.fetch('fixture')
-        assert_equal Runner.const_get(:PROVIDER), artifact.fetch('provider')
-        refute_nil artifact.fetch('seam_revisions')
-        assert_equal manifest.dig('surfaces_driven', scenario), artifact.fetch('surfaces_driven')
-        assert_equal 'ready', artifact.dig('result', 'status'), "#{scenario}: #{artifact.dig('result', 'reason')}"
-      end
-      c6 = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/C6.json')))
-
-      assert_equal 'scored', c6.dig('result', 'parity', 'status')
-      assert_equal result.manifest.fetch('results'), manifest.fetch('results')
     end
+  end
+
+  def test_every_scenario_artifact_is_a_ready_fixture_result
+    with_runner do |runner, directory|
+      runner.run
+      manifest = read_fixture_json(directory, 'manifest.json')
+      SCENARIO_IDS.each do |scenario|
+        artifact = read_fixture_json(directory, "#{scenario}.json")
+
+        assert_equal({ 'run_kind' => 'fixture', 'fixture' => true, 'provider' => Runner.const_get(:PROVIDER),
+                       'surfaces_driven' => manifest.dig('surfaces_driven', scenario), 'status' => 'ready' },
+                     artifact.slice('run_kind', 'fixture', 'provider', 'surfaces_driven')
+                             .merge('status' => artifact.dig('result', 'status')),
+                     "#{scenario}: #{artifact.dig('result', 'reason')}")
+        refute_nil artifact.fetch('seam_revisions')
+      end
+    end
+  end
+
+  def test_the_c6_artifact_records_scored_cross_surface_parity
+    with_runner(scenarios: ['C6']) do |runner, directory|
+      runner.run
+
+      assert_equal 'scored', read_fixture_json(directory, 'C6.json').dig('result', 'parity', 'status')
+    end
+  end
+
+  def c8_result(directory)
+    read_fixture_json(directory, 'C8.json').fetch('result')
+  end
+
+  def c8_timeline(directory, writer)
+    c8_result(directory).fetch('timelines').find { |timeline| timeline.fetch('writer') == writer }
   end
 
   def test_c8_visible_cancellation_scores_end_to_end_over_durable_facts
-    with_runner(scenarios: ['C8']) do |runner, directory|
-      records = scores(runner)
-      record = records.fetch('C8')
-
-      assert_equal 'ready', record.fetch('status'), record['reason']
-      assert_equal 1, record.dig('metrics', 'cancellation_honesty')
-      assert_equal 1, record.dig('metrics', 'restart_safety')
+    with_record('C8') do |record, _|
+      assert_ready_with record, 'cancellation_honesty' => 1, 'restart_safety' => 1
       assert_equal 'unavailable', record.dig('metrics', 'parity', 'status')
-      %w[false_stopped_claim race_misresolved cancellation_state_lost].each do |hard_zero|
-        assert_equal 'passed', record.dig('hard_zero', hard_zero)
-      end
-
-      artifact = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/C8.json')))
-      timelines = artifact.fetch('result').fetch('timelines')
-      clean = timelines.find { |timeline| timeline.fetch('writer') == 'store_seam' }
-      raced = timelines.find { |timeline| timeline.fetch('writer') == 'engine' }
-
-      # Clean stop: requested -> observed -> terminal stopped on a turn that
-      # never settled.
-      assert_equal 'terminal', clean.fetch('state')
-      assert_equal 'stopped', clean.fetch('terminal_word')
-      assert_same false, clean.fetch('settled')
-      assert clean.fetch('requested_present')
-      assert clean.fetch('observed_present')
-      assert clean.fetch('requested_le_observed')
-
-      # Raced restart: the settle fact won, so the timeline and the real
-      # /status rendering both say completed_before_effect — never stopped.
-      assert_equal 'completed_before_effect', raced.fetch('terminal_word')
-      assert raced.fetch('settled')
-      assert raced.fetch('settle_le_observed')
-
-      wordings = artifact.fetch('result').fetch('wordings')
-      stopped_wording = wordings.find { |wording| wording.fetch('reference') == clean.fetch('reference') }
-      completed_wording = wordings.find { |wording| wording.fetch('reference') == raced.fetch('reference') }
-
-      assert_same true, stopped_wording.fetch('claims_stopped')
-      assert_same false, stopped_wording.fetch('claims_completed_before_effect')
-      assert_same true, completed_wording.fetch('claims_completed_before_effect')
-      assert_same false, completed_wording.fetch('claims_stopped')
-
-      edges = artifact.fetch('result').fetch('edges')
-
-      assert(edges.any? { |edge| edge['fact'] == 'engine_observed_before_settle' })
+      assert_equal({ 'false_stopped_claim' => 'passed', 'race_misresolved' => 'passed',
+                     'cancellation_state_lost' => 'passed' },
+                   record.fetch('hard_zero').slice('false_stopped_claim', 'race_misresolved',
+                                                   'cancellation_state_lost'))
     end
   end
 
-  def test_readiness_refuses_publication_for_a_fixture_run
-    protocol = {
-      'graph' => { 'name' => 'comms-b0', 'version' => '1' },
-      'protocol_version' => 1,
-      'missions' => [],
-      'controls' => []
-    }
-    readiness_module = Tamoz::Evals::Benchmark::Readiness
-    manifest = {
-      'runner_schema_version' => readiness_module::EVIDENCE_SCHEMA_VERSION,
-      'protocol_sha256' => readiness_module.protocol_digest(protocol),
-      'run_kind' => 'fixture',
-      'provider' => 'fixture:deterministic-scripted',
-      'model' => 'scripted-provider',
-      'artifact_root' => 'fixtures/scenarios',
-      'git_revision' => 'test-revision',
-      'config_sha256' => "sha256:#{'a' * 64}",
-      'graph' => { 'name' => 'comms-b0', 'version' => '1' },
-      'surfaces' => %w[cli telegram],
-      'command' => 'script/benchmark_comms_run',
-      'capabilities' => {
-        'comms_channel' => { 'exists' => true, 'reachable' => true, 'authorized' => true,
-                             'attempted' => true, 'effective' => true, 'completed' => true,
-                             'verified' => true }
-      },
-      'controls_passed' => false,
-      'missions' => [{
-        'id' => 'c1', 'status' => 'blocked',
-        'metrics_schema_version' => Tamoz::Evals::Benchmark::OpenclawMissionRunner::METRICS_SCHEMA_VERSION,
-        'metrics' => { 'completion' => 1 },
-        'hard_zero' => { 'reply_without_admission' => 'passed' },
-        'effect_outcomes' => [],
-        'surface_executions' => {
-          'cli' => { 'status' => 'executed', 'provenance' => { 'surface' => 'cli' } },
-          'telegram' => { 'status' => 'executed', 'provenance' => { 'surface' => 'telegram' } }
-        }
-      }],
-      'surface_executions' => {}
-    }
-    Dir.mktmpdir('tamoz-comms-b0') do |directory|
-      FileUtils.mkdir_p(File.join(directory, 'fixtures/scenarios'))
-      readiness = readiness_module.evaluate(
-        protocol:, manifest:, expected_mission_ids: %w[c1],
-        mission_catalog: {
-          'schema_version' => 'openclaw.missions.v1',
-          'missions' => [{
-            'id' => 'c1', 'goal' => 'answer a short turn',
-            'metrics' => %w[completion], 'hard_zero' => %w[reply_without_admission],
-            'required_capabilities' => ['comms_channel'], 'surfaces' => %w[cli telegram]
-          }]
-        },
-        artifact_root_base: directory
-      )
+  # Clean stop: requested -> observed -> terminal stopped on a turn that never settled.
+  def test_c8_clean_stop_ends_stopped_on_a_turn_that_never_settled
+    with_record('C8') do |_, directory|
+      assert_equal({ 'state' => 'terminal', 'terminal_word' => 'stopped', 'settled' => false,
+                     'requested_present' => true, 'observed_present' => true, 'requested_le_observed' => true },
+                   c8_timeline(directory, 'store_seam').slice('state', 'terminal_word', 'settled', 'requested_present',
+                                                              'observed_present', 'requested_le_observed'))
+    end
+  end
 
-      refute_predicate readiness, :publishable?, 'a fixture run must never be publishable'
-      assert_includes readiness.reasons, 'fixture_or_fake_provider'
+  # Raced restart: the settle fact won, so the timeline says completed_before_effect, never stopped.
+  def test_c8_raced_restart_ends_completed_before_effect
+    with_record('C8') do |_, directory|
+      assert_equal({ 'terminal_word' => 'completed_before_effect', 'settled' => true, 'settle_le_observed' => true },
+                   c8_timeline(directory, 'engine').slice('terminal_word', 'settled', 'settle_le_observed'))
+    end
+  end
+
+  def test_c8_wordings_match_their_timelines_and_the_engine_edge_is_named
+    with_record('C8') do |_, directory|
+      result = c8_result(directory)
+      wordings = result.fetch('wordings').to_h { |wording| [wording.fetch('reference'), wording] }
+      stopped = wordings.fetch(c8_timeline(directory, 'store_seam').fetch('reference'))
+      completed = wordings.fetch(c8_timeline(directory, 'engine').fetch('reference'))
+
+      assert_equal [[true, false], [true, false]],
+                   [stopped.values_at('claims_stopped', 'claims_completed_before_effect'),
+                    completed.values_at('claims_completed_before_effect', 'claims_stopped')]
+      assert_includes result.fetch('edges').map { |edge| edge['fact'] }, 'engine_observed_before_settle'
     end
   end
 end

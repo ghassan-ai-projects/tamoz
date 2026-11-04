@@ -66,68 +66,94 @@ end
 
 # Fold the log into the model-visible surface exactly as deriveMessages does: surface-eligible
 # events append at their own position, and a replace op shadows the range it names.
-def fold(raw)
-  names = {}
-  nodes = []
-  calls = Hash.new(0)
-  results = Hash.new(0)
-  recent = []
-  replacements = []
-  usage = nil
-  read_sizes = []
-  events = 0
-  raw.each_line do |line|
-    next unless line.include?('"type":"')
+class ContextFold
+  def self.call(raw) = new.fold(raw)
 
-    event = begin
-      JSON.parse(line)
-    rescue JSON::ParserError
-      next
-    end
-    events += 1
+  def initialize
+    @names = {}
+    @nodes = []
+    @calls = Hash.new(0)
+    @results = Hash.new(0)
+    @recent = []
+    @replacements = []
+    @usage = nil
+    @read_sizes = []
+    @events = 0
+  end
+
+  def fold(raw)
+    raw.each_line { |line| absorb(line) }
+    { nodes: @nodes, calls: @calls, results: @results, recent: @recent.last(3), replacements: @replacements,
+      usage: @usage, read_sizes: @read_sizes, events: @events }
+  end
+
+  private
+
+  def absorb(line)
+    return unless line.include?('"type":"')
+
+    event = parse(line)
+    return unless event
+
+    @events += 1
+    track(event)
+    op = event['surfaceOp']
+    return unless op
+
+    shadow(event, op) if op.is_a?(Hash)
+    kind, bytes, tool = surface_entry(event)
+    @nodes << { seq: event['seq'], kind: kind, tool: tool, bytes: bytes } if kind
+  end
+
+  def parse(line)
+    JSON.parse(line)
+  rescue JSON::ParserError
+    nil
+  end
+
+  def track(event)
     case event['type']
     when 'tool/call'
-      calls[tool_name(event)] += 1
-      names[event.dig('data', 'callId')] = tool_name(event)
+      @calls[tool_name(event)] += 1
+      @names[event.dig('data', 'callId')] = tool_name(event)
     when 'assistant/message'
       candidate = event.dig('data', 'usage')
-      usage = candidate if candidate.is_a?(Hash) && candidate.values.any? { |v| v.to_i.positive? }
+      @usage = candidate if candidate.is_a?(Hash) && candidate.values.any? { |v| v.to_i.positive? }
     end
-    op = event['surfaceOp']
-    next unless op
-
-    if op.is_a?(Hash)
-      first = op['startSeq'] || op['start']
-      last = op['endSeq'] || op['end']
-      nodes.reject! { |node| node[:seq].between?(first, last) } if first && last
-      replacements << { 'type' => event['type'], 'range' => [first, last] }
-    end
-
-    kind, bytes, tool = case event['type']
-                        when 'system/message' then ['system', blocks_text(event.dig('data', 'message', 'content')), nil]
-                        when 'user/message'
-                          source = event.dig('data', 'source') || {}
-                          ["user/#{source['kind'] || 'user'}",
-                           blocks_text(event.dig('data', 'content') || event.dig('data', 'message', 'content')), nil]
-                        when 'assistant/message'
-                          ['assistant', blocks_text(event.dig('data', 'message', 'content')), nil]
-                        when 'tool/result'
-                          call_id = event.dig('data', 'message', 'source', 'callId') ||
-                                    event.dig('data', 'message', 'content', 0, 'toolCallId')
-                          name = names[call_id] || '?'
-                          text = result_text(event)
-                          read_sizes << text.bytesize if name == 'read'
-                          results[name] += 1
-                          recent << { 'seq' => event['seq'], 'name' => name, 'bytes' => text.bytesize,
-                                      'head' => text[0, 300] }
-                          ['tool', text.bytesize, name]
-                        end
-    next unless kind
-
-    nodes << { seq: event['seq'], kind: kind, tool: tool, bytes: bytes }
   end
-  { nodes: nodes, calls: calls, results: results, recent: recent.last(3), replacements: replacements,
-    usage: usage, read_sizes: read_sizes, events: events }
+
+  def shadow(event, operation)
+    first = operation['startSeq'] || operation['start']
+    last = operation['endSeq'] || operation['end']
+    @nodes.reject! { |node| node[:seq].between?(first, last) } if first && last
+    @replacements << { 'type' => event['type'], 'range' => [first, last] }
+  end
+
+  def surface_entry(event)
+    case event['type']
+    when 'system/message' then ['system', blocks_text(event.dig('data', 'message', 'content')), nil]
+    when 'user/message' then user_entry(event)
+    when 'assistant/message' then ['assistant', blocks_text(event.dig('data', 'message', 'content')), nil]
+    when 'tool/result' then tool_entry(event)
+    end
+  end
+
+  def user_entry(event)
+    source = event.dig('data', 'source') || {}
+    ["user/#{source['kind'] || 'user'}",
+     blocks_text(event.dig('data', 'content') || event.dig('data', 'message', 'content')), nil]
+  end
+
+  def tool_entry(event)
+    call_id = event.dig('data', 'message', 'source', 'callId') ||
+              event.dig('data', 'message', 'content', 0, 'toolCallId')
+    name = @names[call_id] || '?'
+    text = result_text(event)
+    @read_sizes << text.bytesize if name == 'read'
+    @results[name] += 1
+    @recent << { 'seq' => event['seq'], 'name' => name, 'bytes' => text.bytesize, 'head' => text[0, 300] }
+    ['tool', text.bytesize, name]
+  end
 end
 
 deadline = Time.now + 40
@@ -135,7 +161,7 @@ min_seconds = 1.5
 opened = Time.now
 state = nil
 loop do
-  state = fold(IO.popen(['zstd', '-dc', log], &:read))
+  state = ContextFold.call(IO.popen(['zstd', '-dc', log], &:read))
   ready = state[:read_sizes].length >= expect_reads &&
           state[:results]['edit'].to_i >= expect_edits &&
           state[:results]['write'].to_i >= expect_writes

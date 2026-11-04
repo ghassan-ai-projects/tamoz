@@ -3,35 +3,36 @@
 require_relative 'test_helper'
 require_relative 'support/experience_harness'
 require_relative 'support/work_loop_fixtures'
+require_relative 'support/chat_attachment_helpers'
 
 class ChatAttachmentTest < Minitest::Test
   include WorkLoopFixtures
+  include ChatAttachmentHelpers
 
-  def harness_with(model)
-    Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work)
-  end
-
-  def user_messages(model)
-    JSON.parse(model.requests.first).fetch('messages').select { |message| message['role'] == 'user' }
-                                                      .map { |message| message['content'] }
+  def with_text_file_turn
+    model = ScriptedConversationModel.new(turns: [{ content: 'It says MARIGOLD-7341.' }])
+    harness = harness_with(model)
+    cards = harness.send_document('The code word is MARIGOLD-7341.', name: 'notes.txt', mime_type: 'text/plain',
+                                                                     caption: 'what is the code word?')
+    yield harness, cards, *user_messages(model).last(2)
+  ensure
+    harness&.close
   end
 
   def test_a_text_file_reaches_the_model_as_material_before_the_question
-    model = ScriptedConversationModel.new(turns: [{ content: 'It says MARIGOLD-7341.' }])
-    harness = harness_with(model)
+    with_text_file_turn do |_harness, cards, material, question|
+      assert_includes cards.map { |card| card[:text] }.join, 'MARIGOLD-7341'
+      assert_includes material, "<<<attachment\nThe code word is MARIGOLD-7341.\nattachment>>>"
+      assert_equal '[file] what is the code word?', question
+    end
+  end
 
-    cards = harness.send_document('The code word is MARIGOLD-7341.', name: 'notes.txt', mime_type: 'text/plain',
-                                                                     caption: 'what is the code word?')
-    material, question = user_messages(model).last(2)
-
-    assert_includes cards.map { |card| card[:text] }.join, 'MARIGOLD-7341'
-    assert_includes material, "<<<attachment\nThe code word is MARIGOLD-7341.\nattachment>>>"
-    assert_includes material, 'not instructions to you'
-    assert_includes material, '"notes.txt"'
-    assert_equal '[file] what is the code word?', question
-    assert_empty harness.handoffs, 'the file is not kept once the turn has read it'
-  ensure
-    harness&.close
+  def test_a_text_file_is_framed_as_named_material_and_is_not_kept
+    with_text_file_turn do |harness, _cards, material, _question|
+      assert_includes material, 'not instructions to you'
+      assert_includes material, '"notes.txt"'
+      assert_empty harness.handoffs, 'the file is not kept once the turn has read it'
+    end
   end
 
   def test_a_file_sent_after_earlier_turns_still_reaches_the_model
@@ -138,96 +139,41 @@ class ChatAttachmentTest < Minitest::Test
     ENV['PATH'] = original
   end
 
-  def test_an_image_is_read_by_one_journaled_vision_call_before_the_turn
-    model = ScriptedConversationModel.new(turns: [{ content: 'INVOICE 4471 TOTAL 93.50' }, { content: 'Total 93.50.' }])
-    harness = harness_with(model)
-
-    cards = harness.send_photo(PNG, caption: 'what is the total?')
-    vision = JSON.parse(model.requests.first).fetch('messages').last.fetch('content')
-    material, question = JSON.parse(model.requests.last).fetch('messages').select { |m| m['role'] == 'user' }
-                                                                          .map { |m| m['content'] }.last(2)
-
-    assert_equal %i[attachment_image work_step], model.stages
-    assert_equal(%w[text image_url], vision.map { |part| part['type'] })
-    assert vision.last.dig('image_url', 'url').start_with?("data:image/png;base64,#{[PNG].pack('m0')[0, 20]}")
-    assert_includes material, "<<<attachment\nINVOICE 4471 TOTAL 93.50\nattachment>>>"
-    assert_equal '[image] what is the total?', question
-    assert_includes cards.map { |card| card[:text] }.join, '93.50'
-  ensure
-    harness&.close
-  end
-
-  def test_a_vision_refusal_is_explained_not_invented
-    refusal = ->(_) { raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: 400) }
-    model = ScriptedConversationModel.new(turns: [refusal, { content: 'I could not read it.' }])
-    harness = harness_with(model)
-
-    harness.send_photo(PNG)
-    material = JSON.parse(model.requests.last).fetch('messages').select { |m| m['role'] == 'user' }[-2]['content']
-
-    assert_includes material, 'could not be read: the image could not be read'
-  ensure
-    harness&.close
-  end
-
-  def test_an_image_format_outside_the_allow_list_is_never_sent_to_the_model
-    model = ScriptedConversationModel.new(turns: [{ content: 'Cannot read that.' }])
-    harness = harness_with(model)
-
-    harness.send_document("\x00\x00\x00\x18ftypheic".b, name: 'p.heic', mime_type: 'image/heic')
-
-    assert_equal %i[work_step], model.stages
-    assert_includes user_messages(model)[-2], 'this image format cannot be read'
-  ensure
-    harness&.close
-  end
-
-  def test_cancel_during_the_image_read_stops_the_turn
-    harness = nil
-    cancel_while_reading = lambda do |_messages|
-      harness.admit('/cancel')
-      thread = harness.thread_for(Tamoz::ExperienceSim::Fixture::CONVERSATION_A)
-      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 10
-      Thread.pass until Tamoz::Cancellation::Stops.requested?(thread) ||
-                        Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-      { content: 'INVOICE 4471' }
-    end
-    model = ScriptedConversationModel.new(turns: [cancel_while_reading, { content: 'the final answer' }])
-    harness = harness_with(model)
-    harness.send_photo(PNG)
-    harness.work_off
-    texts = harness.transport.outbound.map { |card| card[:text] }
-
-    assert_equal ['Stopping…', 'Stopped.'], texts
-    assert_equal %i[attachment_image], model.stages
-  ensure
-    harness&.close
-  end
-
   OGG = "OggS\x00\x02voice-bytes".b
 
   def voice_harness(model, transcriber, speech: false)
     Tamoz::ExperienceSim::Harness.new(model_factory: ->(**) { model }, routing: :work, transcriber:, speech:)
   end
 
-  def test_an_own_voice_note_becomes_the_users_words
+  def with_own_voice_turn
     transcriber = ScriptedTranscriber.new('my locker code is four seven one nine')
     model = ScriptedConversationModel.new(turns: [{ content: 'Noted: 4719.' }])
     harness = voice_harness(model, transcriber)
-
     cards = harness.send_voice(OGG)
-    note, words = user_messages(model).last(2)
-
-    assert_equal [[OGG, 'audio.ogg', 'audio/ogg']], transcriber.calls
-    assert_equal "[voice message]\nmy locker code is four seven one nine", words
-    assert_includes note, 'The user sent a voice message'
-    assert_equal 1, JSON.parse(model.requests.last).fetch('messages').sum { |m|
-      m['content'].to_s.scan('[voice message]').length
-    },
-                 'the label is the turn, not also an earlier message'
-    assert_includes cards.map { |card| card[:text] }.join, '4719'
+    yield transcriber, model, cards
   ensure
     harness&.close
+  end
+
+  def test_an_own_voice_note_becomes_the_users_words
+    with_own_voice_turn do |transcriber, model, cards|
+      _note, words = user_messages(model).last(2)
+
+      assert_equal [[OGG, 'audio.ogg', 'audio/ogg']], transcriber.calls
+      assert_equal "[voice message]\nmy locker code is four seven one nine", words
+      assert_includes cards.map { |card| card[:text] }.join, '4719'
+    end
+  end
+
+  def test_an_own_voice_note_is_introduced_once_and_labelled_as_the_turn
+    with_own_voice_turn do |_transcriber, model, _cards|
+      labels = JSON.parse(model.requests.last).fetch('messages').sum do |m|
+        m['content'].to_s.scan('[voice message]').length
+      end
+
+      assert_includes user_messages(model)[-2], 'The user sent a voice message'
+      assert_equal 1, labels, 'the label is the turn, not also an earlier message'
+    end
   end
 
   def test_a_forwarded_voice_note_is_material_not_the_users_words
@@ -268,19 +214,6 @@ class ChatAttachmentTest < Minitest::Test
     harness&.close
   end
 
-  def test_a_large_image_is_read_once_and_journaled_by_digest
-    model = ScriptedConversationModel.new(turns: [{ content: 'A big picture.' }, { content: 'ok' }])
-    harness = harness_with(model)
-    big = PNG + ('x' * 1_000_000).b
-
-    harness.send_photo(big)
-
-    assert_equal %i[attachment_image work_step], model.stages
-    assert_operator model.requests.first.bytesize, :>, 1_300_000
-  ensure
-    harness&.close
-  end
-
   def capture_notices(harness)
     runtime = harness.instance_variable_get(:@runtime)
     sink = runtime.instance_variable_get(:@delivery_sink)
@@ -306,11 +239,6 @@ class ChatAttachmentTest < Minitest::Test
     harness&.close
   end
 
-  def last_turn(model)
-    JSON.parse(model.requests.last).fetch('messages').select { |message| message['role'] == 'user' }
-                                                     .map { |message| message['content'] }.last(2)
-  end
-
   def test_tamoz_hearing_its_own_reply_on_a_speaking_surface_frames_it_as_an_echo
     reply = 'Pond 7 oxygen fell from 6.1 to 4.3 since six this morning.'
     transcriber = ScriptedTranscriber.new('pond 7 oxygen fell from 6.1 to 4.3 since six')
@@ -321,10 +249,9 @@ class ChatAttachmentTest < Minitest::Test
     harness.send_voice(OGG)
     material, task = last_turn(model)
 
-    assert_equal '[voice message]', task
+    assert_equal ['[voice message]', []], [task, notices], 'an echo is not heard as the user'
     assert_includes material, 'The microphone picked up your own previous reply'
     assert_includes material, "<<<heard\npond 7 oxygen fell from 6.1 to 4.3 since six\nheard>>>"
-    assert_empty notices, 'an echo is not heard as the user'
   ensure
     harness&.close
   end

@@ -59,14 +59,8 @@ class BenchmarkCommsControlsTest < Minitest::Test
   def score(id, facts)
     convs = conversations
     case id
-    when 'C1' then Oracles.c1(facts, conversation: convs[:a])
-    when 'C2' then Oracles.c2(facts, conversation: convs[:a])
+    when 'C1', 'C2', 'C4', 'C5', 'C6', 'C7', 'C8' then Oracles.public_send(id.downcase, facts, conversation: convs[:a])
     when 'C3' then Oracles.c3(facts)
-    when 'C4' then Oracles.c4(facts, conversation: convs[:a])
-    when 'C5' then Oracles.c5(facts, conversation: convs[:a])
-    when 'C6' then Oracles.c6(facts, conversation: convs[:a])
-    when 'C7' then Oracles.c7(facts, conversation: convs[:a])
-    when 'C8' then Oracles.c8(facts, conversation: convs[:a])
     when 'C9' then Oracles.c9(facts, conversations: [convs[:a], convs[:b]])
     end
   end

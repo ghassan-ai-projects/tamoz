@@ -97,11 +97,15 @@ module Tamoz
       def research_available? = @services.configuration.subagent_apps.key?('research')
 
       def opening(base, context, previous, brief, reading)
-        transcript = @services.planning_context.conversation_transcript(context)
-        work(base).opening(task: told(base, reading), asked: base.fetch(:task), transcript:,
+        transcript = without_echo(@services.planning_context.conversation_transcript(context), base.fetch(:task))
+        work(base).opening(task: told(base, reading), transcript:,
                            previous_answer: previous_answer(previous, transcript), updates: directive_updates(previous),
                            carried: { memory: brief.text, checkpoint: previous[:work_checkpoint],
                                       material: reading&.material })
+      end
+
+      def without_echo(transcript, asked)
+        transcript.last == { 'role' => 'user', 'text' => asked } ? transcript[0...-1] : transcript
       end
 
       def told(base, reading) = reading&.task ? "#{base.fetch(:task)}\n#{reading.task}" : base.fetch(:task)

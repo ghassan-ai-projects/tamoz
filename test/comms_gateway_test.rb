@@ -26,13 +26,15 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  attr_reader :appended
+
   def with_gateway(limits: {}, controls: nil, attachments: true)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
       begin
         checkpoints = gateway_graph('gateway').compile(checkpointer: adapter).checkpointer
-        appended = []
+        appended = @appended = []
         # The gateway binds its own store, so the capture rides the adapter:
         # every appended delivery wire is recorded for reply-targeting proofs.
         adapter.singleton_class.define_method(:bind_comms_store) do |*bound|
@@ -49,7 +51,7 @@ class CommsGatewayTest < Minitest::Test
         spool = attachments && Tamoz::Core::AttachmentSpool.new(File.join(directory, 'attachments'))
         gateway = Tamoz::Comms::Gateway.new(checkpoints:, transport:, descriptor: descriptor(limits:),
                                             poller_owner: 'gateway:test', controls:, attachments: spool)
-        yield gateway, transport, store, adapter, checkpoints, appended
+        yield gateway, transport, store, adapter, checkpoints
       ensure
         adapter&.close
       end
@@ -77,7 +79,7 @@ class CommsGatewayTest < Minitest::Test
 
   # One message that cannot become a turn must not stop the bot, or every restart re-reads it.
   def test_an_unadmittable_message_is_refused_and_the_gateway_keeps_serving
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       gateway.instance_variable_get(:@store).singleton_class.define_method(:admit_and_enqueue) do |*, **|
         raise Tamoz::ConfigurationError, 'too big'
@@ -128,7 +130,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_file_whose_request_is_refused_is_not_kept
-    with_gateway(limits: { max_open_requests: 1 }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(limits: { max_open_requests: 1 }) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.files = { 'D1' => 'bytes' }
       transport.batch([update(1, text: 'busy'), document_update(2)])
@@ -142,7 +144,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_gateway_without_a_handoff_folder_says_it_cannot_take_files
-    with_gateway(attachments: nil) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(attachments: nil) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([document_update(1)])
 
@@ -154,7 +156,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_redelivered_attachment_is_not_fetched_again_and_gets_no_second_reply
-    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       transport.files = { 'D1' => 'bytes' }
       transport.batch([document_update(1), document_update(2, file_id: 'gone')])
@@ -200,7 +202,7 @@ class CommsGatewayTest < Minitest::Test
                                 'limit is 10 MB', []]
     }
     cases.each do |name, (incoming, reply, fetched)|
-      with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      with_gateway do |gateway, transport, store, _adapter, checkpoints|
         seed_binding(store)
         transport.files = { 'blank' => '' }
         transport.batch([incoming])
@@ -219,7 +221,7 @@ class CommsGatewayTest < Minitest::Test
     failures = [Comms::TransientTransportError.new('timeout'), Comms::ValidationError.new('bad path'),
                 SocketError.new('dns'), Errno::ENOSPC.new, Tamoz::ConfigurationError.new('x')]
     failures.each do |failure|
-      with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      with_gateway do |gateway, transport, store, _adapter, checkpoints|
         seed_binding(store)
         transport.singleton_class.define_method(:fetch_attachment) { |*, **| raise failure }
         transport.batch([document_update(1), update(2, text: 'still here?')])
@@ -235,7 +237,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_telegrams_too_big_refusal_reads_as_too_large
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.singleton_class.define_method(:fetch_attachment) do |*, **|
         raise Comms::ResponseTooLargeError, 'Bad Request: file is too big'
@@ -278,7 +280,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_an_image_over_its_own_limit_names_that_limit
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       update = document_update(1, size: 5_000_001)
       update['message']['document']['mime_type'] = 'image/png'
@@ -310,7 +312,7 @@ class CommsGatewayTest < Minitest::Test
 
   # Re-running setup rewrites the profile; the conversation must keep working, on a fresh thread.
   def test_a_changed_profile_moves_the_conversation_to_a_fresh_thread_instead_of_failing
-    with_gateway do |gateway, transport, store, adapter, checkpoints, appended|
+    with_gateway do |gateway, transport, store, adapter, checkpoints|
       seed_binding(store)
       transport.batch([update(1, text: 'first')])
       gateway.serve_once(drain: false)
@@ -478,6 +480,28 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def terminal_delivery
+    Comms::Delivery.build(
+      conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'answer',
+      part_index: 0, part_count: 1, journaled: true, render_version: 1,
+      content_digest: 'd' * 64
+    ).wire
+  end
+
+  def claim_terminal(store, terminal, now:)
+    store.claim_delivery(
+      delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
+      claim_expires_at: now + 30, now:
+    )
+  end
+
+  def mark_terminal(store, terminal, now:)
+    store.mark_delivery(
+      delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
+      status: 'succeeded', receipt: { 'message_id' => 42 }, now:
+    )
+  end
+
   def test_request_delivery_state_follows_its_terminal_delivery
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
@@ -488,23 +512,13 @@ class CommsGatewayTest < Minitest::Test
 
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       request_id = checkpoints.request_history(thread_id: thread).first.request_id
-      terminal = Comms::Delivery.build(
-        conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'answer',
-        part_index: 0, part_count: 1, journaled: true, render_version: 1,
-        content_digest: 'd' * 64
-      ).wire
+      terminal = terminal_delivery
       assert_equal :appended, store.append_delivery(
         terminal, surface_id: 'telegram-ops', capacity: 500,
                   reserved_request_id: request_id, now:
       )
-      assert_equal :claimed, store.claim_delivery(
-        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
-        claim_expires_at: now + 30, now:
-      )
-      assert_equal :marked, store.mark_delivery(
-        delivery_id: terminal.fetch('delivery_id'), lease: Tamoz::Comms::Lease.new(owner: 'status-test', fence: 1).wire,
-        status: 'succeeded', receipt: { 'message_id' => 42 }, now:
-      )
+      assert_equal :claimed, claim_terminal(store, terminal, now:)
+      assert_equal :marked, mark_terminal(store, terminal, now:)
 
       status = store.request_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
@@ -625,10 +639,7 @@ class CommsGatewayTest < Minitest::Test
   def test_clarification_reply_matching_requires_a_positive_integer_receipt_id
     with_gateway do |gateway, transport, _store|
       row = nil
-      gateway.instance_variable_get(:@store).define_singleton_method(:outbox_row_for_receipt) do |
-        surface_id:, conversation_id:, message_id:|
-        row
-      end
+      gateway.instance_variable_get(:@store).define_singleton_method(:outbox_row_for_receipt) { |**| row }
       envelope = transport.normalize(update(1, text: 'answer')).merge('reply_to' => 4242)
       markup = JSON.generate(
         'phase' => 'clarification_required', 'request_ref' => 'r0123456789', 'actions' => ['answer']
@@ -684,7 +695,7 @@ class CommsGatewayTest < Minitest::Test
   # request there is cancelled and work on the pre-rotation thread is never
   # touched.
   def test_cancel_after_a_rotation_affects_only_the_current_generation
-    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       old_thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       transport.batch([update(1, text: 'work')])
@@ -720,7 +731,7 @@ class CommsGatewayTest < Minitest::Test
   # Nothing admitted on the current generation means /cancel refuses
   # honestly instead of queueing an operation against a stale thread.
   def test_cancel_with_no_running_work_on_the_current_generation_refuses_bounded
-    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       old_thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
       transport.batch([update(1, text: 'work')])
@@ -963,7 +974,7 @@ class CommsGatewayTest < Minitest::Test
   # Invariant 2: a control reply targets the message id the update carries,
   # never the update_id the fixtures once kept equal to it.
   def test_control_replies_target_the_message_id_not_the_update_id
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(400, text: '/help')])
 
@@ -978,7 +989,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_callback_reply_targets_the_callback_message_id_not_the_update_id
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       store.revoke_binding(correspondent_id: 'telegram:user:11111111', surface_id: 'telegram-ops',
                            reason: 'revoked for test', now: Time.utc(2026, 8, 10, 12, 0, 0))
@@ -999,7 +1010,7 @@ class CommsGatewayTest < Minitest::Test
   # ArgumentError text, which would echo the raw argument bytes back.
   def test_an_oversized_cjk_think_argument_gets_the_fixed_bounded_refusal
     controls = ScriptedControls.new
-    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(1, text: 'work')])
       gateway.serve_once(drain: false)
@@ -1018,7 +1029,7 @@ class CommsGatewayTest < Minitest::Test
 
   def test_a_bad_verbose_argument_gets_its_own_fixed_bounded_refusal
     controls = ScriptedControls.new
-    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(1, text: 'work')])
       gateway.serve_once(drain: false)
@@ -1036,7 +1047,7 @@ class CommsGatewayTest < Minitest::Test
   # Belt-and-braces at the single choke point: whatever a control handler
   # produced, the delivery build can never raise on reply length.
   def test_append_control_clamps_oversized_reply_text_to_the_delivery_ceiling
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       envelope = transport.normalize(update(1, text: '/help'))
 
@@ -1084,7 +1095,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_a_within_limit_command_still_passes_the_size_gate
-    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(331, text: '/help')])
 
@@ -1096,7 +1107,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_help_teaches_the_core_loop_and_keeps_default_controls_short
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(332, text: '/help')])
 
@@ -1111,7 +1122,7 @@ class CommsGatewayTest < Minitest::Test
   end
 
   def test_help_more_expands_the_typed_command_reference_and_rejects_other_arguments
-    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(333, text: '/help more')])
 
@@ -1175,7 +1186,7 @@ class CommsGatewayTest < Minitest::Test
   # conflict from the controls seam answers the distinct bounded busy line.
   def test_a_stateless_thread_keeps_the_guidance_reply_on_a_read_only_control
     controls = ConflictControls.new('thread tg.g1 has no checkpoint')
-    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(5, text: 'work')])
       gateway.serve_once(drain: false)
@@ -1189,7 +1200,7 @@ class CommsGatewayTest < Minitest::Test
 
   def test_a_real_fence_conflict_answers_the_distinct_conflict_reply
     controls = ConflictControls.new('writer lease for thread tg.g1 is held by owner tamoz.worker/9')
-    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints|
       seed_binding(store)
       transport.batch([update(7, text: 'work')])
       gateway.serve_once(drain: false)
@@ -1238,7 +1249,7 @@ class CommsGatewayTest < Minitest::Test
       @calls = []
     end
 
-    def set_reasoning_depth(thread:, request_id:, depth:)
+    def set_reasoning_depth(depth:, **)
       unless %w[low medium high].include?(depth)
         raise ArgumentError, "reasoning_depth must be one of low, medium, high (got #{depth.inspect})"
       end
@@ -1247,7 +1258,7 @@ class CommsGatewayTest < Minitest::Test
       projection('think')
     end
 
-    def set_answer_verbosity(thread:, request_id:, verbosity:)
+    def set_answer_verbosity(verbosity:, **)
       unless %w[quiet normal detailed].include?(verbosity)
         raise ArgumentError, "answer_verbosity must be one of quiet, normal, detailed (got #{verbosity.inspect})"
       end
@@ -1270,7 +1281,7 @@ class CommsGatewayTest < Minitest::Test
       @message = message
     end
 
-    def context_report(thread:)
+    def context_report(**)
       raise Tamoz::CheckpointConflictError, @message
     end
   end
@@ -1344,29 +1355,38 @@ class CommsGatewayTest < Minitest::Test
     def normalize(update)
       if update['message']&.key?('document') || update['message']&.key?('voice')
         Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1).normalize(update).wire
-      elsif (callback = update['callback_query'])
-        Comms::InboundEnvelope.new(
-          surface_id: 'telegram-ops', surface_revision: 1,
-          update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),
-          parser_version: 1, kind: 'callback',
-          correspondent_id: "telegram:user:#{callback.dig('from', 'id')}",
-          conversation_id: "telegram:chat:#{callback.dig('message', 'chat', 'id')}",
-          callback_message_id: callback.dig('message', 'message_id'),
-          text: callback['data'],
-          observed_time: Time.at(callback.dig('message', 'date') || 1_752_700_800).utc
-        ).wire
+      elsif update['callback_query']
+        callback_envelope(update)
       else
-        Comms::InboundEnvelope.new(
-          surface_id: 'telegram-ops', surface_revision: 1,
-          update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),
-          parser_version: 1, kind: update.dig('message', 'text')&.start_with?('/') ? 'command' : 'text',
-          correspondent_id: "telegram:user:#{update.dig('message', 'from', 'id')}",
-          conversation_id: "telegram:chat:#{update.dig('message', 'chat', 'id')}",
-          message_id: update.dig('message', 'message_id'),
-          text: update.dig('message', 'text'),
-          observed_time: Time.at(update.dig('message', 'date')).utc
-        ).wire
+        message_envelope(update)
       end
+    end
+
+    def callback_envelope(update)
+      callback = update.fetch('callback_query')
+      Comms::InboundEnvelope.new(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),
+        parser_version: 1, kind: 'callback',
+        correspondent_id: "telegram:user:#{callback.dig('from', 'id')}",
+        conversation_id: "telegram:chat:#{callback.dig('message', 'chat', 'id')}",
+        callback_message_id: callback.dig('message', 'message_id'),
+        text: callback['data'],
+        observed_time: Time.at(callback.dig('message', 'date') || 1_752_700_800).utc
+      ).wire
+    end
+
+    def message_envelope(update)
+      Comms::InboundEnvelope.new(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),
+        parser_version: 1, kind: update.dig('message', 'text')&.start_with?('/') ? 'command' : 'text',
+        correspondent_id: "telegram:user:#{update.dig('message', 'from', 'id')}",
+        conversation_id: "telegram:chat:#{update.dig('message', 'chat', 'id')}",
+        message_id: update.dig('message', 'message_id'),
+        text: update.dig('message', 'text'),
+        observed_time: Time.at(update.dig('message', 'date')).utc
+      ).wire
     end
 
     def payload_digest(update)

@@ -11,7 +11,7 @@ class SelfHealingLiveTurnTest < Minitest::Test
       @responses = responses.transform_values(&:dup)
     end
 
-    def generate(stage:, system:, prompt:)
+    def generate(stage:, **)
       queue = @responses.fetch(stage)
       raise "no scripted #{stage} response" if queue.empty?
 
@@ -34,33 +34,41 @@ class SelfHealingLiveTurnTest < Minitest::Test
     }
   end
 
+  def discovery_plan
+    { 'goal' => 'Look', 'done_when' => ['seen'],
+      'steps' => [{ 'id' => 'r', 'purpose' => 'read', 'tool' => 'read_file',
+                    'arguments' => { 'path' => 'a.rb' }, 'verification' => 'read' }] }
+  end
+
+  def failing_model
+    ScriptedModel.new(
+      plan: [discovery_plan] + Array.new(4) { action_plan },
+      review: Array.new(6) { accepted_review },
+      verify: [{ 'answer' => 'the check failed', 'satisfied' => false, 'evidence' => [] }]
+    )
+  end
+
+  def run_failing_turn(root)
+    File.write(File.join(root, 'a.rb'), "A = 1\n")
+    runtime = Tamoz::Agent.build(
+      model: failing_model, root:, allow_changes: true,
+      checks: { 'values' => [RbConfig.ruby, '-e', 'exit 1'] },
+      ask: ->(**) { 'approve' }
+    )
+    events = []
+    result = runtime.run('Update values') { |event| events << event }
+    [result, events]
+  end
+
   def test_failed_action_turn_emits_a_healing_assessment
     Dir.mktmpdir('tamoz-heal-live') do |root|
-      File.write(File.join(root, 'a.rb'), "A = 1\n")
-      discovery = { 'goal' => 'Look', 'done_when' => ['seen'],
-                    'steps' => [{ 'id' => 'r', 'purpose' => 'read', 'tool' => 'read_file',
-                                  'arguments' => { 'path' => 'a.rb' }, 'verification' => 'read' }] }
-      model = ScriptedModel.new(
-        plan: [discovery] + Array.new(4) { action_plan },
-        review: Array.new(6) { accepted_review },
-        verify: [{ 'answer' => 'the check failed', 'satisfied' => false, 'evidence' => [] }]
-      )
-      runtime = Tamoz::Agent.build(
-        model:, root:, allow_changes: true,
-        checks: { 'values' => [RbConfig.ruby, '-e', 'exit 1'] },
-        ask: ->(**) { 'approve' }
-      )
-
-      events = []
-      result = runtime.run('Update values') { |event| events << event }
-
-      refute result.satisfied
+      result, events = run_failing_turn(root)
       assessment = events.find { |event| event.type == :healing_assessment }
 
+      refute result.satisfied
       refute_nil assessment, 'a failed action turn must emit a healing assessment'
-      assert_equal 'verification_failed', assessment.data.fetch('category')
-      assert_equal 'escalated', assessment.data.fetch('route')
-      refute assessment.data.fetch('remediable')
+      assert_equal({ 'category' => 'verification_failed', 'route' => 'escalated', 'remediable' => false },
+                   assessment.data.slice('category', 'route', 'remediable'))
     end
   end
 end

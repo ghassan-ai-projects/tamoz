@@ -56,7 +56,7 @@ class TalkSpeakerTest < Minitest::Test
     assert_includes err, 'RuntimeError'
   end
 
-  def test_a_failed_flight_wakes_every_waiter_with_one_paid_call
+  def gated_failing_speaker
     calls = Queue.new
     gate = Queue.new
     speaker = Speaker.new(synthesize: lambda { |text|
@@ -64,6 +64,11 @@ class TalkSpeakerTest < Minitest::Test
       gate.pop
       raise 'provider down'
     })
+    [speaker, calls, gate]
+  end
+
+  def test_a_failed_flight_wakes_every_waiter_with_one_paid_call
+    speaker, calls, gate = gated_failing_speaker
     speaker.register(1, 'once')
     waiters = Array.new(3) { Thread.new { speaker.speech(1) } }
     eventually { calls.size == 1 && waiters.count { |thread| thread.status == 'sleep' } == 3 }
@@ -76,27 +81,42 @@ class TalkSpeakerTest < Minitest::Test
     assert_equal 1, calls.size
   end
 
-  def test_the_cache_is_bounded_and_nothing_touches_the_disk
-    writes = []
+  FILE_WRITERS = %i[write binwrite open].freeze
+
+  def record_file_writes(writes)
     file = File.singleton_class
-    %i[write binwrite open].each do |name|
+    FILE_WRITERS.each do |name|
       file.alias_method(:"talk_original_#{name}", name)
       file.define_method(name) do |*args, **kw, &block|
         (writes << args.first) || send(:"talk_original_#{name}", *args, **kw, &block)
       end
     end
-    speaker = Speaker.new(synthesize: ->(text) { "ID3#{text}" })
-    40.times do |index|
+  end
+
+  def restore_file_writes
+    file = File.singleton_class
+    FILE_WRITERS.each do |name|
+      file.alias_method(name, :"talk_original_#{name}")
+      file.remove_method(:"talk_original_#{name}")
+    end
+  end
+
+  def speak_texts(speaker, count)
+    count.times do |index|
       speaker.register(index, "text #{index}")
       speaker.speech(index)
     end
+  end
+
+  def test_the_cache_is_bounded_and_nothing_touches_the_disk
+    writes = []
+    record_file_writes(writes)
+    speaker = Speaker.new(synthesize: ->(text) { "ID3#{text}" })
+    speak_texts(speaker, 40)
 
     assert_operator speaker.instance_variable_get(:@cache).length, :<=, Speaker::MAX_CACHED
     assert_empty writes
   ensure
-    %i[write binwrite open].each do |name|
-      file.alias_method(name, :"talk_original_#{name}")
-      file.remove_method(:"talk_original_#{name}")
-    end
+    restore_file_writes
   end
 end

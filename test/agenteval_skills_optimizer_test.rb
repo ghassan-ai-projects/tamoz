@@ -47,12 +47,10 @@ class AgentevalSkillsOptimizerTest < Minitest::Test
   def test_a_rewrite_that_wins_on_held_out_is_staged_as_a_candidate
     run_optimizer(SHORTER) do |result, _, _|
       accepted = result.accepted
-
-      assert accepted, "rewrite not accepted: #{result.reason}"
-      assert_equal 'tamoz.skill-optimizer', result.candidate.fetch('created_by')
       staged = File.read(File.join(result.best, 'SKILL.md'), encoding: Encoding::UTF_8)
 
-      assert_equal SHORTER, staged
+      assert accepted, "rewrite not accepted: #{result.reason}"
+      assert_equal ['tamoz.skill-optimizer', SHORTER], [result.candidate.fetch('created_by'), staged]
       assert_path_exists "#{result.best}.candidate.json"
     end
   end

@@ -17,6 +17,8 @@ class TalkInboxTest < Minitest::Test
     Thread.new { box.submit(wire, audio:, timeout_s:) }.tap { |thread| Thread.pass until thread.status == 'sleep' }
   end
 
+  def update_ids(batch) = batch[:updates].map { |wire| wire['update_id'] }
+
   def test_a_submit_is_admitted_only_when_a_later_poll_confirms_its_batch
     box = inbox
     waiting = submit_async(box, envelope(1))
@@ -85,10 +87,10 @@ class TalkInboxTest < Minitest::Test
     waiting = (1..3).map { |id| submit_async(box, envelope(id)) }
     batch = box.poll(next_offset: nil, limit: 2, timeout_s: 0)
 
-    assert_equal([1, 2], batch[:updates].map { |wire| wire['update_id'] })
+    assert_equal([1, 2], update_ids(batch))
     rest = box.poll(next_offset: batch[:next_offset], limit: 50, timeout_s: 0)
 
-    assert_equal([3], rest[:updates].map { |wire| wire['update_id'] })
+    assert_equal([3], update_ids(rest))
     assert_equal %i[admitted admitted], waiting.first(2).map(&:value)
     assert_nil waiting.last.join(0.05)
     waiting.last.kill

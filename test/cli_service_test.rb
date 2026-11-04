@@ -23,27 +23,34 @@ class CliServiceTest < Minitest::Test
     end
   end
 
-  # launchctl list reports the labels in loaded; bootstrap exits with bootstrap_exit.
-  def fake_cli(io, agents, loaded, calls, bootstrap_exit: 0)
-    cli = Tamoz::Agent::CLI.new(**io, input: StringIO.new, env: {},
-                                      channel_kinds: ChannelKindsFixture.telegram(lambda { |_|
-                                        Bot.new([])
-                                      }),
-                                      model_factory: lambda { |**|
-                                        Object.new.tap do |model|
-                                          model.define_singleton_method(:generate) do |**|
-                                            'ok'
-                                          end
-                                        end
-                                      })
-    cli.define_singleton_method(:launch_agents) { agents }
-    list = loaded.map { |label| "4242\t0\t#{label}\n" }.join
+  def stub_model_factory
+    lambda { |**|
+      Object.new.tap do |model|
+        model.define_singleton_method(:generate) do |**|
+          'ok'
+        end
+      end
+    }
+  end
+
+  def stub_launchctl(cli, list, calls, bootstrap_exit)
     cli.define_singleton_method(:launchctl) do |*args|
       calls << args
       next [list, Exit.new(0)] if args.first == 'list'
 
       args.first == 'bootstrap' ? ['Bootstrap failed: 5', Exit.new(bootstrap_exit)] : ['', Exit.new(0)]
     end
+  end
+
+  # launchctl list reports the labels in loaded; bootstrap exits with bootstrap_exit.
+  def fake_cli(io, agents, loaded, calls, bootstrap_exit: 0)
+    cli = Tamoz::Agent::CLI.new(**io, input: StringIO.new, env: {},
+                                      channel_kinds: ChannelKindsFixture.telegram(lambda { |_|
+                                        Bot.new([])
+                                      }),
+                                      model_factory: stub_model_factory)
+    cli.define_singleton_method(:launch_agents) { agents }
+    stub_launchctl(cli, loaded.map { |label| "4242\t0\t#{label}\n" }.join, calls, bootstrap_exit)
     cli
   end
 

@@ -28,6 +28,10 @@ class AgentPlaybookDraftTest < Minitest::Test
     assert_includes error.message, "playbook_draft/#{code}"
   end
 
+  def assert_each_refused(cases)
+    cases.each { |code, document| assert_refused code, document }
+  end
+
   def test_a_proposal_holding_for_every_cited_case_parses
     draft = parse(proposal)
 
@@ -59,20 +63,24 @@ class AgentPlaybookDraftTest < Minitest::Test
   end
 
   def test_cited_cases_must_be_a_non_empty_unique_subset_of_the_request
-    assert_refused 'cited_episode_ids_empty', proposal(cited_episode_ids: [])
-    assert_refused 'cited_unknown_case: ep-9', proposal(cited_episode_ids: %w[ep-1 ep-9])
-    assert_refused 'cited_episode_ids_duplicate', proposal(cited_episode_ids: %w[ep-1 ep-1])
-    assert_refused 'cited_episode_id_not_string', proposal(cited_episode_ids: [1])
-    assert_refused 'cited_episode_ids_too_many', proposal(cited_episode_ids: Array.new(21) { |i| "ep-#{i}" })
+    assert_each_refused [
+      ['cited_episode_ids_empty', proposal(cited_episode_ids: [])],
+      ['cited_unknown_case: ep-9', proposal(cited_episode_ids: %w[ep-1 ep-9])],
+      ['cited_episode_ids_duplicate', proposal(cited_episode_ids: %w[ep-1 ep-1])],
+      ['cited_episode_id_not_string', proposal(cited_episode_ids: [1])],
+      ['cited_episode_ids_too_many', proposal(cited_episode_ids: Array.new(21) { |i| "ep-#{i}" })]
+    ]
   end
 
   def test_the_envelope_of_the_document_is_strict
-    assert_refused 'exactly_one_answer', proposal.merge('no_proposal' => { 'reason' => 'too_few_cases' })
-    assert_refused 'exactly_one_answer', { 'protocol' => Draft::PROTOCOL }
-    assert_refused 'protocol', proposal.merge('protocol' => 'tamoz.episode-diagnosis/v2')
-    assert_refused 'rationale_blank', proposal(rationale: '  ')
-    assert_refused 'duplicate_key', %({"protocol":"#{Draft::PROTOCOL}","protocol":"x"})
-    assert_refused 'malformed_json', 'Here is my rule: {}'
-    assert_refused 'document_too_large', ' ' * (Draft::MAX_BYTES + 1)
+    assert_each_refused [
+      ['exactly_one_answer', proposal.merge('no_proposal' => { 'reason' => 'too_few_cases' })],
+      ['exactly_one_answer', { 'protocol' => Draft::PROTOCOL }],
+      ['protocol', proposal.merge('protocol' => 'tamoz.episode-diagnosis/v2')],
+      ['rationale_blank', proposal(rationale: '  ')],
+      ['duplicate_key', %({"protocol":"#{Draft::PROTOCOL}","protocol":"x"})],
+      ['malformed_json', 'Here is my rule: {}'],
+      ['document_too_large', ' ' * (Draft::MAX_BYTES + 1)]
+    ]
   end
 end

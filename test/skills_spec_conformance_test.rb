@@ -34,6 +34,13 @@ class SkillsSpecConformanceTest < Minitest::Test
 
   def rejection(name) = compile.rejections.find { |entry| entry.entry == name }
 
+  def add_dotfile_noise(skill_directory)
+    File.write(File.join(skill_directory, '.DS_Store'), 'finder')
+    FileUtils.mkdir_p(File.join(skill_directory, '.git'))
+    File.symlink('/etc/passwd', File.join(skill_directory, '.git', 'escape'))
+    File.write(File.join(@root, '.DS_Store'), 'finder')
+  end
+
   def test_space_separated_allowed_tools_with_scoped_and_capitalised_tools
     write('spec-tools', minimal('spec-tools', "allowed-tools: Bash(git add:*) Bash(jq:*) Read\n"))
 
@@ -66,16 +73,14 @@ class SkillsSpecConformanceTest < Minitest::Test
   def test_dotfiles_are_ignored_and_do_not_change_identity
     clean = write('clean-skill', minimal('clean-skill'))
     digest = record('clean-skill').tree_digest
-    File.write(File.join(clean, '.DS_Store'), 'finder')
-    FileUtils.mkdir_p(File.join(clean, '.git'))
-    File.symlink('/etc/passwd', File.join(clean, '.git', 'escape'))
-    File.write(File.join(@root, '.DS_Store'), 'finder')
+    add_dotfile_noise(clean)
 
     snapshot = compile
+    clean_record = snapshot.records.fetch('op/clean-skill')
 
     assert_empty snapshot.rejections
-    assert_equal digest, snapshot.records.fetch('op/clean-skill').tree_digest
-    assert_equal ['SKILL.md'], snapshot.records.fetch('op/clean-skill').resource_index.keys
+    assert_equal digest, clean_record.tree_digest
+    assert_equal ['SKILL.md'], clean_record.resource_index.keys
   end
 
   def test_spec_invalid_names_are_refused
@@ -107,8 +112,8 @@ class SkillsSpecConformanceTest < Minitest::Test
                                            'references/r.md' => "R\n", 'scripts/run.sh' => "echo\n")
     readable = record('readable')
 
-    assert_equal "Form fields.\n", Skills.read_resource(readable, 'forms.md')
-    assert_equal "A\n", Skills.read_resource(readable, 'templates/a.md')
+    assert_equal(["Form fields.\n", "A\n"],
+                 %w[forms.md templates/a.md].map { |path| Skills.read_resource(readable, path) })
     error = assert_raises(Tamoz::Core::ToolArgumentError) { Skills.read_resource(readable, 'scripts/run.sh') }
     assert_match(/skill_resource_not_readable/, error.message)
   end

@@ -12,7 +12,6 @@ require_relative 'support/autonomy_case'
 # What it does NOT get — recorded here as a named limitation rather than
 # invented: there is no protocol that resumes EVENT STREAMING from a last-seen
 # sequence, so a reconnecting client reads current state; it never replays history.
-# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 class ReconnectionResumeProtocolTest < Minitest::Test
   include AutonomyCase
 
@@ -25,66 +24,84 @@ class ReconnectionResumeProtocolTest < Minitest::Test
   NOW = Time.utc(2026, 8, 10, 12, 0, 0)
 
   def test_a_reconnecting_client_gets_identity_state_and_one_terminal_without_rerunning
-    with_channel_runtime do |rt|
-      admit_request!(rt)
-      request_id = rt.with_engine do |_adapter, checkpoints|
-        checkpoints.request_history(thread_id: THREAD).first.request_id
-      end
-
-      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
-      runtime = Tamoz::Agent::WorkerRuntime.open(
-        directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
-        lease_ttl: 5.0
-      )
-      begin
-        worker = Tamoz::Agent::Worker.new(
-          runtime:,
-          session_builder: ->(thread) { runtime.session_for(thread) },
-          emitter: ->(_event) {}, once: true
-        )
-
-        assert worker.poll_once
-
-        reference = Comms::Lifecycle::RequestRef.for(request_id)
-        view = runtime.session_for(THREAD).view(thread: THREAD)
-
-        assert_equal :completed, view.status
-      ensure
-        runtime&.close
-      end
+    with_channel_runtime do |fixture|
+      admit_request!(fixture)
+      request_id = first_request_id(fixture)
+      reference = complete_turn(fixture, request_id)
 
       # Every writer is gone. The reconnect view answers from durable rows.
-      status, out, err = rt.cli(['comms', 'request', reference])
-
-      assert_equal 0, status, err
-      assert_match(%r{request #{reference} on #{SURFACE_ID}/#{CONVERSATION} \(thread #{THREAD}\)}, out)
-      assert_match(/task=completed delivery=\w+ open_requests=0 state=idle/, out)
-
-      status, out, err = rt.cli(['comms', 'request', reference, '--json'])
-
-      assert_equal 0, status, err
-      row = JSON.parse(out.lines.last).fetch('requests').first
-
-      assert_equal reference, row.fetch('request_ref'), 'identity round-trips through the short ref'
-      assert_equal THREAD, row.fetch('thread_id')
-      assert_equal request_id, row.fetch('request_id')
-      assert row.key?('task_state')
-      assert row.key?('delivery_state')
+      assert_reconnect_text(fixture, reference)
+      assert_reconnect_row(fixture, reference, request_id)
 
       # Nothing re-ran and no second terminal appeared during reconnection.
-      rt.with_engine do |adapter, checkpoints|
-        store = adapter.bind_comms_store(checkpoints)
-
-        assert_equal 1, checkpoints.request_history(thread_id: THREAD).length,
-                     'reconnection must not enqueue or run the turn again'
-        assert_equal 1, answer_rows(store),
-                     'reconnection must not duplicate the terminal delivery'
-      end
+      assert_nothing_reran(fixture)
     end
   end
 
   private
+
+  def first_request_id(fixture)
+    fixture.with_engine do |_adapter, checkpoints|
+      checkpoints.request_history(thread_id: THREAD).first.request_id
+    end
+  end
+
+  def complete_turn(fixture, request_id)
+    directory = Tamoz::Agent::RuntimeDirectory.resolve(path: fixture.dir, env: {})
+    runtime = Tamoz::Agent::WorkerRuntime.open(
+      directory,
+      model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
+      lease_ttl: 5.0
+    )
+    begin
+      worker = Tamoz::Agent::Worker.new(
+        runtime:,
+        session_builder: ->(thread) { runtime.session_for(thread) },
+        emitter: ->(_event) {}, once: true
+      )
+
+      assert worker.poll_once
+
+      view = runtime.session_for(THREAD).view(thread: THREAD)
+
+      assert_equal :completed, view.status
+      Comms::Lifecycle::RequestRef.for(request_id)
+    ensure
+      runtime&.close
+    end
+  end
+
+  def assert_reconnect_text(fixture, reference)
+    status, out, err = fixture.cli(['comms', 'request', reference])
+
+    assert_equal 0, status, err
+    assert_match(%r{request #{reference} on #{SURFACE_ID}/#{CONVERSATION} \(thread #{THREAD}\)}, out)
+    assert_match(/task=completed delivery=\w+ open_requests=0 state=idle/, out)
+  end
+
+  def assert_reconnect_row(fixture, reference, request_id)
+    status, out, err = fixture.cli(['comms', 'request', reference, '--json'])
+
+    assert_equal 0, status, err
+    row = JSON.parse(out.lines.last).fetch('requests').first
+
+    assert_equal reference, row.fetch('request_ref'), 'identity round-trips through the short ref'
+    assert_equal THREAD, row.fetch('thread_id')
+    assert_equal request_id, row.fetch('request_id')
+    assert row.key?('task_state')
+    assert row.key?('delivery_state')
+  end
+
+  def assert_nothing_reran(fixture)
+    fixture.with_engine do |adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
+
+      assert_equal 1, checkpoints.request_history(thread_id: THREAD).length,
+                   'reconnection must not enqueue or run the turn again'
+      assert_equal 1, answer_rows(store),
+                   'reconnection must not duplicate the terminal delivery'
+    end
+  end
 
   def read_only_responses
     {
@@ -154,55 +171,63 @@ class ReconnectionResumeProtocolTest < Minitest::Test
       FileUtils.mkdir_p(runtime_dir, mode: 0o700)
       File.chmod(0o700, runtime_dir)
       File.write(File.join(workspace, 'note.txt'), "hello\n")
-      File.write(File.join(runtime_dir, 'config.yaml'), Psych.dump(
-                                                          'runtime' => { 'schema_version' => 2 },
-                                                          'workspace' => { 'root' => workspace },
-                                                          'sources' => {},
-                                                          'channels' => {
-                                                            SURFACE_ID => {
-                                                              'kind' => 'telegram', 'revision' => 1,
-                                                              'enabled' => false, 'profile' => 'trusted',
-                                                              'credential_ref' => {
-                                                                'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN'
-                                                              },
-                                                              'stream_id' => "telegram:bot:#{BOT_ID}",
-                                                              'admission' => { 'direct' => 'pairing',
-                                                                               'correspondents' => [] }
-                                                            }
-                                                          }
-                                                        ))
-      File.chmod(0o600, File.join(runtime_dir, 'config.yaml'))
+      write_runtime_config(runtime_dir, workspace)
       write_read_only_profile(runtime_dir, workspace)
       yield ChannelRuntime.new(dir: runtime_dir)
     end
+  end
+
+  def write_runtime_config(runtime_dir, workspace)
+    path = File.join(runtime_dir, 'config.yaml')
+    File.write(path, Psych.dump(
+                       'runtime' => { 'schema_version' => 2 },
+                       'workspace' => { 'root' => workspace },
+                       'sources' => {},
+                       'channels' => { SURFACE_ID => channel_entry }
+                     ))
+    File.chmod(0o600, path)
+  end
+
+  def channel_entry
+    {
+      'kind' => 'telegram', 'revision' => 1,
+      'enabled' => false, 'profile' => 'trusted',
+      'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+      'stream_id' => "telegram:bot:#{BOT_ID}",
+      'admission' => { 'direct' => 'pairing', 'correspondents' => [] }
+    }
   end
 
   # A read-only authority: the reconnect scenario needs a turn that completes
   # verified without a configured check, which an action-capable profile would
   # refuse (`no_check`).
   def write_read_only_profile(runtime_dir, workspace)
-    digest = Tamoz::Agent::Toolbox.new(
-      root: workspace, allow_changes: false, checks: {},
-      allowed_tools: READ_ONLY_TOOLS
-    ).catalog_digest
     directory = File.join(runtime_dir, 'profiles')
     FileUtils.mkdir_p(directory, mode: 0o700)
     File.chmod(0o700, directory)
     path = File.join(directory, 'trusted.yaml')
-    File.write(path, Psych.dump(
-                       'profile' => {
-                         'schema_version' => 1, 'profile_id' => 'trusted', 'profile_version' => '1.0',
-                         'canonical_root' => workspace
-                       },
-                       'roots' => { 'workspace' => workspace },
-                       'tools' => { 'allowed' => READ_ONLY_TOOLS },
-                       'policy' => {
-                         'allow_changes' => false, 'default_check_safety' => 'read_only',
-                         'graph_version' => '1', 'behavior_version' => '1.0',
-                         'tool_catalog_digest' => digest, 'unattended_catalog_digest' => digest
-                       }
-                     ))
+    File.write(path, Psych.dump(read_only_profile(workspace)))
     File.chmod(0o600, path)
+  end
+
+  def read_only_profile(workspace)
+    digest = Tamoz::Agent::Toolbox.new(
+      root: workspace, allow_changes: false, checks: {},
+      allowed_tools: READ_ONLY_TOOLS
+    ).catalog_digest
+    {
+      'profile' => {
+        'schema_version' => 1, 'profile_id' => 'trusted', 'profile_version' => '1.0',
+        'canonical_root' => workspace
+      },
+      'roots' => { 'workspace' => workspace },
+      'tools' => { 'allowed' => READ_ONLY_TOOLS },
+      'policy' => {
+        'allow_changes' => false, 'default_check_safety' => 'read_only',
+        'graph_version' => '1', 'behavior_version' => '1.0',
+        'tool_catalog_digest' => digest, 'unattended_catalog_digest' => digest
+      }
+    }
   end
 
   # One operator-owned runtime directory: durable rows in, CLI answers out.
@@ -238,4 +263,3 @@ class ReconnectionResumeProtocolTest < Minitest::Test
     end
   end
 end
-# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength

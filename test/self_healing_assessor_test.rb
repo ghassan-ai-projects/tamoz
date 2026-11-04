@@ -49,9 +49,7 @@ class SelfHealingAssessorTest < Minitest::Test
     verdict = Assessor.new(rules: Healing::RuleRegistry.new).assess_check_failure(check_failure)
 
     refute verdict.remediable
-    assert_equal :escalated, verdict.route
-    assert_equal :verification_failed, verdict.category
-    assert_nil verdict.rule_id
+    assert_equal [:escalated, :verification_failed, nil], [verdict.route, verdict.category, verdict.rule_id]
   end
 
   # A never-mutate class is named as such and can never be remediable.
@@ -71,10 +69,8 @@ class SelfHealingAssessorTest < Minitest::Test
                       .assess_tool_failure(tool_failure(error_class: 'Tamoz::Agent::ToolArgumentError'))
 
     assert verdict.remediable
-    assert_equal :remediate, verdict.route
-    assert_equal :malformed_recoverable_output, verdict.category
-    assert_equal :refresh_recompute, verdict.action_family
-    assert_equal 'rule.malformed_recoverable_output', verdict.rule_id
+    assert_equal [:remediate, :malformed_recoverable_output, :refresh_recompute, 'rule.malformed_recoverable_output'],
+                 [verdict.route, verdict.category, verdict.action_family, verdict.rule_id]
   end
 
   # The durable path (worker/session, which Telegram rides) hands the assessor the

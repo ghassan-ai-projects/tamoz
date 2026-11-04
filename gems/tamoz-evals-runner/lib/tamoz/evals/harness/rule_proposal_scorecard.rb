@@ -25,7 +25,7 @@ module Tamoz
 
         # The controls' verdicts are known: the oracle wins every case, null and always-true none, and the
         # memorising and always-decline drafters no case that needs a rule unless declining is allowed there.
-        def self.controls_discriminate?(cases, allowed_features)
+        def self.control_verdict(cases, allowed_features)
           scores = control_scores(cases, allowed_features)
           declinable = cases.count { |entry| !entry.fetch('abstain_expected') && entry.dig('gold', 'allow_decline') }
           verdict = scores.dig('oracle', 'passed') == cases.length &&

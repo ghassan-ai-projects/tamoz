@@ -39,6 +39,10 @@ class StreamDraftPlaybookRuleTest < Minitest::Test
 
   def draft(worker, wire = request) = worker.draft_playbook_rule(wire, nil)
 
+  def draft_reason(worker, wire) = draft(worker, wire).first.no_proposal.reason
+
+  def request_with_repeated_case = request.tap { |wire| wire.cases.last.episode_id = 'ep-1' }
+
   def test_the_handshake_announces_drafting_only_when_a_draft_runner_is_bound
     handshake = V1::HandshakeRequest.new(protocol_version: '1.0', contract_version: '1.0', worker_id: 'w',
                                          runtime_instance_id: 'r', non_interactive: true)
@@ -134,29 +138,31 @@ class StreamDraftPlaybookRuleTest < Minitest::Test
   def test_an_id_the_store_cannot_hold_or_a_repeated_case_is_refused_before_any_model_call
     with_worker(no_proposal_bytes('too_few_cases')) do |worker, endpoint|
       assert_raises(GRPC::InvalidArgument) { draft(worker, request(draft_id: 'd' * 121)) }
-      assert_equal 'too_few_cases', draft(worker, request(draft_id: 'd' * 120)).first.no_proposal.reason
-      repeated = request
-      repeated.cases.last.episode_id = 'ep-1'
-      assert_raises(GRPC::InvalidArgument) { draft(worker, repeated) }
-      assert_equal 1, endpoint.observed.length
+      reason = draft_reason(worker, request(draft_id: 'd' * 120))
+      assert_raises(GRPC::InvalidArgument) { draft(worker, request_with_repeated_case) }
+
+      assert_equal ['too_few_cases', 1], [reason, endpoint.observed.length]
     end
+  end
+
+  ADMISSION_CHANGES = {
+    'key without an intent' => ->(wire) { wire.key.intent = '' },
+    'features that are not an object' => ->(wire) { wire.cases.first.features_json = '[1.0]' },
+    'features that are not JSON' => ->(wire) { wire.cases.first.features_json = '{a' },
+    'wall time over the ceiling' => ->(wire) { wire.budget.wall_time.seconds = 601 },
+    'model calls over the ceiling' => ->(wire) { wire.budget.model_calls = 51 },
+    'a case of another key' => ->(wire) { wire.cases.last.preset = 'p2' },
+    'a case that is not verified' => ->(wire) { wire.cases.last.verdict = 'not_verified' }
+  }.freeze
+
+  def admission_refusals
+    changed = ADMISSION_CHANGES.transform_values { |change| request.tap(&change) }
+    { 'empty id' => request(draft_id: ''), 'control character in id' => request(draft_id: "d\n1") }.merge(changed)
   end
 
   def test_every_admission_guard_refuses_before_any_model_call
     with_worker(no_proposal_bytes('too_few_cases')) do |worker, endpoint|
-      refusals = {
-        'empty id' => request(draft_id: ''),
-        'control character in id' => request(draft_id: "d\n1"),
-        'key without an intent' => request.tap { |wire| wire.key.intent = '' },
-        'features that are not an object' => request.tap { |wire| wire.cases.first.features_json = '[1.0]' },
-        'features that are not JSON' => request.tap { |wire| wire.cases.first.features_json = '{a' },
-        'wall time over the ceiling' => request.tap { |wire| wire.budget.wall_time.seconds = 601 },
-        'model calls over the ceiling' => request.tap { |wire| wire.budget.model_calls = 51 },
-        'a case of another key' => request.tap { |wire| wire.cases.last.preset = 'p2' },
-        'a case that is not verified' => request.tap { |wire| wire.cases.last.verdict = 'not_verified' }
-      }
-
-      refusals.each do |name, wire|
+      admission_refusals.each do |name, wire|
         assert_raises(GRPC::InvalidArgument, name) { draft(worker, wire) }
       end
       assert_empty endpoint.observed

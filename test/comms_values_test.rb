@@ -103,14 +103,20 @@ class CommsValuesTest < Minitest::Test
   ATTACHMENT = { 'kind' => 'document', 'file_id' => 'D', 'file_unique_id' => 'u', 'media_type' => 'text/plain',
                  'name' => 'notes.txt', 'size_bytes' => 5, 'duration_s' => nil }.freeze
 
+  BAD_ATTACHMENTS = [ATTACHMENT.merge('kind' => 'video'), ATTACHMENT.merge('extra' => 1), ATTACHMENT.except('name'),
+                     ATTACHMENT.merge('file_id' => ''), ATTACHMENT.merge('name' => 'n' * 256),
+                     ATTACHMENT.merge('size_bytes' => -1)].freeze
+
+  def attachment_envelope(attachment)
+    envelope(kind: 'attachment', text: nil, attachment:)
+  end
+
   def test_an_attachment_envelope_is_bounded_and_round_trips
-    wire = envelope(kind: 'attachment', text: nil, attachment: ATTACHMENT.dup).wire
+    wire = attachment_envelope(ATTACHMENT.dup).wire
 
     assert_equal ATTACHMENT, Comms::InboundEnvelope.from_wire(wire).attachment
-    [ATTACHMENT.merge('kind' => 'video'), ATTACHMENT.merge('extra' => 1), ATTACHMENT.except('name'),
-     ATTACHMENT.merge('file_id' => ''), ATTACHMENT.merge('name' => 'n' * 256),
-     ATTACHMENT.merge('size_bytes' => -1)].each do |bad|
-      assert_raises(Comms::ValidationError, bad.inspect) { envelope(kind: 'attachment', text: nil, attachment: bad) }
+    BAD_ATTACHMENTS.each do |bad|
+      assert_raises(Comms::ValidationError, bad.inspect) { attachment_envelope(bad) }
     end
     assert_raises(Comms::ValidationError) { envelope(kind: 'attachment', text: nil) }
     assert_raises(Comms::ValidationError) { envelope(kind: 'text', attachment: ATTACHMENT.dup) }
@@ -219,23 +225,20 @@ class CommsValuesTest < Minitest::Test
     end
   end
 
+  def build_prompt(required_evidence: :filesystem_operator)
+    Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
+      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
+      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence:,
+      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
+    )
+  end
+
   def test_prompt_reference_is_single_use_and_digest_only
-    reference_a, prompt_a = Comms::ApprovalPrompt.build(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
-      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
-      required_evidence: :filesystem_operator,
-      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
-    )
-    reference_b, prompt_b = Comms::ApprovalPrompt.build(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
-      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
-      required_evidence: :filesystem_operator,
-      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
-    )
+    reference_a, prompt_a = build_prompt
+    reference_b, prompt_b = build_prompt
 
     assert_match(/\A[0-9a-f]{32}\z/, reference_a, 'the reference is exactly 128 bits')
     assert_match(/\A[0-9a-f]{64}\z/, prompt_a.reference_digest)
@@ -246,14 +249,7 @@ class CommsValuesTest < Minitest::Test
   end
 
   def test_prompt_pins_the_evidence_symbol_the_decision_carries
-    _reference, prompt = Comms::ApprovalPrompt.build(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
-      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
-      required_evidence: :filesystem_operator,
-      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
-    )
+    _reference, prompt = build_prompt
 
     assert_equal 'filesystem_operator', prompt.required_evidence,
                  'the prompt pins exactly the symbol the caller passes (the Decision carries it)'
@@ -261,26 +257,10 @@ class CommsValuesTest < Minitest::Test
   end
 
   def test_prompt_rejects_a_non_lattice_required_evidence
-    error = assert_raises(Comms::ValidationError) do
-      Comms::ApprovalPrompt.build(
-        surface_id: 'telegram-ops', surface_revision: 1,
-        thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
-        interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
-        required_evidence: :root,
-        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-        prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
-      )
-    end
+    error = assert_raises(Comms::ValidationError) { build_prompt(required_evidence: :root) }
     assert_match(/evidence must be one of/, error.message)
 
-    prompt = Comms::ApprovalPrompt.build(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
-      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
-      required_evidence: :chat_bound,
-      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
-    ).last
+    prompt = build_prompt(required_evidence: :chat_bound).last
 
     assert_raises(Comms::ValidationError) do
       Comms::ApprovalPrompt.from_wire(prompt.wire.merge('required_evidence' => 'root'))
@@ -288,14 +268,7 @@ class CommsValuesTest < Minitest::Test
   end
 
   def test_prompt_validates_lifecycle_fields
-    prompt = Comms::ApprovalPrompt.build(
-      surface_id: 'telegram-ops', surface_revision: 1,
-      thread_id: 'telegram.ops.abc', occurrence_id: 'req-1',
-      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
-      required_evidence: :filesystem_operator,
-      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
-    ).last
+    prompt = build_prompt.last
 
     assert_raises(Comms::ValidationError) do
       Comms::ApprovalPrompt.from_wire(prompt.wire.merge('status' => 'consumed'))

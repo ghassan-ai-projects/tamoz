@@ -52,11 +52,16 @@ module TalkFixtures
     socket&.close if read
   end
 
-  def http(hub, method, path, body: '', token: TOKEN, host: "127.0.0.1:#{hub.port}", headers: {})
-    head = "#{method} #{path} HTTP/1.1\r\nHost: #{host}\r\nContent-Length: #{body.bytesize}\r\n"
+  def http(hub, method, path, token: TOKEN, **request)
+    body = request.fetch(:body, '')
+    head = request_head(method, path, request.fetch(:host, "127.0.0.1:#{hub.port}"), body.bytesize)
     head << "Authorization: Bearer #{token}\r\n" if token
-    headers.each { |name, value| head << "#{name}: #{value}\r\n" }
+    request.fetch(:headers, {}).each { |name, value| head << "#{name}: #{value}\r\n" }
     raw(hub, head.b + "\r\n".b + body.b)
+  end
+
+  def request_head(method, path, host, length)
+    "#{method} #{path} HTTP/1.1\r\nHost: #{host}\r\nContent-Length: #{length}\r\n"
   end
 
   def parse(text)
@@ -68,9 +73,12 @@ module TalkFixtures
 
   def wav(seconds, rate: 16_000, channels: 1, bits: 16)
     data = "\x00\x01".b * (rate * seconds * channels).to_i
+    wav_header(data.bytesize, rate, channels, bits) + data
+  end
+
+  def wav_header(data_bytes, rate, channels, bits)
     format = [1, channels, rate, rate * channels * bits / 8, channels * bits / 8, bits].pack('vvVVvv')
-    "RIFF#{[36 + data.bytesize].pack('V')}WAVEfmt #{[16].pack('V')}".b + format +
-      "data#{[data.bytesize].pack('V')}".b + data
+    "RIFF#{[36 + data_bytes].pack('V')}WAVEfmt #{[16].pack('V')}".b + format + "data#{[data_bytes].pack('V')}".b
   end
 
   # Confirms every batch as the gateway would: poll, then poll again with the returned offset.

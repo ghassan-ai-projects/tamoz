@@ -8,21 +8,16 @@ module Tamoz
         @compiled = compiled
       end
 
-      def execute_tasks(
-        tasks,
-        checkpoint,
-        writer:,
-        context:,
-        concurrency:,
-        resume_values:
-      )
+      def execute_tasks(tasks, checkpoint, execution)
         return [] if tasks.empty?
 
+        context = execution.context
+        concurrency = execution.concurrency
         pool = compiled.pool_for(concurrency)
         pool.map(tasks, cancellation: context.cancellation) do |task|
-          resumed = resume_values.fetch(task.id, {}.freeze)
+          resumed = execution.resume_values.fetch(task.id, {}.freeze)
           task_context = task_context_for(task, checkpoint, context, concurrency, resumed)
-          execute_task(task, checkpoint, task_context, writer)
+          execute_task(task, checkpoint, task_context, execution.writer)
         end
       end
 

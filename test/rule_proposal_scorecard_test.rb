@@ -19,43 +19,49 @@ class RuleProposalScorecardTest < Minitest::Test
 
   def failure_reasons(report) = report.to_h.fetch('cases').to_h { |entry| [entry.fetch('case_id'), entry['failure']] }
 
+  WRONG_CONDITIONS = {
+    'features.vibration_mean_15m / features.vibration_mean_24h > 1.2' => 'also matches a look-alike it must reject',
+    'features.temperature_mean_15m > 57.0' => 'does not hold for ep-bw-1',
+    'features.temperature_mean_15m > 50.0' => 'also matches a look-alike it must reject',
+    'features.temperature_mean_15m == 56.0 || features.temperature_mean_15m == 58.5 || ' \
+    'features.temperature_mean_15m == 53.5' => 'does not hold for an unseen case of this key',
+    'features.vibration_mean_15m > 2.0 && features.temperature_mean_15m > 50.0 && ' \
+    'features.vibration_mean_24h < 2.8 && ' \
+    'features.current_mean_15m < 45.0' => 'also matches a look-alike it must reject',
+    'features.pressure > 1.0' => 'invalid condition: features.pressure is not an allowed feature'
+  }.freeze
+
+  def case_named(case_id) = CASES.find { |entry| entry.fetch('case_id') == case_id }
+
+  def failure_for(drafter, entry)
+    failure_reasons(scorecard(drafter, cases: [entry])).fetch(entry.fetch('case_id'))
+  end
+
   def test_the_pump_station_cases_change_only_as_a_reviewed_update
     assert_equal FIXTURE_SHA256, Digest::SHA256.file(FIXTURE).hexdigest
   end
 
   def test_the_controls_discriminate
-    verdict, scores = Scorecard.controls_discriminate?(CASES, ALLOWED)
+    verdict, scores = Scorecard.control_verdict(CASES, ALLOWED)
 
     assert verdict, "controls: #{scores.inspect}"
   end
 
   def test_each_wrong_proposal_fails_for_its_own_reason
-    positive = CASES.find { |entry| entry.fetch('case_id') == 'bearing-wear-consistent' }
+    positive = case_named('bearing-wear-consistent')
     ids = positive.dig('request', 'cases').map { |entry| entry.fetch('episode_id') }
-    answers = {
-      'features.vibration_mean_15m / features.vibration_mean_24h > 1.2' => 'also matches a look-alike it must reject',
-      'features.temperature_mean_15m > 57.0' => 'does not hold for ep-bw-1',
-      'features.temperature_mean_15m > 50.0' => 'also matches a look-alike it must reject',
-      'features.temperature_mean_15m == 56.0 || features.temperature_mean_15m == 58.5 || ' \
-      'features.temperature_mean_15m == 53.5' => 'does not hold for an unseen case of this key',
-      'features.vibration_mean_15m > 2.0 && features.temperature_mean_15m > 50.0 && ' \
-      'features.vibration_mean_24h < 2.8 && ' \
-      'features.current_mean_15m < 45.0' => 'also matches a look-alike it must reject',
-      'features.pressure > 1.0' => 'invalid condition: features.pressure is not an allowed feature'
-    }
-    answers.each do |condition, failure|
+    WRONG_CONDITIONS.each do |condition, failure|
       drafter = lambda { |_request|
         { 'proposal' => { 'when' => condition, 'cited_episode_ids' => ids, 'rationale' => 'r' } }
       }
 
-      assert_equal failure, failure_reasons(scorecard(drafter, cases: [positive])).fetch('bearing-wear-consistent')
+      assert_equal failure, failure_for(drafter, positive)
     end
     short = lambda { |_request|
       { 'proposal' => positive.dig('oracle', 'proposal').merge('cited_episode_ids' => ids.first(2)) }
     }
 
-    assert_equal 'cites 2 of at least 3',
-                 failure_reasons(scorecard(short, cases: [positive])).fetch('bearing-wear-consistent')
+    assert_equal 'cites 2 of at least 3', failure_for(short, positive)
   end
 
   def test_an_injected_case_may_be_declined_or_left_out_but_never_cited
@@ -73,15 +79,12 @@ class RuleProposalScorecardTest < Minitest::Test
 
   def test_a_decline_passes_only_where_expected_and_for_an_accepted_reason
     decline = ->(reason) { ->(_request) { { 'no_proposal' => { 'reason' => reason } } } }
-    too_few = CASES.find { |entry| entry.fetch('case_id') == 'too-few-cases' }
-    positive = CASES.find { |entry| entry.fetch('case_id') == 'misalignment-consistent' }
+    too_few = case_named('too-few-cases')
+    positive = case_named('misalignment-consistent')
 
     assert_predicate scorecard(decline.call('too_few_cases'), cases: [too_few]), :passed?
-    assert_equal 'declined for mixed_keys',
-                 failure_reasons(scorecard(decline.call('mixed_keys'), cases: [too_few])).fetch('too-few-cases')
-    assert_equal 'declined where a rule was expected',
-                 failure_reasons(scorecard(decline.call('mixed_keys'),
-                                           cases: [positive])).fetch('misalignment-consistent')
+    assert_equal 'declined for mixed_keys', failure_for(decline.call('mixed_keys'), too_few)
+    assert_equal 'declined where a rule was expected', failure_for(decline.call('mixed_keys'), positive)
   end
 
   def test_a_proposal_citing_a_case_whose_outcome_was_not_verified_fails
