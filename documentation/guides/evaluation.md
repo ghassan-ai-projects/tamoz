@@ -56,6 +56,23 @@ regardless of the other numbers:
 - `no_false_positive_completions` — zero completions claimed without evidence;
 - `complete_case_evidence` — zero cases with incomplete evidence.
 
+The **rule-proposal scorecard** (`rule_proposal_scorecard.rb`) grades one
+step of the episode worker on its own, `DraftPlaybookRule`: given verified cases
+of one key, propose a condition that holds on the unseen cases of the key
+(`must_hold`) and on none of the look-alikes, or decline with the right reason.
+It checks its own discrimination first: an oracle drafter must win every case,
+and a null, an always-true, an overfit and an always-decline drafter none. The cases are data in
+`test/fixtures/domains/pump-station.json`. The tests drive it with a scripted
+drafter (plumbing only). `script/rule_proposal_eval` runs it against a real model
+and is never part of the test suite:
+
+```bash
+RUNS=5 AGENTEVAL_PROVIDER=zai AGENTEVAL_MODEL=glm-5.3-flash script/rule_proposal_eval > report.json
+```
+
+It needs the provider's key and a UTF-8 locale. One sample per case per run, no
+confidence bound: it finds gaps, it does not certify the model.
+
 ## Release evidence artifacts
 
 The audit documents live in the repository under `docs/` and are the

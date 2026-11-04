@@ -10,6 +10,26 @@ from its public release line onward.
 
 ### Added
 
+- Rule promotion, Tamoz's part (ADR-055): every DIAGNOSE decision carries the
+  `diagnosis_code` Tamoz derived, and the episode worker serves a new
+  `DraftPlaybookRule` RPC when started with `--draft-model-policy ROLE`
+  (handshake feature `draft_playbook_rule`). A draft is a typed proposal — a
+  restricted-CEL condition over named features that holds on every cited
+  verified case — or a typed decline. It carries no mode or activation, and
+  only a human approval in `agentic-stream` lets a rule run. Graded by the
+  rule-proposal scorecard and `script/rule_proposal_eval` (real model); the
+  first results are in `documentation/limitations.md`.
+- `tamoz setup`, `tamoz channel add telegram|talk`, `tamoz start` and
+  `tamoz service install|status|uninstall` (launchd): one runtime, one agent,
+  channels as ways in (ADR-062). Models come from `--provider/--model` or the
+  runtime config.
+- Telegram attachments: text files, PDFs (needs poppler's `pdftotext`), photos
+  (read by the `--vision` model, else the chat model) and voice or audio notes
+  (the `--transcription` model). A received file is a temporary handoff, deleted
+  once the turn has read it; only what was read stays.
+- The talk channel (`tamoz-talk`, ADR-061): talk to Tamoz from a browser page by
+  voice or text, with a phone guide through Tailscale.
+
 - Read-only self-diagnosis (ADR-060): `tamoz diagnose` (findings from rules
   kept as data in `gems/tamoz-observability/diagnosis/rules.yaml`), `tamoz
   explain` (one turn's decision record), `tamoz postmortem` (Markdown + JSON,
@@ -41,6 +61,11 @@ from its public release line onward.
 
 ### Changed
 
+- `tamoz setup`, `channel add` and `start` replace `tamoz init`,
+  `tamoz telegram setup|start` and `tamoz talk setup|start`; the Fixed entries below
+  that name the old commands describe behavior the new ones keep.
+- Every channel's code lives in its adapter gem (`tamoz-telegram`,
+  `tamoz-talk`); party ids follow one grammar for every channel.
 - One approval engine everywhere: durable sessions and the one-shot runtime ask
   the same policy owner; a denial is a structured result the turn continues from.
 - Approval prompts carry the evidence level from the journaled engine Decision;
@@ -48,6 +73,16 @@ from its public release line onward.
 
 ### Fixed
 
+- A model call the provider refuses with 429 or 503 is retried within the
+  episode's `max_provider_retries` budget (none when unset), pausing for
+  `Retry-After` (at most 30 s) or 2 s then 6 s. Replay reproduces the retries
+  from the journal.
+- A failed model or tool call in an episode names its cause (error class, code,
+  HTTP status — never the provider body) instead of `graph_step_failed`, and the
+  worker log says why an episode ended without a decision.
+- The episode frame renders the exact diagnosis-document shape, so a real model
+  no longer invents its own keys.
+- The MCP server restarts when the SDK's read timeout wins the deadline race.
 - A model reply containing a non-ASCII character no longer crashes a turn:
   `Tamoz::Core::JCS` now returns UTF-8 strings from a binary HTTP body.
 - Interactive approval previews print once, not twice. A failed session names
@@ -104,6 +139,9 @@ from its public release line onward.
 
 ### Removed
 
+- The schema 1 runtime config and `tamoz config migrate`: only schema 2 loads,
+  and an older directory is refused with a pointer to `tamoz setup` (ADR-059).
+- Reading a model from `TAMOZ_PROVIDER`, `TAMOZ_MODEL` or `TAMOZ_<ROLE>_*`.
 - `ApprovalDeniedError`, the tools-gem approval plumbing, and every
   approve-all bypass flag; unattended behavior is a policy profile, not a flag.
 
