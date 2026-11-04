@@ -19,6 +19,7 @@ require_relative 'telegram_bot_api_fake'
 #   fake, DB observations, settlement, reporting); splitting it would scatter the settle
 #   rules every scenario depends on.
 class TelegramChatEval
+  VERDICT_LABELS = { true => 'pass', false => '**FAIL**', nil => 'BLOCKED' }.freeze
   ROOT = File.expand_path('../..', __dir__)
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
   HYGIENE = [
@@ -251,9 +252,8 @@ class TelegramChatEval
   end
 
   def workspace_files_text
-    Dir[File.join(@workspace, '*')].select do |path|
-      File.file?(path)
-    end.map { |path| File.read(path) }.join("\n")
+    files = Dir[File.join(@workspace, '*')].select { |path| File.file?(path) }
+    files.map { |path| File.read(path) }.join("\n")
   end
 
   def workspace_text(name)
@@ -571,7 +571,7 @@ class TelegramChatEval
              "**#{passed}/#{@results.length - blocked} checks pass; #{blocked} blocked.**", '',
              '| scenario | check | result | detail |', '|---|---|---|---|']
     @results.each do |result|
-      verdict = { true => 'pass', false => '**FAIL**', nil => 'BLOCKED' }.fetch(result[:pass])
+      verdict = VERDICT_LABELS.fetch(result[:pass])
       lines << "| #{result[:scenario]} | #{result[:check]} | #{verdict} | " \
                "#{result[:detail].to_s.tr('|', '/')[0, 140]} |"
     end

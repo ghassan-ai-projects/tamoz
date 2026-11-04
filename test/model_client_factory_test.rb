@@ -45,9 +45,11 @@ class ModelClientFactoryTest < Minitest::Test
     assert_includes error.message, 'TAMOZ_MODEL_SECRET'
   end
 
+  SPEECH_ENVIRONMENT = { 'OPENROUTER_SPEECH_API_KEY' => 'speech' }.freeze
+
   def test_a_role_without_a_profile_may_name_its_key_variable
     built = Factory.build(provider: 'openrouter', model: 'hexgrad/kokoro-82m', profile_role: nil,
-                          environment: { 'OPENROUTER_SPEECH_API_KEY' => 'speech' }, credential_name: 'OPENROUTER_SPEECH_API_KEY')
+                          environment: SPEECH_ENVIRONMENT, credential_name: 'OPENROUTER_SPEECH_API_KEY')
 
     assert_equal 'hexgrad/kokoro-82m', built.model
     assert_equal %w[OPENROUTER_SPEECH_API_KEY OPENROUTER_API_BASE],

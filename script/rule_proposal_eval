@@ -18,6 +18,7 @@ require 'support/episode_composition'
 require 'support/real_profile'
 require 'support/rule_proposal_drafter'
 
+# Plays the rule-proposal controls and the real-model drafter, and prints the report.
 module RuleProposalEval
   module_function
 

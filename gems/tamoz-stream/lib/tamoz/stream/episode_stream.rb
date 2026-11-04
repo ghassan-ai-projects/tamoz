@@ -272,6 +272,15 @@ module Tamoz
         "graph_step_failed"
       end
 
+      # nil usage (unavailable) crosses as nil — the wire claims nothing it
+      # cannot prove. Present usage is mapped 1:1 from the receipt projection.
+      def self.wire_usage(usage)
+        return nil if usage.nil?
+
+        fields = USAGE_FIELDS.to_h { |field| [field, Integer(usage.fetch(field.to_s, 0))] }
+        Agenticstream::Runtime::V1::Usage.new(**fields)
+      end
+
       private
 
       def model_started_part(data)
@@ -289,15 +298,6 @@ module Tamoz
           usage: self.class.wire_usage(data["usage"]),
           response_sha256: data["response_sha256"]
         )
-      end
-
-      # nil usage (unavailable) crosses as nil — the wire claims nothing it
-      # cannot prove. Present usage is mapped 1:1 from the receipt projection.
-      def self.wire_usage(usage)
-        return nil if usage.nil?
-
-        fields = USAGE_FIELDS.to_h { |field| [field, Integer(usage.fetch(field.to_s, 0))] }
-        Agenticstream::Runtime::V1::Usage.new(**fields)
       end
     end
   end

@@ -23,6 +23,7 @@ module Tamoz
         503 => 'Service Unavailable'
       }.freeze
 
+      # A request the server refuses, carrying the HTTP status to answer with.
       class Refused < StandardError
         attr_reader :status
 

@@ -6,6 +6,7 @@ require 'json'
 module Tamoz
   module Evals
     module Harness
+      # Reads externally supplied case files from an absolute root.
       module ExternalInputs
         module_function
 

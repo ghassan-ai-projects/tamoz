@@ -50,7 +50,8 @@ class CommsPartiesTest < Minitest::Test
     assert_equal '096f5b88c7047e35ba757f22292aaf69a2a8c9e72b4abe45db759a0030b87893',
                  telegram_descriptor.definition_digest
     decision = Comms::DecisionRecord.build(
-      thread_id: 'telegram.telegram.0123456789abcdef', occurrence_id: 'occ-1', interrupts: [], interrupt_digest: 'b' * 64,
+      thread_id: 'telegram.telegram.0123456789abcdef', occurrence_id: 'occ-1',
+      interrupts: [], interrupt_digest: 'b' * 64,
       direction: 'approve', actor_kind: 'telegram_user', actor_id: 'telegram:user:4242', source: 'telegram',
       decided_at: Time.utc(2026, 10, 9, 12), ttl_s: 900
     )

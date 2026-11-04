@@ -48,9 +48,10 @@ class CliStartTest < Minitest::Test
 
   def start_cli(out, err, env, served, stubs)
     bot = stubs.fetch(:bot) { Bot.new([]) }
-    cli = Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:, channel_kinds: ChannelKindsFixture.telegram(lambda { |_token|
-      bot
-    }),
+    cli = Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:,
+                                channel_kinds: ChannelKindsFixture.telegram(lambda { |_token|
+                                  bot
+                                }),
                                 model_factory: ->(**) { stubs.fetch(:chat) { Model.new } })
     stub_launch(cli, served, stubs)
   end

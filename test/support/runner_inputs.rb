@@ -315,14 +315,17 @@ module RunnerInputs
       train: Array.new(4) do |index|
         path = "lib/#{('a'.ord + index).chr}.rb"
         { 'trajectory_id' => "t.00#{index + 1}", 'verified' => true, 'outcome' => 'satisfied',
-          'steps' => [step.call('s1', 'read_file', path, 'read the target'), step.call('s2', 'apply_patch', path, 'patch the target')] }
+          'steps' => [step.call('s1', 'read_file', path, 'read the target'),
+                      step.call('s2', 'apply_patch', path, 'patch the target')] }
       end + [{ 'trajectory_id' => 't.unverified', 'verified' => false, 'outcome' => 'unresolved',
-               'steps' => [step.call('s1', 'list_directory', 'lib/z.rb', 'list first'), step.call('s2', 'apply_patch', 'lib/z.rb', 'patch blind')] }],
+               'steps' => [step.call('s1', 'list_directory', 'lib/z.rb', 'list first'),
+                           step.call('s2', 'apply_patch', 'lib/z.rb', 'patch blind')] }],
       development: [
         { 'task_id' => 'd.blind-patch', 'invariant' => 'read_before_patch',
           'steps' => [step.call('s1', 'apply_patch', 'lib/one.rb', 'patch without reading')] },
         { 'task_id' => 'd.already-safe', 'invariant' => 'read_before_patch',
-          'steps' => [step.call('s1', 'read_file', 'lib/two.rb', 'read the target'), step.call('s2', 'apply_patch', 'lib/two.rb', 'patch the target')] },
+          'steps' => [step.call('s1', 'read_file', 'lib/two.rb', 'read the target'),
+                      step.call('s2', 'apply_patch', 'lib/two.rb', 'patch the target')] },
         { 'task_id' => 'd.read-only', 'invariant' => 'read_before_patch',
           'steps' => [step.call('s1', 'read_file', 'lib/three.rb', 'just read')] },
         { 'task_id' => 'd.second-blind-patch', 'invariant' => 'read_before_patch',
@@ -332,7 +335,8 @@ module RunnerInputs
         { 'task_id' => 'h.blind-patch', 'invariant' => 'read_before_patch',
           'steps' => [step.call('s1', 'apply_patch', 'lib/held-one.rb', 'patch without reading')] },
         { 'task_id' => 'h.already-safe', 'invariant' => 'read_before_patch',
-          'steps' => [step.call('s1', 'read_file', 'lib/held-two.rb', 'read the target'), step.call('s2', 'apply_patch', 'lib/held-two.rb', 'patch the target')] },
+          'steps' => [step.call('s1', 'read_file', 'lib/held-two.rb', 'read the target'),
+                      step.call('s2', 'apply_patch', 'lib/held-two.rb', 'patch the target')] },
         { 'task_id' => 'h.read-only', 'invariant' => 'read_before_patch',
           'steps' => [step.call('s1', 'list_directory', 'lib/held-three.rb', 'just list')] }
       ]

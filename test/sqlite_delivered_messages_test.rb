@@ -14,7 +14,8 @@ class SQLiteDeliveredMessagesTest < Minitest::Test
       _, consumed = card(store, 'consumed', at: Time.utc(2026, 10, 9, 10, 1))
       decision = Comms::DecisionRecord.build(
         thread_id: 'talk.talk.consumed', occurrence_id: 'consumed', interrupts: [],
-        interrupt_digest: consumed.interrupt_digest, direction: 'deny', actor_kind: 'talk_user', actor_id: 'talk:user:1',
+        interrupt_digest: consumed.interrupt_digest, direction: 'deny',
+        actor_kind: 'talk_user', actor_id: 'talk:user:1',
         source: 'talk', decided_at: Time.utc(2026, 10, 9, 10, 2), ttl_s: 900
       )
 

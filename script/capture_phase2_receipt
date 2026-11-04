@@ -120,17 +120,23 @@ cases = [
   command_result('base-scorecard-removed',
                  [RbConfig.ruby, '-S', 'bundle', 'exec', 'tamoz-eval', 'scorecard', 'agent-smoke']),
   command_result('runner-missing-manifest',
-                 [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke', '--input-manifest',
-                  missing_path]),
+                 [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke',
+                  '--input-manifest', missing_path]),
   command_result(
     'runner-scorecard-report',
     [RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', '-Itest', '-e',
-     'require "test_helper"; RunnerInputs.with_manifest { |manifest| status = Tamoz::Evals::Runner::CLI.run(["scorecard", "agent-smoke", "--input-manifest", manifest], scorecard_factory: -> { Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: RunnerInputs.smoke_corpus) }); exit(status) }']
+     'require "test_helper"; RunnerInputs.with_manifest { |manifest| status = Tamoz::Evals::Runner::CLI.run(' \
+     '["scorecard", "agent-smoke", "--input-manifest", manifest], scorecard_factory: -> { ' \
+     'Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: RunnerInputs.smoke_corpus) }); exit(status) }']
   ),
   command_result(
     'runner-consumer-summary',
     [RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', '-Itest', '-e',
-     'require "test_helper"; report = %q!{"decision":"pass","corpus":{"case_count":21},"aggregate":{"task_successes":19,"unsafe_or_bypassed_actions":0},"hard_gates":[{"status":"pass"},{"status":"pass"},{"status":"pass"},{"status":"pass"}]}!; puts JSON.generate(Tamoz::Evals::Runner::ScorecardSummaryConsumer.new(executor: ->(_command) { [true, report, ""] }).run(input_manifest: "/tmp/manifest.json"))']
+     'require "test_helper"; report = %q!{"decision":"pass","corpus":{"case_count":21},' \
+     '"aggregate":{"task_successes":19,"unsafe_or_bypassed_actions":0},"hard_gates":[{"status":"pass"},' \
+     '{"status":"pass"},{"status":"pass"},{"status":"pass"}]}!; puts JSON.generate(' \
+     'Tamoz::Evals::Runner::ScorecardSummaryConsumer.new(executor: ->(_command) { [true, report, ""] }).run(' \
+     'input_manifest: "/tmp/manifest.json"))']
   )
 ]
 
@@ -146,19 +152,20 @@ manifest_failure_cases = Dir.mktmpdir('tamoz-phase2-receipt') do |directory|
   missing_factory = write_manifest(Dir.mktmpdir('missing-factory', directory))
   [
     command_result('missing',
-                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke', '--input-manifest',
-                    missing_path]),
+                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke',
+                    '--input-manifest', missing_path]),
     command_result('malformed',
-                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke', '--input-manifest',
-                    malformed]),
+                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke',
+                    '--input-manifest', malformed]),
     command_result('incomplete',
-                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke', '--input-manifest',
-                    incomplete]),
+                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke',
+                    '--input-manifest', incomplete]),
     command_result('repository_relative',
-                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke', '--input-manifest',
-                    relative]),
+                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'bin/tamoz-eval-runner', 'scorecard', 'agent-smoke',
+                    '--input-manifest', relative]),
     command_result('missing_openclaw_factory',
-                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', 'script/benchmark_comms_run', '--input-manifest', missing_factory,
+                   [RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', 'script/benchmark_comms_run',
+                    '--input-manifest', missing_factory,
                     '--out', directory, '--artifact-root', 'receipt-output', '--scenarios', 'C1'])
   ].map do |entry|
     entry.slice('name', 'exit', 'stdout_b64', 'stderr_b64', 'side_effects')
@@ -168,13 +175,17 @@ end
 public_api = command_result(
   'public-api-inventory',
   [RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', '-e',
-   'require "json"; require "tamoz/evals"; require "tamoz/evals/runner"; puts JSON.generate("requires" => ["tamoz/evals", "tamoz/evals/runner"], "constants" => ["Tamoz::Evals::CLI", "Tamoz::Evals::Runner::CLI", "Tamoz::Evals::Runner::InputManifest", "Tamoz::Evals::Runner::ScorecardSummaryConsumer"])']
+   'require "json"; require "tamoz/evals"; require "tamoz/evals/runner"; ' \
+   'puts JSON.generate("requires" => ["tamoz/evals", "tamoz/evals/runner"], ' \
+   '"constants" => ["Tamoz::Evals::CLI", "Tamoz::Evals::Runner::CLI", ' \
+   '"Tamoz::Evals::Runner::InputManifest", "Tamoz::Evals::Runner::ScorecardSummaryConsumer"])']
 )
 public_api_document = JSON.parse(Base64.decode64(public_api.fetch('stdout_b64')))
 
 load_graph = %w[tamoz/evals tamoz/evals/runner].to_h do |library|
   command = [RbConfig.ruby, '-S', 'bundle', 'exec', 'ruby', '-e',
-             "require #{library.inspect}; puts JSON.generate($LOADED_FEATURES.select { |path| path.include?('/tamoz/') }.sort)"]
+             "require #{library.inspect}; puts JSON.generate(" \
+             "$LOADED_FEATURES.select { |path| path.include?('/tamoz/') }.sort)"]
   result = command_result(library, command)
   [library == 'tamoz/evals' ? 'base' : 'runner',
    JSON.parse(Base64.decode64(result.fetch('stdout_b64')))]
@@ -207,7 +218,8 @@ receipt = {
     { 'surface' => 'scheduler scorecard consumer', 'before' => 'Tamoz::Scheduler::ScorecardSummaryConsumer',
       'after' => 'Tamoz::Evals::Runner::ScorecardSummaryConsumer', 'reason' => 'scheduler remains generic' },
     { 'surface' => 'runner inputs', 'before' => 'repository-relative and package-local harness inputs',
-      'after' => 'digest-pinned caller-owned manifest and adapter', 'reason' => 'no fixture source or data in either package' }
+      'after' => 'digest-pinned caller-owned manifest and adapter',
+      'reason' => 'no fixture source or data in either package' }
   ],
   'manifest_failure_cases' => manifest_failure_cases
 }

@@ -69,7 +69,8 @@ module TalkFixtures
   def wav(seconds, rate: 16_000, channels: 1, bits: 16)
     data = "\x00\x01".b * (rate * seconds * channels).to_i
     format = [1, channels, rate, rate * channels * bits / 8, channels * bits / 8, bits].pack('vvVVvv')
-    "RIFF#{[36 + data.bytesize].pack('V')}WAVEfmt #{[16].pack('V')}".b + format + "data#{[data.bytesize].pack('V')}".b + data
+    "RIFF#{[36 + data.bytesize].pack('V')}WAVEfmt #{[16].pack('V')}".b + format +
+      "data#{[data.bytesize].pack('V')}".b + data
   end
 
   # Confirms every batch as the gateway would: poll, then poll again with the returned offset.

@@ -9,6 +9,7 @@ require 'digest'
 require 'json'
 require 'time'
 
+# Verifies an evidence-audit findings file against the files it cites.
 module EvidenceAudit
   CONCLUSIONS = %w[exception no_exception insufficient_evidence].freeze
   SEVERITIES = %w[high medium low info].freeze
@@ -40,6 +41,7 @@ module EvidenceAudit
     def ok? = problems.empty?
   end
 
+  # Checks every finding's shape and that each quoted passage occurs in its file at the cited lines.
   class Verifier
     def initialize(findings_path, root: Dir.pwd, reviewed: false)
       @findings_path = findings_path

@@ -14,7 +14,9 @@ require 'json'
 # rubocop:disable Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/AbcSize
 # rubocop:disable Style/FormatStringToken, Style/MultilineBlockChain
 
-INTERESTING = %r{"type":"(?:request/context|compaction/start|compaction/prune|assistant/message|user/message|system/message|tool/result)"}
+ALTERNATIVES = 'request/context|compaction/start|compaction/prune|assistant/message|' \
+               'user/message|system/message|tool/result'
+INTERESTING = /"type":"(?:#{ALTERNATIVES})"/
 
 # The highest session format generation in a directory. Older generations are superseded copies
 # of the same session, so counting both would double every figure.

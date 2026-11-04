@@ -8,6 +8,7 @@ require_relative 'talk_checks'
 # controls test can show each one failing on an adversary without a model.
 module TalkScenarios
   Result = Struct.new(:scenario, :input, :outcome, :detail, keyword_init: true)
+  VALID_VERDICT_OUTCOMES = %i[pass fail].freeze
   ECHO_LABEL = File.expand_path('../../gems/tamoz-harness/prompts/attachment_text.json', __dir__)
 
   module_function
@@ -60,7 +61,7 @@ module TalkScenarios
 
   # A gated scenario passes only at its stated valid runs, with INVALID at most a bounded share of its attempts.
   def verdict(outcomes, needs:, threshold:, max_invalid_share:)
-    valid = outcomes.count { |outcome| %i[pass fail].include?(outcome) }
+    valid = outcomes.count { |outcome| VALID_VERDICT_OUTCOMES.include?(outcome) }
     return 'SHORT' if valid.zero?
     return 'FAIL' if outcomes.count(:pass).fdiv(valid) < threshold
     return 'SHORT' if valid < needs || outcomes.count(:invalid) > outcomes.length * max_invalid_share

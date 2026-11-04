@@ -169,6 +169,52 @@ class ContextControlExposureTest < Minitest::Test
     end
   end
 
+  Surface = Struct.new(:gateway, :transport, :store, :session, :recorded, :checkpoints,
+                       :workspace, :session_dir, :adapter, keyword_init: true) do
+    include CommsGatewayHarness
+
+    def admit(id, text)
+      transport.batch([update(id, text:)])
+      raise "admission returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
+    end
+
+    def command(text, id)
+      transport.batch([update(id, text:)])
+      raise "command returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
+
+      reply_for(id)
+    end
+
+    def reply_for(id)
+      row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
+                 .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
+      row&.fetch('text')
+    end
+
+    def current_thread
+      Comms::Admission.thread_id(
+        SURFACE_ID, CONVERSATION_ID,
+        generation: store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
+      )
+    end
+
+    def captured = recorded.captured
+
+    def cli_thread_path(thread) = File.join(session_dir, "#{thread}.sqlite3")
+
+    def run_cli(argv)
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Agent::CLI.run(
+        ['--session-dir', session_dir, '--root', workspace, '--json'] + argv,
+        out:, err:, input: StringIO.new, env: {}, model_factory: ->(_options) { ControlsModel.new }
+      )
+      raise "cli #{argv.inspect} exited #{status}: #{err.string}" unless status.zero?
+
+      JSON.parse(out.string.lines.last)
+    end
+  end
+
   private
 
   def drive(gateway, store, transport, text, id)
@@ -266,52 +312,6 @@ class ContextControlExposureTest < Minitest::Test
   end
 
   # ===== harness =====
-
-  Surface = Struct.new(:gateway, :transport, :store, :session, :recorded, :checkpoints,
-                       :workspace, :session_dir, :adapter, keyword_init: true) do
-    include CommsGatewayHarness
-
-    def admit(id, text)
-      transport.batch([update(id, text:)])
-      raise "admission returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
-    end
-
-    def command(text, id)
-      transport.batch([update(id, text:)])
-      raise "command returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
-
-      reply_for(id)
-    end
-
-    def reply_for(id)
-      row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
-                 .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
-      row&.fetch('text')
-    end
-
-    def current_thread
-      Comms::Admission.thread_id(
-        SURFACE_ID, CONVERSATION_ID,
-        generation: store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
-      )
-    end
-
-    def captured = recorded.captured
-
-    def cli_thread_path(thread) = File.join(session_dir, "#{thread}.sqlite3")
-
-    def run_cli(argv)
-      out = StringIO.new
-      err = StringIO.new
-      status = Tamoz::Agent::CLI.run(
-        ['--session-dir', session_dir, '--root', workspace, '--json'] + argv,
-        out:, err:, input: StringIO.new, env: {}, model_factory: ->(_options) { ControlsModel.new }
-      )
-      raise "cli #{argv.inspect} exited #{status}: #{err.string}" unless status.zero?
-
-      JSON.parse(out.string.lines.last)
-    end
-  end
 
   # The session-access seam under test, built exactly as the CLI wiring builds
   # it: one profile-less Session over the shared runtime database.

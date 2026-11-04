@@ -24,7 +24,7 @@ module Tamoz
         raise CheckpointCorruptionError, "#{name} is not canonical JSON" unless JSON.generate(wire) == text
 
         wire
-      rescue JSON::ParserError, JSON::NestingError => e
+      rescue JSON::ParserError => e
         raise CheckpointCorruptionError.new("#{name} is invalid JSON"), cause: e
       end
 

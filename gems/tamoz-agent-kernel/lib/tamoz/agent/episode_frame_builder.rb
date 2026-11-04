@@ -139,7 +139,8 @@ module Tamoz
         ["INTENTS (recommended_intents may use only these types):"] +
           intents.map { |entry| intent_line(entry) } +
           ["Recommend at most #{Tamoz::Core::MAX_ACTIONABLE_INTENTS} intent besides " \
-           "#{Tamoz::Core::INTENT_WATCH_TYPE}. When #{DiagnosisCatalog::UNKNOWN} is the most probable code, recommend only an R0 intent or none."]
+           "#{Tamoz::Core::INTENT_WATCH_TYPE}. When #{DiagnosisCatalog::UNKNOWN} is the most probable code, " \
+           'recommend only an R0 intent or none.']
       end
 
       def intent_line(entry)

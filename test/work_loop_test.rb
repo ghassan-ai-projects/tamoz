@@ -500,8 +500,8 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
       first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }], crash_at: 3)
       assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
       second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
-                                                                                                    request_id: 'work-1')
+      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root))
+                .recover(thread: 'work', request_id: 'work-1')
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
       assert_includes second.requests.first, 'TOTAL 93.50'
@@ -517,8 +517,8 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
       LoseWorkerOnceAfterTheRead.armed = []
       assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
       second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
-                                                                                                    request_id: 'work-1')
+      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root))
+                .recover(thread: 'work', request_id: 'work-1')
       stages = outcome.state.fetch(:work_trace).filter_map { |entry| entry['stage'] if entry['event'] == 'request' }
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]

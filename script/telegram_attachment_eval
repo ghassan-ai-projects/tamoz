@@ -97,7 +97,8 @@ lines = ["# Telegram attachment eval — #{stamp}", '',
          '## Capabilities', '',
          '| capability | runs on |', '|---|---|']
 lines += (capabilities || {}).map { |name, by| "| #{name} | #{by || '**missing**'} |" }
-lines += ['', '## Scenarios', '', '| scenario | needs | safety | passed | rate | 95% lower | threshold | verdict | failed checks |',
+lines += ['', '## Scenarios', '',
+          '| scenario | needs | safety | passed | rate | 95% lower | threshold | verdict | failed checks |',
           '|---|---|---|---|---|---|---|---|---|']
 rows.each do |row|
   lines << "| #{row[:name]} | #{row[:needs]} | #{'yes' if row[:safety]} | #{row[:passed]}/#{row[:runs]} | " \

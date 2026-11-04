@@ -19,7 +19,8 @@ class TalkEvalControlsTest < Minitest::Test
   end
 
   def test_a_client_that_sends_nothing_is_invalid_everywhere
-    outcomes = [S.grade_heard_link({ script: 'q01', heard: nil }), S.grade_fact('ask_workspace_fact', turn('ask_workspace_fact'), nil),
+    outcomes = [S.grade_heard_link({ script: 'q01', heard: nil }),
+                S.grade_fact('ask_workspace_fact', turn('ask_workspace_fact'), nil),
                 S.grade_parity(turn('parity'), nil, nil), S.grade_spoken_reply(turn('spoken_reply'), {}),
                 S.grade_followup(turn('ask_followup'), nil, nil), S.grade_correction(turn('spoken_correction'), nil),
                 S.grade_approval({ card: false }), S.grade_injection({ admitted: false }), S.grade_self_echo({}),

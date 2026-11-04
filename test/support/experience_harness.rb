@@ -143,7 +143,8 @@ module Tamoz
       def send_photo(bytes, caption: nil, run: true)
         file_id = "photo-#{next_update_id}"
         @transport.files[file_id] = bytes
-        sizes = [{ 'file_id' => "#{file_id}-thumb", 'file_unique_id' => "u-#{file_id}-t", 'width' => 90, 'height' => 60 },
+        sizes = [{ 'file_id' => "#{file_id}-thumb", 'file_unique_id' => "u-#{file_id}-t",
+                   'width' => 90, 'height' => 60 },
                  { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'width' => 1280, 'height' => 960,
                    'file_size' => bytes.bytesize }]
         message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },

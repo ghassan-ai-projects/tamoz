@@ -335,7 +335,7 @@ module Tamoz
             until buffer.include?(needle)
               return [false, buffer] if monotonic > deadline
 
-              ready = IO.select([io], nil, nil, 0.5)
+              ready = io.wait_readable(0.5)
               next unless ready
 
               chunk = io.read_nonblock(4096, exception: false)
@@ -397,6 +397,10 @@ module Tamoz
           payload = case_artifact['input'].fetch('payload')
           payload.merge('case_id' => case_artifact['case_id'])
         end
+
+        MCP_BASE_ENV_ALLOWLIST = %w[
+          PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
+        ].freeze
 
         private
 
@@ -885,7 +889,7 @@ module Tamoz
             terminal = status.zero? ? 'completed' : 'failed'
             result = CliOutcome.new(satisfied: status.zero?, answer: nil)
             oracle_success = begin
-              profile_boundary_oracle(
+              profile_boundary_oracle?(
                 status:, out:, err:, secret:, root:, workspace:, config_home:,
                 state: evidence.fetch(:state)
               )
@@ -987,7 +991,7 @@ module Tamoz
           YAML
         end
 
-        def profile_boundary_oracle(status:, out:, err:, secret:, root:, workspace:, config_home:, state:)
+        def profile_boundary_oracle?(status:, out:, err:, secret:, root:, workspace:, config_home:, state:)
           return false unless status.zero?
 
           session_record = state.fetch(:session)
@@ -1167,10 +1171,6 @@ module Tamoz
 
           @scheduler_graph_factory.call(adapter:)
         end
-
-        MCP_BASE_ENV_ALLOWLIST = %w[
-          PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
-        ].freeze
 
         def run_mcp_governed_call(case_artifact, definition)
           thread_id = 'mcp-governed-call'
@@ -2424,9 +2424,7 @@ module Tamoz
             terminal = 'plan_rejected'
           rescue Tamoz::Agent::ToolError, Tamoz::Core::ToolError
             terminal = 'tool_error'
-          rescue Tamoz::Agent::ProtocolError, Tamoz::Core::ProtocolError
-            terminal = 'agent_error'
-          rescue Tamoz::Agent::Error
+          rescue Tamoz::Agent::ProtocolError, Tamoz::Core::ProtocolError, Tamoz::Agent::Error
             terminal = 'agent_error'
           rescue StandardError
             terminal = 'unexpected_error'

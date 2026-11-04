@@ -106,10 +106,12 @@ module Tamoz
         stamp = Time.now.utc.strftime('%Y%m%dT%H%M%S')
         session_dir = @sessions.provision_session_dir!(options)
         workspace = SkillInstallation.draft_workspace(session_dir, "#{name}-#{stamp}", name, trajectory)
-        status = cmd_ask(options.merge(root: workspace, work_routing: true, allow_changes: true, bundled_skills: true,
-                                       skills_dir: nil, skill: 'skill-authoring', checks: {}, session: nil, profile: nil,
-                                       explicit_session: "skill-draft-#{name}-#{stamp}".downcase),
-                         ["Write a skill named #{name} into the directory #{name}/ of this workspace, from trajectory.md."])
+        draft_options = options.merge(root: workspace, work_routing: true, allow_changes: true, bundled_skills: true,
+                                      skills_dir: nil, skill: 'skill-authoring', checks: {}, session: nil,
+                                      profile: nil, explicit_session: "skill-draft-#{name}-#{stamp}".downcase)
+        status = cmd_ask(draft_options,
+                         ["Write a skill named #{name} into the directory #{name}/ of this workspace, " \
+                          'from trajectory.md.'])
         # The draft has no check of its own (exit 2, done unverified); the authoring bar at staging is its gate.
         unless [0, 2].include?(status)
           @err.puts "the drafting turn did not finish (exit #{status}); the draft is in #{workspace}"
@@ -131,16 +133,16 @@ module Tamoz
         verification = state[:verification] || {}
         unless state[:terminal_reason] == 'done' && verification['satisfied'] == true
           raise ArgumentError,
-                "thread #{thread} did not finish verified (#{state[:terminal_reason]}); only verified work becomes a skill"
+                "thread #{thread} did not finish verified (#{state[:terminal_reason]}); " \
+                'only verified work becomes a skill'
         end
 
         Tamoz::Core.scrub_secrets(trajectory_text(state, verification))
       end
 
       def trajectory_text(state, verification)
-        tools = Array(state[:work_entries]).select do |entry|
-          entry['kind'] == 'tool_result'
-        end.map { |entry| entry['name'] }
+        tool_results = Array(state[:work_entries]).select { |entry| entry['kind'] == 'tool_result' }
+        tools = tool_results.map { |entry| entry['name'] }
         checks = Array(state[:work_checks]).map { |check| "#{check['name']}: #{check['passed'] ? 'passed' : 'failed'}" }
         plan = state[:work_plan]
         <<~MARKDOWN

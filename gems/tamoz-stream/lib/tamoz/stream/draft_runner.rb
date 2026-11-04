@@ -30,7 +30,8 @@ module Tamoz
         stream = EpisodeStream.new(Identity.new(request.draft_id, 'draft', 1))
         result = @durable_runner.deliver(
           payload, thread: thread_id(request), request_id: thread_id(request), operation: :turn,
-                   delivery: :queue, namespace: [@tenant], context: context_for(request, EpisodeStreamAdapter.new(stream))
+                   delivery: :queue, namespace: [@tenant],
+                   context: context_for(request, EpisodeStreamAdapter.new(stream))
         )
         [answer(request, result, stream)]
       end

@@ -49,7 +49,8 @@ class RuntimeDirectoryConfigTest < Minitest::Test
       path = RuntimeDirectory.create!(File.join(root, 'runtime'), workspace:).path
       config = File.join(path, RuntimeDirectory::CONFIG_FILE)
       entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat',
-                'stream_id' => 'telegram:bot:7', 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' } }
+                'stream_id' => 'telegram:bot:7',
+                'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' } }
       { 'expected_bot_id' => 7, 'talk' => { 'port' => 8787 } }.each do |key, value|
         File.write(config,
                    Psych.dump(Psych.safe_load_file(config).merge('channels' => { 'ops' => entry.merge(key => value) })))
@@ -67,7 +68,8 @@ class RuntimeDirectoryConfigTest < Minitest::Test
       FileUtils.mkdir_p(workspace = File.join(root, 'workspace'))
       path = RuntimeDirectory.create!(File.join(root, 'runtime'), workspace:).path
       config = File.join(path, RuntimeDirectory::CONFIG_FILE)
-      entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat', 'stream_id' => 'telegram:bot:7',
+      entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat',
+                'stream_id' => 'telegram:bot:7',
                 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' } }
       ['../..', 'Telegram', 'a/b', ''].each do |surface|
         File.write(config, Psych.dump(Psych.safe_load_file(config).merge('channels' => { surface => entry })))

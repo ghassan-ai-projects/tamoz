@@ -16,6 +16,7 @@ module Tamoz
     # successor thread while the old one stays fully readable.
     module SessionContextControls
       REASONING_DEPTHS = %w[low medium high].freeze
+      TRUNCATING_CONTROLS = %w[reset compact].freeze
       ANSWER_VERBOSITIES = %w[quiet normal detailed].freeze
 
       # The episode working set /reset clears. Audit lives in checkpoint
@@ -97,7 +98,7 @@ module Tamoz
       # truncating control (/reset, /compact) never re-enters a later
       # model-visible frame.
       def visible_fragment_offset(controls)
-        found = controls.reverse.find { |record| %w[reset compact].include?(record.fetch('control')) }
+        found = controls.reverse.find { |record| TRUNCATING_CONTROLS.include?(record.fetch('control')) }
         found&.fetch('truncated_fragments', nil)
       end
       module_function :generation_of, :last_preference, :visible_fragment_offset
@@ -205,6 +206,11 @@ module Tamoz
         )
       end
 
+      ControlBase = Struct.new(
+        :id, :execution_id, :status, :logical_step, :frontier, :pending, :interrupts,
+        :resume_values, :attempts, :failure, :total_tasks, :state, keyword_init: true
+      )
+
       private
 
       # The durable conversation history for `thread`, read through that thread's
@@ -277,11 +283,6 @@ module Tamoz
           sequence: checkpoint.sequence, record:
         )
       end
-
-      ControlBase = Struct.new(
-        :id, :execution_id, :status, :logical_step, :frontier, :pending, :interrupts,
-        :resume_values, :attempts, :failure, :total_tasks, :state, keyword_init: true
-      )
 
       # A control may run before the first turn; it then starts the thread's
       # checkpoint chain over the graph's initial channels in a terminal status

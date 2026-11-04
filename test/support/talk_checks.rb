@@ -148,7 +148,8 @@ module TalkChecks
         return [total + current.to_i + ORDINALS.fetch(word), used + 1]
       elsif TENS_ORDINALS.key?(word) && current.nil?
         return [total + TENS_ORDINALS.fetch(word), used + 1]
-      elsif UNITS.key?(word) && (current.nil? || ((current % 100) >= 20 && (current % 10).zero?) || (current % 100).zero?)
+      elsif UNITS.key?(word) &&
+            (current.nil? || ((current % 100) >= 20 && (current % 10).zero?) || (current % 100).zero?)
         current = current.to_i + UNITS.fetch(word)
       elsif TENS.key?(word) && (current.nil? || ((current % 100).zero? && current.positive?))
         current = current.to_i + TENS.fetch(word)
@@ -171,7 +172,11 @@ module TalkChecks
 
   def times(text)
     text.gsub(/\bat (\d{1,2})[ .](\d{2})\b/) do
-      ::Regexp.last_match(2).to_i < 60 && ::Regexp.last_match(1).to_i < 24 ? "at #{::Regexp.last_match(1).to_i}:#{::Regexp.last_match(2)}" : ::Regexp.last_match(0)
+      if ::Regexp.last_match(2).to_i < 60 && ::Regexp.last_match(1).to_i < 24
+        "at #{::Regexp.last_match(1).to_i}:#{::Regexp.last_match(2)}"
+      else
+        ::Regexp.last_match(0)
+      end
     end
         .gsub(/\b0(\d):(\d{2})\b/, '\1:\2')
   end

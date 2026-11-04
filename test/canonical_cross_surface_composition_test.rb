@@ -155,7 +155,9 @@ class CanonicalCrossSurfaceCompositionTest < Minitest::Test
                                               user_id:, conversation_id:))
 
     assert reply, 'first contact produced no pairing reply'
-    assert reply['text'].start_with?(Gateway::PAIRING_PENDING_REPLY), reply['text']
+    pending = reply['text'].start_with?(Gateway::PAIRING_PENDING_REPLY)
+
+    assert pending, "reply: #{reply['text']}"
     reply['text'].delete_prefix(Gateway::PAIRING_PENDING_REPLY)
   end
 

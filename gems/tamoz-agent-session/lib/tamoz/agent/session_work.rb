@@ -40,8 +40,8 @@ module Tamoz
         end
         brief = @memory.brief(told(base, reading))
         entries = opening(base, context, previous, brief, reading)
-        base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
-                   work_execution_id: context.execution_id,
+        base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries,
+                   work_turn: context.request_id, work_execution_id: context.execution_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
                    work_checkpoint: previous[:work_checkpoint],

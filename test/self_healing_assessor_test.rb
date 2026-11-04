@@ -14,7 +14,8 @@ class SelfHealingAssessorTest < Minitest::Test
       trigger: { 'categories' => [category.to_s] },
       minimum_confidence: min_confidence, risk_class: :low, effect_class: :reconcilable,
       authorized_scopes: ['workspace'], authorized_resources: ['a.rb'],
-      plan_review_policy: { 'plan_required' => true, 'semantic_critic_required' => true, 'human_approval_required' => true },
+      plan_review_policy: { 'plan_required' => true, 'semantic_critic_required' => true,
+                            'human_approval_required' => true },
       preconditions: Healing::Preflight::CHECK_IDS.map(&:to_s),
       remediation_steps: [{ 'form' => family, 'safety' => 'reconcilable', 'creates' => false }],
       effect_identity: { 'domain' => Healing::EffectIdentity::DOMAIN },
@@ -82,7 +83,8 @@ class SelfHealingAssessorTest < Minitest::Test
     obs = [
       { 'tool' => 'read_file', 'output' => 'ok' },
       { 'tool' => 'apply_patch', 'failure' => { 'tool' => 'apply_patch',
-                                                'error_class' => 'Tamoz::Agent::ToolArgumentError', 'reason' => 'bad' } }
+                                                'error_class' => 'Tamoz::Agent::ToolArgumentError',
+                                                'reason' => 'bad' } }
     ]
     verdict = Assessor.new(rules: registry_with(rule_on(:malformed_recoverable_output)))
                       .assess_observations(obs)

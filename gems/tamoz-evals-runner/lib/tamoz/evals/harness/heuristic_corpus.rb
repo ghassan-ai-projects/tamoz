@@ -8,6 +8,7 @@ require "tmpdir"
 module Tamoz
   module Evals
     module Harness
+      # The development and holdout task sets of a heuristic evaluation.
       class HeuristicCorpus
         DIRECTORY_MODE = 0o700
         FILE_MODE = 0o600

@@ -63,8 +63,9 @@ class TalkFakeProvider
   def chat(request)
     last = Array(request['messages']).reverse.find { |message| message['role'] == 'user' }
     content = request['response_format'] ? '{"ok":true}' : @answer.call(last && last['content'].to_s)
-    { 'id' => 'fake', 'model' => request['model'], 'choices' => [{ 'index' => 0, 'finish_reason' => 'stop',
-                                                                   'message' => { 'role' => 'assistant', 'content' => content } }],
+    { 'id' => 'fake', 'model' => request['model'],
+      'choices' => [{ 'index' => 0, 'finish_reason' => 'stop',
+                      'message' => { 'role' => 'assistant', 'content' => content } }],
       'usage' => { 'prompt_tokens' => 10, 'completion_tokens' => 5, 'total_tokens' => 15 } }
   end
 end

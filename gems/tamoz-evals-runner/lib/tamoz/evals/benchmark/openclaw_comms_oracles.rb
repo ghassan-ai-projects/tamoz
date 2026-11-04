@@ -28,9 +28,8 @@ module Tamoz
         end
 
         def dispositions(facts, update_id)
-          facts['inbound'].select do |row|
-            row['update_id'] == update_id
-          end.map { |row| [row['disposition'], row['reason']] }
+          rows = facts['inbound'].select { |row| row['update_id'] == update_id }
+          rows.map { |row| [row['disposition'], row['reason']] }
         end
 
         def task_word(internal_state)
@@ -52,12 +51,11 @@ module Tamoz
         TERMINAL_KINDS = %w[answer failed stopped blocked].freeze
 
         def confirmed_answer_texts(facts, conversation_id)
-          rows_of_kind(facts, nil)
-            .select do |row|
+          confirmed = rows_of_kind(facts, nil).select do |row|
             row['conversation_id'] == conversation_id &&
               row['status'] == 'succeeded' && TERMINAL_KINDS.include?(row['kind'])
           end
-            .map { |row| row['text'] }
+          confirmed.map { |row| row['text'] }
         end
 
         # context_inclusion (invariant 11): only CONFIRMED successful terminal

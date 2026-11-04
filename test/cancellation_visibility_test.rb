@@ -561,9 +561,9 @@ class CancellationVisibilityTest < Minitest::Test
     end
   end
 
-  def seed_durable_rows!(rt)
+  def seed_durable_rows!(harness)
     reference = "r#{'a' * 10}"
-    rt.with_store do |store|
+    harness.with_store do |store|
       store.__send__(:transaction, 'test.view.insert') do |tx|
         binds = ["#{'a' * 63}1", 'telegram-ops', 1, CONVERSATION, THREAD, 'ops', 1, 'admitted',
                  ms(NOW), ms(NOW)]

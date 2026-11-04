@@ -137,7 +137,8 @@ class ChannelKindsTest < Minitest::Test
     with_runtime do |runtime|
       cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
       entry = { 'kind' => 'telegram', 'revision' => 1, 'enabled' => true, 'profile' => 'chat',
-                'stream_id' => 'telegram:bot:7', 'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+                'stream_id' => 'telegram:bot:7',
+                'credential_ref' => { 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                 'rendering' => { 'speech' => true } }
 
       error = assert_raises(Tamoz::Comms::ValidationError) do

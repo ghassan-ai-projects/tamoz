@@ -14,7 +14,8 @@ class ChildEnvironmentsTest < Minitest::Test
     'ZAI_API_KEY' => 'chat-secret', 'ZAI_API_BASE' => 'https://api.z.ai/api/coding/paas/v4',
     'OPENROUTER_SPEECH_API_KEY' => 'speech-secret', 'OPENAI_API_KEY' => 'vision-secret',
     'TAMOZ_BRAVE_API_KEY' => 'search-secret', 'TAMOZ_WEBSEARCH_REGION' => 'gb',
-    'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot-secret', 'TAMOZ_TALK_TOKEN' => 'talk-secret', 'FUTURE_CHANNEL_API_KEY' => 'later',
+    'TAMOZ_TELEGRAM_BOT_TOKEN' => 'bot-secret', 'TAMOZ_TALK_TOKEN' => 'talk-secret',
+    'FUTURE_CHANNEL_API_KEY' => 'later',
     'TAMOZ_ENV_FILE' => '/srv/.env', 'AWS_SECRET_ACCESS_KEY' => 'unrelated-secret'
   }.freeze
   SPEECH = { 'provider' => 'openrouter', 'credential' => 'OPENROUTER_SPEECH_API_KEY' }.freeze

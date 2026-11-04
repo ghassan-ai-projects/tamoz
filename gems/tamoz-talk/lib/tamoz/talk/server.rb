@@ -85,7 +85,7 @@ module Tamoz
         respond(socket, request, early)
       rescue Http::Refused => e
         reply(socket, e.status, e.message)
-      rescue EOFError, IOError, SystemCallError
+      rescue IOError, SystemCallError
         nil
       rescue StandardError => e
         warn "tamoz: talk server request failed (#{e.class})"

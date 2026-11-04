@@ -7,6 +7,7 @@ require 'digest'
 # The talk eval's corpus is data: pinned, split by script, and every slot findable in its own script.
 # rubocop:disable Minitest/MultipleAssertions
 class TalkFixturesTest < Minitest::Test
+  SPLITS = %w[dev held_out].freeze
   SPEC_DIGEST = '20d74c9955714d6adac40a6e49a34f8c2d46c9d4ba0b9c5c1d6bf4bf6dffdf5b'
   WAV_DIR = File.expand_path('fixtures/talk/wav', __dir__)
 
@@ -24,7 +25,7 @@ class TalkFixturesTest < Minitest::Test
     voices = spec.dig('suite', 'voices').length
 
     assert_equal ids.uniq, ids
-    assert(scripts.values.all? { |script| %w[dev held_out].include?(script.fetch('split')) })
+    assert(scripts.values.all? { |script| SPLITS.include?(script.fetch('split')) })
     assert_operator scripts.values.count { |script| script.fetch('split') == 'dev' }, :>=, 6
     assert(heard.all? { |script| script.fetch('split') == 'held_out' })
     assert_operator heard.length, :>=, spec.dig('scenarios', 'heard_clean', 'min_scripts')

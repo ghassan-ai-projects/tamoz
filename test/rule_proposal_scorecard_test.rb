@@ -26,7 +26,7 @@ class RuleProposalScorecardTest < Minitest::Test
   def test_the_controls_discriminate
     verdict, scores = Scorecard.controls_discriminate?(CASES, ALLOWED)
 
-    assert verdict, scores.inspect
+    assert verdict, "controls: #{scores.inspect}"
   end
 
   def test_each_wrong_proposal_fails_for_its_own_reason
@@ -39,7 +39,8 @@ class RuleProposalScorecardTest < Minitest::Test
       'features.temperature_mean_15m == 56.0 || features.temperature_mean_15m == 58.5 || ' \
       'features.temperature_mean_15m == 53.5' => 'does not hold for an unseen case of this key',
       'features.vibration_mean_15m > 2.0 && features.temperature_mean_15m > 50.0 && ' \
-      'features.vibration_mean_24h < 2.8 && features.current_mean_15m < 45.0' => 'also matches a look-alike it must reject',
+      'features.vibration_mean_24h < 2.8 && ' \
+      'features.current_mean_15m < 45.0' => 'also matches a look-alike it must reject',
       'features.pressure > 1.0' => 'invalid condition: features.pressure is not an allowed feature'
     }
     answers.each do |condition, failure|

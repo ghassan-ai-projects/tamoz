@@ -647,7 +647,8 @@ namespace :agenteval do
       sh agenteval_ruby, BIN, "topologies", "prove"
     end
 
-    desc "Run the hard topology pack, subagents on vs off (real model; AGENTEVAL_SEEDS, AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
+    desc "Run the hard topology pack, subagents on vs off (real model; " \
+         "AGENTEVAL_SEEDS, AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
     task run: :prove do
       utf8_env!
       real_run_ready!

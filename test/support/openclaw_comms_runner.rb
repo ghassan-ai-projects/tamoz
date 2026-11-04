@@ -88,6 +88,15 @@ module Tamoz
           @failed
         end
 
+        REPORTED_ONLY_METRICS = %w[update_count latency_to_ack latency_to_terminal].freeze
+
+        # The CLI surface's own expression of current work: the durable inbox
+        # states translated through the same closed Lifecycle vocabulary.
+        INBOX_TASK_STATES = {
+          %w[claimed running] => 'running',
+          %w[due enqueued prepared] => 'queued'
+        }.freeze
+
         private
 
         def validate_scenarios!
@@ -156,8 +165,6 @@ module Tamoz
           { 'status' => 'blocked', 'reason' => "drive_error:#{e.class}:#{e.message}", 'metrics' => {},
             'hard_zero' => {}, 'seam_revisions' => {} }
         end
-
-        REPORTED_ONLY_METRICS = %w[update_count latency_to_ack latency_to_terminal].freeze
 
         def metrics_ready?(scored)
           scored['metrics'].except(*REPORTED_ONLY_METRICS)
@@ -423,8 +430,8 @@ module Tamoz
             fixture.submit([raw_update(201, 'Summarize both notes.')])
             begin
               fixture.work
-            rescue Exception => e
-              raise unless e.is_a?(@adapter.crash_error)
+            rescue @adapter.crash_error
+              nil
             end
             recovered = fixture.fresh_worker
             work_until_terminal(fixture, recovered, conversation)
@@ -548,8 +555,8 @@ module Tamoz
             boundaries << 'after_inbound_persistence'
             begin
               fixture.work
-            rescue Exception => e
-              raise unless e.is_a?(@adapter.crash_error)
+            rescue @adapter.crash_error
+              nil
             end
             boundaries << 'after_worker_claim_crash'
             fresh = fixture.fresh_worker
@@ -685,13 +692,6 @@ module Tamoz
           { 'reply_word' => control_reply_text(fixture, update_id, '/status --diagnostic')[/task=([a-z_]+)/, 1],
             'view_word' => inbox_task_word(fixture, thread) }
         end
-
-        # The CLI surface's own expression of current work: the durable inbox
-        # states translated through the same closed Lifecycle vocabulary.
-        INBOX_TASK_STATES = {
-          %w[claimed running] => 'running',
-          %w[due enqueued prepared] => 'queued'
-        }.freeze
 
         def inbox_task_word(fixture, thread_id)
           statuses = fixture.durable_request_rows(thread_id).map { |row| row['status'] }
@@ -834,8 +834,8 @@ module Tamoz
             fixture.submit([raw_update(881, 'Summarize both notes.')])
             begin
               fixture.work
-            rescue Exception => e
-              raise unless e.is_a?(@adapter.crash_error)
+            rescue @adapter.crash_error
+              nil
             end
             target = fixture.request_ids_for(conversation).last
             raise 'the crashed turn was not admitted durably' unless target
@@ -935,10 +935,8 @@ module Tamoz
         end
 
         def first_terminal_settle_ms(fixture)
-          row = fixture.outbox.select do |candidate|
-            OpenclawCommsOracles::TERMINAL_KINDS.include?(candidate['kind'])
-          end.min_by { |candidate| candidate.fetch('created_at_ms') }
-          row&.fetch('created_at_ms')
+          terminal = fixture.outbox.select { |candidate| OpenclawCommsOracles::TERMINAL_KINDS.include?(candidate['kind']) }
+          terminal.min_by { |candidate| candidate.fetch('created_at_ms') }&.fetch('created_at_ms')
         end
 
         # Every terminal delivery, not just a completion: F25-COR-01 routes a

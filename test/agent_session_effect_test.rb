@@ -562,9 +562,9 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
-  private
-
   SessionModelConfiguration = Data.define(:model, :model_call_safety, :profile, :toolbox, :mcp)
+
+  private
 
   # A capabilities fake whose dispatch returns one fixed typed outcome, so the
   # MCP outcome path is exercised without a live server.

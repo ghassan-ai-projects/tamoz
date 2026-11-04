@@ -100,8 +100,8 @@ class ReconnectionResumeProtocolTest < Minitest::Test
          .count { |row| row.fetch('conversation_id') == CONVERSATION && row.fetch('kind') == 'answer' }
   end
 
-  def admit_request!(rt)
-    rt.with_store do |store|
+  def admit_request!(runtime)
+    runtime.with_store do |store|
       store.deploy_surface(descriptor.wire, now: NOW)
       store.bind_conversation(
         Comms::Conversation.new(

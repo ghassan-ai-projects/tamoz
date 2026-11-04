@@ -48,7 +48,11 @@ class SkillsEvidenceVerifierTest < Minitest::Test
     EvidenceAudit::Verifier.new('audit/findings.json', root: @root, **).call
   end
 
-  def assert_problem(pattern, result) = assert(result.problems.any? { |line| line.match?(pattern) }, result.problems)
+  def assert_problem(pattern, result)
+    found = result.problems.any? { |line| line.match?(pattern) }
+
+    assert found, "no matching problem in #{result.problems}"
+  end
 
   def cite(**overrides) = finding('evidence' => [finding['evidence'].first.merge(overrides)])
 
@@ -132,7 +136,7 @@ class SkillsEvidenceVerifierTest < Minitest::Test
   def test_a_source_path_that_resolves_into_audit_is_refused
     File.write(File.join(@root, 'audit', 'notes.md'), "Passwords must contain at least 8 characters\n")
     document = { 'path' => './audit/notes.md', 'sha256' => 'x' }
-    result = verify.tap {}
+    result = verify
     json = JSON.parse(File.read(File.join(@root, 'audit', 'findings.json')))
     json['sources'] << document.merge('sha256' => Digest::SHA256.hexdigest(File.read(File.join(@root, 'audit',
                                                                                                'notes.md'))))

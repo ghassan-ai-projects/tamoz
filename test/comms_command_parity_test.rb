@@ -9,6 +9,7 @@ class CommsCommandParityTest < Minitest::Test
 
   Comms = Tamoz::Comms
 
+  COMMAND_TEXTS = { 'think' => '/think high', 'verbose' => '/verbose quiet' }.freeze
   NOT_AVAILABLE = 'That command is not available on this channel.'
   UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
   AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
@@ -26,7 +27,7 @@ class CommsCommandParityTest < Minitest::Test
 
         assert_equal word, parsed.command, 'every known name must parse as known'
 
-        text = { 'think' => '/think high', 'verbose' => '/verbose quiet' }.fetch(word, "/#{word}")
+        text = COMMAND_TEXTS.fetch(word, "/#{word}")
         reply = drive_command(gateway, transport, text, id: 900 + Comms::Commands::KNOWN.index(word))
 
         assert_kind_of String, reply, word

@@ -49,8 +49,9 @@ module Tamoz
         reader, writer = IO.pipe
         deadline = clock + seconds
         pid = Process.spawn({ 'PATH' => ENV.fetch('PATH', ''), 'LANG' => 'C.UTF-8' }, command, '-q', '-enc', 'UTF-8',
-                            '-l', PDF_PAGES.to_s, path, '-', unsetenv_others: true, in: File::NULL, out: writer,
-                                                             err: File::NULL, pgroup: true, rlimit_cpu: seconds.ceil, rlimit_core: 0)
+                            '-l', PDF_PAGES.to_s, path, '-',
+                            unsetenv_others: true, in: File::NULL, out: writer, err: File::NULL,
+                            pgroup: true, rlimit_cpu: seconds.ceil, rlimit_core: 0)
         writer.close
         output, finished = drained(reader, deadline)
         stop(pid) unless finished == :eof

@@ -5,6 +5,7 @@ require 'tamoz/core'
 
 module Tamoz
   module Agent
+    # Projects a model response to the receipt keys the journal stores.
     module ModelCallProjection
       KEYS = %w[
         request_digest content response_digest usage settings_digest

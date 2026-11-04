@@ -57,7 +57,7 @@ module Tamoz
         def logical_key(logical_key) = logical_key
 
         # The dispatcher's contract fixes this keyword list.
-        # rubocop:disable Metrics/ParameterLists
+        # rubocop:disable Metrics/ParameterLists, Lint/UnusedMethodArgument
         def prepare(execution_id:, task_id:, call_index:, operation:, safety:, request:,
                     logical_key:, request_id: nil)
           call = Call.new(
@@ -75,7 +75,7 @@ module Tamoz
             open_attempt(existing, call)
           end
         end
-        # rubocop:enable Metrics/ParameterLists
+        # rubocop:enable Metrics/ParameterLists, Lint/UnusedMethodArgument
 
         def start(key:, attempt_token:)
           @monitor.synchronize do

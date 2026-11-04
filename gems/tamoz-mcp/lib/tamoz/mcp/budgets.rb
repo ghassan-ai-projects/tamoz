@@ -2,15 +2,15 @@
 
 module Tamoz
   module Mcp
+    MAX_CATALOG_ENTRIES = 256
+    MAX_DESCRIPTION_BYTES = 4096
+    MAX_OUTPUT_BYTES = 64 * 1024
+
     Budgets = Data.define(
       :max_catalog_entries, :max_description_bytes, :max_output_bytes,
       :connect_timeout, :request_timeout, :max_concurrent, :idle_timeout,
       :max_lifetime, :stderr_bytes
     ) do
-      MAX_CATALOG_ENTRIES = 256
-      MAX_DESCRIPTION_BYTES = 4096
-      MAX_OUTPUT_BYTES = 64 * 1024
-
       def initialize(
         max_catalog_entries: 256,
         max_description_bytes: 4096,

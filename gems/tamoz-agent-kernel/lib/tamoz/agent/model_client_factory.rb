@@ -8,6 +8,7 @@ require 'tamoz/agent/providers'
 
 module Tamoz
   module Agent
+    # Builds model clients from the provider descriptors; native-protocol providers are rejected.
     module ModelClientFactory
       DESCRIPTORS = {
         'openai' => { default_base: 'https://api.openai.com/v1', protocol: 'openai-compatible', kind: 'direct' },

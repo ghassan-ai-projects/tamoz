@@ -52,7 +52,8 @@ module Tamoz
         end
 
         def retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
-          attempts < max_attempts && descriptor.read_only? && !supervisor.open? && !TransportErrors.new.corruption?(error)
+          attempts < max_attempts && descriptor.read_only? && !supervisor.open? &&
+            !TransportErrors.new.corruption?(error)
         end
 
         def timed_out?(error)

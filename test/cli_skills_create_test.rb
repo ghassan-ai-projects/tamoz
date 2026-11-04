@@ -47,7 +47,8 @@ class CliSkillsCreateTest < Minitest::Test
       draft = [{ calls: [plan_call(paths: %w[set-constant], checks: [])] },
                { calls: [['create_file', { 'path' => 'set-constant/SKILL.md', 'content' => SKILL }]] },
                { content: 'Drafted set-constant.' }]
-      status, err = tamoz(['--session-dir', sessions, 'skills', 'create', 'set-constant', '--from-session', 'fix-value'],
+      status, err = tamoz(['--session-dir', sessions, 'skills', 'create', 'set-constant',
+                           '--from-session', 'fix-value'],
                           draft)
 
       assert_equal 0, status, err

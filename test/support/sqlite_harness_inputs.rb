@@ -272,35 +272,55 @@ module SQLiteHarnessInputs
         scenario('request.claim-resume', family: 'request', operation: 'request.claim',
                                          coverage: claim_base + ['request.claim.active_execution'] + claim_tail),
         scenario('request.claim-redirect', family: 'request', operation: 'request.claim',
-                                           coverage: claim_base + %w[request.claim.redirect_target request.claim.cancellation_generation] + claim_tail),
+                                           coverage: claim_base + %w[request.claim.redirect_target
+                                                                     request.claim.cancellation_generation] +
+                                                                     claim_tail),
         scenario('request.claim-stale', family: 'request', operation: 'request.claim',
-                                        coverage: claim_base + %w[request.claim.latest_checkpoint request.terminal_fail request.transition.index request.transition.insert request.claim.result]),
+                                        coverage: claim_base + %w[request.claim.latest_checkpoint
+                                                                  request.terminal_fail request.transition.index
+                                                                  request.transition.insert request.claim.result]),
         scenario('request.recover-claimed', family: 'request', operation: 'request.recover', coverage: recover),
         scenario('request.recover-running', family: 'request', operation: 'request.recover', coverage: recover),
         scenario('request.recover-redirecting', family: 'request', operation: 'request.recover', coverage: recover),
         scenario('request.recover-stale', family: 'request', operation: 'request.recover',
-                                          coverage: %w[request.recover.time request.recover.lease.thread request.recover.lease.row request.recover.row request.recover.earlier request.recover.latest_checkpoint request.terminal_fail request.transition.index request.transition.insert request.recover.result]),
+                                          coverage: %w[request.recover.time request.recover.lease.thread
+                                                       request.recover.lease.row request.recover.row
+                                                       request.recover.earlier request.recover.latest_checkpoint
+                                                       request.terminal_fail request.transition.index
+                                                       request.transition.insert request.recover.result]),
         scenario('request.mark-running', family: 'request', operation: 'request.transition', coverage: transition),
         scenario('request.mark-redirect-running', family: 'request', operation: 'request.transition',
                                                   coverage: transition),
         scenario('request.redirect-ready', family: 'request', operation: 'request.redirect_ready',
-                                           state_classes: ['stable'], coverage: %w[request.redirect_ready.time request.redirect_ready.lease.thread request.redirect_ready.lease.row request.redirect_ready.effects]),
+                                           state_classes: ['stable'],
+                                           coverage: %w[request.redirect_ready.time
+                                                        request.redirect_ready.lease.thread
+                                                        request.redirect_ready.lease.row
+                                                        request.redirect_ready.effects]),
         scenario('checkpoint.writes-new', family: 'checkpoint', operation: 'checkpoint.append_writes',
-                                          coverage: writes + %w[checkpoint.writes.activation checkpoint.writes.item.{index}]),
+                                          coverage: writes + %w[checkpoint.writes.activation
+                                                                checkpoint.writes.item.{index}]),
         scenario('checkpoint.writes-duplicate', family: 'checkpoint', operation: 'checkpoint.append_writes',
-                                                state_classes: ['stable'], coverage: writes + ['checkpoint.writes.verify']),
+                                                state_classes: ['stable'],
+                                                coverage: writes + ['checkpoint.writes.verify']),
         scenario('checkpoint.commit-start', family: 'checkpoint', operation: 'checkpoint.commit',
                                             coverage: commit + %w[checkpoint.commit.insert checkpoint.commit.advance]),
         scenario('checkpoint.commit-advance', family: 'checkpoint', operation: 'checkpoint.commit',
-                                              coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert checkpoint.commit.consume.{index} checkpoint.commit.advance]),
+                                              coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert
+                                                                    checkpoint.commit.consume.{index}
+                                                                    checkpoint.commit.advance]),
         scenario('checkpoint.commit-turn', family: 'checkpoint', operation: 'checkpoint.commit',
-                                           coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert] + request_commit + ['checkpoint.commit.advance']),
+                                           coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert] +
+                                                     request_commit + ['checkpoint.commit.advance']),
         scenario('checkpoint.commit-fork', family: 'checkpoint', operation: 'checkpoint.commit',
-                                           coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert checkpoint.commit.advance]),
+                                           coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert
+                                                                 checkpoint.commit.advance]),
         scenario('checkpoint.commit-paused', family: 'checkpoint', operation: 'checkpoint.commit',
-                                             coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert checkpoint.commit.advance]),
+                                             coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert
+                                                                   checkpoint.commit.advance]),
         scenario('checkpoint.commit-failed', family: 'checkpoint', operation: 'checkpoint.commit',
-                                             coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert] + request_commit + ['checkpoint.commit.advance'])
+                                             coverage: commit + %w[checkpoint.commit.base checkpoint.commit.insert] +
+                                                       request_commit + ['checkpoint.commit.advance'])
       ]
       Tamoz::Evals::DeepFreeze.call(list)
     end
@@ -320,11 +340,13 @@ module SQLiteHarnessInputs
                     'request.enqueue'], ['request',
                                          'request.claim'], ['request', 'request.transition'] then 'inbox-reopen'
               when ['request',
-                    'request.recover'] then entry.fetch('id').end_with?('stale') ? 'stale-request-fail' : 'request-recovery'
+                    'request.recover']
+                entry.fetch('id').end_with?('stale') ? 'stale-request-fail' : 'request-recovery'
               when ['request', 'request.redirect_ready'] then 'checkpoint-reopen'
               when ['checkpoint', 'checkpoint.append_writes'] then 'pending-write-replay'
               when ['checkpoint',
-                    'checkpoint.commit'] then entry.fetch('id').match?(/turn|failed/) ? 'request-checkpoint-reopen' : 'checkpoint-reopen'
+                    'checkpoint.commit']
+                entry.fetch('id').match?(/turn|failed/) ? 'request-checkpoint-reopen' : 'checkpoint-reopen'
               end
       probe = 'duplicate-delivery' if entry.fetch('id') == 'request.enqueue-duplicate'
       probe = 'stale-request-fail' if entry.fetch('id') == 'request.claim-stale'

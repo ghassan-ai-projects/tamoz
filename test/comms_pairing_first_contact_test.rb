@@ -102,7 +102,8 @@ class CommsPairingFirstContactTest < Minitest::Test
       rows = store.pairing_challenges
 
       assert_equal 2, rows.length, 'the expired row stays for the operator audit trail'
-      assert_equal 1, store.pairing_challenges(status: 'pending', now: NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60).length,
+      assert_equal 1, store.pairing_challenges(status: 'pending',
+                                               now: NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60).length,
                    'pending scans exclude the expired row'
       assert_match CODE_PATTERN, last_reply
     end

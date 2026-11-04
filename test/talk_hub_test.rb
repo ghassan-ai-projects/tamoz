@@ -130,7 +130,8 @@ class TalkHubTest < Minitest::Test
   def test_an_approval_card_carries_its_reference_and_an_edit_keeps_the_message_id
     hub = Talk::Hub.new(descriptor:, token: TOKEN, floor: 0)
     card = hub.deliver(delivery('Approve the change?', kind: 'approval_request',
-                                                       markup: JSON.generate('reference' => 'abc', 'actions' => %w[approve deny])))
+                                                       markup: JSON.generate('reference' => 'abc',
+                                                                             'actions' => %w[approve deny])))
     edit = hub.deliver(delivery('Approved.', kind: 'control', operation: 'edit_message',
                                              reply_to: card.fetch('message_id')))
     events = hub.log.since(after: 0, epoch: nil, timeout_s: 0)['events']

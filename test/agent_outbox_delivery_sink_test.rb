@@ -353,8 +353,10 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store, surface: descriptor(limits: {
-                                                               max_inbound_bytes: 8192, max_open_requests: 50, max_denial_prompts_per_request: 4,
-                                                               outbox_capacity: 1, control_capacity: 50, per_chat_messages_per_s: 1.0,
+                                                               max_inbound_bytes: 8192, max_open_requests: 50,
+                                                               max_denial_prompts_per_request: 4,
+                                                               outbox_capacity: 1, control_capacity: 50,
+                                                               per_chat_messages_per_s: 1.0,
                                                                global_messages_per_s: 25.0
                                                              }))
       interrupts = [{ task_id: 'task', call_index: 0,

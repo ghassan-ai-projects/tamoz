@@ -12,8 +12,8 @@ class CLIImprovePromoteTest < Minitest::Test
 
   Harness = Tamoz::Evals::Harness
 
-  def enable_memory(rt)
-    path = File.join(rt.dir, 'config.yaml')
+  def enable_memory(runtime)
+    path = File.join(runtime.dir, 'config.yaml')
     document = Psych.safe_load_file(path)
     document['sources'] = { 'memory' => { 'enabled' => true, 'tenant' => 'acme', 'owner' => 'operator' } }
     File.write(path, Psych.dump(document))
@@ -78,7 +78,7 @@ class CLIImprovePromoteTest < Minitest::Test
     end
   end
 
-  def db_path(rt)
-    Dir[File.join(rt.dir, '**', '*.sqlite3')].first
+  def db_path(runtime)
+    Dir[File.join(runtime.dir, '**', '*.sqlite3')].first
   end
 end

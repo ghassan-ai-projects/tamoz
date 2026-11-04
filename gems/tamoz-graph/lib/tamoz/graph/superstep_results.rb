@@ -12,11 +12,10 @@ module Tamoz
         successes = {}
         interruptions = []
         errors = []
-        pool_cancelled = false
         results.each_with_index do |result, index|
-          task = tasks.fetch(index)
-          pool_cancelled = classify_result(task, result, successes, interruptions, errors) || pool_cancelled
+          record_result(tasks.fetch(index), result, successes, interruptions, errors)
         end
+        pool_cancelled = results.any?(TaskResult::Cancelled) || results.any?(TaskResult::Stuck)
         [successes.freeze, interruptions.sort_by(&:key).freeze, errors.freeze, pool_cancelled]
       end
 
@@ -48,7 +47,7 @@ module Tamoz
         )
       end
 
-      def classify_result(task, result, successes, interruptions, errors)
+      def record_result(task, result, successes, interruptions, errors)
         case result
         when TaskResult::Succeeded
           successes[task.id] = result.value
@@ -59,11 +58,10 @@ module Tamoz
         when TaskResult::Failed
           errors << node_error(task, result.error)
         when TaskResult::Cancelled, TaskResult::Stuck
-          return true
+          nil
         else
           raise PoolWorkerError, "unknown pool result #{result.class}"
         end
-        false
       end
     end
 

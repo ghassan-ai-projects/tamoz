@@ -150,7 +150,8 @@ class ExperienceHarnessTest < Minitest::Test
 
   def test_a_sticker_from_the_correspondent_says_what_the_bot_reads
     @harness.transport.enqueue('update_id' => 9_001, 'message' => {
-                                 'message_id' => 9_001, 'date' => Time.now.to_i, 'from' => { 'id' => Fixture::USER_BOUND },
+                                 'message_id' => 9_001, 'date' => Time.now.to_i,
+                                 'from' => { 'id' => Fixture::USER_BOUND },
                                  'chat' => { 'id' => 22_222_222, 'type' => 'private' },
                                  'sticker' => { 'file_id' => 's', 'file_unique_id' => 'u-s' }
                                })

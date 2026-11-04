@@ -40,10 +40,11 @@ module TelegramCliFixture
   def cli(runtime, argv, bot:, input: '', env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '123:test' })
     out = StringIO.new
     err = StringIO.new
-    status = Tamoz::Agent::CLI.run(['--runtime-dir', runtime] + argv, out:, err:, input: StringIO.new(input),
-                                                                      env:, channel_kinds: ChannelKindsFixture.telegram(lambda { |_token|
-                                                                              bot
-                                                                            }))
+    status = Tamoz::Agent::CLI.run(
+      ['--runtime-dir', runtime] + argv,
+      out:, err:, input: StringIO.new(input), env:,
+      channel_kinds: ChannelKindsFixture.telegram(->(_token) { bot })
+    )
     [status, out.string, err.string]
   end
 

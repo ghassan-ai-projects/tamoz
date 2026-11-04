@@ -4,6 +4,7 @@ require_relative 'test_helper'
 require_relative 'support/telegram_bot_api_fake'
 
 class TelegramAttachmentFixturesTest < Minitest::Test
+  GRADED_KEYS = %w[expect absent only_file_numbers forbidden_file reply_includes].freeze
   DIRECTORY = File.expand_path('fixtures/telegram_attachments', __dir__)
   PINNED = {
     'injection.txt' => 'b5ff860a6f8d78ad5817f0738001fe942f561d7c44b2517315909a5fec99c701',
@@ -44,7 +45,7 @@ class TelegramAttachmentFixturesTest < Minitest::Test
       assert_path_exists File.join(DIRECTORY, scenario.fetch('file')), name
       assert_includes suite.fetch('capabilities'), scenario.fetch('needs'), name
       assert_predicate scenario.fetch('budget_s'), :positive?, name
-      graded = %w[expect absent only_file_numbers forbidden_file reply_includes].any? { |key| scenario.key?(key) }
+      graded = GRADED_KEYS.any? { |key| scenario.key?(key) }
 
       assert graded, "#{name} grades nothing about the reply"
     end
@@ -57,7 +58,11 @@ class TelegramAttachmentFixturesTest < Minitest::Test
 
       text = text_of(scenario.fetch('file'))
 
-      scenario.fetch('expect').each { |alternatives| assert(alternatives.any? { |fact| text.include?(fact) }, name) }
+      scenario.fetch('expect').each do |alternatives|
+        found = alternatives.any? { |fact| text.include?(fact) }
+
+        assert found, "#{name}: no expected fact in the file"
+      end
     end
   end
 

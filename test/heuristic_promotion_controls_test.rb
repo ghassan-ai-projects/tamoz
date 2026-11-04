@@ -30,7 +30,9 @@ class HeuristicPromotionControlsTest < Minitest::Test
       report_body(dev_candidate: 6, dev_baseline: 3, holdout_candidate: 5, holdout_baseline: 3)
     )
 
-    assert decision.fetch('passed'), decision.fetch('reasons').inspect
+    passed = decision.fetch('passed')
+
+    assert passed, "reasons: #{decision.fetch('reasons').inspect}"
   end
 
   # The adversary the holdout exists to catch: it gamed the development set and
