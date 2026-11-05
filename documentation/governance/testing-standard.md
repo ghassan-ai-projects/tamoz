@@ -1,6 +1,6 @@
 # Testing standard
 
-This supplements [coding standard §9](../CODING_STANDARD.md#9-testing-minitest).
+This supplements [coding standard §9](coding-standard.md#9-testing-minitest).
 Use locked Minitest with plain Ruby; do not add a second framework or a fixture DSL.
 
 ## Shape and naming

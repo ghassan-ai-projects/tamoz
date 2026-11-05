@@ -1,9 +1,9 @@
 {
   "generated_by": "script/adr_catalog.rb",
-  "count": 62,
-  "next_number": 63,
+  "count": 64,
+  "next_number": 65,
   "states": {
-    "accepted": 51,
+    "accepted": 53,
     "proposed": 2,
     "retired": 9
   },
@@ -1469,6 +1469,58 @@
         "042",
         "048",
         "059",
+        "061"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "History"
+      ]
+    },
+    {
+      "num": "063",
+      "title": "Authority is pinned by digest when it is bound, and never re-derived by id",
+      "status": "Accepted 2026-11-04",
+      "state": "accepted",
+      "date": "2026-09-15",
+      "tier": "F",
+      "implementation": "Complete — thread and child profiles",
+      "file": "adr-063-authority-is-pinned-by-digest-when-bound-and-never-re-derived-by-id.md",
+      "relates_to": [
+        "053"
+      ],
+      "supersedes": [],
+      "superseded_by": [],
+      "amends": [],
+      "amended_by": [],
+      "sections": [
+        "Context",
+        "Decision",
+        "Consequences",
+        "Invariants",
+        "Threat model",
+        "History"
+      ]
+    },
+    {
+      "num": "064",
+      "title": "A received channel file is a temporary handoff, never stored",
+      "status": "Accepted 2026-11-04",
+      "state": "accepted",
+      "date": "2026-10-09",
+      "tier": "F",
+      "implementation": "Complete",
+      "file": "adr-064-a-received-channel-file-is-a-temporary-handoff-never-stored.md",
+      "relates_to": [
+        "041",
+        "042",
         "061"
       ],
       "supersedes": [],

@@ -24,8 +24,7 @@
   4.3 s under bundler from its workspace checks alone. A subprocess that runs someone else's project (an
   eval workspace) gets `Bundler.unbundled_env`; one that needs the bundle keeps it and spawns less.
 - **Cost that grows with the state is in the codec, not the fixture.** Profile with thread CPU time before
-  trimming a session test: per-codepoint JCS escaping was 80% of `work_loop_test`
-  (`docs/test-quality/STATE_REENCODE_PLAN.md` has what remains).
+  trimming a session test: per-codepoint JCS escaping was 80% of `work_loop_test`.
 - **A file this session creates is mode 600; `gem build` then refuses it.** `packaging_test` is the
   only gate that notices, and it reports it as 15 errors in gem *building*, not as a permission
   problem: `Gem::InvalidSpecificationException: specification has warnings`. `chmod 644` every new
@@ -37,8 +36,7 @@
   probe covers; never discover them by glob.
 - **A test that passes locally and fails only on CI is usually reading the WORKING TREE, not the
   checkout.** `documentation_test` resolves every markdown link against the filesystem, so a tracked
-  doc linking to an untracked directory (`docs/coding-harness/README.md` →
-  `docs/active-investigation/`) resolves on the author's machine and dangles in CI, which checks out
+  doc linking to an untracked directory resolves on the author's machine and dangles in CI, which checks out
   tracked files only. To reproduce a doc/packaging failure, move the untracked path aside first —
   `git stash` does not cover untracked files and will "reproduce" nothing.
 - **Fix the failure the pipeline reports, not the one you inferred.** A `FAILED:` line lists every
@@ -68,8 +66,8 @@
   on its queue forever — `work_loop_test.rb` hung instead of failing. Re-raise whatever the block
   raised on the caller's thread.
 - **`rubocop -a` rewrites the whole file, not your hunk.** Autocorrecting a pre-existing file changed an
-  unrelated assertion's alignment in `agent_cli_test.rb`. Autocorrect only new files; on touched files, fix
-  your own offenses by hand and compare counts against a clean `git worktree add --detach` of HEAD.
+  unrelated assertion's alignment in `agent_cli_test.rb`. Read the diff afterwards and revert hunks your change
+  did not need.
 - **A full-suite run that overlaps your edits proves nothing.** A `rake test test_slow` started while a
   mutation test temporarily removed a policy entry reported 78 errors that were only the mutation. Run the
   full gate on a tree nobody is editing — or on the scratch worktree with only the package's files copied in.

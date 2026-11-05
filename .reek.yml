@@ -11,7 +11,7 @@
 # judgement calls that belong to the quality program (Q0-5), not to installing
 # the tool. Until they exist, `reek` reports the RAW smell count and does not
 # gate. One detector is named below deliberately: the coding standard
-# (docs/CODING_STANDARD.md §11) requires public API documentation, and
+# (documentation/governance/coding-standard.md, Documentation and comments) requires a one-line statement of what each public class is, and
 # IrresponsibleModule enforces it.
 #
 # Current raw baseline, for reference when that work starts:
@@ -36,8 +36,8 @@ exclude_paths:
   - tmp
 
 detectors:
-  # Public API documentation is REQUIRED (docs/CODING_STANDARD.md §11): every
-  # public class and module says what it is, before how it works. This is
+  # A one-line class statement is REQUIRED (documentation/governance/coding-standard.md):
+  # every public class and module says what it is. This is
   # reek's default; the entry exists to pin the intent — a future tuning pass
   # must not silently silence the documentation requirement.
   IrresponsibleModule:

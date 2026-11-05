@@ -60,13 +60,15 @@ owner waking up.
 |---|---|
 | Replay repeats a completed effect | Request-keyed identity; immutable terminal receipt returned on replay |
 | Timeout read as failure, then retried | Unsafe class becomes `:unknown`; no automatic retry |
-| A stale owner starts a new attempt | Starting an effect requires the current graph fence |
+| A stale owner starts a new attempt | Starting an effect validates the active lease and requires the current graph fence |
+| A stale owner grants itself a retry | `not_applied` validates the lease in the transaction; a stale fence raises `LeaseLostError` |
 | A late receipt overwrites a newer truth | Late receipts are retained without overwriting a succeeded head |
-| A human resolution from the wrong writer | Resolution is fenced to the row scope and audited |
+| A human resolution from the wrong writer | Resolution validates the active lease, is fenced to the row scope and audited |
 
-**Residual risk:** an `:unknown` unsafe effect may in fact have happened; a human decides.
+**Residual risk:** an `:unknown` unsafe effect may in fact have happened; a human decides. A reconciliation recording `completed` or `unknown` stays possible after lease loss and grants no execution authority, so a stale owner can close an effect as `completed` on evidence nothing verifies.
 
 ## History
 
 - 2026-10-09 — speech output of delivered text is presentation, not an effect (owner decision OD6,
   ADR-061).
+- 2026-11-04: recorded the lease check on a granted retry and the residual risk of a `completed` recorded after lease loss, at the owner's request; no behavior changed.

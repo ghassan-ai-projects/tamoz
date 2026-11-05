@@ -1,7 +1,7 @@
 # Context management — the prompt cache is prefix-exact
 
-Learned mapping DSH's context machinery onto the Tamoz harness
-(`docs/coding-harness/`, measured with `script/dsh_context_survey`).
+Learned mapping DSH's context machinery onto the Tamoz harness (measured with
+`script/dsh_context_survey`).
 
 - **A disk change is not a prompt event; a prompt-byte change is.** A file changing under
   the model costs nothing and touches nothing. Only rewriting the prompt moves the cache:

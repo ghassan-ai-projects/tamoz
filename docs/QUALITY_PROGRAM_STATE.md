@@ -1,8 +1,8 @@
-# Quality Program — Live State
+# Quality Program — State (retired)
 
 **Charter:** [`QUALITY_PROGRAM.md`](QUALITY_PROGRAM.md)
-**This file is the single resume point.** Every session starts here. Update it at the end of
-every slice and whenever the phase table changes.
+**Retired 2026-11-04 (owner).** Its last checkpoint is 2026-08-26 and it is no longer maintained. Do not
+start a session here or follow its "never push" lines; current rules are in `AGENTS.md`. Kept as history.
 
 ---
 
