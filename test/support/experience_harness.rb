@@ -73,17 +73,14 @@ module Tamoz
       # A real provider by default (real experience/answer evidence). Pass an
       # explicit model_factory (e.g. the fixture's scripted one) ONLY for a
       # deterministic plumbing test — such a run is never intelligence evidence.
-      def initialize(provider: nil, model: nil, model_factory: nil,
-                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy, transcriber: nil, speech: false)
+      def initialize(provider: nil, model: nil, model_factory: nil, admission_mode: :allowlist, **fixture_options)
         @provider = provider || ENV.fetch('AGENTEVAL_PROVIDER', 'deepseek')
         @model = model || ENV.fetch('AGENTEVAL_MODEL', 'deepseek-chat')
         @update_seq = 1_000
         @message_seq = 500
         @seen_out = 0
         @last_bot_message_id = nil
-        super(model_factory: model_factory || real_model_factory,
-              admission_mode: admission_mode, approval_ask: approval_ask,
-              routing:, transcriber:, speech:)
+        super(model_factory: model_factory || real_model_factory, admission_mode:, **fixture_options)
         bind_thread(Fixture::CONVERSATION_A) if admission_mode == :allowlist
       end
 
@@ -143,7 +140,8 @@ module Tamoz
       def send_photo(bytes, caption: nil, run: true)
         file_id = "photo-#{next_update_id}"
         @transport.files[file_id] = bytes
-        sizes = [{ 'file_id' => "#{file_id}-thumb", 'file_unique_id' => "u-#{file_id}-t", 'width' => 90, 'height' => 60 },
+        sizes = [{ 'file_id' => "#{file_id}-thumb", 'file_unique_id' => "u-#{file_id}-t",
+                   'width' => 90, 'height' => 60 },
                  { 'file_id' => file_id, 'file_unique_id' => "u-#{file_id}", 'width' => 1280, 'height' => 960,
                    'file_size' => bytes.bytesize }]
         message = { 'message_id' => next_message_id, 'chat' => chat_hash, 'from' => { 'id' => Fixture::USER_BOUND },

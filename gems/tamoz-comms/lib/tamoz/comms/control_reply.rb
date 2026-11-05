@@ -13,10 +13,10 @@ module Tamoz
         case control
         when 'reset'
           "Episode reset on generation #{document.fetch('generation')}; " \
-            "#{document.fetch('truncated_fragments')} transcript fragments left the frame."
+          "#{document.fetch('truncated_fragments')} transcript fragments left the frame."
         when 'compact'
           "Transcript compacted; #{document.fetch('truncated_fragments')} fragments " \
-            'externalized behind pinned digests.'
+          'externalized behind pinned digests.'
         when 'usage' then usage_line(document)
         when 'context' then context_line(document)
         when 'think' then "Reasoning depth set to #{document.dig('preferences', 'reasoning_depth')}."

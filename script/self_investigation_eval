@@ -50,17 +50,25 @@ class SelfInvestigationEval
     def investigate(corpus, scenario, vocabulary)
       with_runtime(scenario) do |paths|
         write_probe_config(paths.fetch(:runtime))
-        baselines = SelfInvestigationGrader.baselines(scenario, diagnosis_json(paths.fetch(:runtime)), vocabulary)
+        baselines = scenario_baselines(scenario, paths, vocabulary)
         text, status, seconds = investigation_turn(paths, corpus.fetch('question'))
         shown = shown_document(paths)
-        inputs = { scenario:, vocabulary:, report: shown['report'], cited_probes: cited_probes(text),
-                   probe_results: probe_results(paths) }
+        inputs = grading_inputs(scenario, vocabulary, shown, text, paths)
         SelfInvestigationGrader.grade(**inputs).to_h.merge(
           baselines:, exit: status, seconds: seconds.round(1), model_calls: model_calls(paths),
           grading_inputs: inputs, output: Tamoz::Core.scrub_secrets(text),
           turn: shown.slice('status', 'terminal'), self_diagnosis: shown['report'] ? nil : self_diagnosis(paths)
         )
       end
+    end
+
+    def scenario_baselines(scenario, paths, vocabulary)
+      SelfInvestigationGrader.baselines(scenario, diagnosis_json(paths.fetch(:runtime)), vocabulary)
+    end
+
+    def grading_inputs(scenario, vocabulary, shown, text, paths)
+      { scenario:, vocabulary:, report: shown['report'], cited_probes: cited_probes(text),
+        probe_results: probe_results(paths) }
     end
 
     def investigation_turn(paths, question)
@@ -84,17 +92,21 @@ class SelfInvestigationEval
         status, = tamoz('--json', '--runtime-dir', runtime, 'status')
         metrics, = tamoz('--runtime-dir', runtime, 'observe', 'metrics')
         diagnosis = diagnosis_json(runtime)
-        vocabulary = SelfInvestigationGrader.vocabulary(SelfDiagnosisCorpus.load)
         { 'scenario' => scenario.fetch('id'), 'truth' => truth, 'expected_rules' => scenario.fetch('expected_rules'),
-          'baselines' => truth && SelfInvestigationGrader.baselines(scenario, diagnosis, vocabulary),
+          'baselines' => truth && SelfInvestigationGrader.baselines(scenario, diagnosis, corpus_vocabulary),
           'status_names_it' => named?(status, truth), 'metrics_names_it' => named?(metrics, truth),
           'diagnose_names_it' => named?(diagnosis, truth), 'status_bytes' => status.bytesize,
-          'diagnose_rules' => JSON.parse(diagnosis).fetch('findings').map { |finding| finding.fetch('rule_id') } }
+          'diagnose_rules' => rule_ids(diagnosis) }
       end
     end
 
+    def corpus_vocabulary = SelfInvestigationGrader.vocabulary(SelfDiagnosisCorpus.load)
+
+    def rule_ids(diagnosis) = JSON.parse(diagnosis).fetch('findings').map { |finding| finding.fetch('rule_id') }
+
     def diagnosis_json(runtime)
-      out, = Open3.capture3(RbConfig.ruby, *LIBS, TAMOZ, '--runtime-dir', runtime, 'diagnose', '--json', '--since', '24h',
+      out, = Open3.capture3(RbConfig.ruby, *LIBS, TAMOZ, '--runtime-dir', runtime,
+                            'diagnose', '--json', '--since', '24h',
                             stdin_data: '')
       out
     end

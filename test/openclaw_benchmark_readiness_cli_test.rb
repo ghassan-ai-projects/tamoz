@@ -66,23 +66,25 @@ class OpenclawBenchmarkReadinessCLITest < Minitest::Test
   end
   # rubocop:enable Metrics/AbcSize
 
+  def descriptor(path)
+    { 'path' => path.to_s, 'sha256' => Digest::SHA256.file(path).hexdigest }
+  end
+
+  def pin_external_inputs(input_manifest)
+    external_root = Pathname.new(File.dirname(input_manifest))
+    catalog = external_root.join('catalog.json')
+    FileUtils.cp(MISSIONS, catalog)
+    input_document = JSON.parse(File.read(input_manifest))
+    input_document['openclaw']['protocol'] = descriptor(protocol_path(external_root))
+    input_document['openclaw']['catalog'] = descriptor(catalog)
+    File.write(input_manifest, JSON.generate(input_document))
+  end
+
   def test_publish_refuses_fixture_manifest
     Dir.mktmpdir('openclaw-readiness') do |directory|
-      root = Pathname.new(directory)
       RunnerInputs.with_manifest do |input_manifest|
-        external_root = Pathname.new(File.dirname(input_manifest))
-        protocol = protocol_path(external_root)
-        catalog = external_root.join('catalog.json')
-        FileUtils.cp(MISSIONS, catalog)
-        input_document = JSON.parse(File.read(input_manifest))
-        descriptor = lambda do |path|
-          { 'path' => path.to_s, 'sha256' => Digest::SHA256.file(path).hexdigest }
-        end
-        input_document['openclaw']['protocol'] = descriptor.call(protocol)
-        input_document['openclaw']['catalog'] = descriptor.call(catalog)
-        File.write(input_manifest, JSON.generate(input_document))
-        command = [RbConfig.ruby, SCRIPT.to_s,
-                   '--manifest', manifest_path(root).to_s,
+        pin_external_inputs(input_manifest)
+        command = [RbConfig.ruby, SCRIPT.to_s, '--manifest', manifest_path(Pathname.new(directory)).to_s,
                    '--input-manifest', input_manifest, '--publish']
         _stdout, stderr, status = Open3.capture3(*command, chdir: ROOT.to_s)
 

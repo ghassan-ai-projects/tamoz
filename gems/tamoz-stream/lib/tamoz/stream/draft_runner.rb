@@ -30,7 +30,8 @@ module Tamoz
         stream = EpisodeStream.new(Identity.new(request.draft_id, 'draft', 1))
         result = @durable_runner.deliver(
           payload, thread: thread_id(request), request_id: thread_id(request), operation: :turn,
-                   delivery: :queue, namespace: [@tenant], context: context_for(request, EpisodeStreamAdapter.new(stream))
+                   delivery: :queue, namespace: [@tenant],
+                   context: context_for(request, EpisodeStreamAdapter.new(stream))
         )
         [answer(request, result, stream)]
       end
@@ -113,16 +114,22 @@ module Tamoz
 
       def admit!(request)
         refuse('the draft belongs to another tenant') unless request.tenant_id == @tenant
-        id = request.draft_id
+        admit_id!(request.draft_id)
+        admit_key!(request.key)
+        refuse("a draft needs 1 to #{MAX_CASES} cases") unless request.cases.length.between?(1, MAX_CASES)
+        admit_episode_ids!(request.cases.map(&:episode_id))
+        admit_cases!(request)
+        admit_budget!(request.budget)
+      end
+
+      def admit_id!(id)
         refuse('draft_id is required') if id.empty?
         refuse("draft_id must be at most #{MAX_ID_BYTES} bytes with no control characters") if
           id.bytesize > MAX_ID_BYTES || id.match?(/[\x00-\x1F\x7F]/)
-        admit_key!(request.key)
-        refuse("a draft needs 1 to #{MAX_CASES} cases") unless request.cases.length.between?(1, MAX_CASES)
-        ids = request.cases.map(&:episode_id)
+      end
+
+      def admit_episode_ids!(ids)
         refuse('every case needs its own episode_id') if ids.include?('') || ids.uniq.length != ids.length
-        admit_cases!(request)
-        admit_budget!(request.budget)
       end
 
       def admit_key!(key)

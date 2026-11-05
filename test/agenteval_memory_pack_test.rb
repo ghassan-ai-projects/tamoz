@@ -42,12 +42,12 @@ class AgentevalMemoryPackTest < Minitest::Test
   end
 
   def test_session_metrics_decode_a_real_checkpoint_shape
-    state = ['object', [['terminal_reason', ['string', 'done']],
-                        ['work_entries', ['array', [['object', [['kind', ['string', 'tool_result']],
-                                                               ['name', ['string', 'recall_memory']]]]]]],
-                        ['work_trace', ['array', [['object', [['event', ['string', 'memory_injected']],
-                                                             ['tokens', ['integer', 42]],
-                                                             ['ids', ['array', [['string', 'mem.x']]]]]]]]]]]
+    state = ['object', [['terminal_reason', %w[string done]],
+                        ['work_entries', ['array', [['object', [['kind', %w[string tool_result]],
+                                                                ['name', %w[string recall_memory]]]]]]],
+                        ['work_trace', ['array', [['object', [['event', %w[string memory_injected]],
+                                                              ['tokens', ['integer', 42]],
+                                                              ['ids', ['array', [['string', 'mem.x']]]]]]]]]]]
     payload = JSON.generate(['tamoz.graph.checkpoint', 1, JSON.generate(['tamoz.state', 1, state])])
     metrics = Agenteval::SessionChain.metrics_of(Agenteval::SessionChain.decode_state(payload))
 
@@ -80,7 +80,7 @@ class AgentevalMemoryPackTest < Minitest::Test
       {}
     end
 
-    assert_match(/written into the repo: qa\/probe_example.rb/, verdict.detail)
+    assert_match(%r{written into the repo: qa/probe_example.rb}, verdict.detail)
   end
 
   def test_no_last_prompt_carries_the_fact_it_tests

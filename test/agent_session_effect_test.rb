@@ -244,11 +244,11 @@ class AgentSessionEffectTest < Minitest::Test
           )
           first = effects.model_call(
             context, stage: :plan, system: "system", prompt: "prompt",
-            call_index: 0, iteration: 0, sub_operation: 0
+                     call_index: 0, iteration: 0, sub_operation: 0
           )
           second = effects.model_call(
             context, stage: :plan, system: "system", prompt: "prompt",
-            call_index: 0, iteration: 0, sub_operation: 0
+                     call_index: 0, iteration: 0, sub_operation: 0
           )
 
           assert_equal "model answer", first.value
@@ -290,7 +290,7 @@ class AgentSessionEffectTest < Minitest::Test
           first = effects.dispatch(
             context,
             { "tool" => "read_file", "operation" => "tool.read_file", "safety" => "read_only",
-              "plan_digest" => "sha256:#{"a" * 64}"},
+              "plan_digest" => "sha256:#{'a' * 64}"},
             step,
             iteration: 0,
             sub_operation: 0
@@ -298,7 +298,7 @@ class AgentSessionEffectTest < Minitest::Test
           second = effects.dispatch(
             context,
             { "tool" => "read_file", "operation" => "tool.read_file", "safety" => "read_only",
-              "plan_digest" => "sha256:#{"b" * 64}"},
+              "plan_digest" => "sha256:#{'b' * 64}"},
             step,
             iteration: 0,
             sub_operation: 0
@@ -562,9 +562,9 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
-  private
-
   SessionModelConfiguration = Data.define(:model, :model_call_safety, :profile, :toolbox, :mcp)
+
+  private
 
   # A capabilities fake whose dispatch returns one fixed typed outcome, so the
   # MCP outcome path is exercised without a live server.
@@ -618,7 +618,7 @@ class AgentSessionEffectTest < Minitest::Test
       define_method(:provider_configuration_digest) { transport.provider_configuration_digest }
       define_method(:safety) { :unsafe }
 
-      define_method(:generate) do |stage:, system:, prompt:|
+      define_method(:generate) do |system:, prompt:, **|
         @calls += 1
         request_bytes = transport.build_request(system:, prompt:)
         Tamoz::Agent::EpisodeModelTransport::Response.new(

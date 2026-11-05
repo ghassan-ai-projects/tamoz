@@ -18,6 +18,7 @@ require 'support/episode_composition'
 require 'support/real_profile'
 require 'support/rule_proposal_drafter'
 
+# Plays the rule-proposal controls and the real-model drafter, and prints the report.
 module RuleProposalEval
   module_function
 
@@ -31,7 +32,7 @@ module RuleProposalEval
   end
 
   def controls_discriminate?
-    verdict, scores = Scorecard.controls_discriminate?(DATA.fetch('cases'), DATA.fetch('allowed_features'))
+    verdict, scores = Scorecard.control_verdict(DATA.fetch('cases'), DATA.fetch('allowed_features'))
     warn "controls: #{scores}"
     verdict
   end
@@ -48,18 +49,23 @@ module RuleProposalEval
     FileUtils.remove_entry(composition.fetch(:directory)) if composition
   end
 
-  def run(runs)
+  def require_ready!
     key = Tamoz::Agent::Providers::ENV_KEYS.fetch(PROVIDER.to_sym)
     abort "BLOCKED: #{key} is not set; no draft would reach the model" if ENV[key].to_s.strip.empty?
     abort 'the controls do not discriminate; the corpus cannot grade a model' unless controls_discriminate?
+  end
 
+  def case_line(case_id, entries, runs)
+    "#{case_id.ljust(28)} #{entries.count { |entry| entry.fetch('passed') }}/#{runs} " \
+      "#{entries.filter_map { |entry| entry['failure'] }.uniq.join('; ')}"
+  end
+
+  def run(runs)
+    require_ready!
     warn "REAL run: provider=#{PROVIDER} model=#{MODEL} runs=#{runs}"
     reports = Array.new(runs) { |index| real_run(index) }
     passes = reports.flat_map { |report| report.fetch('cases') }.group_by { |entry| entry.fetch('case_id') }
-    passes.each do |case_id, entries|
-      warn "#{case_id.ljust(28)} #{entries.count { |entry| entry.fetch('passed') }}/#{runs} " \
-           "#{entries.filter_map { |entry| entry['failure'] }.uniq.join('; ')}"
-    end
+    passes.each { |case_id, entries| warn case_line(case_id, entries, runs) }
     puts JSON.generate({ 'runs' => reports })
   end
 end

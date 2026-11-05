@@ -241,10 +241,10 @@ module Tamoz
         # deterministically.
         def vocabulary
           @vocabulary ||= @seed_records.values
-                                   .flat_map { |seed_record| seed_record.fetch("match_keys") }
-                                   .map(&:downcase)
-                                   .uniq
-                                   .freeze
+                                       .flat_map { |seed_record| seed_record.fetch("match_keys") }
+                                       .map(&:downcase)
+                                       .uniq
+                                       .freeze
         end
 
         # The prompt's words that belong to the seeded vocabulary (case-
@@ -281,7 +281,6 @@ module Tamoz
 
         def build_memory_record(seed_record)
           layer_sym = layer(seed_record).to_sym
-          sensitive = restricted?(seed_record)
           statement = build_statement(seed_record)
           Tamoz::Agent::Memory::MemoryRecord.new(
             memory_id: seed_record.fetch("memory_id"),
@@ -291,31 +290,47 @@ module Tamoz
             state: :active,
             statement:,
             epistemic_kind: epistemic_kind_by_layer.fetch(layer_sym),
-            source_refs: [{
-              "identity" => "eval-seed",
-              "digest" => seed_digest_for(seed_record),
-              "observed_at" => seed_epoch
-            }],
+            source_refs: seed_source_refs(seed_record),
             owner: user,
             actor: user,
-            scopes: {
-              "tenant" => tenant, "user" => user, "project" => project,
-              "session" => seed_record.fetch("memory_id")
-            },
-            sensitivity: sensitive ? :sensitive : :public,
+            scopes: seed_scopes(seed_record),
+            sensitivity: seed_sensitivity(seed_record),
             disclosure_policy: "default",
             confidence: 0.95,
             confidence_method: "eval_seed",
             valid_from: seed_epoch,
             created_by: {"surface" => "eval_seed"},
             compatibility: compatibility,
-            transition: {
-              "actor" => user, "authority" => "eval_seed",
-              "reason" => "deterministic seed", "policy_version" => "1",
-              "timestamp" => seed_epoch * 1000, "trace_id" => "eval-seed"
-            },
-            created_at_ms: seed_epoch * 1000
+            transition: seed_transition,
+            created_at_ms: seed_epoch_ms
           )
+        end
+
+        def seed_epoch_ms
+          seed_epoch * 1000
+        end
+
+        def seed_sensitivity(seed_record)
+          restricted?(seed_record) ? :sensitive : :public
+        end
+
+        def seed_source_refs(seed_record)
+          [{"identity" => "eval-seed", "digest" => seed_digest_for(seed_record), "observed_at" => seed_epoch}]
+        end
+
+        def seed_scopes(seed_record)
+          {
+            "tenant" => tenant, "user" => user, "project" => project,
+            "session" => seed_record.fetch("memory_id")
+          }
+        end
+
+        def seed_transition
+          {
+            "actor" => user, "authority" => "eval_seed",
+            "reason" => "deterministic seed", "policy_version" => "1",
+            "timestamp" => seed_epoch_ms, "trace_id" => "eval-seed"
+          }
         end
 
         # The searchable statement: the record vocabulary + the rendered

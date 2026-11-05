@@ -121,7 +121,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
       decision.merge(
         "valid_until" => nil,
         "intents" => decision.fetch("intents").map do |intent|
-          intent.reject { |key, _| %w[expires_at intent_digest].include?(key) }
+          intent.except('expires_at', 'intent_digest')
         end
       )
     end
@@ -132,7 +132,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
              "the decision digest must verify its own document"
       decision.fetch("intents").each do |intent|
         assert Tamoz::Core.verify_digest(
-          :intent, intent.reject { |key, _| key == "intent_digest" }, intent.fetch("intent_digest")
+          :intent, intent.except("intent_digest"), intent.fetch("intent_digest")
         ), "each intent digest must verify its own document"
       end
     end

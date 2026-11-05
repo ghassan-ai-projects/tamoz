@@ -36,8 +36,11 @@ class DomainLoader
   # Reproduces the exact schema/digest/presets/compensation shape the wire
   # binds (description interpolation, parameter_schema_digest, watch
   # properties from JSON, compensation note/priority, policy, rate limit).
-  def self.intent_entry(type:, risk:, compensation_map:, watch_preset:, watch_properties:, parameter_schemas: {})
-    configured_schema = parameter_schemas.fetch(type, {})
+  def self.intent_entry(type:, risk:, data:)
+    compensation_map = data.fetch("compensation_map", {})
+    watch_preset = data.fetch("watch_preset", {})
+    watch_properties = data.fetch("watch_properties", {})
+    configured_schema = data.fetch("intent_parameter_schemas", {}).fetch(type, {})
     writable = if configured_schema.empty?
                  type == "install_watch_condition" ? [] : %w[hypothesis]
                else
@@ -79,12 +82,7 @@ class DomainLoader
   def initialize(data)
     @data = deep_freeze(data)
     @intent_catalog = @data.fetch("intent_types").map do |type, risk|
-      DomainLoader.intent_entry(
-        type:, risk:, compensation_map: @data.fetch("compensation_map", {}),
-        watch_preset: @data.fetch("watch_preset", {}),
-        watch_properties: @data.fetch("watch_properties", {}),
-        parameter_schemas: @data.fetch("intent_parameter_schemas", {})
-      )
+      DomainLoader.intent_entry(type:, risk:, data: @data)
     end.freeze
     # Precomputed fixture responses (JCS strings) — order is load-bearing for
     # the fixture endpoint's index-based selection. Computed eagerly because

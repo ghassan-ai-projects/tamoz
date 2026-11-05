@@ -1,37 +1,94 @@
-require_relative "../../../test/test_helper"
-require_relative "../../../test/support/memory_spec"
-require "benchmark"
+# frozen_string_literal: true
+
+require_relative '../../../test/test_helper'
+require_relative '../../../test/support/memory_spec'
+require 'benchmark'
 class B; include MemorySpec; end
-b = B.new; M = Tamoz::Agent::Memory
-WORDS = %w[deploy parser login cache invoice vendor build release slug queue retry index report token schema widget config]
+SPEC = B.new
+M = Tamoz::Agent::Memory
+QUERY = { terms: ['login retry queue'] }.freeze
+BRIEF_TASK = 'fix the parser cache'
+WORDS = %w[deploy parser login cache invoice vendor build release slug queue retry index report token schema widget
+           config].freeze
+PLAN_SQL = 'EXPLAIN QUERY PLAN SELECT i.memory_id FROM tamoz_memory_index i JOIN tamoz_store_heads h ' \
+           "ON h.namespace = i.store_namespace AND h.key = i.layer || '/' || i.memory_id " \
+           'AND h.current_version = i.record_version AND h.deleted = 0 JOIN tamoz_memory_fts ' \
+           'ON tamoz_memory_fts.store_namespace = i.store_namespace ' \
+           'AND tamoz_memory_fts.memory_id = i.memory_id ' \
+           "WHERE i.store_namespace = 'x' AND tamoz_memory_fts MATCH 'login' " \
+           'ORDER BY bm25(tamoz_memory_fts)'
+
+def klass_for(layer, index)
+  return :episode if layer == :experience
+
+  (index % 5).zero? ? :preference : :procedure
+end
+
+def record_for(index, layer, now)
+  statement = "#{layer} note #{index}: #{WORDS.sample(4, random: Random.new(index)).join(' ')} " \
+              "handled in step #{index % 97}"
+  M::MemoryRecord.new(memory_id: "mem.b.#{layer}.#{index}", layer:, klass: klass_for(layer, index), state: :active,
+                      statement:, epistemic_kind: :reported, owner: 'alice',
+                      source_refs: [{ 'identity' => "b:#{index}", 'digest' => "d#{index}" }],
+                      scopes: SPEC.memory_scopes, sensitivity: :internal, valid_from: now.to_i,
+                      transition: { 'actor' => 'b', 'reason' => 'bench' }, created_at_ms: now.to_i * 1000)
+end
+
+def append_records(engine, now, layer, count)
+  count.times do |index|
+    record = record_for(index, layer, now)
+    engine.repository.append(record:, index: engine.index_for(record), expected_version: nil, sensitive: false)
+  end
+end
+
+def report_load(engine, now, knowledge, experience)
+  seconds = Benchmark.realtime do
+    append_records(engine, now, :knowledge, knowledge)
+    append_records(engine, now, :experience, experience)
+  end
+  printf("load %<kn>d knowledge + %<ex>d experience: %<t>.1fs (%<ms>.2f ms/record)\n",
+         kn: knowledge, ex: experience, t: seconds, ms: seconds * 1000 / (knowledge + experience))
+end
+
+def report_search(engine, caller)
+  rows = nil
+  ts_search = Benchmark.realtime { rows = engine.repository.search(caller:, query: QUERY, limit: 200).candidates }
+  ts_get = Benchmark.realtime do
+    rows.each do |r|
+      engine.store.get(engine.namespace, "#{r['layer']}/#{r['memory_id']}")
+    end
+  end
+  printf("search %<search>.0f ms (%<rows>d rows) | 200 gets %<gets>.0f ms\n",
+         search: ts_search * 1000, rows: rows.length, gets: ts_get * 1000)
+end
+
+def report_plan(dir)
+  SQLite3::Database.new(File.join(dir, 'memory.sqlite3')).execute(PLAN_SQL).each { |row| puts "  plan: #{row.last}" }
+end
+
+def average_ms(runs, &)
+  Benchmark.realtime { runs.times(&) } / runs * 1000
+end
+
+def db_megabytes(dir) = File.size(File.join(dir, 'memory.sqlite3')) / 1e6
+
+def report_latency(engine, caller, dir)
+  3.times { engine.retrieval.brief(caller:, task: BRIEF_TASK) }
+  brief = average_ms(10) { engine.retrieval.brief(caller:, task: BRIEF_TASK) }
+  recall = average_ms(10) { engine.retrieval.recall(caller:, query: QUERY) }
+  delete = average_ms(5) { |i| engine.lifecycle.delete(memory_id: "mem.b.knowledge.#{i + 1}") }
+  sweep = Benchmark.realtime { engine.lifecycle.sweep } * 1000
+  printf("brief %<b>.0f ms | recall %<r>.0f ms | delete %<d>.0f ms | sweep %<s>.0f ms | db %<m>.1f MB\n",
+         b: brief, r: recall, d: delete, s: sweep, m: db_megabytes(dir))
+end
+
 Dir.mktmpdir do |d|
   now = Time.at(1_800_000_000)
-  e, a = b.memory_engine_at(d, clock: -> { now })
-  add = lambda do |i, layer, klass|
-    st = "#{layer} note #{i}: #{WORDS.sample(4, random: Random.new(i)).join(' ')} handled in step #{i % 97}"
-    r = M::MemoryRecord.new(memory_id: "mem.b.#{layer}.#{i}", layer:, klass:, state: :active, statement: st, epistemic_kind: :reported,
-      owner: 'alice', source_refs: [{ 'identity' => "b:#{i}", 'digest' => "d#{i}" }], scopes: b.memory_scopes,
-      sensitivity: :internal, valid_from: now.to_i, transition: { 'actor' => 'b', 'reason' => 'bench' }, created_at_ms: now.to_i * 1000)
-    e.repository.append(record: r, index: e.index_for(r), expected_version: nil, sensitive: false)
-  end
-  [[2_000, 8_000]].each do |kn, ex|
-    t = Benchmark.realtime { kn.times { |i| add.(i, :knowledge, i % 5 == 0 ? :preference : :procedure) }; ex.times { |i| add.(i, :experience, :episode) } }
-    printf("load %d knowledge + %d experience: %.1fs (%.2f ms/record)\n", kn, ex, t, t * 1000 / (kn + ex))
-    c = e.caller(user: 'alice', project: 'proj')
-    q = { terms: ['login retry queue'] }
-    ts_search = Benchmark.realtime { @rows = e.repository.search(caller: c, query: q, limit: 200).candidates }
-    ts_get = Benchmark.realtime { @rows.each { |r| e.store.get(e.namespace, "#{r['layer']}/#{r['memory_id']}") } }
-    printf("search %.0f ms (%d rows) | 200 gets %.0f ms
-", ts_search * 1000, @rows.length, ts_get * 1000)
-    db = SQLite3::Database.new(File.join(d, 'memory.sqlite3'))
-    plan = db.execute("EXPLAIN QUERY PLAN SELECT i.memory_id FROM tamoz_memory_index i JOIN tamoz_store_heads h ON h.namespace = i.store_namespace AND h.key = i.layer || '/' || i.memory_id AND h.current_version = i.record_version AND h.deleted = 0 JOIN tamoz_memory_fts ON tamoz_memory_fts.store_namespace = i.store_namespace AND tamoz_memory_fts.memory_id = i.memory_id WHERE i.store_namespace = 'x' AND tamoz_memory_fts MATCH 'login' ORDER BY bm25(tamoz_memory_fts)")
-    plan.each { |row| puts "  plan: #{row.last}" }
-    3.times { e.retrieval.brief(caller: c, task: 'fix the parser cache') }
-    tb = Benchmark.realtime { 10.times { e.retrieval.brief(caller: c, task: 'fix the parser cache') } } / 10
-    tr = Benchmark.realtime { 10.times { e.retrieval.recall(caller: c, query: { terms: ['login retry queue'] }) } } / 10
-    td = Benchmark.realtime { 5.times { |i| e.lifecycle.delete(memory_id: "mem.b.knowledge.#{i + 1}") } } / 5
-    ts = Benchmark.realtime { e.lifecycle.sweep }
-    printf("brief %.0f ms | recall %.0f ms | delete %.0f ms | sweep %.0f ms | db %.1f MB\n", tb * 1000, tr * 1000, td * 1000, ts * 1000, File.size(File.join(d, 'memory.sqlite3')) / 1e6)
-  end
+  e, a = SPEC.memory_engine_at(d, clock: -> { now })
+  report_load(e, now, 2_000, 8_000)
+  c = e.caller(user: 'alice', project: 'proj')
+  report_search(e, c)
+  report_plan(d)
+  report_latency(e, c, d)
   a.close
 end

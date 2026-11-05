@@ -58,8 +58,8 @@ PRODUCT_TESTS = %w[
   test/agent_unattended_policy_test.rb
 ].freeze
 
-LIB_PATHS = Dir[File.join(ROOT, "gems", "*", "lib")].sort
-                   .map { |path| "-I#{path}" }.join(":")
+LIB_PATHS = Dir[File.join(ROOT, "gems", "*", "lib")]
+            .map { |path| "-I#{path}" }.join(":")
 
 # --- run the product tests with the coverage hook ---------------------------
 

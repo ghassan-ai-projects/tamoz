@@ -40,12 +40,13 @@ module Tamoz
       end
 
       def merge(sources)
-        TelemetryReader::KINDS.to_h do |kind|
+        records = TelemetryReader::KINDS.to_h do |kind|
           rows = sources.flat_map do |source|
             source.records.fetch(kind.to_s, []).map { |row| row.merge('source' => source.name) }
           end
           [kind.to_s, rows]
-        end.then { |records| joined(records, sources) }
+        end
+        joined(records, sources)
       end
 
       def joined(records, sources)

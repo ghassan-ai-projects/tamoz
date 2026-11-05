@@ -9,34 +9,48 @@ class ModelTranscriptionTest < Minitest::Test
   def with_endpoint(status: '200 OK', body: '{"text":"my locker code is four seven one nine"}')
     server = TCPServer.new('127.0.0.1', 0)
     seen = Queue.new
-    thread = Thread.new do
-      socket = server.accept
-      head = +''
-      head << socket.gets until head.end_with?("\r\n\r\n")
-      length = head[/content-length: (\d+)/i, 1].to_i
-      seen << [head, socket.read(length)]
-      socket.write("HTTP/1.1 #{status}\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\n" \
-                   "Connection: close\r\n\r\n#{body}")
-      socket.close
-    end
-    yield Tamoz::Agent::EpisodeModelTransport.new(endpoint: "http://127.0.0.1:#{server.addr[1]}/v1", model: 'whisper-1',
-                                                  provider: 'openai', api_key: 'stt-key'), seen
+    thread = Thread.new { answer_once(server, seen, status, body) }
+    yield transport_for(server), seen
   ensure
     thread&.join(2)
     server&.close
   end
 
+  def answer_once(server, seen, status, body)
+    socket = server.accept
+    head = +''
+    head << socket.gets until head.end_with?("\r\n\r\n")
+    length = head[/content-length: (\d+)/i, 1].to_i
+    seen << [head, socket.read(length)]
+    socket.write("HTTP/1.1 #{status}\r\nContent-Type: application/json\r\nContent-Length: #{body.bytesize}\r\n" \
+                 "Connection: close\r\n\r\n#{body}")
+    socket.close
+  end
+
+  def transport_for(server)
+    Tamoz::Agent::EpisodeModelTransport.new(endpoint: "http://127.0.0.1:#{server.addr[1]}/v1", model: 'whisper-1',
+                                            provider: 'openai', api_key: 'stt-key')
+  end
+
   def test_the_audio_goes_as_received_in_one_multipart_request
     with_endpoint do |transport, seen|
       transcript = transport.transcribe(audio: AUDIO, filename: 'voice.ogg', media_type: 'audio/ogg')
-      head, body = seen.pop
+      _head, body = seen.pop
 
-      assert_equal 'my locker code is four seven one nine', transcript.text
-      assert_match(%r{\APOST /v1/audio/transcriptions }, head)
-      assert_match(/authorization: Bearer stt-key/i, head)
+      assert_equal ['my locker code is four seven one nine', transport.transcription_digest(Digest::SHA256.hexdigest(AUDIO))],
+                   [transcript.text, transcript.request_digest]
       assert_includes body.b, "name=\"model\"\r\n\r\nwhisper-1".b
       assert_includes body.b, "filename=\"voice.ogg\"\r\nContent-Type: audio/ogg\r\n\r\n#{AUDIO}".b
-      assert_equal transport.transcription_digest(Digest::SHA256.hexdigest(AUDIO)), transcript.request_digest
+    end
+  end
+
+  def test_the_request_is_a_post_to_the_transcriptions_path_with_the_bearer_key
+    with_endpoint do |transport, seen|
+      transport.transcribe(audio: AUDIO, filename: 'voice.ogg', media_type: 'audio/ogg')
+      head, = seen.pop
+
+      assert_match(%r{\APOST /v1/audio/transcriptions }, head)
+      assert_match(/authorization: Bearer stt-key/i, head)
     end
   end
 

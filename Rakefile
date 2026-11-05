@@ -111,7 +111,7 @@ SERIAL_TESTS = %w[
 TEST_LANES = TestSuite.lanes(slow: SLOW_TESTS, serial: SERIAL_TESTS,
                              autonomy: AUTONOMY_TESTS, manual: MANUAL_TESTS)
 LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
-            .sort.flat_map { |path| ["-I", path] }.freeze
+            .flat_map { |path| ["-I", path] }.freeze
 
 def test_command(files, warnings: false)
   options = warnings ? ["-w"] : []
@@ -169,51 +169,51 @@ end
 # take DEFAULT_WEIGHT.
 DEFAULT_WEIGHT = 0.7
 TEST_WEIGHTS = {
-  "test/packaging_test.rb"                             => 72.0,
-  "test/graph_surface_audit_test.rb"                   => 57.9,
-  "test/investigation_eval_controls_test.rb"           => 48.8,
-  "test/agent_scorecard_test.rb"                       => 42.5,
-  "test/agent_session_kill_matrix_test.rb"             => 39.1,
-  "test/sqlite_raw_oracle_test.rb"                     => 37.0,
-  "test/sqlite_convergence_probe_test.rb"              => 27.9,
-  "test/mcp_invocation_test.rb"                        => 27.0,
-  "test/agenteval_subagent_pack_test.rb"               => 26.1,
-  "test/agenteval_topology_pack_test.rb"               => 22.4,
-  "test/sqlite_scenario_driver_test.rb"                => 15.9,
-  "test/work_loop_test.rb"                             => 15.9,
-  "test/benchmark_comms_b0_test.rb"                    => 15.2,
-  "test/memory_treatment_profile_test.rb"              => 14.2,
-  "test/m2_evidence_test.rb"                           => 13.6,
-  "test/benchmark_comms_controls_test.rb"              => 13.4,
-  "test/mcp_supervisor_test.rb"                        => 12.1,
-  "test/subagent_spec_test.rb"                         => 11.8,
-  "test/talk_end_to_end_test.rb"                       => 10.0,
-  "agenteval/test/grader_test.rb"                      => 7.6,
-  "test/thermal_manifest_test.rb"                      => 6.8,
-  "test/stream_worker_server_test.rb"                  => 6.6,
-  "test/research_spec_test.rb"                         => 6.5,
-  "test/websearch_invocation_test.rb"                  => 6.3,
-  "test/subagent_topology_test.rb"                     => 6.1,
-  "test/agent_cli_test.rb"                             => 5.1,
-  "test/talk_endpointing_eval_test.rb"                 => 5.0,
-  "test/agent_unattended_policy_test.rb"               => 5.0,
-  "test/thermal_tournament_test.rb"                    => 4.6,
-  "test/subagent_kill_test.rb"                         => 4.5,
-  "test/agent_session_operations_test.rb"              => 4.1,
-  "test/dependency_isolation_test.rb"                  => 4.0,
-  "test/memory_work_route_test.rb"                     => 4.0,
-  "test/self_diagnosis_scale_test.rb"                  => 3.9,
-  "test/thermal_tournament_controls_test.rb"           => 3.9,
-  "test/research_durability_test.rb"                   => 3.7,
-  "test/benchmark_holdout_test.rb"                     => 3.6,
-  "test/agent_mcp_adversarial_test.rb"                 => 3.6,
-  "test/work_web_chat_test.rb"                         => 3.5,
-  "test/talk_gateway_test.rb"                          => 3.5,
-  "test/agent_mcp_capability_source_test.rb"           => 3.4,
-  "test/agent_toolbox_test.rb"                         => 3.4,
-  "test/agent_profile_machinery_test.rb"               => 3.3,
-  "test/test_suite_test.rb"                            => 3.2,
-  "test/work_loop_observation_test.rb"                 => 3.1
+  "test/packaging_test.rb" => 72.0,
+  "test/graph_surface_audit_test.rb" => 57.9,
+  "test/investigation_eval_controls_test.rb" => 48.8,
+  "test/agent_scorecard_test.rb" => 42.5,
+  "test/agent_session_kill_matrix_test.rb" => 39.1,
+  "test/sqlite_raw_oracle_test.rb" => 37.0,
+  "test/sqlite_convergence_probe_test.rb" => 27.9,
+  "test/mcp_invocation_test.rb" => 27.0,
+  "test/agenteval_subagent_pack_test.rb" => 26.1,
+  "test/agenteval_topology_pack_test.rb" => 22.4,
+  "test/sqlite_scenario_driver_test.rb" => 15.9,
+  "test/work_loop_test.rb" => 15.9,
+  "test/benchmark_comms_b0_test.rb" => 15.2,
+  "test/memory_treatment_profile_test.rb" => 14.2,
+  "test/m2_evidence_test.rb" => 13.6,
+  "test/benchmark_comms_controls_test.rb" => 13.4,
+  "test/mcp_supervisor_test.rb" => 12.1,
+  "test/subagent_spec_test.rb" => 11.8,
+  "test/talk_end_to_end_test.rb" => 10.0,
+  "agenteval/test/grader_test.rb" => 7.6,
+  "test/thermal_manifest_test.rb" => 6.8,
+  "test/stream_worker_server_test.rb" => 6.6,
+  "test/research_spec_test.rb" => 6.5,
+  "test/websearch_invocation_test.rb" => 6.3,
+  "test/subagent_topology_test.rb" => 6.1,
+  "test/agent_cli_test.rb" => 5.1,
+  "test/talk_endpointing_eval_test.rb" => 5.0,
+  "test/agent_unattended_policy_test.rb" => 5.0,
+  "test/thermal_tournament_test.rb" => 4.6,
+  "test/subagent_kill_test.rb" => 4.5,
+  "test/agent_session_operations_test.rb" => 4.1,
+  "test/dependency_isolation_test.rb" => 4.0,
+  "test/memory_work_route_test.rb" => 4.0,
+  "test/self_diagnosis_scale_test.rb" => 3.9,
+  "test/thermal_tournament_controls_test.rb" => 3.9,
+  "test/research_durability_test.rb" => 3.7,
+  "test/benchmark_holdout_test.rb" => 3.6,
+  "test/agent_mcp_adversarial_test.rb" => 3.6,
+  "test/work_web_chat_test.rb" => 3.5,
+  "test/talk_gateway_test.rb" => 3.5,
+  "test/agent_mcp_capability_source_test.rb" => 3.4,
+  "test/agent_toolbox_test.rb" => 3.4,
+  "test/agent_profile_machinery_test.rb" => 3.3,
+  "test/test_suite_test.rb" => 3.2,
+  "test/work_loop_observation_test.rb" => 3.1
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the
@@ -647,7 +647,8 @@ namespace :agenteval do
       sh agenteval_ruby, BIN, "topologies", "prove"
     end
 
-    desc "Run the hard topology pack, subagents on vs off (real model; AGENTEVAL_SEEDS, AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
+    desc "Run the hard topology pack, subagents on vs off (real model; " \
+         "AGENTEVAL_SEEDS, AGENTEVAL_REPEAT, AGENTEVAL_OUT)"
     task run: :prove do
       utf8_env!
       real_run_ready!
@@ -721,8 +722,8 @@ namespace :agenteval do
 
   desc "Compare the newest run against the committed baseline (non-zero on a regression)"
   task :compare do
-    committed = Dir[File.join(BASELINES, "baseline-*.json")].sort
-    local = Dir[File.join(REPORTS, "*.json")].sort
+    committed = Dir[File.join(BASELINES, "baseline-*.json")]
+    local = Dir[File.join(REPORTS, "*.json")]
     raise "need a committed baseline under #{BASELINES} or two local reports" if committed.empty? && local.length < 2
 
     after = local.last
@@ -762,43 +763,47 @@ namespace :agenteval do
   end
 
   # A real run spends money, so name the blocker for the SELECTED route before spending any. The
-# default route is OpenRouter while the DeepSeek direct account is unfunded; either can be chosen
-# with AGENTEVAL_PROVIDER / AGENTEVAL_MODEL.
-def agenteval_env_key(name)
-  key = ENV[name].to_s
-  return key unless key.empty?
+  # default route is OpenRouter while the DeepSeek direct account is unfunded; either can be chosen
+  # with AGENTEVAL_PROVIDER / AGENTEVAL_MODEL.
+  def agenteval_env_key(name)
+    key = ENV[name].to_s
+    return key unless key.empty?
 
-  dotenv = File.join(__dir__, ".env")
-  File.exist?(dotenv) ? File.read(dotenv)[/#{name}\s*=\s*(\S+)/, 1].to_s : ""
-end
-
-# /api/v1/models is PUBLIC and answers 200 for a bogus key, so it cannot guard anything.
-# /api/v1/key authenticates the credential, which is the only thing worth asserting here.
-def openrouter_reachable!
-  require "net/http"
-  key = agenteval_env_key("OPENROUTER_API_KEY")
-  abort "OPENROUTER_API_KEY is not set; export it or use AGENTEVAL_PROVIDER=deepseek" if key.empty?
-
-  uri = URI("https://openrouter.ai/api/v1/key")
-  response = Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
-    request = Net::HTTP::Get.new(uri)
-    request["Authorization"] = "Bearer #{key}"
-    http.request(request)
+    dotenv = File.join(__dir__, ".env")
+    File.exist?(dotenv) ? File.read(dotenv)[/#{name}\s*=\s*(\S+)/, 1].to_s : ""
   end
-  return if response.code.to_i == 200
 
-  abort "OpenRouter refuses the configured key (HTTP #{response.code}: " \
-        "#{response.body.to_s.strip[0, 140]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
-rescue SocketError, Timeout::Error, SystemCallError => e
-  abort "OpenRouter is unreachable (#{e.class}); a real run needs the network"
-end
+  # /api/v1/models is PUBLIC and answers 200 for a bogus key, so it cannot guard anything.
+  # /api/v1/key authenticates the credential, which is the only thing worth asserting here.
+  def openrouter_reachable!
+    require "net/http"
+    key = agenteval_env_key("OPENROUTER_API_KEY")
+    abort "OPENROUTER_API_KEY is not set; export it or use AGENTEVAL_PROVIDER=deepseek" if key.empty?
 
-def real_run_ready!
-  provider = ENV.fetch("AGENTEVAL_PROVIDER", "openrouter")
-  provider == "deepseek" ? deepseek_funded! : openrouter_reachable!
-end
+    response = openrouter_key_response(key)
+    return if response.code.to_i == 200
 
-def harness_step(label, *command, **options)
+    abort "OpenRouter refuses the configured key (HTTP #{response.code}: " \
+          "#{response.body.to_s.strip[0, 140]}); renew it or use AGENTEVAL_PROVIDER=deepseek"
+  rescue SocketError, Timeout::Error, SystemCallError => e
+    abort "OpenRouter is unreachable (#{e.class}); a real run needs the network"
+  end
+
+  def openrouter_key_response(key)
+    uri = URI("https://openrouter.ai/api/v1/key")
+    Net::HTTP.start(uri.host, uri.port, use_ssl: true, open_timeout: 10, read_timeout: 20) do |http|
+      request = Net::HTTP::Get.new(uri)
+      request["Authorization"] = "Bearer #{key}"
+      http.request(request)
+    end
+  end
+
+  def real_run_ready!
+    provider = ENV.fetch("AGENTEVAL_PROVIDER", "openrouter")
+    provider == "deepseek" ? deepseek_funded! : openrouter_reachable!
+  end
+
+  def harness_step(label, *command, **options)
     sh(*command, **options) { |ok, status| puts "#{label}: #{ok ? 'ok' : "exit #{status.exitstatus}"}" }
   end
 
@@ -841,7 +846,7 @@ def harness_step(label, *command, **options)
 
   desc "Promote the newest run to the committed baseline"
   task :baseline do
-    latest = Dir[File.join(REPORTS, "*.json")].sort.last
+    latest = Dir[File.join(REPORTS, "*.json")].last
     raise "no run under #{REPORTS} to promote" if latest.nil?
 
     target = File.join(BASELINES, "baseline-#{File.mtime(latest).utc.strftime("%Y%m%d")}.json")

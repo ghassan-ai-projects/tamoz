@@ -19,6 +19,7 @@ require_relative 'telegram_bot_api_fake'
 #   fake, DB observations, settlement, reporting); splitting it would scatter the settle
 #   rules every scenario depends on.
 class TelegramChatEval
+  VERDICT_LABELS = { true => 'pass', false => '**FAIL**', nil => 'BLOCKED' }.freeze
   ROOT = File.expand_path('../..', __dir__)
   EXE = File.join(ROOT, 'gems/tamoz-agent-cli/exe/tamoz')
   HYGIENE = [
@@ -251,9 +252,8 @@ class TelegramChatEval
   end
 
   def workspace_files_text
-    Dir[File.join(@workspace, '*')].select do |path|
-      File.file?(path)
-    end.map { |path| File.read(path) }.join("\n")
+    files = Dir[File.join(@workspace, '*')].select { |path| File.file?(path) }
+    files.map { |path| File.read(path) }.join("\n")
   end
 
   def workspace_text(name)
@@ -565,19 +565,24 @@ class TelegramChatEval
   end
 
   def report
-    passed = @results.count { |result| result[:pass] }
-    blocked = @results.count { |result| result[:pass].nil? }
-    lines = ["# Telegram chat eval — #{label}", '',
-             "**#{passed}/#{@results.length - blocked} checks pass; #{blocked} blocked.**", '',
-             '| scenario | check | result | detail |', '|---|---|---|---|']
-    @results.each do |result|
-      verdict = { true => 'pass', false => '**FAIL**', nil => 'BLOCKED' }.fetch(result[:pass])
-      lines << "| #{result[:scenario]} | #{result[:check]} | #{verdict} | " \
-               "#{result[:detail].to_s.tr('|', '/')[0, 140]} |"
-    end
+    lines = report_header
+    @results.each { |result| lines << result_row(result) }
     lines += ['', '## Transcript', '']
     @transcript.each { |turn| lines.concat(transcript_lines(turn)) }
     lines.join("\n")
+  end
+
+  def report_header
+    passed = @results.count { |result| result[:pass] }
+    blocked = @results.count { |result| result[:pass].nil? }
+    ["# Telegram chat eval — #{label}", '',
+     "**#{passed}/#{@results.length - blocked} checks pass; #{blocked} blocked.**", '',
+     '| scenario | check | result | detail |', '|---|---|---|---|']
+  end
+
+  def result_row(result)
+    "| #{result[:scenario]} | #{result[:check]} | #{VERDICT_LABELS.fetch(result[:pass])} | " \
+      "#{result[:detail].to_s.tr('|', '/')[0, 140]} |"
   end
 
   def transcript_lines(turn)

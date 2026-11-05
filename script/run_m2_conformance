@@ -147,7 +147,7 @@ manifest_path = nil
 OptionParser.new do |parser|
   parser.on("--input-manifest PATH", "external runner input manifest") { |path| manifest_path = path }
 end.parse!(ARGV)
-manifest_path ||= ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+manifest_path ||= ENV.fetch("TAMOZ_RUNNER_INPUT_MANIFEST", nil)
 unless ARGV.length == 1 && manifest_path
   warn "Usage: run_m2_conformance OUTPUT_DIRECTORY --input-manifest PATH"
   exit 64

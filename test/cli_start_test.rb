@@ -1,70 +1,17 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
-require_relative 'support/telegram_cli_fixture'
-require 'socket'
+require_relative 'support/cli_start_harness'
 
 # `tamoz start` checks a runtime's channels and models with scripted calls, then runs a gateway per channel and one
 # worker; nothing here spawns a process or calls a real model.
 class CliStartTest < Minitest::Test
-  include TelegramCliFixture
+  include CliStartHarness
 
   CHAT = %w[--chat zai/glm-5.3-flash].freeze
   SPEECH = %w[--transcription openrouter/openai/gpt-4o-mini-transcribe --transcription-credential
               OPENROUTER_SPEECH_API_KEY --voice openrouter/hexgrad/kokoro-82m --voice-name af_heart
               --voice-credential OPENROUTER_SPEECH_API_KEY].freeze
-  KEYS = { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '123:test', 'ZAI_API_KEY' => 'chat-key',
-           'OPENROUTER_SPEECH_API_KEY' => 'speech-key' }.freeze
-
-  # A model that answers, or refuses with an HTTP status.
-  class Model
-    def initialize(status = nil) = @status = status
-
-    def generate(**) = refuse || 'ok'
-    def transcribe(**) = refuse || :ok
-    def speak(**) = refuse || :ok
-
-    def refuse
-      raise Tamoz::Agent::ModelCallError.new(code: 'http_failure', status: @status) if @status
-    end
-  end
-
-  def runtime_with(runtime, workspace, *setup, telegram: true, talk: false)
-    cli(runtime, ['setup', '--workspace', workspace, *setup], bot: Bot.new([]))
-    cli(runtime, %W[channel add telegram --owner #{OWNER}], bot: Bot.new([])) if telegram
-    cli(runtime, %W[channel add talk --port #{free_port}], bot: Bot.new([])) if talk
-  end
-
-  def free_port = TCPServer.open('127.0.0.1', 0) { |server| server.addr[1] }
-
-  # stubs: chat: the chat model, speech: role -> model, bot: the Bot API.
-  def start(runtime, *args, env: KEYS, **stubs)
-    out = StringIO.new
-    err = StringIO.new
-    served = []
-    status = start_cli(out, err, env, served, stubs).run(['--runtime-dir', runtime, 'start', *args])
-    [status, out.string, err.string, served.last]
-  end
-
-  def start_cli(out, err, env, served, stubs)
-    bot = stubs.fetch(:bot) { Bot.new([]) }
-    cli = Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:, channel_kinds: ChannelKindsFixture.telegram(lambda { |_token|
-      bot
-    }),
-                                model_factory: ->(**) { stubs.fetch(:chat) { Model.new } })
-    stub_launch(cli, served, stubs)
-  end
-
-  def stub_launch(cli, served, stubs)
-    speech = stubs.fetch(:speech) { ->(_role) { Model.new } }
-    cli.define_singleton_method(:role_model) { |_base, role, _directory| speech.call(role) }
-    cli.define_singleton_method(:serve) { |directory, base| (served << [directory, base]) && 0 }
-    cli.define_singleton_method(:launch_agents) { stubs.fetch(:agents) { Dir.tmpdir } }
-    cli.define_singleton_method(:launchctl) { |*| ['', nil] }
-    cli
-  end
-
-  def config_path(runtime) = File.join(runtime, Tamoz::Agent::RuntimeDirectory::CONFIG_FILE)
 
   def test_a_runtime_with_telegram_and_talk_starts_both_with_its_chat_model
     with_dirs do |runtime, workspace|
@@ -82,7 +29,7 @@ class CliStartTest < Minitest::Test
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
       _status, out, = start(runtime)
       token = File.read(File.join(runtime, 'channels', 'talk', 'token')).strip
-      spawned = spawn_children_of(Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {}))
+      spawned = spawn_children_of(resolved(runtime))
 
       assert_includes out, "/#token=#{token}"
       assert_equal token, spawned.dig('talk-gateway', 0, 'TAMOZ_TALK_TOKEN')
@@ -92,7 +39,7 @@ class CliStartTest < Minitest::Test
   def test_one_gateway_per_channel_and_one_worker_without_model_flags
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, talk: true)
-      spawned = spawn_children_of(Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {}))
+      spawned = spawn_children_of(resolved(runtime))
 
       assert_equal({ 'telegram-gateway' => %w[comms serve --surface telegram],
                      'talk-gateway' => %w[comms serve --surface talk], 'worker' => %w[--work-routing worker --json] },
@@ -103,7 +50,7 @@ class CliStartTest < Minitest::Test
   def test_each_child_gets_its_own_environment
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, talk: true)
-      spawned = spawn_children_of(Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {}))
+      spawned = spawn_children_of(resolved(runtime))
 
       assert_equal(%w[TAMOZ_TELEGRAM_BOT_TOKEN TAMOZ_TALK_TOKEN ZAI_API_KEY],
                    [spawned.dig('telegram-gateway', 0), spawned.dig('talk-gateway', 0), spawned.dig('worker', 0)]
@@ -115,18 +62,15 @@ class CliStartTest < Minitest::Test
   def test_a_voice_whose_key_is_missing_leaves_the_page_text_only
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, telegram: false, talk: true)
-      cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
 
-      assert_nil cli.send(:voice_synthesizer, Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {}))
+      assert_nil plain_cli.send(:voice_synthesizer, resolved(runtime))
     end
   end
 
   def test_a_disabled_channel_is_neither_checked_nor_served
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT, *SPEECH, talk: true)
-      document = Psych.safe_load_file(config_path(runtime))
-      document['channels']['telegram']['enabled'] = false
-      File.write(config_path(runtime), Psych.dump(document))
+      edit_config(runtime) { |document| document['channels']['telegram']['enabled'] = false }
       status, _out, err, (directory,) = start(runtime, env: KEYS.except('TAMOZ_TELEGRAM_BOT_TOKEN'))
 
       assert_equal 0, status, err
@@ -137,16 +81,14 @@ class CliStartTest < Minitest::Test
   def test_the_worker_never_gets_a_variable_a_disabled_channel_names
     with_dirs do |runtime, workspace|
       runtime_with(runtime, workspace, *CHAT)
-      document = Psych.safe_load_file(config_path(runtime))
-      document['channels']['telegram'].merge!('enabled' => false,
-                                              'credential_ref' => { 'kind' => 'env', 'name' => 'OLD_BOT_TOKEN' })
-      document['sources'] = { 'websearch' => { 'enabled' => true, 'command' => '/opt/websearch',
-                                               'credential_refs' => %w[OLD_BOT_TOKEN] } }
-      File.write(config_path(runtime), Psych.dump(document))
-      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime, env: {})
-      cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: KEYS)
-
-      worker, = cli.send(:child_plan, directory, KEYS.merge('OLD_BOT_TOKEN' => 'old')).fetch('worker')
+      edit_config(runtime) do |document|
+        document['channels']['telegram'].merge!('enabled' => false,
+                                                'credential_ref' => { 'kind' => 'env', 'name' => 'OLD_BOT_TOKEN' })
+        document['sources'] = { 'websearch' => { 'enabled' => true, 'command' => '/opt/websearch',
+                                                 'credential_refs' => %w[OLD_BOT_TOKEN] } }
+      end
+      plan = plain_cli(KEYS).send(:child_plan, resolved(runtime), KEYS.merge('OLD_BOT_TOKEN' => 'old'))
+      worker, = plan.fetch('worker')
 
       refute worker.key?('OLD_BOT_TOKEN')
     end
@@ -331,26 +273,6 @@ class CliStartTest < Minitest::Test
 
       assert_equal 0, status
       assert_includes out, '--env-file PATH'
-    end
-  end
-
-  private
-
-  def spawn_children_of(directory)
-    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: KEYS)
-    spawned = {}
-    cli.define_singleton_method(:spawn_child) { |name, env, args, _logs| (spawned[name] = [env, args]) && Process.pid }
-    cli.send(:spawn_children, directory, KEYS.merge('TAMOZ_TALK_TOKEN' => 't' * 43), Dir.tmpdir)
-    spawned
-  end
-
-  def hold_poller(runtime, surface, stream)
-    Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
-                     .send(:with_comms_runtime, { runtime_dir: runtime }) do |_directory, _adapter, store, _checkpoints|
-      store.acquire_poller_lease(surface_id: surface, stream_id: stream,
-                                 lease: Tamoz::Comms::Lease.new(owner: "gateway:#{Process.pid}", fence: 1).wire,
-                                 ttl_s: 60,
-                                 now: Time.now.utc)
     end
   end
 end

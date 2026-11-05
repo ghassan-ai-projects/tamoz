@@ -513,8 +513,6 @@ module Tamoz
           DeepFreeze.call(body)
         end
 
-        private
-
         def probes
           @inputs.fetch(:probes)
         end
@@ -563,7 +561,6 @@ module Tamoz
           @definition.fetch("graph").fetch("version")
         end
       end
-
     end
   end
 end

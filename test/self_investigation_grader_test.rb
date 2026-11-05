@@ -81,12 +81,11 @@ class SelfInvestigationGraderTest < Minitest::Test
     ordinary = baselines_for('provider_balance')
     traps = %w[unknown_write_among_misses unknown_feeder_among_empty_searches].map { |id| baselines_for(id) }
 
-    assert ordinary.fetch('frequency').fetch('success')
-    assert ordinary.fetch('ranked').fetch('success')
-    traps.each do |trap|
-      refute trap.fetch('frequency').fetch('success')
-      assert trap.fetch('ranked').fetch('success')
-    end
+    strategies = %w[frequency ranked]
+
+    assert_equal([true, true], strategies.map { |name| ordinary.fetch(name).fetch('success') })
+    assert_equal([[false, true]] * 2,
+                 traps.map { |trap| strategies.map { |name| trap.fetch(name).fetch('success') } })
   end
 
   private

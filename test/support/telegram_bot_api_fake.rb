@@ -51,10 +51,10 @@ class TelegramBotApiFake
     push('message' => user_message(user_id, 'sticker' => { 'file_id' => 'st1', 'file_unique_id' => 'u-st1' }))
   end
 
-  def send_document(user_id, bytes, name:, mime_type:, caption: nil, announced: bytes.bytesize)
-    file = add_file(bytes, "documents/#{name}", announced)
+  def send_document(user_id, bytes, name:, mime_type:, **options)
+    file = add_file(bytes, "documents/#{name}", options.fetch(:announced, bytes.bytesize))
     push('message' => user_message(user_id, { 'document' => file.merge('file_name' => name, 'mime_type' => mime_type),
-                                              'caption' => caption }.compact))
+                                              'caption' => options[:caption] }.compact))
   end
 
   def send_photo(user_id, bytes, caption: nil)
@@ -138,18 +138,21 @@ class TelegramBotApiFake
 
   def serve(socket)
     line = socket.gets or return
-    return serve_file(socket, line.split[1].to_s) if line.split[1].to_s.start_with?('/file/bot')
+    path = line.split[1].to_s
+    return serve_file(socket, path) if path.start_with?('/file/bot')
 
-    method = line.split[1].to_s.split('/').last
-    params = read_body(socket)
-    status, body = dispatch(method, params)
-    payload = JSON.generate(body)
-    socket.write("HTTP/1.1 #{status} X\r\nContent-Type: application/json\r\n" \
-                 "Content-Length: #{payload.bytesize}\r\nConnection: close\r\n\r\n#{payload}")
+    serve_method(socket, path.split('/').last)
   rescue IOError, Errno::EPIPE, Errno::ECONNRESET
     nil
   ensure
     socket.close
+  end
+
+  def serve_method(socket, method)
+    status, body = dispatch(method, read_body(socket))
+    payload = JSON.generate(body)
+    socket.write("HTTP/1.1 #{status} X\r\nContent-Type: application/json\r\n" \
+                 "Content-Length: #{payload.bytesize}\r\nConnection: close\r\n\r\n#{payload}")
   end
 
   def serve_file(socket, path)
@@ -179,12 +182,18 @@ class TelegramBotApiFake
     case method
     when 'getMe' then ok('id' => @bot_id, 'is_bot' => true, 'username' => @username, 'first_name' => 'Tamoz')
     when 'getUpdates' then ok(polled { long_poll(params) })
+    when 'getWebhookInfo' then ok('url' => '')
+    else dispatch_recorded(method, params)
+    end
+  end
+
+  def dispatch_recorded(method, params)
+    case method
     when 'sendMessage' then record(method, params) { send_message(params) }
     when 'editMessageText' then record(method, params) { edit_message(params) }
     when 'editMessageReplyMarkup' then record(method, params) { edit_markup(params) }
     when 'sendChatAction', 'answerCallbackQuery' then record(method, params) { ok(true) }
     when 'getFile' then record(method, params) { file_info(params['file_id']) }
-    when 'getWebhookInfo' then ok('url' => '')
     else [404, { 'ok' => false, 'error_code' => 404, 'description' => 'Not Found' }]
     end
   end

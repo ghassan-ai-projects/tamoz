@@ -888,7 +888,7 @@ class PackagingTest < Minitest::Test
     FileUtils.mkdir_p(cases_root)
     external_fixture_script = File.join(external_root, "mcp_test_server.rb")
     FileUtils.cp(fixture_script, external_fixture_script)
-    cases = Dir[ROOT.join("gems", "tamoz-evals", "suites", "agent", "smoke", "*.case.json").to_s].sort.map do |source|
+    cases = Dir[ROOT.join("gems", "tamoz-evals", "suites", "agent", "smoke", "*.case.json").to_s].map do |source|
       target = File.join(cases_root, File.basename(source))
       FileUtils.cp(source, target)
       target

@@ -8,7 +8,7 @@ module Tamoz
       # The disk journal over the shared Concurrency::Drain skeleton. What
       # stays here is this recorder's own policy: the reserved lane never
       # drops (a full reserved queue falls back to a single bounded local
-      # write inside #record), rotation and strict mode, and the drop ledger.
+      # write inside #record), rotation, and the drop ledger. It is never strict.
       class Journal < Concurrency::Drain
         include DropLedger
 
@@ -16,6 +16,17 @@ module Tamoz
         DEFAULT_RESERVED_SIZE = 64
         DEFAULT_MAX_FILE_BYTES = 32 * 1_024 * 1_024
         DEFAULT_MAX_FILES = 8
+
+        # The journal's bounds: lane capacities, rotation size and count, and the flush cadence.
+        Limits = Data.define(:queue_size, :reserved_size, :max_file_bytes, :max_files, :flush_interval_ms) do
+          def initialize(queue_size: DEFAULT_QUEUE_SIZE, reserved_size: DEFAULT_RESERVED_SIZE,
+                         max_file_bytes: DEFAULT_MAX_FILE_BYTES, max_files: DEFAULT_MAX_FILES, flush_interval_ms: 200)
+            { queue_size:, reserved_size:, max_file_bytes:, max_files: }.each do |name, value|
+              raise ValidationError, "#{name} must be a positive integer" unless value.is_a?(Integer) && value.positive?
+            end
+            super
+          end
+        end
 
         attr_reader :path
 
@@ -35,19 +46,16 @@ module Tamoz
           Files.read_health(directory)
         end
 
-        def initialize(directory:, role:, pid: Process.pid, catalog: Catalog, policy: ContentPolicy::NONE,
-                       queue_size: DEFAULT_QUEUE_SIZE, reserved_size: DEFAULT_RESERVED_SIZE,
-                       max_file_bytes: DEFAULT_MAX_FILE_BYTES, max_files: DEFAULT_MAX_FILES,
-                       flush_interval_ms: 200, strict: false)
+        def initialize(directory:, role:, pid: Process.pid, policy: ContentPolicy::NONE, limits: Limits.new)
           resolve_journal_paths(directory:, role:, pid:)
-          @catalog = catalog
+          @catalog = Catalog
+          @strict = false
           @policy_digest = policy.digest
-          @queue_size = positive_integer(queue_size, :queue_size)
-          @reserved_size = positive_integer(reserved_size, :reserved_size)
-          @max_file_bytes = positive_integer(max_file_bytes, :max_file_bytes)
-          @max_files = positive_integer(max_files, :max_files)
-          @flush_interval = Float(flush_interval_ms) / 1_000
-          @strict = strict
+          @queue_size = limits.queue_size
+          @reserved_size = limits.reserved_size
+          @max_file_bytes = limits.max_file_bytes
+          @max_files = limits.max_files
+          @flush_interval = Float(limits.flush_interval_ms) / 1_000
           @drops = Hash.new(0)
           @io = nil
           @io_bytes = 0
@@ -74,12 +82,6 @@ module Tamoz
         end
 
         private
-
-        def positive_integer(value, name)
-          return value if value.is_a?(Integer) && value.positive?
-
-          raise ValidationError, "#{name} must be a positive integer"
-        end
 
         def route(signal)
           lane = reserved?(signal) ? :reserved : :bulk
@@ -175,7 +177,11 @@ module Tamoz
         end
 
         def current_file_bytes
-          @io ? @io_bytes : (File.file?(path) ? File.size(path) : 0)
+          if @io
+            @io_bytes
+          else
+            (File.file?(path) ? File.size(path) : 0)
+          end
         end
 
         def rotate_files
@@ -187,14 +193,20 @@ module Tamoz
         end
 
         def delete_current_file
-          File.delete(path) if File.exist?(path)
+          delete_if_present(path)
+        end
+
+        def delete_if_present(file)
+          File.delete(file)
+        rescue Errno::ENOENT
+          nil
         end
 
         def shift_numbered_backups
           (@max_files - 1).downto(1) do |index|
             source = index == 1 ? path : "#{path}.#{index - 1}"
             target = "#{path}.#{index}"
-            File.delete(target) if File.exist?(target)
+            delete_if_present(target)
             File.rename(source, target) if File.exist?(source)
           end
         end
@@ -279,7 +291,7 @@ module Tamoz
           def self.read_file_entries(file, since_ms:, thread_id:, kind:)
             identity = file_identity(file)
             File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
-              parse_entry(line, identity, index, since_ms:, thread_id:, kind:)
+              parse_entry(line, "#{identity}:#{index}", since_ms:, thread_id:, kind:)
             end
           rescue Errno::ENOENT
             []
@@ -292,13 +304,13 @@ module Tamoz
           end
           private_class_method :file_identity
 
-          def self.parse_entry(line, file_identity, index, since_ms:, thread_id:, kind:)
+          def self.parse_entry(line, origin, since_ms:, thread_id:, kind:)
             return nil if line.strip.empty?
 
             document = JSON.parse(line)
             return nil unless matches_filters?(document, since_ms:, thread_id:, kind:)
 
-            [document, "#{file_identity}:#{index}"]
+            [document, origin]
           rescue JSON::ParserError
             nil
           end

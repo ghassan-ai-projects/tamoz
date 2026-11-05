@@ -16,61 +16,77 @@ module ScenarioDriverInputs
 
   def definitions
     @definitions ||= {
-      scenario_id => {
-        'id' => scenario_id,
-        'mission_id' => mission_id,
-        'driver_mode' => 'contradiction',
-        'setup' => {
-          'fixture' => {'path' => 'scenario/status.json', 'status' => 'active'}
-        },
-        'steps' => [
-          {
-            'id' => 'M1',
-            'task' => 'Determine the correct status from scenario/status.json and record it once. ' \
-                      'Reconsider if the evidence changes.'
-          },
-          {
-            'id' => 'M2',
-            'fixture' => {
-              'path' => 'scenario/status.json', 'status' => 'inactive'
-            },
-            'task' => 'Reconsider the status after scenario/status.json changed. Re-read it, revise ' \
-                      'your decision if needed, and record the corrected status once. Do not rely on ' \
-                      'the earlier value.'
-          }
-        ],
-        'oracle' => Tamoz::Evals::Benchmark::ScenarioDriver::T3M1M2Oracle
-      },
-      restart_scenario_id => {
-        'id' => restart_scenario_id,
-        'mission_id' => restart_mission_id,
-        'driver_mode' => 'restart',
-        'setup' => {
-          'fixture' => {
-            'path' => restart_fixture_path,
-            'content' => restart_fixture_content,
-            'expected_sha256' => restart_fixture_digest,
-            'mode' => restart_fixture_mode
-          }
-        },
-        'steps' => [
-          {
-            'id' => 'M3',
-            'task' => 'Create the restart fixture file using the exact create_file arguments supplied ' \
-                      'below. Keep this single create_file request logically stable because the ' \
-                      'worker may be interrupted immediately after its effect is journaled. On ' \
-                      'restart, resume from the durable checkpoint using the journaled result ' \
-                      'without re-journaling the effect, then summarize the recovery.'
-          },
-          {
-            'id' => 'M4',
-            'task' => 'After the worker restarts, resume from the durable checkpoint and complete ' \
-                      'only from the journaled create_file result. Do not re-journal the effect; ' \
-                      'summarize the recovery.'
-          }
-        ],
-        'oracle' => Tamoz::Evals::Benchmark::ScenarioDriver::T3M3M4Oracle
-      }
+      scenario_id => contradiction_definition,
+      restart_scenario_id => restart_definition
     }.freeze
+  end
+
+  def contradiction_definition
+    {
+      'id' => scenario_id,
+      'mission_id' => mission_id,
+      'driver_mode' => 'contradiction',
+      'setup' => {
+        'fixture' => { 'path' => 'scenario/status.json', 'status' => 'active' }
+      },
+      'steps' => contradiction_steps,
+      'oracle' => Tamoz::Evals::Benchmark::ScenarioDriver::T3M1M2Oracle
+    }
+  end
+
+  def contradiction_steps
+    [
+      {
+        'id' => 'M1',
+        'task' => 'Determine the correct status from scenario/status.json and record it once. ' \
+                  'Reconsider if the evidence changes.'
+      },
+      {
+        'id' => 'M2',
+        'fixture' => {
+          'path' => 'scenario/status.json', 'status' => 'inactive'
+        },
+        'task' => 'Reconsider the status after scenario/status.json changed. Re-read it, revise ' \
+                  'your decision if needed, and record the corrected status once. Do not rely on ' \
+                  'the earlier value.'
+      }
+    ]
+  end
+
+  def restart_definition
+    {
+      'id' => restart_scenario_id,
+      'mission_id' => restart_mission_id,
+      'driver_mode' => 'restart',
+      'setup' => {
+        'fixture' => {
+          'path' => restart_fixture_path,
+          'content' => restart_fixture_content,
+          'expected_sha256' => restart_fixture_digest,
+          'mode' => restart_fixture_mode
+        }
+      },
+      'steps' => restart_steps,
+      'oracle' => Tamoz::Evals::Benchmark::ScenarioDriver::T3M3M4Oracle
+    }
+  end
+
+  def restart_steps
+    [
+      {
+        'id' => 'M3',
+        'task' => 'Create the restart fixture file using the exact create_file arguments supplied ' \
+                  'below. Keep this single create_file request logically stable because the ' \
+                  'worker may be interrupted immediately after its effect is journaled. On ' \
+                  'restart, resume from the durable checkpoint using the journaled result ' \
+                  'without re-journaling the effect, then summarize the recovery.'
+      },
+      {
+        'id' => 'M4',
+        'task' => 'After the worker restarts, resume from the durable checkpoint and complete ' \
+                  'only from the journaled create_file result. Do not re-journal the effect; ' \
+                  'summarize the recovery.'
+      }
+    ]
   end
 end

@@ -18,7 +18,7 @@ require "tmpdir"
 require "time"
 
 ROOT = File.expand_path("..", __dir__)
-Dir[File.join(ROOT, "gems", "*", "lib")].sort.each do |path|
+Dir[File.join(ROOT, "gems", "*", "lib")].each do |path|
   $LOAD_PATH.unshift(path)
 end
 require "tamoz/sqlite"

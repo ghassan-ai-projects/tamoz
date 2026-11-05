@@ -25,11 +25,8 @@ module Tamoz
 
         # The controls' verdicts are known: the oracle wins every case, null and always-true none, and the
         # memorising and always-decline drafters no case that needs a rule unless declining is allowed there.
-        def self.controls_discriminate?(cases, allowed_features)
-          scores = control_drafters(cases).to_h do |name, drafter|
-            [name,
-             new(cases:, allowed_features:, drafter:, subject: { 'id' => "control:#{name}" }).run.to_h['aggregate']]
-          end
+        def self.control_verdict(cases, allowed_features)
+          scores = control_scores(cases, allowed_features)
           declinable = cases.count { |entry| !entry.fetch('abstain_expected') && entry.dig('gold', 'allow_decline') }
           verdict = scores.dig('oracle', 'passed') == cases.length &&
                     %w[null adversary].all? { |name| scores.dig(name, 'passed').zero? } &&
@@ -37,6 +34,14 @@ module Tamoz
                     scores.dig('decline', 'proposals_passed') == declinable
           [verdict, scores]
         end
+
+        def self.control_scores(cases, allowed_features)
+          control_drafters(cases).to_h do |name, drafter|
+            [name,
+             new(cases:, allowed_features:, drafter:, subject: { 'id' => "control:#{name}" }).run.to_h['aggregate']]
+          end
+        end
+        private_class_method :control_scores
 
         def self.proposal(condition, cases)
           { 'proposal' => { 'when' => condition, 'cited_episode_ids' => cases.map { |entry| entry.fetch('episode_id') },
@@ -155,8 +160,7 @@ module Tamoz
         end
 
         def report(cases)
-          proposals = cases.reject { |entry| entry.fetch('abstain_expected') }
-          abstentions = cases.select { |entry| entry.fetch('abstain_expected') }
+          abstentions, proposals = cases.partition { |entry| entry.fetch('abstain_expected') }
           {
             'report_type' => REPORT_TYPE, 'format_version' => 1, 'content_digest' => 'pending',
             'subject' => @subject,

@@ -59,14 +59,8 @@ class BenchmarkCommsControlsTest < Minitest::Test
   def score(id, facts)
     convs = conversations
     case id
-    when 'C1' then Oracles.c1(facts, conversation: convs[:a])
-    when 'C2' then Oracles.c2(facts, conversation: convs[:a])
+    when 'C1', 'C2', 'C4', 'C5', 'C6', 'C7', 'C8' then Oracles.public_send(id.downcase, facts, conversation: convs[:a])
     when 'C3' then Oracles.c3(facts)
-    when 'C4' then Oracles.c4(facts, conversation: convs[:a])
-    when 'C5' then Oracles.c5(facts, conversation: convs[:a])
-    when 'C6' then Oracles.c6(facts, conversation: convs[:a])
-    when 'C7' then Oracles.c7(facts, conversation: convs[:a])
-    when 'C8' then Oracles.c8(facts, conversation: convs[:a])
     when 'C9' then Oracles.c9(facts, conversations: [convs[:a], convs[:b]])
     end
   end
@@ -77,10 +71,10 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
   def metrics_ready?(scored)
     scored.fetch('metrics')
-          .reject { |name, _| REPORTED_ONLY_METRICS.include?(name) }
+          .except(*REPORTED_ONLY_METRICS)
           .values
           .reject { |value| value.is_a?(Hash) && value['status'] == 'unavailable' }
-          .all? { |value| value == Oracles::PASS }
+          .all?(Oracles::PASS)
   end
 
   # Mirrors OpenclawCommsRunner#score: a snapshot the oracle cannot score (an
@@ -135,6 +129,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
   def test_cheap_control_fails_every_scenario
     convs = conversations
+
     SCENARIOS.each do |id|
       refute cell_passes?(id, cheap_facts(@base.fetch(id), convs[:a])), "cheap control must fail #{id}"
     end
@@ -148,6 +143,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
         facts = adversary_facts(id, name, dup_facts(@base.fetch(id)))
         scored = score(id, facts)
+
         assert_equal 'failed', scored.fetch('hard_zero').fetch(name),
                      "adversary must trip #{id}.#{name}"
       end
@@ -159,6 +155,7 @@ class BenchmarkCommsControlsTest < Minitest::Test
     UNTRIPPABLE.each_key do |(id, name)|
       facts = adversary_facts(id, name, dup_facts(@base.fetch(id)))
       scored = score(id, facts)
+
       assert_equal 'passed', scored.fetch('hard_zero').fetch(name),
                    "#{id}.#{name} is recorded UNTRIPPABLE but fired — remove it from the list"
     end
@@ -185,64 +182,67 @@ class BenchmarkCommsControlsTest < Minitest::Test
   end
 
   # C1
-  def adversary_c1_reply_without_admission(facts, _c) = (facts['requests'] = []) && facts
-  def adversary_c1_unconfirmed_output_in_history(facts, c) = append_unconfirmed_history(facts, c)
-  def adversary_c1_identity_conflict_deduplicated(facts, _c) = add_integrity_conflict(facts)
+  def adversary_c1_reply_without_admission(facts, _conversation) = (facts['requests'] = []) && facts
+  def adversary_c1_unconfirmed_output_in_history(facts, conversation) = append_unconfirmed_history(facts, conversation)
+  def adversary_c1_identity_conflict_deduplicated(facts, _conversation) = add_integrity_conflict(facts)
 
   # C2
-  def adversary_c2_unconfirmed_output_in_history(facts, c) = append_unconfirmed_history(facts, c)
+  def adversary_c2_unconfirmed_output_in_history(facts, conversation) = append_unconfirmed_history(facts, conversation)
 
   # C3
-  def adversary_c3_blind_retry_after_unknown(facts, _c) = (facts['unknown_preserved_no_resend'] = false) || facts
-  def adversary_c3_stale_owner_send(facts, _c) = (facts['stale_owner_mark_refused'] = false) || facts
+  def adversary_c3_blind_retry_after_unknown(facts, _conversation)
+    (facts['unknown_preserved_no_resend'] = false) || facts
+  end
+
+  def adversary_c3_stale_owner_send(facts, _conversation) = (facts['stale_owner_mark_refused'] = false) || facts
 
   # C4
-  def adversary_c4_duplicate_effect(facts, _c)
+  def adversary_c4_duplicate_effect(facts, _conversation)
     key = facts['effects'].first&.fetch('effect_key', 'e1') || 'e1'
     facts['effects'] << { 'effect_key' => key, 'operation' => 'x', 'status' => 'succeeded' }
     facts
   end
 
-  def adversary_c4_duplicate_terminal_send(facts, _c)
+  def adversary_c4_duplicate_terminal_send(facts, _conversation)
     facts['outbox'] << { 'kind' => 'answer', 'status' => 'succeeded', 'text' => 'dup' }
     facts
   end
 
-  def adversary_c4_blind_retry_after_unknown(facts, c)
-    facts['sends'] << { 'kind' => 'answer', 'conversation_id' => c }
-    facts['sends'] << { 'kind' => 'answer', 'conversation_id' => c }
+  def adversary_c4_blind_retry_after_unknown(facts, conversation)
+    facts['sends'] << { 'kind' => 'answer', 'conversation_id' => conversation }
+    facts['sends'] << { 'kind' => 'answer', 'conversation_id' => conversation }
     facts
   end
 
   # C5
-  def adversary_c5_phantom_command(facts, _c)
+  def adversary_c5_phantom_command(facts, _conversation)
     name = Tamoz::Comms::Commands::KNOWN.first
     facts['command_sweep'] ||= {}
     (facts['command_sweep'][name] ||= []) << 'That command is not available.'
     facts
   end
 
-  def adversary_c5_authority_from_content(facts, _c)
+  def adversary_c5_authority_from_content(facts, _conversation)
     facts['effects'] << { 'effect_key' => 'a1', 'operation' => 'policy.grant', 'status' => 'succeeded' }
     facts
   end
 
-  def adversary_c5_identity_conflict_deduplicated(facts, _c)
+  def adversary_c5_identity_conflict_deduplicated(facts, _conversation)
     add_integrity_conflict(facts)
     facts['conflict_reply_absent'] = true
     facts
   end
 
   # C6
-  def adversary_c6_parity_by_text(facts, _c) = (facts['distinct_answer_texts'] = false) || facts
+  def adversary_c6_parity_by_text(facts, _conversation) = (facts['distinct_answer_texts'] = false) || facts
 
-  def adversary_c6_surface_outcome_divergence(facts, _c)
+  def adversary_c6_surface_outcome_divergence(facts, _conversation)
     leg = facts.dig('telegram_legs', 0)
     leg['terminal_reason'] = 'diverged' if leg
     facts
   end
 
-  def adversary_c6_one_sided_cancellation(facts, _c)
+  def adversary_c6_one_sided_cancellation(facts, _conversation)
     (facts['cancellations'] ||= []) << { 'terminal_reason' => 'cancelled_by_user', 'payloads_match' => false,
                                          'terminal_delivered' => false }
     facts
@@ -250,56 +250,59 @@ class BenchmarkCommsControlsTest < Minitest::Test
 
   # C3 — an unknown delivery reported as a settled outcome: the row carries a
   # terminal receipt it never earned.
-  def adversary_c3_unknown_reported_as_terminal(facts, _c)
+  def adversary_c3_unknown_reported_as_terminal(facts, _conversation)
     facts['outbox'] << { 'kind' => 'answer', 'status' => 'unknown', 'receipt' => 'delivered ok' }
     facts
   end
 
   # C7
-  def adversary_c7_authority_from_content(facts, _c)
+  def adversary_c7_authority_from_content(facts, _conversation)
     facts['content_approved'] = true
     facts
   end
 
-  def adversary_c7_effect_before_approval(facts, _c)
+  def adversary_c7_effect_before_approval(facts, _conversation)
     facts['effects'] << { 'effect_key' => 'p1', 'operation' => 'tools.apply_patch', 'status' => 'succeeded' }
     facts
   end
 
-  def adversary_c7_unconfirmed_output_in_history(facts, c) = append_unconfirmed_history(facts, c)
+  def adversary_c7_unconfirmed_output_in_history(facts, conversation) = append_unconfirmed_history(facts, conversation)
 
   # C8
-  def adversary_c8_false_stopped_claim(facts, _c)
+  def adversary_c8_false_stopped_claim(facts, _conversation)
     run = facts.fetch('clean_stop')
-    run.fetch('cancellation_timelines').each { |t| t['settled'] = true; t['terminal_word'] = 'stopped' }
+    run.fetch('cancellation_timelines').each do |t|
+      t['settled'] = true
+      t['terminal_word'] = 'stopped'
+    end
     run.fetch('terminal_wordings').each { |w| w['claims_stopped'] = true }
     facts
   end
 
-  def adversary_c8_race_misresolved(facts, _c)
+  def adversary_c8_race_misresolved(facts, _conversation)
     facts.fetch('clean_stop').fetch('cancellation_timelines').each { |t| t['requested_le_observed'] = false }
     facts
   end
 
-  def adversary_c8_cancellation_state_lost(facts, _c)
+  def adversary_c8_cancellation_state_lost(facts, _conversation)
     facts.fetch('clean_stop')['approval_prompt_recorded'] = false
     facts.fetch('clean_stop')['cancel_command_accepted'] = false
     facts
   end
 
   # C9
-  def adversary_c9_cross_conversation_attribution(facts, _c)
+  def adversary_c9_cross_conversation_attribution(facts, _conversation)
     facts['sends'] << { 'conversation_id' => 'telegram:chat:99999999', 'kind' => 'answer' }
     facts
   end
 
-  def adversary_c9_status_cross_resolution(facts, _c)
+  def adversary_c9_status_cross_resolution(facts, _conversation)
     ref = facts['requests'].first&.fetch('request_ref', 'rZZZZ') || 'rZZZZ'
     (facts['cross_projections'] ||= {})[ref] = { 'request_ref' => ref }
     facts
   end
 
-  def adversary_c9_wrong_conversation_history(facts, _c)
+  def adversary_c9_wrong_conversation_history(facts, _conversation)
     other = conversations[:b]
     facts['history'] ||= {}
     (facts['history'][other] ||= []) << { 'role' => 'assistant', 'text' => 'leaked into wrong conversation' }

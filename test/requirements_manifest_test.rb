@@ -34,7 +34,7 @@ class RequirementsManifestTest < Minitest::Test
   end
 
   def test_every_accepted_adr_has_a_row
-    adr_ids = Dir[ROOT.join("documentation", "adr", "adr-*.md")].sort.filter_map do |path|
+    adr_ids = Dir[ROOT.join("documentation", "adr", "adr-*.md")].filter_map do |path|
       text = File.read(path, encoding: Encoding::UTF_8)
       header = text.match(/\A# (ADR-\d+) — /)
       next unless header

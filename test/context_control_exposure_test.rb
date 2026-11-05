@@ -13,29 +13,14 @@ class ContextControlExposureTest < Minitest::Test
   Records = Tamoz::Agent::SessionRecords
 
   TURN_TEXT = 'make the header blue'
-  LONG_TEXT = "repaint the whole page #{'x' * 1500}"
+  LONG_TEXT = "repaint the whole page #{'x' * 1500}".freeze
   VOLATILE_FIELDS = %w[thread_id checkpoint_id sequence audit_digest].freeze
 
   def test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields
     with_dual_surface do |surface|
       surface.admit(101, TURN_TEXT)
-
-      ['/think high', '/verbose detailed', '/reset', '/compact', '/usage', '/context']
-        .each_with_index do |text, index|
-        surface.command(text, 200 + index)
-      end
-
-      cli_thread = 'th_exposure_cli'
-      seed_cli_turn(surface, cli_thread, TURN_TEXT)
-      cli_commands = {
-        'think' => ['think', cli_thread, 'high'],
-        'verbose' => ['verbose', cli_thread, 'detailed'],
-        'reset' => ['reset', cli_thread],
-        'compact' => ['compact', cli_thread],
-        'usage' => ['usage', cli_thread],
-        'context' => ['context', cli_thread]
-      }
-      cli_documents = cli_commands.transform_values { |argv| surface.run_cli(argv) }
+      run_gateway_controls(surface)
+      cli_documents = run_cli_controls(surface)
 
       %w[think verbose reset compact usage context].each do |name|
         gateway_document = surface.captured.fetch(name).last
@@ -80,13 +65,15 @@ class ContextControlExposureTest < Minitest::Test
 
       compact_line = surface.reply_for(103)
       context_line = surface.reply_for(104)
+
       assert_equal 'Transcript compacted; 1 fragments externalized behind pinned digests.', compact_line
       assert_includes context_line, 'earlier summary pinned'
       assert_includes context_line, 'fragments visible 0 of 1 (1 truncated by controls)'
 
       pinned = surface.captured.fetch('context').last
                       .dig('layers', 'transcript', 'earlier_summary_pinned')
-      assert_equal true, pinned
+
+      assert_same true, pinned
 
       cli_thread = 'th_compact_cli'
       seed_cli_turn(surface, cli_thread, LONG_TEXT)
@@ -95,7 +82,7 @@ class ContextControlExposureTest < Minitest::Test
       composition = surface.run_cli(['context', cli_thread])
 
       assert_equal 1, compacted.fetch('truncated_fragments')
-      assert_equal true, composition.dig('layers', 'transcript', 'earlier_summary_pinned')
+      assert_same true, composition.dig('layers', 'transcript', 'earlier_summary_pinned')
       assert_equal 0, composition.dig('layers', 'transcript', 'fragments_visible')
     end
   end
@@ -118,6 +105,7 @@ class ContextControlExposureTest < Minitest::Test
       surface.command('/context', 106)
 
       think_document = surface.captured.fetch('think').last
+
       assert_equal 'high', think_document.fetch('preferences').fetch('reasoning_depth')
       assert_equal successor, think_document.fetch('thread_id')
       assert_equal successor, surface.captured.fetch('context').last.fetch('thread_id')
@@ -166,20 +154,85 @@ class ContextControlExposureTest < Minitest::Test
     end
   end
 
+  Surface = Struct.new(:gateway, :transport, :store, :session, :recorded, :checkpoints,
+                       :workspace, :session_dir, :adapter, keyword_init: true) do
+    include CommsGatewayHarness
+
+    def admit(id, text)
+      transport.batch([update(id, text:)])
+      raise "admission returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
+    end
+
+    def command(text, id)
+      transport.batch([update(id, text:)])
+      raise "command returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
+
+      reply_for(id)
+    end
+
+    def reply_for(id)
+      row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
+                 .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
+      row&.fetch('text')
+    end
+
+    def current_thread
+      Comms::Admission.thread_id(
+        SURFACE_ID, CONVERSATION_ID,
+        generation: store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
+      )
+    end
+
+    def captured = recorded.captured
+
+    def cli_thread_path(thread) = File.join(session_dir, "#{thread}.sqlite3")
+
+    def run_cli(argv)
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Agent::CLI.run(
+        ['--session-dir', session_dir, '--root', workspace, '--json'] + argv,
+        out:, err:, input: StringIO.new, env: {}, model_factory: ->(_options) { ControlsModel.new }
+      )
+      raise "cli #{argv.inspect} exited #{status}: #{err.string}" unless status.zero?
+
+      JSON.parse(out.string.lines.last)
+    end
+  end
+
   private
+
+  def run_gateway_controls(surface)
+    ['/think high', '/verbose detailed', '/reset', '/compact', '/usage', '/context']
+      .each_with_index do |text, index|
+      surface.command(text, 200 + index)
+    end
+  end
+
+  def run_cli_controls(surface)
+    cli_thread = 'th_exposure_cli'
+    seed_cli_turn(surface, cli_thread, TURN_TEXT)
+    cli_commands = {
+      'think' => ['think', cli_thread, 'high'],
+      'verbose' => ['verbose', cli_thread, 'detailed'],
+      'reset' => ['reset', cli_thread],
+      'compact' => ['compact', cli_thread],
+      'usage' => ['usage', cli_thread],
+      'context' => ['context', cli_thread]
+    }
+    cli_commands.transform_values { |argv| surface.run_cli(argv) }
+  end
 
   def drive(gateway, store, transport, text, id)
     transport.batch([update(id, text:)])
-    unless gateway.serve_once(now: NOW + id, drain: false) == :served
-      raise "command #{id} did not serve"
-    end
+    raise "command #{id} did not serve" unless gateway.serve_once(now: NOW + id, drain: false) == :served
 
     row = nil
     store.outbox_rows(surface_id: SURFACE_ID,
                       statuses: %w[pending claimed succeeded]).each do |candidate|
       row = candidate if candidate.fetch('reply_to') == id + 10_000
     end
-    row && row.fetch('text')
+    row&.fetch('text')
   end
 
   def meaning(document)
@@ -265,52 +318,6 @@ class ContextControlExposureTest < Minitest::Test
   end
 
   # ===== harness =====
-
-  Surface = Struct.new(:gateway, :transport, :store, :session, :recorded, :checkpoints,
-                       :workspace, :session_dir, :adapter, keyword_init: true) do
-    include CommsGatewayHarness
-
-    def admit(id, text)
-      transport.batch([update(id, text:)])
-      raise "admission returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
-    end
-
-    def command(text, id)
-      transport.batch([update(id, text:)])
-      raise "command returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
-
-      reply_for(id)
-    end
-
-    def reply_for(id)
-      row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending])
-                 .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
-      row && row.fetch('text')
-    end
-
-    def current_thread
-      Comms::Admission.thread_id(
-        SURFACE_ID, CONVERSATION_ID,
-        generation: store.conversation_generation(surface_id: SURFACE_ID, conversation_id: CONVERSATION_ID)
-      )
-    end
-
-    def captured = recorded.captured
-
-    def cli_thread_path(thread) = File.join(session_dir, "#{thread}.sqlite3")
-
-    def run_cli(argv)
-      out = StringIO.new
-      err = StringIO.new
-      status = Tamoz::Agent::CLI.run(
-        ['--session-dir', session_dir, '--root', workspace, '--json'] + argv,
-        out:, err:, input: StringIO.new, env: {}, model_factory: ->(_options) { ControlsModel.new }
-      )
-      raise "cli #{argv.inspect} exited #{status}: #{err.string}" unless status.zero?
-
-      JSON.parse(out.string.lines.last)
-    end
-  end
 
   # The session-access seam under test, built exactly as the CLI wiring builds
   # it: one profile-less Session over the shared runtime database.

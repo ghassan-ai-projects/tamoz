@@ -23,14 +23,13 @@ module SelfDiagnosisCorpus
   end
 
   def healthy_noise(builder, noise)
-    executions = Array.new(noise.fetch('turns')) do |index|
+    Array.new(noise.fetch('turns')) do |index|
       turn = builder.completed_turn(thread: "thread.noise.#{index}")
       noise.fetch('model_calls_per_turn').times { succeed(builder, turn, 'model.generate.plan') }
       noise.fetch('tool_calls_per_turn').times { succeed(builder, turn, 'tool.read_file') }
       builder.approval(verdict: 'ask', answer: 'approve', session: 'profile:default')
       [turn.thread_id, turn.execution_id]
     end
-    executions
   end
 
   def succeed(builder, turn, operation)

@@ -16,20 +16,14 @@ class SelfDiagnosisTest < Minitest::Test
   end
 
   def test_unknown_effect_is_a_critical_finding_with_its_row_as_evidence
-    report = diagnose do |builder|
-      execution = healthy_activity(builder)
-      builder.effect(thread: 'thread.a', execution_id: execution, operation: 'tool.mcp.write',
-                     outcome: :unknown, error: { 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout',
-                                                 'message' => 'timeout' })
-    end
+    report = report_with_unknown_write
     finding = finding(report, 'effect.outcome_unknown')
+    failure = { 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout' }
 
-    assert_equal 'critical', finding.severity
-    assert_equal(['tool.mcp.write'], finding.evidence.map { |entry| entry.fetch('operation') })
-    assert_equal({ 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout' },
-                 finding.evidence.first.fetch('failure'))
-    write = report.summary.fetch('operations').find { |line| line.fetch('operation') == 'tool.mcp.write' }
-    assert_equal [0, 1], write.values_at('failed', 'unknown')
+    assert_equal ['critical', ['tool.mcp.write'], failure],
+                 [finding.severity, finding.evidence.map { |entry| entry.fetch('operation') },
+                  finding.evidence.first.fetch('failure')]
+    assert_equal [0, 1], operation_line(report, 'tool.mcp.write').values_at('failed', 'unknown')
     assert_equal report.findings.first, finding
   end
 
@@ -209,6 +203,19 @@ class SelfDiagnosisTest < Minitest::Test
   def diagnosis_window(records, since_ms, now_ms)
     source = Diagnosis::Source.new(name: 'runtime.sqlite3', records:, limit: 1_000)
     Diagnosis.run(sources: [source], journal: NO_JOURNAL, now_ms:, since_ms:)
+  end
+
+  def operation_line(report, operation)
+    report.summary.fetch('operations').find { |line| line.fetch('operation') == operation }
+  end
+
+  def report_with_unknown_write
+    diagnose do |builder|
+      execution = healthy_activity(builder)
+      builder.effect(thread: 'thread.a', execution_id: execution, operation: 'tool.mcp.write',
+                     outcome: :unknown, error: { 'class' => 'Tamoz::MCP::TransportError', 'code' => 'transport_timeout',
+                                                 'message' => 'timeout' })
+    end
   end
 
   def healthy_activity(builder)

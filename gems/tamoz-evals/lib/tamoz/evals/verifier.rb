@@ -363,8 +363,7 @@ module Tamoz
           validate_no_diagnostic_errors!("failed evidence", invalid, gaps, infrastructure)
         else
           verify_terminal_diagnostic_status!(
-            document.fetch("status"), "evidence",
-            invalid:, gaps:, infrastructure:,
+            document.fetch("status"), "evidence", diagnostics,
             unknown: claims.any? { |claim| claim.fetch("status") == "unknown" }
           )
         end
@@ -374,7 +373,9 @@ module Tamoz
       # evidence and the result document: the status's own diagnostic family must
       # be populated and no other may be, with insufficient additionally admitting
       # an unknown outcome. `noun` names the document in the message.
-      def verify_terminal_diagnostic_status!(status, noun, invalid:, gaps:, infrastructure:, unknown:)
+      def verify_terminal_diagnostic_status!(status, noun, diagnostics, unknown:)
+        invalid, gaps, infrastructure =
+          diagnostics.values_at("invalid_evidence", "evidence_gaps", "infrastructure_errors")
         case status
         when "invalid"
           raise InvalidArtifactError, "invalid #{noun} must identify invalid material" if invalid.empty?
@@ -536,8 +537,7 @@ module Tamoz
           )
         else
           verify_terminal_diagnostic_status!(
-            status, "result",
-            invalid: invalid_evidence, gaps: evidence_gaps, infrastructure: infrastructure_errors,
+            status, "result", document,
             unknown: hard_gates.any? { |gate| gate.fetch("status") == "unknown" }
           )
         end

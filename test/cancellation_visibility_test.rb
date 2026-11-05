@@ -143,12 +143,12 @@ class CancellationVisibilityTest < Minitest::Test
       directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
       runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
         lease_ttl: 5.0
       )
       begin
         store = runtime.adapter.bind_comms_store(runtime.checkpoints)
-        insert_request!(store, request_id: 'c' * 63 + '1')
+        insert_request!(store, request_id: "#{'c' * 63}1")
         worker = Tamoz::Agent::Worker.new(
           runtime:,
           session_builder: ->(thread) { runtime.session_for(thread) },
@@ -156,14 +156,16 @@ class CancellationVisibilityTest < Minitest::Test
         )
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'd' * 63 + '1', operation: :turn,
+          thread_id: THREAD, request_id: "#{'d' * 63}1", operation: :turn,
           payload: { 'task' => 'Read note.txt' }, delivery: :queue
         )
+
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
+
         assert_nil stamps.fetch('observed_at_ms'),
-                  'a settled ordinary turn is not a cancellation observation'
+                   'a settled ordinary turn is not a cancellation observation'
 
         # The plain redirect is enqueued BEFORE the cancellation exists, so the
         # inbox (FIFO by enqueue sequence) consumes it while the timeline is
@@ -171,11 +173,12 @@ class CancellationVisibilityTest < Minitest::Test
         # would actually land in the store. Consumed after the genuine cancel,
         # first-write-wins would hide any misclassification.
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'g' * 63 + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'g' * 63}1", operation: :redirect,
           payload: { 'task' => 'Read note.txt' }, delivery: :redirect
         )
 
         requested_at = (Time.now.to_r * 1000).to_i
+
         assert_equal :requested, store.request_cancellation(
           thread_id: THREAD, request_id: 'cancel-claim', payload: CANCEL_PAYLOAD,
           now: Time.at(requested_at / 1000.0)
@@ -183,37 +186,46 @@ class CancellationVisibilityTest < Minitest::Test
 
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
+
         assert_nil stamps.fetch('observed_at_ms'),
-                  'a redirect without a cancel task is not an observation'
+                   'a redirect without a cancel task is not an observation'
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'e' * 63 + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'e' * 63}1", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
+
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
+
         refute_nil stamps.fetch('observed_at_ms'), 'consuming the cancel stamps observed'
         observed = stamps.fetch('observed_at_ms')
+
         assert_operator observed, :>=, stamps.fetch('requested_at_ms')
 
         history = runtime.checkpoints.request_history(thread_id: THREAD)
+
         assert_equal 1, history.count { |request| request.operation == :turn },
                      'no second turn ran behind the cancel'
         redirect = history.find { |request| request.request_id == 'cancel-claim' }
-        assert redirect.terminal?, 'the consumed cancel redirect is terminal'
+
+        assert_predicate redirect, :terminal?, 'the consumed cancel redirect is terminal'
 
         view = runtime.session_for(THREAD).view(thread: THREAD)
+
         assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'h' * 63 + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'h' * 63}1", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
+
         assert worker.poll_once
 
-        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'c' * 63}1")
+
         assert_equal observed, stamps.fetch('observed_at_ms'),
                      'a replayed observation never moves the stamp'
       ensure
@@ -231,15 +243,15 @@ class CancellationVisibilityTest < Minitest::Test
       directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
       runtime = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
         lease_ttl: 5.0
       )
       begin
         store = runtime.adapter.bind_comms_store(runtime.checkpoints)
-        insert_request!(store, request_id: 'f' * 63 + '1')
+        insert_request!(store, request_id: "#{'f' * 63}1")
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'a' * 63 + '1', operation: :turn,
+          thread_id: THREAD, request_id: "#{'a' * 63}1", operation: :turn,
           payload: { 'task' => 'Read note.txt' }, delivery: :queue
         )
         first = Tamoz::Agent::Worker.new(
@@ -247,10 +259,11 @@ class CancellationVisibilityTest < Minitest::Test
           session_builder: ->(thread) { runtime.session_for(thread) },
           emitter: ->(_event) {}, once: true
         )
+
         assert first.poll_once
 
         runtime.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: 'b' * 63 + '9', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'b' * 63}9", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
         # Exactly what a kill between claim and execution leaves behind: the
@@ -259,6 +272,7 @@ class CancellationVisibilityTest < Minitest::Test
           thread_id: THREAD, namespace: [], owner_id: 'ghost.claim', ttl: 5.0
         ) do |writer|
           claimed = writer.claim_next_request
+
           refute_nil claimed
           assert_equal :redirecting, claimed.status
         end
@@ -274,14 +288,17 @@ class CancellationVisibilityTest < Minitest::Test
           session_builder: ->(thread) { runtime.session_for(thread) },
           emitter: ->(event) { events << event.fetch('event') }, once: true
         )
+
         assert recovering.poll_once
 
         assert_includes events, 'request.recovered', 'the redirect was re-entered by recover'
-        stamps = cancellation_stamps(store, 'f' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'f' * 63}1")
+
         refute_nil stamps.fetch('observed_at_ms'),
-                  'the recover-path observation stamped the timeline'
+                   'the recover-path observation stamped the timeline'
 
         view = runtime.session_for(THREAD).view(thread: THREAD)
+
         assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
       ensure
         runtime&.close
@@ -298,16 +315,16 @@ class CancellationVisibilityTest < Minitest::Test
       directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
       first = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) {
+        model_factory: lambda { |**|
           CrashingModel.new(after: :claim, **read_only_responses)
         },
         lease_ttl: 0.2
       )
       begin
         store = first.adapter.bind_comms_store(first.checkpoints)
-        insert_request!(store, request_id: '9' * 63 + '1')
+        insert_request!(store, request_id: "#{'9' * 63}1")
         first.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: '8' * 63 + '1', operation: :turn,
+          thread_id: THREAD, request_id: "#{'8' * 63}1", operation: :turn,
           payload: { 'task' => 'Read note.txt' }, delivery: :queue
         )
         crashing = Tamoz::Agent::Worker.new(
@@ -317,11 +334,12 @@ class CancellationVisibilityTest < Minitest::Test
         )
         assert_raises(CrashingModel::Killed) { crashing.poll_once }
         requested_at = Time.now
+
         assert_equal :requested, store.request_cancellation(
           thread_id: THREAD, request_id: 'cancel-crash', payload: CANCEL_PAYLOAD, now: requested_at
         )
         first.checkpoints.enqueue_request(
-          thread_id: THREAD, request_id: '7' * 63 + '1', operation: :redirect,
+          thread_id: THREAD, request_id: "#{'7' * 63}1", operation: :redirect,
           payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
         )
       ensure
@@ -330,7 +348,7 @@ class CancellationVisibilityTest < Minitest::Test
 
       second = Tamoz::Agent::WorkerRuntime.open(
         directory,
-        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        model_factory: ->(**) { ScriptedModel.new(**read_only_responses) },
         lease_ttl: 5.0
       )
       begin
@@ -339,16 +357,19 @@ class CancellationVisibilityTest < Minitest::Test
           session_builder: ->(thread) { second.session_for(thread) },
           emitter: ->(_event) {}, once: true
         )
+
         assert worker.poll_once, 'the recovered occurrence made progress'
 
         store = second.adapter.bind_comms_store(second.checkpoints)
-        stamps = cancellation_stamps(store, '9' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'9' * 63}1")
+
         assert_nil stamps.fetch('observed_at_ms'),
-                  'recovering the crashed turn consumed no cancel operation'
+                   'recovering the crashed turn consumed no cancel operation'
 
         assert worker.poll_once, 'the queued cancel redirect was consumed'
 
-        stamps = cancellation_stamps(store, '9' * 63 + '1')
+        stamps = cancellation_stamps(store, "#{'9' * 63}1")
+
         refute_nil stamps.fetch('observed_at_ms')
         assert_operator stamps.fetch('observed_at_ms'), :>=, stamps.fetch('requested_at_ms')
       ensure
@@ -368,7 +389,7 @@ class CancellationVisibilityTest < Minitest::Test
       status, out, err = rt.cli(['comms', 'request', reference])
 
       assert_equal 0, status, err
-      assert_match(/request #{reference} on telegram-ops\/#{CONVERSATION}/, out)
+      assert_match(%r{request #{reference} on telegram-ops/#{CONVERSATION}}, out)
       assert_match(/task=\w+ delivery=\w+ open_requests=1 state=/, out)
       assert_match(/queue_position=0/, out)
       assert_match(/cancellation=terminal requested_age_ms=/, out)
@@ -378,6 +399,7 @@ class CancellationVisibilityTest < Minitest::Test
 
       assert_equal 0, status, err
       document = JSON.parse(out.lines.last)
+
       assert_equal 'tamoz.comms.request_view.v1', document.fetch('schema')
       row = document.fetch('requests').first
 
@@ -394,7 +416,7 @@ class CancellationVisibilityTest < Minitest::Test
     with_rt do |rt|
       seed_durable_rows!(rt)
 
-      status, _out, err = rt.cli(['comms', 'request', 'r0000000000'])
+      status, _out, err = rt.cli(%w[comms request r0000000000])
 
       assert_equal 1, status
       assert_match(/no request with reference "r0000000000" is admitted/, err)
@@ -420,15 +442,17 @@ class CancellationVisibilityTest < Minitest::Test
   # transport, the way the channel really receives it.
   def serve_admission(gateway, transport, id)
     transport.batch([update(id)])
+
     assert_equal :served, gateway.serve_once(now: NOW + id, drain: false)
   end
 
   def drive_status(gateway, transport, store, id, text)
     transport.batch([update(id, text:)])
+
     assert_equal :served, gateway.serve_once(now: NOW + id, drain: false)
     row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending claimed succeeded])
                .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
-    row && row.fetch('text')
+    row&.fetch('text')
   end
 
   def with_engine
@@ -439,8 +463,7 @@ class CancellationVisibilityTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         transport = CommsGatewayHarness::ScriptedTransport.new
-        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
-        )
+        gateway = Comms::Gateway.new(checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test')
         yield store, checkpoints, gateway, transport
       ensure
         adapter&.close
@@ -517,32 +540,32 @@ class CancellationVisibilityTest < Minitest::Test
       FileUtils.mkdir_p(runtime_dir, mode: 0o700)
       File.chmod(0o700, runtime_dir)
       File.write(File.join(runtime_dir, 'config.yaml'), Psych.dump(
-                                                           'runtime' => { 'schema_version' => 2 },
-                                                           'workspace' => { 'root' => workspace },
-                                                           'sources' => {},
-                                                           'channels' => {
-                                                             'telegram-ops' => {
-                                                               'kind' => 'telegram', 'revision' => 1,
-                                                               'enabled' => false, 'profile' => 'ops',
-                                                               'credential_ref' => {
-                                                                 'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN'
-                                                               },
-                                                               'stream_id' => "telegram:bot:#{BOT_ID}",
-                                                               'admission' => { 'direct' => 'pairing',
-                                                                                'correspondents' => [] }
-                                                             }
-                                                           }
-                                                         ))
+                                                          'runtime' => { 'schema_version' => 2 },
+                                                          'workspace' => { 'root' => workspace },
+                                                          'sources' => {},
+                                                          'channels' => {
+                                                            'telegram-ops' => {
+                                                              'kind' => 'telegram', 'revision' => 1,
+                                                              'enabled' => false, 'profile' => 'ops',
+                                                              'credential_ref' => {
+                                                                'kind' => 'env', 'name' => 'TAMOZ_TELEGRAM_BOT_TOKEN'
+                                                              },
+                                                              'stream_id' => "telegram:bot:#{BOT_ID}",
+                                                              'admission' => { 'direct' => 'pairing',
+                                                                               'correspondents' => [] }
+                                                            }
+                                                          }
+                                                        ))
       File.chmod(0o600, File.join(runtime_dir, 'config.yaml'))
       yield Harness.new(runtime_dir)
     end
   end
 
-  def seed_durable_rows!(rt)
+  def seed_durable_rows!(harness)
     reference = "r#{'a' * 10}"
-    rt.with_store do |store|
+    harness.with_store do |store|
       store.__send__(:transaction, 'test.view.insert') do |tx|
-        binds = ['a' * 63 + '1', 'telegram-ops', 1, CONVERSATION, THREAD, 'ops', 1, 'admitted',
+        binds = ["#{'a' * 63}1", 'telegram-ops', 1, CONVERSATION, THREAD, 'ops', 1, 'admitted',
                  ms(NOW), ms(NOW)]
         tx.execute('test.view.insert', <<~SQL, binds)
           INSERT INTO tamoz_comms_requests (
@@ -552,6 +575,7 @@ class CancellationVisibilityTest < Minitest::Test
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         SQL
       end
+
       assert_equal :requested, store.request_cancellation(
         thread_id: THREAD, request_id: 'cancel-view', payload: CANCEL_PAYLOAD, now: NOW + 2
       )

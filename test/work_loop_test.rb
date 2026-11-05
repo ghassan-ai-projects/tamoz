@@ -493,15 +493,42 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
       .send(:deliver_turn, payload, thread: 'work', request_id: 'work-1', owner_id: nil, emitter: nil, context: nil)
   end
 
+  def image_payload(root)
+    attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
+                                                     spool: spool(root))
+  end
+
+  def voice_payload(root)
+    attachment_payload('[voice message]', kind: 'voice', bytes: "OggS\x00voice".b, media_type: 'audio/ogg',
+                                          spool: spool(root))
+  end
+
+  def lose_worker_in_intake(model, root, adapter, payload, **options)
+    assert_raises(ScriptedConversationModel::Crash) { deliver(model, root, adapter, payload, **options) }
+  end
+
+  def recover_work(model, root, adapter, **)
+    work_session(model:, root:, adapter:, attachment_spool: spool(root), **)
+      .recover(thread: 'work', request_id: 'work-1')
+  end
+
+  def answering(content) = ScriptedConversationModel.new(turns: [{ content: }])
+
+  def request_stages(outcome)
+    outcome.state.fetch(:work_trace).filter_map { |entry| entry['stage'] if entry['event'] == 'request' }
+  end
+
+  def lose_voice_worker(root, adapter, transcriber)
+    lose_worker_in_intake(ScriptedConversationModel.new(turns: []), root, adapter, voice_payload(root), transcriber:)
+  end
+
   def test_a_crash_after_the_image_was_read_never_reads_it_again
     with_work_workspace do |root, adapter|
-      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
-                                                                 spool: spool(root))
       first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }], crash_at: 3)
-      assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
-      second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
-                                                                                                    request_id: 'work-1')
+
+      lose_worker_in_intake(first, root, adapter, image_payload(root))
+      second = answering('The total is 93.50.')
+      outcome = recover_work(second, root, adapter)
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
       assert_includes second.requests.first, 'TOTAL 93.50'
@@ -511,20 +538,17 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
 
   def test_a_crash_inside_intake_after_the_read_replays_the_journaled_image_receipt
     with_work_workspace do |root, adapter|
-      payload = attachment_payload('[image] what is the total?', kind: 'image', bytes: PNG, media_type: 'image/png',
-                                                                 spool: spool(root))
       first = ScriptedConversationModel.new(turns: [{ content: 'TOTAL 93.50' }])
       LoseWorkerOnceAfterTheRead.armed = []
-      assert_raises(ScriptedConversationModel::Crash) { deliver(first, root, adapter, payload) }
-      second = ScriptedConversationModel.new(turns: [{ content: 'The total is 93.50.' }])
-      outcome = work_session(model: second, root:, adapter:, attachment_spool: spool(root)).recover(thread: 'work',
-                                                                                                    request_id: 'work-1')
-      stages = outcome.state.fetch(:work_trace).filter_map { |entry| entry['stage'] if entry['event'] == 'request' }
+
+      lose_worker_in_intake(first, root, adapter, image_payload(root))
+      second = answering('The total is 93.50.')
+      outcome = recover_work(second, root, adapter)
 
       assert_equal [%i[attachment_image], %i[work_step]], [first.stages, second.stages]
       assert_includes second.requests.first, 'TOTAL 93.50'
-      assert_equal %w[attachment_image], stages, 'turn usage counts the image call'
-      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+      assert_equal [%w[attachment_image], 'answered'], [request_stages(outcome), outcome.state.fetch(:terminal_reason)],
+                   'turn usage counts the image call'
     ensure
       LoseWorkerOnceAfterTheRead.armed = nil
     end
@@ -532,24 +556,17 @@ class WorkLoopAttachmentCrashTest < Minitest::Test
 
   def test_a_crash_inside_intake_after_the_transcription_replays_its_receipt
     with_work_workspace do |root, adapter|
-      ogg = "OggS\x00voice".b
-      payload = attachment_payload('[voice message]', kind: 'voice', bytes: ogg, media_type: 'audio/ogg',
-                                                      spool: spool(root))
       first = ScriptedTranscriber.new('my locker code is four seven one nine')
       seen = LoseWorkerOnceAfterTheRead.armed = []
-      assert_raises(ScriptedConversationModel::Crash) do
-        deliver(ScriptedConversationModel.new(turns: []), root, adapter, payload, transcriber: first)
-      end
+
+      lose_voice_worker(root, adapter, first)
       second = ScriptedTranscriber.new('never asked')
-      model = ScriptedConversationModel.new(turns: [{ content: 'Noted.' }])
-      outcome = work_session(model:, root:, adapter:, transcriber: second, attachment_spool: spool(root)).recover(
-        thread: 'work', request_id: 'work-1'
-      )
+      outcome = recover_work(answering('Noted.'), root, adapter, transcriber: second)
+      task = "[voice message]\nmy locker code is four seven one nine"
 
       assert_equal [1, 0], [first.calls.length, second.calls.length]
-      assert_equal "[voice message]\nmy locker code is four seven one nine", outcome.state.fetch(:task)
-      assert_equal [outcome.state.fetch(:task)], seen, 'memory recall sees the words'
-      assert_equal 'answered', outcome.state.fetch(:terminal_reason)
+      assert_equal({ task:, terminal_reason: 'answered' }, outcome.state.slice(:task, :terminal_reason))
+      assert_equal [task], seen, 'memory recall sees the words'
     ensure
       LoseWorkerOnceAfterTheRead.armed = nil
     end

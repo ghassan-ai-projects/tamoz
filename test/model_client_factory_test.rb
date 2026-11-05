@@ -6,7 +6,7 @@ require_relative 'support/local_model_endpoint'
 class ModelClientFactoryTest < Minitest::Test
   Factory = Tamoz::Agent::ModelClientFactory
   Role = Tamoz::Agent::ModelCall::ModelRole
-  DIGEST = "sha256:#{'c' * 64}"
+  DIGEST = "sha256:#{'c' * 64}".freeze
 
   PROVIDERS = {
     'openai' => ['OPENAI_API_KEY', 'https://api.openai.com/v1'],
@@ -45,18 +45,27 @@ class ModelClientFactoryTest < Minitest::Test
     assert_includes error.message, 'TAMOZ_MODEL_SECRET'
   end
 
+  SPEECH_ENVIRONMENT = { 'OPENROUTER_SPEECH_API_KEY' => 'speech' }.freeze
+
   def test_a_role_without_a_profile_may_name_its_key_variable
     built = Factory.build(provider: 'openrouter', model: 'hexgrad/kokoro-82m', profile_role: nil,
-                          environment: { 'OPENROUTER_SPEECH_API_KEY' => 'speech' }, credential_name: 'OPENROUTER_SPEECH_API_KEY')
+                          environment: SPEECH_ENVIRONMENT, credential_name: 'OPENROUTER_SPEECH_API_KEY')
 
     assert_equal 'hexgrad/kokoro-82m', built.model
     assert_equal %w[OPENROUTER_SPEECH_API_KEY OPENROUTER_API_BASE],
                  Factory.environment_names(provider: 'openrouter', credential_name: 'OPENROUTER_SPEECH_API_KEY')
+  end
+
+  def test_a_pasted_key_given_as_the_credential_name_is_never_echoed
     pasted = assert_raises(Tamoz::ConfigurationError) do
       Factory.build(provider: 'openrouter', model: 'a/b', profile_role: nil, environment: {},
                     credential_name: 'sk-or-v1-secret')
     end
+
     refute_includes pasted.message, 'sk-or-v1-secret', 'a pasted key is never echoed'
+  end
+
+  def test_a_credential_name_is_refused_beside_a_profile_role_or_when_it_is_not_a_key_variable
     assert_raises(Tamoz::ConfigurationError) do
       Factory.build(provider: 'openai', model: 'gpt-test', profile_role: role, environment: { 'K' => 'x' },
                     credential_name: 'K')
@@ -107,9 +116,10 @@ class ModelClientFactoryTest < Minitest::Test
     )
 
     refute_equal from_profile.provider_configuration_digest, from_explicit.provider_configuration_digest
-    refute_includes from_profile.inspect, secret
-    refute_includes from_explicit.inspect, secret
-    refute_includes from_profile.provider_configuration_digest, secret
+    leaks = [from_profile.inspect, from_explicit.inspect, from_profile.provider_configuration_digest]
+            .map { |text| text.include?(secret) }
+
+    assert_equal [false, false, false], leaks, 'the secret reaches inspect or the configuration digest'
   end
 
   def test_factory_uses_the_profile_credential_at_the_http_boundary
@@ -163,8 +173,7 @@ class ModelClientFactoryTest < Minitest::Test
       Factory.build(provider: 'unknown', model: 'model', profile_role: nil, environment: {})
     end
 
-    assert_equal 'native_protocol_rejected', native.code
-    assert_equal 'unsupported_provider', unsupported.code
+    assert_equal %w[native_protocol_rejected unsupported_provider], [native.code, unsupported.code]
   end
 
   def test_openrouter_requires_a_provider_qualified_model_identifier

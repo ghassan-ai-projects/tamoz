@@ -2,12 +2,15 @@
 
 require 'digest'
 require 'tamoz/agent/episode_model_transport'
+require 'tamoz/agent/model_credentials'
 require 'tamoz/agent/model_receipt'
+require 'tamoz/agent/model_route_checks'
 require 'tamoz/agent/model_windows'
 require 'tamoz/agent/providers'
 
 module Tamoz
   module Agent
+    # Builds model clients from the provider descriptors; native-protocol providers are rejected.
     module ModelClientFactory
       DESCRIPTORS = {
         'openai' => { default_base: 'https://api.openai.com/v1', protocol: 'openai-compatible', kind: 'direct' },
@@ -22,12 +25,11 @@ module Tamoz
         'anthropic' => { default_base: nil, protocol: 'native-rejected', kind: 'rejected' },
         'gemini' => { default_base: nil, protocol: 'native-rejected', kind: 'rejected' }
       }.transform_values(&:freeze).freeze
-      ROLE_CREDENTIAL = /\A(?!TAMOZ_)[A-Z][A-Z0-9_]*_API_KEY\z/
+
+      extend ModelCredentials
+      extend ModelRouteChecks
 
       class << self
-        # A model role reads its key from the `*_API_KEY` variable it names, never from a runtime or channel one.
-        def role_credential?(name) = name.is_a?(String) && name.match?(ROLE_CREDENTIAL)
-
         # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists -- one build: every ensure,
         # the configuration digest and the transport in the order a caller can read them.
         def build(provider:, model:, profile_role:, environment:, explicit_api_base: nil,
@@ -46,7 +48,7 @@ module Tamoz
           ensure_credential!(api_key, name, profile_role:, credential_name:)
           ensure_endpoint!(endpoint, name)
           safety = normalize_safety(safety)
-          configuration = configuration_document(name, model, endpoint, descriptor, profile_role, safety)
+          configuration = configuration_document(name, model, endpoint, profile_role, safety)
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:, gateway:,
             pause:,
@@ -58,33 +60,6 @@ module Tamoz
           )
         end
         # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
-
-        def environment_names(provider:, profile_role: nil, credential_name: nil)
-          name = normalize_provider(provider)
-          names = [role_credential_name(credential_name, profile_role) || credential_env_key(name),
-                   api_base_name(name)]
-          ref = profile_credential_reference(profile_role, name)
-          names << ref.fetch('name') if ref
-          names.uniq.freeze
-        end
-
-        def worker_environment(provider:, environment:, profile_role: nil, credential_name: nil)
-          environment_names(provider:, profile_role:, credential_name:).each_with_object({}) do |name, selected|
-            value = environment_value(environment, name)
-            selected[name] = value unless value.nil?
-          end
-        end
-
-        def credential_reference(provider:, profile_role:, environment:)
-          name = normalize_provider(provider)
-          credential_name = credential_name_for(profile_role, name)
-          credential = environment_value(environment, credential_name)
-          raise_credential_unavailable(profile_role, credential_name) if credential.to_s.empty? && name != 'ollama'
-
-          return nil if name == 'ollama' && credential.to_s.empty?
-
-          { 'kind' => 'env', 'name' => credential_name }
-        end
 
         private
 
@@ -114,115 +89,17 @@ module Tamoz
           DESCRIPTORS.fetch(provider)
         end
 
-        def ensure_model!(model, provider)
-          return if model.is_a?(String) && !model.empty? &&
-                    (provider != 'openrouter' || model.include?('/'))
-
-          code = model.is_a?(String) && !model.empty? ? 'model_invalid' : 'model_required'
-          raise ModelCallError.new(code:)
-        end
-
-        def ensure_role_binding!(role, provider, model)
-          return unless role
-          return if role.provider.to_s == provider && role.model.to_s == model
-
-          raise ModelCallError.new(code: 'profile_role_mismatch')
-        end
-
-        def ensure_protocol!(descriptor, _provider)
-          return unless descriptor.fetch(:kind) == 'rejected'
-
-          raise ModelCallError.new(code: 'native_protocol_rejected')
-        end
-
-        def role_credential_name(name, profile_role)
-          return nil if name.to_s.empty?
-          raise ConfigurationError, 'a profile role names its credential in the profile' if profile_role
-          unless role_credential?(name)
-            raise ConfigurationError, 'a role credential must name an environment variable, never hold the key'
-          end
-
-          name
-        end
-
-        def credential_name_for(profile_role, provider)
-          ref = profile_credential_reference(profile_role, provider)
-          return credential_env_key(provider) unless ref
-
-          ref.fetch('name')
-        end
-
-        def profile_credential_reference(profile_role, provider)
-          return unless profile_role
-
-          ref = profile_role.credential_ref
-          return if ref.nil?
-          unless ref.is_a?(Hash) && ref['kind'] == 'env' &&
-                 ref['name'].is_a?(String) && ref['name'].match?(/\A[A-Z][A-Z0-9_]*\z/)
-            raise ProfileRoleUnavailableError, 'model_role/credential_reference_invalid'
-          end
-          if ref.fetch('name') == api_base_name(provider)
-            raise ProfileRoleUnavailableError, 'model_role/credential_reference_invalid'
-          end
-
-          ref
-        end
-
-        def credential_env_key(provider)
-          Providers::ENV_KEYS.fetch(provider.to_sym)
-        end
-
-        def api_base_name(provider)
-          "#{provider.upcase}_API_BASE"
-        end
-
         def profile_endpoint(profile_role)
           settings = profile_role&.normalized_settings || {}
           settings['base_url'] || settings['api_base']
         end
 
-        def ensure_credential!(value, provider, profile_role:, credential_name:)
-          return if !value.to_s.empty? || provider == 'ollama'
-
-          raise_credential_unavailable(profile_role, credential_name)
-        end
-
-        # The refusal names the role and the reference (DR-5 D1): the operator
-        # pinned a specific credential, so the generic provider key is noise.
-        def raise_credential_unavailable(profile_role, name)
-          if profile_role
-            raise ProfileRoleUnavailableError,
-                  "model_role/credential_unavailable: #{profile_role.name} (#{name})"
-          end
-
-          raise ModelCallError.new(code: 'credential_unavailable')
-        end
-
-        def ensure_endpoint!(endpoint, _provider)
-          return if endpoint.is_a?(String) && !endpoint.empty?
-
-          raise ModelCallError.new(code: 'endpoint_unavailable')
-        end
-
-        def normalize_safety(safety)
-          value = safety.to_sym if safety.respond_to?(:to_sym)
-          return value if %i[unsafe idempotent].include?(value)
-
-          raise ModelCallError.new(code: 'safety_invalid')
-        end
-
-        def environment_value(environment, name)
-          return environment[name] if environment.respond_to?(:[])
-
-          environment.to_h.fetch(name, nil)
-        end
-
-        def configuration_document(provider, model, endpoint, descriptor, role, safety)
+        def configuration_document(provider, model, endpoint, role, safety)
           {
             'provider' => provider,
             'model' => model,
             'endpoint' => endpoint,
-            'protocol' => descriptor.fetch(:protocol),
+            'protocol' => descriptor_for(provider).fetch(:protocol),
             'settings' => EpisodeModelTransport::SETTINGS,
             'profile_role' => role_document(role),
             'profile_digest' => role&.profile_digest,

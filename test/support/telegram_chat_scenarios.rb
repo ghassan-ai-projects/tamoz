@@ -193,14 +193,17 @@ module TelegramChatScenarios
   # R5: a real chat keeps going. Long multi-byte replies pile up in the history every later
   # message carries, past the history's line and size limits; every message still gets an answer.
   def long_conversation(eval)
-    user = eval.fresh_user
-    turns = [eval.turn(user, 'اشرح لي بالتفصيل، في ثلاث فقرات طويلة مع رموز تعبيرية، كيف تعمل الطاقة الشمسية ☀️')]
-    turns += (1..13).map { |index| eval.turn(user, "Follow-up #{index}: add one more short fact, one sentence.") }
+    turns = long_conversation_turns(eval, eval.fresh_user)
     answered = turns.count { |turn| !turn.reply.strip.empty? && !turn.reply.include?(Tamoz::Agent::ChatReply::FAILED) }
     eval.check('long_conversation', 'all 14 messages answered', answered == turns.length,
                "#{answered}/#{turns.length}; last: #{turns.last.reply}")
     eval.check('long_conversation', 'the bot stayed up', eval.alive?, 'a process exited')
     eval.hygiene('long_conversation', turns)
+  end
+
+  def long_conversation_turns(eval, user)
+    turns = [eval.turn(user, 'اشرح لي بالتفصيل، في ثلاث فقرات طويلة مع رموز تعبيرية، كيف تعمل الطاقة الشمسية ☀️')]
+    turns + (1..13).map { |index| eval.turn(user, "Follow-up #{index}: add one more short fact, one sentence.") }
   end
 
   # R3: a restart loses neither the conversation nor a message sent while the bot was down.
@@ -283,19 +286,30 @@ module TelegramChatScenarios
     missing = eval.capability_gap(spec.fetch('needs'))
     return eval.blocked(name, missing) if missing
 
+    turn, seen = play_attachment(eval, spec)
+    TelegramAttachmentChecks.grade(spec, seen).each { |check, pass, detail| eval.check(name, check, pass, detail) }
+    eval.hygiene(name, [turn])
+  end
+
+  def play_attachment(eval, spec)
     downloads = eval.fake.downloads.length
     turn = send_attachment(eval, eval.fresh_user, spec, timeout: [spec.fetch('budget_s') * 3, 180].max)
-    seen = TelegramAttachmentChecks::Observation.new(
+    [turn, observe_attachment(eval, spec, turn, downloaded: eval.fake.downloads.length > downloads)]
+  end
+
+  def attachment_text(spec)
+    File.read(File.join(ATTACHMENTS, spec.fetch('file')), mode: 'rb').force_encoding('UTF-8').scrub
+  end
+
+  def observe_attachment(eval, spec, turn, downloaded:)
+    TelegramAttachmentChecks::Observation.new(
       reply: turn.reply, steps: turn.steps, answer_s: turn.answer_s,
       buttons: !(turn.button('approve:') || turn.button('deny:')).nil?,
       written: spec['forbidden_file'] && !eval.workspace_text(spec['forbidden_file']).empty?,
-      handoffs_left: eval.handoffs, downloaded: eval.fake.downloads.length > downloads,
-      file_text: File.read(File.join(ATTACHMENTS, spec.fetch('file')), mode: 'rb').force_encoding('UTF-8').scrub,
+      handoffs_left: eval.handoffs, downloaded:, file_text: attachment_text(spec),
       read_by_configured_model: read_by_configured_model(eval, spec, turn),
       known_text: eval.workspace_files_text
     )
-    TelegramAttachmentChecks.grade(spec, seen).each { |check, pass, detail| eval.check(name, check, pass, detail) }
-    eval.hygiene(name, [turn])
   end
 
   def read_by_configured_model(eval, spec, turn)
@@ -304,8 +318,7 @@ module TelegramChatScenarios
   end
 
   attachment_spec.fetch('scenarios').each_key do |name|
-    define_method(name) { |eval| attachment(eval, name) }
-    module_function name
+    define_singleton_method(name) { |eval| attachment(eval, name) }
   end
 
   def stranger(eval)

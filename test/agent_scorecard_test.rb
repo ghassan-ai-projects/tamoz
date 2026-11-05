@@ -166,51 +166,46 @@ class AgentScorecardTest < Minitest::Test
   end
 
   def test_scorecard_cli_exit_codes_are_distinct_and_output_is_one_json_line
+    argv = ["scorecard", "agent-smoke", "--input-manifest"]
     RunnerInputs.with_manifest do |manifest|
-      out = StringIO.new
-      err = StringIO.new
-      status = Tamoz::Evals::Runner::CLI.run(
-        ["scorecard", "agent-smoke", "--input-manifest", manifest],
-        out:, err:, scorecard_factory: -> { Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: CORPUS) }
+      status, out, err = run_scorecard_cli(
+        [*argv, manifest],
+        scorecard_factory: -> { Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: CORPUS) }
       )
       assert_equal Tamoz::Evals::CLI::SUCCESS, status
-      assert_equal 1, out.string.lines.length
-      assert_equal "pass", JSON.parse(out.string).fetch("decision")
-      assert_empty err.string
+      assert_equal 1, out.lines.length
+      assert_equal "pass", JSON.parse(out).fetch("decision")
+      assert_empty err
 
-      out = StringIO.new
-      err = StringIO.new
-      status = Tamoz::Evals::Runner::CLI.run(
-        ["scorecard", "agent-smoke", "--input-manifest", manifest],
-        out:,
-        err:,
+      status, out, = run_scorecard_cli(
+        [*argv, manifest],
         scorecard_factory: -> { StaticRunner.new(report: StaticReport.new(passed: false)) }
       )
       assert_equal Tamoz::Evals::CLI::GATE_FAILURE, status
-      assert_equal "{\"report_type\":\"test\"}\n", out.string
+      assert_equal "{\"report_type\":\"test\"}\n", out
 
-      out = StringIO.new
-      err = StringIO.new
-      status = Tamoz::Evals::Runner::CLI.run(
-        ["scorecard", "agent-smoke", "--input-manifest", manifest],
-        out:,
-        err:,
+      status, out, err = run_scorecard_cli(
+        [*argv, manifest],
         scorecard_factory: lambda do
           StaticRunner.new(error: Tamoz::Evals::ExecutionError.new("subject unavailable"))
         end
       )
       assert_equal Tamoz::Evals::CLI::INFRASTRUCTURE_FAILURE, status
-      assert_empty out.string
-      assert_includes err.string, "infrastructure failure"
+      assert_empty out
+      assert_includes err, "infrastructure failure"
     end
 
-    out = StringIO.new
-    err = StringIO.new
-    assert_equal Tamoz::Evals::CLI::USAGE_ERROR,
-                 Tamoz::Evals::Runner::CLI.run(["scorecard", "unknown"], out:, err:)
+    assert_equal Tamoz::Evals::CLI::USAGE_ERROR, run_scorecard_cli(["scorecard", "unknown"]).first
   end
 
   private
+
+  def run_scorecard_cli(argv, **)
+    out = StringIO.new
+    err = StringIO.new
+    status = Tamoz::Evals::Runner::CLI.run(argv, out:, err:, **)
+    [status, out.string, err.string]
+  end
 
   def scorecard_case(report, case_id)
     entry = report.fetch('cases').find { |candidate| candidate.fetch('case_id') == case_id }
@@ -396,5 +391,4 @@ class AgentScorecardTest < Minitest::Test
   def gate(report, id)
     report.to_h.fetch("hard_gates").find { |entry| entry.fetch("id") == id }.fetch("status")
   end
-
 end

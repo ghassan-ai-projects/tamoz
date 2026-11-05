@@ -23,6 +23,7 @@ module Tamoz
         503 => 'Service Unavailable'
       }.freeze
 
+      # A request the server refuses, carrying the HTTP status to answer with.
       class Refused < StandardError
         attr_reader :status
 
@@ -32,7 +33,7 @@ module Tamoz
         end
       end
 
-      Request = Data.define(:method, :path, :query, :headers) do
+      Request = Data.define(:verb, :path, :query, :headers) do
         def header(name) = headers[name.downcase]
 
         def content_length = headers.fetch('content-length', '0').to_i
@@ -49,7 +50,7 @@ module Tamoz
         end
         raise Refused, 431 if ending > MAX_HEAD_BYTES
 
-        [parse_head(buffer.byteslice(0, ending)), buffer.byteslice(ending + 4..)]
+        [Head.parse(buffer.byteslice(0, ending)), buffer.byteslice((ending + 4)..)]
       end
 
       def read_body(socket, request, early, max_bytes:, deadline: monotonic + BODY_DEADLINE_S)
@@ -61,45 +62,12 @@ module Tamoz
         body
       end
 
-      def parse_head(head)
-        raise Refused, 400 if head.include?("\n") && head.gsub("\r\n", '').include?("\n")
-
-        line, *fields = head.split("\r\n")
-        raise Refused, 400 if line.nil? || line.bytesize > MAX_REQUEST_LINE
-        raise Refused, 431 if fields.length > MAX_HEADERS
-
-        parts = line.split(/ /, -1)
-        raise Refused, 400 unless parts.length == 3
-
-        method, target, version = parts
-        raise Refused, 400 unless method.match?(/\A[A-Z]{3,7}\z/) && version == 'HTTP/1.1' && target.start_with?('/')
-
-        path, query = target.split('?', 2)
-        Request.new(method:, path:, query: URI.decode_www_form(query.to_s).to_h, headers: headers(fields))
-      rescue ArgumentError
-        raise Refused, 400
-      end
-
-      def headers(fields)
-        fields.each_with_object({}) do |field, out|
-          raise Refused, 400 if field.start_with?(' ', "\t")
-
-          name, value = field.split(':', 2)
-          raise Refused, 400 unless value && name.match?(/\A[!#$%&'*+.^_`|~0-9A-Za-z-]+\z/)
-
-          key = name.downcase
-          raise Refused, 400 if key == 'transfer-encoding' || (SINGLE.include?(key) && out.key?(key))
-          raise Refused, 400 if key == 'content-length' && !value.strip.match?(/\A\d{1,10}\z/)
-
-          out[key] = value.strip
-        end
-      end
-
-      def write(socket, status, body = '', type: 'text/plain; charset=utf-8', headers: {}, deadline_s: WRITE_DEADLINE_S)
+      def write(socket, status, body = '', headers: {}, deadline_s: WRITE_DEADLINE_S)
         body = body.b
         head = "HTTP/1.1 #{status} #{REASONS.fetch(status)}\r\n"
-        { 'Content-Type' => type, 'Content-Length' => body.bytesize.to_s, 'Connection' => 'close',
-          'X-Content-Type-Options' => 'nosniff' }.merge(headers).each { |name, value| head << "#{name}: #{value}\r\n" }
+        { 'Content-Type' => 'text/plain; charset=utf-8', 'Content-Length' => body.bytesize.to_s,
+          'Connection' => 'close', 'X-Content-Type-Options' => 'nosniff' }
+          .merge(headers).each { |name, value| head << "#{name}: #{value}\r\n" }
         write_all(socket, head.b + "\r\n".b + body, monotonic + deadline_s)
       rescue IOError, SystemCallError
         nil
@@ -132,3 +100,5 @@ module Tamoz
     end
   end
 end
+
+require_relative 'http/head'

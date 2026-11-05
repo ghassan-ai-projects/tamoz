@@ -110,9 +110,9 @@ class TelegramAttachmentChecksTest < Minitest::Test
   end
 
   def test_a_fact_inside_a_longer_number_does_not_count
-    refute Checks.carries?('The pipe count is 137.', '37')
-    refute Checks.carries?('Total 193.50', '93.50')
-    assert Checks.carries?('There are 37 units.', '37')
-    assert Checks.carries?('The budget is 48,250 dollars.', '48250')
+    cases = [['The pipe count is 137.', '37'], ['Total 193.50', '93.50'],
+             ['There are 37 units.', '37'], ['The budget is 48,250 dollars.', '48250']]
+
+    assert_equal([false, false, true, true], cases.map { |reply, fact| Checks.carries?(reply, fact) })
   end
 end

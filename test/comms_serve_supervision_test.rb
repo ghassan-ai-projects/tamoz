@@ -20,8 +20,8 @@ class CommsServeSupervisionTest < Minitest::Test
       now
     end
 
-    def outbox_rows(surface_id:, statuses:, limit:) = []
-    def working_conversations(surface_id:, now:) = []
+    def outbox_rows(**) = []
+    def working_conversations(**) = []
   end
 
   # Blocks in its loop until supervised `stop` ends it.
@@ -36,7 +36,7 @@ class CommsServeSupervisionTest < Minitest::Test
       @stopped = true
     end
 
-    def serve_loop(drain: true, interval_s: 1.0, on_started: nil)
+    def serve_loop(on_started: nil, **)
       on_started&.call
       sleep(0.01) until @stopped
       :stopped
@@ -52,16 +52,40 @@ class CommsServeSupervisionTest < Minitest::Test
   end
 
   class CursorStore
-    def poll_offset(stream_id:) = nil
-    def delivered_messages(surface_id:, limit:) = []
+    def poll_offset(**) = nil
+    def delivered_messages(**) = []
   end
 
   def test_a_storage_failure_stops_the_loops_names_the_class_and_exits_non_zero
+    status, err, = run_supervised_failure
+
+    assert_equal 1, status, 'a storage failure exits non-zero'
+    assert_includes err.string, 'StorageExploded', 'stderr names the exception class'
+    assert_includes err.string, 'stopped accepting writes', 'stderr carries the failure detail'
+  end
+
+  def test_a_storage_failure_asks_the_surviving_sibling_loop_to_stop
+    _status, _err, gateway = run_supervised_failure
+
+    assert_predicate gateway, :stopped?, 'the surviving sibling loop was asked to stop'
+  end
+
+  private
+
+  def run_supervised_failure
     err = StringIO.new
     supervisor = Object.new.extend(Tamoz::Agent::CLICommsCommands)
     supervisor.instance_variable_set(:@err, err)
     gateway = QuietGateway.new
-    drainer = Tamoz::Comms::DeliveryDrainer.new(
+    surface = Tamoz::Agent::CLICommsCommands::ServedSurface.new(
+      descriptor: supervised_descriptor, connection: IdleConnection.new, drainer: failing_drainer, gateway:
+    )
+    status = Timeout.timeout(10) { supervisor.send(:run_gateway_loops, CursorStore.new, [surface]) }
+    [status, err, gateway]
+  end
+
+  def failing_drainer
+    Tamoz::Comms::DeliveryDrainer.new(
       store: FailingStore.new,
       transport: Object.new,
       descriptor: supervised_descriptor,
@@ -69,19 +93,7 @@ class CommsServeSupervisionTest < Minitest::Test
       clock: -> { Time.utc(2026, 8, 10, 12, 0, 0) },
       sleeper: ->(_seconds) {}
     )
-
-    surface = Tamoz::Agent::CLICommsCommands::ServedSurface.new(
-      descriptor: supervised_descriptor, connection: IdleConnection.new, drainer:, gateway:
-    )
-    status = Timeout.timeout(10) { supervisor.send(:run_gateway_loops, CursorStore.new, [surface]) }
-
-    assert_equal 1, status, 'a storage failure exits non-zero'
-    assert_includes err.string, 'StorageExploded', 'stderr names the exception class'
-    assert_includes err.string, 'stopped accepting writes', 'stderr carries the failure detail'
-    assert_predicate gateway, :stopped?, 'the surviving sibling loop was asked to stop'
   end
-
-  private
 
   def supervised_descriptor
     Tamoz::Comms::SurfaceDescriptor.build(

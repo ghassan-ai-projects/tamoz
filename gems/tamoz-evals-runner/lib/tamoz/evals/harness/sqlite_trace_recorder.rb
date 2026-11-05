@@ -518,7 +518,6 @@ module Tamoz
           raise ExecutionError, "#{name} is invalid"
         end
 
-
         private_constant :ATTEMPT_CLASSES, :DEFINITION, :DEFINITION_DIGEST,
                          :EVENT_FIELDS, :GIT_OBJECT_PATTERN,
                          :ID_PATTERN, :ITERATION_CLASSES, :MAX_ATTEMPTS,

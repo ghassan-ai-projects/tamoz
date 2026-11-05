@@ -22,7 +22,10 @@ class SkillsBoundaryTest < Minitest::Test
   def test_the_inner_constants_are_private
     public_names = Tamoz::Skills.constants
 
-    %i[Candidates Collisions Compiler Disk Frontmatter FrontmatterScanner Lint Manifest Rejected Rendering Resources Roots Tree Walk].each { |name| refute_includes public_names, name }
+    %i[Candidates Collisions Compiler Disk Frontmatter FrontmatterScanner Lint Manifest Rejected Rendering Resources
+       Roots Tree Walk].each do |name|
+      refute_includes public_names, name
+    end
   end
 
   def test_the_gem_requires_only_core_and_the_stdlib
@@ -33,21 +36,21 @@ class SkillsBoundaryTest < Minitest::Test
     assert_empty requires.uniq - ALLOWED_REQUIRES
   end
 
-# The gem reads and compiles; installing, staging and scaffolding write through their caller.
-def test_the_gem_writes_nothing
-  writes = gem_files.flat_map { |path| matches(path, WRITE) }
+  # The gem reads and compiles; installing, staging and scaffolding write through their caller.
+  def test_the_gem_writes_nothing
+    writes = gem_files.flat_map { |path| matches(path, WRITE) }
 
-  assert_empty writes
-end
-
-# The session reaches skills only through its toolbox: the catalog prompt, a skill's identity, the skill tools.
-def test_the_session_asks_the_toolbox_and_never_reads_skill_internals
-  leaks = files('gems/tamoz-agent-session/lib/**/*.rb').flat_map do |path|
-    matches(path, /Tamoz::Skills\b|\.skill_catalog\b|\.tree_digest\b|record\.id\b/)
+    assert_empty writes
   end
 
-  assert_empty leaks
-end
+  # The session reaches skills only through its toolbox: the catalog prompt, a skill's identity, the skill tools.
+  def test_the_session_asks_the_toolbox_and_never_reads_skill_internals
+    leaks = files('gems/tamoz-agent-session/lib/**/*.rb').flat_map do |path|
+      matches(path, /Tamoz::Skills\b|\.skill_catalog\b|\.tree_digest\b|record\.id\b/)
+    end
+
+    assert_empty leaks
+  end
 
   def test_every_gem_that_names_the_facade_declares_it
     GEM_ROOTS.each do |name, root|

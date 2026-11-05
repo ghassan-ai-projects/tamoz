@@ -77,9 +77,11 @@ module Tamoz
         headers = HttpAdmission.new.validate_headers!(headers)
         credential_headers = HttpAdmission.new.validate_credential_headers!(credential_headers, credential_refs,
                                                                             headers)
-        command, working_directory = ProcessAdmission.new.validate_process_surface!(
-          transport:, command:, arguments:, env_allowlist:, working_directory:, workspace:
-        )
+        if transport == :http
+          ProcessAdmission.new.validate_http_surface!(command:, arguments:, env_allowlist:, working_directory:)
+        end
+        command, working_directory = ProcessAdmission.new.validate_process_location!(transport, command,
+                                                                                     working_directory, workspace)
         protocol_range = ServerAdmission.new.validate_protocol_range!(protocol_range)
         primitives = ServerAdmission.new.validate_primitives!(primitives)
         budgets = ServerAdmission.new.validate_budgets!(budgets)

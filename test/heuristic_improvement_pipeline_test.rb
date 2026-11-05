@@ -1,22 +1,21 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
+require_relative 'test_helper'
 
 # The end-to-end self-improvement pipeline: generate -> holdout-evaluate ->
 # decide -> provenance, producing one vetted, promotion-ready bundle. It stops
 # at the human gate (it never promotes).
 class HeuristicImprovementPipelineTest < Minitest::Test
   Harness = Tamoz::Evals::Harness
+  Pipeline = Harness::HeuristicImprovementPipeline
   Improvement = Tamoz::Agent::Improvement
 
-  def with_pipeline(generator: "principal.generator", evaluator: "principal.evaluator")
+  def with_pipeline(generator: 'principal.generator', evaluator: 'principal.evaluator')
     Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) do |corpus|
-      yield Harness::HeuristicImprovementPipeline.new(
-        corpus:, generator_principal: generator, evaluator_principal: evaluator,
-        promoter_principal: "principal.operator",
-        behavior_version_before: "tamoz.agent.session/1",
-        behavior_version_after: "tamoz.agent.session/2",
-        rollback_snapshot_digest: "sha256:#{"a" * 64}",
+      yield Pipeline.new(
+        corpus:, principals: Pipeline::Principals.new(generator:, evaluator:, promoter: 'principal.operator'),
+        change: Pipeline::BehaviorChange.new(before: 'tamoz.agent.session/1', after: 'tamoz.agent.session/2',
+                                             rollback_snapshot_digest: "sha256:#{'a' * 64}"),
         regression_tasks: RunnerInputs.regression_tasks
       )
     end
@@ -26,11 +25,18 @@ class HeuristicImprovementPipelineTest < Minitest::Test
     with_pipeline do |pipeline|
       bundle = pipeline.run
 
-      assert bundle.generated?, "the corpus should yield a candidate"
-      assert bundle.passed?, "the candidate should pass its paired holdout evaluation"
-      assert bundle.promotable?, "a passed candidate with complete provenance is promotion-ready"
-      assert bundle.provenance.complete?
-      assert bundle.decision.fetch("holdout_margin") >= 0
+      assert_predicate bundle, :generated?, 'the corpus should yield a candidate'
+      assert_predicate bundle, :passed?, 'the candidate should pass its paired holdout evaluation'
+      assert_predicate bundle, :promotable?, 'a passed candidate with complete provenance is promotion-ready'
+    end
+  end
+
+  def test_the_bundle_provenance_is_complete_and_its_report_verifies
+    with_pipeline do |pipeline|
+      bundle = pipeline.run
+
+      assert_predicate bundle.provenance, :complete?
+      assert_operator bundle.decision.fetch('holdout_margin'), :>=, 0
       # The report is the sealed artifact production verifies — re-verify it here.
       assert Improvement::EvaluationReport.verify!(bundle.report)
     end
@@ -40,16 +46,17 @@ class HeuristicImprovementPipelineTest < Minitest::Test
     with_pipeline do |pipeline|
       bundle = pipeline.run
       lineage = bundle.provenance.evaluation_lineage
-      assert_equal "principal.evaluator", lineage.fetch("evaluator_principal")
-      assert_equal "principal.generator", lineage.fetch("generator_principal")
+
+      assert_equal 'principal.evaluator', lineage.fetch('evaluator_principal')
+      assert_equal 'principal.generator', lineage.fetch('generator_principal')
       assert_equal bundle.candidate.digest,
-                   bundle.provenance.artifact_digests.fetch("candidate_digest")
+                   bundle.provenance.artifact_digests.fetch('candidate_digest')
     end
   end
 
   def test_evaluator_must_differ_from_generator
     error = assert_raises(ArgumentError) do
-      with_pipeline(generator: "same", evaluator: "same") { |pipeline| pipeline.run }
+      with_pipeline(generator: 'same', evaluator: 'same', &:run)
     end
     assert_match(/evaluator principal must differ/, error.message)
   end
@@ -61,28 +68,13 @@ class HeuristicImprovementPipelineTest < Minitest::Test
     Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) do |corpus|
       with_engine do |engine|
         seed_baseline(engine)
+        bundle = session_three_pipeline(corpus).run
 
-        pipeline = Harness::HeuristicImprovementPipeline.new(
-          corpus:, generator_principal: "principal.generator", evaluator_principal: "principal.evaluator",
-          promoter_principal: "principal.operator",
-          behavior_version_before: "tamoz.agent.session/2", behavior_version_after: "tamoz.agent.session/3",
-          rollback_snapshot_digest: "sha256:#{"a" * 64}", regression_tasks: RunnerInputs.regression_tasks
-        )
-        bundle = pipeline.run
-        assert bundle.promotable?
+        assert_predicate bundle, :promotable?
 
-        body = Improvement::EvaluationReport.verify!(bundle.report)
-        resolver = ->(seal) { seal == Improvement::EvaluationReport.seal(body) ? bundle.report : nil }
-        result = Improvement::Promotion.new(engine).promote(
-          candidate: bundle.candidate, provenance: bundle.provenance, report: bundle.report,
-          human_gate_evidence: "human:operator-1", actor: "principal.operator", evidence_resolver: resolver
-        )
+        promote_and_activate(engine, bundle)
 
-        transition_id = result.fetch("transition").transition_id
-        engine.transitions.claim(transition_id:, owner: "intake", attempt: 1)
-        engine.transitions.finalize(transition_id:, consumed_by: "session.canary")
-
-        assert_equal "tamoz.agent.session/3", engine.transitions.active.fetch("active_version")
+        assert_equal 'tamoz.agent.session/3', engine.transitions.active.fetch('active_version')
       end
     end
   end
@@ -90,22 +82,45 @@ class HeuristicImprovementPipelineTest < Minitest::Test
   private
 
   def with_engine
-    Dir.mktmpdir("tamoz-improve-engine") do |dir|
-      adapter = Tamoz::SQLite::Adapter.new(path: File.join(dir, "engine.sqlite3"))
-      yield Tamoz::Agent::Memory::Engine.new(tenant: "pipeline", adapter:)
+    Dir.mktmpdir('tamoz-improve-engine') do |dir|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(dir, 'engine.sqlite3'))
+      yield Tamoz::Agent::Memory::Engine.new(tenant: 'pipeline', adapter:)
     ensure
       adapter&.close
     end
   end
 
+  def session_three_pipeline(corpus)
+    Pipeline.new(
+      corpus:,
+      principals: Pipeline::Principals.new(generator: 'principal.generator', evaluator: 'principal.evaluator',
+                                           promoter: 'principal.operator'),
+      change: Pipeline::BehaviorChange.new(before: 'tamoz.agent.session/2', after: 'tamoz.agent.session/3',
+                                           rollback_snapshot_digest: "sha256:#{'a' * 64}"),
+      regression_tasks: RunnerInputs.regression_tasks
+    )
+  end
+
+  def promote_and_activate(engine, bundle)
+    body = Improvement::EvaluationReport.verify!(bundle.report)
+    resolver = ->(seal) { seal == Improvement::EvaluationReport.seal(body) ? bundle.report : nil }
+    result = Improvement::Promotion.new(engine).promote(
+      candidate: bundle.candidate, provenance: bundle.provenance, report: bundle.report,
+      human_gate_evidence: 'human:operator-1', actor: 'principal.operator', evidence_resolver: resolver
+    )
+    transition_id = result.fetch('transition').transition_id
+    engine.transitions.claim(transition_id:, owner: 'intake', attempt: 1)
+    engine.transitions.finalize(transition_id:, consumed_by: 'session.canary')
+  end
+
   def seed_baseline(engine)
     transition, = engine.transitions.record(
-      kind: :wisdom_promotion, candidate_id: "wis.default", candidate_digest: "sha256:#{"9" * 64}",
-      behavior_snapshot: {"wisdom" => "default baseline"}, behavior_version_after: "tamoz.agent.session/2",
-      promotion_evidence_digest: "sha256:#{"7" * 64}", human_gate_evidence: "human:operator-1",
-      created_by: "tamoz.agent.memory.wisdom"
+      kind: :wisdom_promotion, candidate_id: 'wis.default', candidate_digest: "sha256:#{'9' * 64}",
+      behavior_snapshot: { 'wisdom' => 'default baseline' }, behavior_version_after: 'tamoz.agent.session/2',
+      promotion_evidence_digest: "sha256:#{'7' * 64}", human_gate_evidence: 'human:operator-1',
+      created_by: 'tamoz.agent.memory.wisdom'
     )
-    engine.transitions.claim(transition_id: transition.transition_id, owner: "intake", attempt: 1)
-    engine.transitions.finalize(transition_id: transition.transition_id, consumed_by: "session.seed")
+    engine.transitions.claim(transition_id: transition.transition_id, owner: 'intake', attempt: 1)
+    engine.transitions.finalize(transition_id: transition.transition_id, consumed_by: 'session.seed')
   end
 end

@@ -222,14 +222,9 @@ module Tamoz
       end
 
       def run_read_only_work(task)
-        plan, review = accepted_plan(
-          task,
-          phase: :read_only,
-          allowed_tools: toolbox.names,
-          evidence: [],
-          metadata: {},
-          planning_context: {}
-        ) { |event| yield event if block_given? }
+        plan, review = accepted_plan(task, PlanInputs.new(phase: :read_only, allowed_tools: toolbox.names)) do |event|
+          yield event if block_given?
+        end
         observations = execute_observations(plan, phase: :read_only) { |event| yield event }
         {plan:, review:, observations:, verification_context: {}}
       end
@@ -430,14 +425,9 @@ module Tamoz
       end
 
       def routed_read_only_plan(task, discovery_observations)
-        accepted_plan(
-          task,
-          phase: :read_only,
-          allowed_tools: toolbox.read_only_names,
-          evidence: discovery_observations,
-          metadata: {"discovery_pass" => 0},
-          planning_context: {}
-        ) { |event| yield event }
+        inputs = PlanInputs.new(phase: :read_only, allowed_tools: toolbox.read_only_names,
+                                evidence: discovery_observations)
+        accepted_plan(task, inputs, metadata: {"discovery_pass" => 0}) { |event| yield event }
       rescue PlanRejectedError, ProtocolError
         route_plan_fallback("route_read_only_plan_rejected") { |event| yield event }
         nil
@@ -476,12 +466,7 @@ module Tamoz
 
       def discover_action_observations(task, discovery:)
         discovery_plan, = discovery || accepted_plan(
-          task,
-          phase: :discovery,
-          allowed_tools: toolbox.read_only_names,
-          evidence: [],
-          metadata: {},
-          planning_context: {}
+          task, PlanInputs.new(phase: :discovery, allowed_tools: toolbox.read_only_names)
         ) { |event| yield event }
         execute_observations(discovery_plan, phase: :discovery) { |event| yield event }
       end
@@ -535,14 +520,9 @@ module Tamoz
       end
 
       def draft_action_plan(task, state, context)
-        accepted_plan(
-          task,
-          phase: context.fetch(:phase),
-          allowed_tools: toolbox.names,
-          evidence: state.all_observations,
-          metadata: context.fetch(:metadata),
-          planning_context: context.fetch(:planning_context)
-        ) { |event| yield event }
+        inputs = PlanInputs.new(phase: context.fetch(:phase), allowed_tools: toolbox.names,
+                                evidence: state.all_observations, planning_context: context.fetch(:planning_context))
+        accepted_plan(task, inputs, metadata: context.fetch(:metadata)) { |event| yield event }
       rescue PlanRejectedError
         raise if state.repair_attempt.zero?
 
@@ -736,12 +716,14 @@ module Tamoz
       end
 
       def model_content(value, request:, configuration_digest:)
-        return ModelCallProjection.validate!(
-          value,
-          request_digest: request["request_digest"],
-          settings_digest: model_settings_digest,
-          provider_configuration_digest: configuration_digest
-        ).fetch("content") if value.is_a?(Hash) && value.key?("content")
+        if value.is_a?(Hash) && value.key?("content")
+          return ModelCallProjection.validate!(
+            value,
+            request_digest: request["request_digest"],
+            settings_digest: model_settings_digest,
+            provider_configuration_digest: configuration_digest
+          ).fetch("content")
+        end
 
         value
       end

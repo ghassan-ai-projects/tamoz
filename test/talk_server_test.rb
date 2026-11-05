@@ -10,6 +10,26 @@ class TalkServerTest < Minitest::Test
 
   def teardown = stop_hubs
 
+  def status_of(hub, method, path, **) = http(hub, method, path, **).status
+
+  def upload_status(hub, body, headers)
+    status_of(hub, 'POST', '/v1/utterances?update_id=3', body:, headers:)
+  end
+
+  def held_update(hub) = hub.inbox.poll(next_offset: nil, limit: 5, timeout_s: 0)[:updates].first
+
+  def events_page(hub) = JSON.parse(http(hub, 'GET', '/v1/events?after=0&timeout=0&speech=1').body)
+
+  def speech_of(hub, receipt)
+    speech = http(hub, 'GET', "/v1/speech/#{receipt.fetch('message_id')}")
+    [speech.status, speech.headers['content-type'], speech.body]
+  end
+
+  def deliver_answer(hub)
+    hub.deliver(Tamoz::Comms::Delivery.build(conversation_id: 'talk:chat:1', kind: 'answer', text: 'Fine.',
+                                             render_version: 1, content_digest: 'a' * 64))
+  end
+
   API = [%w[POST /v1/messages], %w[POST /v1/utterances?update_id=1], %w[POST /v1/decisions], %w[GET /v1/events],
          %w[GET /v1/speech/1], %w[GET /v1/trace]].freeze
 
@@ -70,31 +90,34 @@ class TalkServerTest < Minitest::Test
 
   def test_malformed_and_oversized_requests_are_typed_refusals
     hub = start_hub
+    decision = JSON.generate('update_id' => 1, 'action' => 'maybe', 'reference' => 'r', 'message_id' => 1)
+    statuses = [
+      status_of(hub, 'POST', '/v1/messages', body: 'not json'),
+      status_of(hub, 'POST', '/v1/messages', body: JSON.generate('update_id' => 2**53, 'text' => 'x')),
+      status_of(hub, 'POST', '/v1/messages', body: JSON.generate('update_id' => 1, 'text' => ' ')),
+      status_of(hub, 'POST', '/v1/messages', body: 'x' * 9000),
+      status_of(hub, 'POST', '/v1/decisions', body: decision),
+      status_of(hub, 'GET', '/v1/messages'),
+      status_of(hub, 'GET', '/v1/nothing')
+    ]
 
-    assert_equal 400, http(hub, 'POST', '/v1/messages', body: 'not json').status
-    assert_equal 400, http(hub, 'POST', '/v1/messages', body: JSON.generate('update_id' => 2**53, 'text' => 'x')).status
-    assert_equal 400, http(hub, 'POST', '/v1/messages', body: JSON.generate('update_id' => 1, 'text' => ' ')).status
-    assert_equal 413, http(hub, 'POST', '/v1/messages', body: 'x' * 9000).status
-    assert_equal 400, http(hub, 'POST', '/v1/decisions',
-                           body: JSON.generate('update_id' => 1, 'action' => 'maybe', 'reference' => 'r',
-                                               'message_id' => 1)).status
-    assert_equal 405, http(hub, 'GET', '/v1/messages').status
-    assert_equal 404, http(hub, 'GET', '/v1/nothing').status
-    assert_equal 404, http(hub, 'GET', '/v1/trace').status, 'the trace route exists only when asked for'
+    assert_equal [400, 400, 400, 413, 400, 405, 404], statuses
+    assert_equal 404, status_of(hub, 'GET', '/v1/trace'), 'the trace route exists only when asked for'
   end
 
   def test_an_utterance_must_be_a_short_16k_mono_wav
     hub = start_hub
     audio = { 'Content-Type' => 'audio/wav' }
+    statuses = [
+      upload_status(hub, 'RIFF', audio),
+      upload_status(hub, wav(1, rate: 44_100), audio),
+      upload_status(hub, wav(1), { 'Content-Type' => 'text/plain' }),
+      upload_status(hub, wav(61), audio),
+      upload_status(hub, wav(1), audio)
+    ]
 
-    assert_equal 415, http(hub, 'POST', '/v1/utterances?update_id=3', body: 'RIFF', headers: audio).status
-    assert_equal 415, http(hub, 'POST', '/v1/utterances?update_id=3', body: wav(1, rate: 44_100), headers: audio).status
-    assert_equal 415,
-                 http(hub, 'POST', '/v1/utterances?update_id=3', body: wav(1),
-                                                                 headers: { 'Content-Type' => 'text/plain' }).status
-    assert_equal 413, http(hub, 'POST', '/v1/utterances?update_id=3', body: wav(61), headers: audio).status
-    assert_equal 503, http(hub, 'POST', '/v1/utterances?update_id=3', body: wav(1), headers: audio).status
-    held = hub.inbox.poll(next_offset: nil, limit: 5, timeout_s: 0)[:updates].first
+    assert_equal [415, 415, 415, 413, 503], statuses
+    held = held_update(hub)
 
     assert_equal %w[voice audio/wav talk-3], held['attachment'].values_at('kind', 'media_type', 'file_id')
     assert_equal wav(1), hub.inbox.audio('talk-3')
@@ -102,29 +125,30 @@ class TalkServerTest < Minitest::Test
 
   def test_events_and_speech_routes
     hub = start_hub(synthesize: ->(_text) { "ID3\x04".b })
-    receipt = hub.deliver(Tamoz::Comms::Delivery.build(conversation_id: 'talk:chat:1', kind: 'answer', text: 'Fine.',
-                                                       render_version: 1, content_digest: 'a' * 64))
-    events = JSON.parse(http(hub, 'GET', '/v1/events?after=0&timeout=0&speech=1').body)
-    speech = http(hub, 'GET', "/v1/speech/#{receipt.fetch('message_id')}")
+    receipt = deliver_answer(hub)
+    events = events_page(hub)
 
     assert_equal(['Fine.'], events['events'].map { |event| event['text'] })
     assert events['reset'], 'a page with no epoch starts from the whole log'
-    assert_equal [200, 'audio/mpeg', "ID3\x04".b], [speech.status, speech.headers['content-type'], speech.body]
+    assert_equal [200, 'audio/mpeg', "ID3\x04".b], speech_of(hub, receipt)
     assert_equal 404, http(hub, 'GET', '/v1/speech/42').status
   end
 
   def test_duplicate_identity_headers_and_odd_request_lines_are_refused
     hub = start_hub
+    host = "127.0.0.1:#{hub.port}"
     base = "GET /v1/events?timeout=0 HTTP/1.1\r\n"
     auth = "Authorization: Bearer #{TOKEN}\r\n"
+    refused = [
+      raw(hub, "#{base}Host: evil.test\r\nHost: #{host}\r\n#{auth}\r\n").status,
+      raw(hub, "#{base}Host: #{host}\r\n#{auth}Authorization: Bearer x\r\n\r\n").status,
+      raw(hub, "GET  /v1/events HTTP/1.1\r\nHost: #{host}\r\n\r\n").status,
+      raw(hub, "GET / HTTP/1.1 extra\r\nHost: #{host}\r\n\r\n").status
+    ]
+    hosts = ["[::1]:#{hub.port}", "LOCALHOST:#{hub.port}", "localhost.:#{hub.port}"]
 
-    assert_equal 400, raw(hub, "#{base}Host: evil.test\r\nHost: 127.0.0.1:#{hub.port}\r\n#{auth}\r\n").status
-    assert_equal 400, raw(hub, "#{base}Host: 127.0.0.1:#{hub.port}\r\n#{auth}Authorization: Bearer x\r\n\r\n").status
-    assert_equal 400, raw(hub, "GET  /v1/events HTTP/1.1\r\nHost: 127.0.0.1:#{hub.port}\r\n\r\n").status
-    assert_equal 400, raw(hub, "GET / HTTP/1.1 extra\r\nHost: 127.0.0.1:#{hub.port}\r\n\r\n").status
-    assert_equal 200, http(hub, 'GET', '/v1/events?timeout=0', host: "[::1]:#{hub.port}").status
-    assert_equal 200, http(hub, 'GET', '/v1/events?timeout=0', host: "LOCALHOST:#{hub.port}").status
-    assert_equal 421, http(hub, 'GET', '/v1/events?timeout=0', host: "localhost.:#{hub.port}").status
+    assert_equal [400, 400, 400, 400], refused
+    assert_equal([200, 200, 421], hosts.map { |name| status_of(hub, 'GET', '/v1/events?timeout=0', host: name) })
   end
 
   def test_invalid_text_and_references_are_refused

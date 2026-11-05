@@ -67,6 +67,7 @@ class ThermalTournamentControlsTest < Minitest::Test
         candidate: @supervisor, baseline: control, cells: @supervisor,
         metric: correct, minimum_effect: 0.0, seed: 7
       )
+
       assert_operator result.fetch('mean_difference'), :>, 0.0
     end
   end

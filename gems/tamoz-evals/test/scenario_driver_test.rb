@@ -200,12 +200,7 @@ class ScenarioDriverTest < Minitest::Test
       restart_driver(adapter).call(**restart_call_arguments)
 
       task = adapter.enqueued_tasks.first
-      arguments = JSON.generate(
-        'path' => ScenarioDriverInputs.restart_fixture_path,
-        'content' => ScenarioDriverInputs.restart_fixture_content,
-        'expected_sha256' => ScenarioDriverInputs.restart_fixture_digest,
-        'mode' => ScenarioDriverInputs.restart_fixture_mode
-      )
+      arguments = restart_create_file_arguments
 
       assert_equal 1, task.scan(arguments).length
       assert_includes task, 'durable checkpoint'
@@ -335,6 +330,15 @@ class ScenarioDriverTest < Minitest::Test
   def restart_driver(adapter)
     Tamoz::Evals::Benchmark::ScenarioDriver.new(
       adapter:, scenario: 'T3-m3m4', scenario_definitions: ScenarioDriverInputs.definitions
+    )
+  end
+
+  def restart_create_file_arguments
+    JSON.generate(
+      'path' => ScenarioDriverInputs.restart_fixture_path,
+      'content' => ScenarioDriverInputs.restart_fixture_content,
+      'expected_sha256' => ScenarioDriverInputs.restart_fixture_digest,
+      'mode' => ScenarioDriverInputs.restart_fixture_mode
     )
   end
 

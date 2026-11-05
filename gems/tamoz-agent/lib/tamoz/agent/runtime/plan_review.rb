@@ -9,17 +9,15 @@ module Tamoz
       #
       # :nodoc:
       module PlanReview
+        # What one phase's plan is drafted and reviewed against.
+        PlanInputs = Data.define(:phase, :allowed_tools, :evidence, :planning_context) do
+          def initialize(phase:, allowed_tools:, evidence: [], planning_context: {}) = super
+        end
+
         private
 
-        def accepted_plan(
-          task,
-          phase:,
-          allowed_tools:,
-          evidence:,
-          metadata:,
-          planning_context:
-        )
-          event_context = {"phase" => phase.to_s}.merge(metadata)
+        def accepted_plan(task, inputs, metadata: {}, &block)
+          event_context = { 'phase' => inputs.phase.to_s }.merge(metadata)
           feedback = []
           # D-8 Fix C (RC-3): track the last attempt's feedback layer so the
           # PlanRejectedError discloses a bounded summary of STRUCTURAL-layer issues
@@ -27,68 +25,40 @@ module Tamoz
           # yields the generic phrase.
           last_layer = nil
           max_plan_attempts.times do |offset|
-            attempt = offset + 1
-            raw = model_generate(
-              stage: :plan,
-              system: PLAN_SYSTEM,
-              prompt: planning_prompt(
-                task,
-                phase,
-                allowed_tools,
-                evidence,
-                feedback,
-                planning_context
-              )
-            )
-            plan = Plan.parse(raw)
-            emit(:plan_drafted, event_context.merge("attempt" => attempt, "plan" => plan.to_h)) do |event|
-              yield event
-            end
-
-            structural_issues = structural_issues(plan, phase:, allowed_tools:)
-            emit(
-              :plan_reviewed,
-              event_context.merge(
-                "attempt" => attempt,
-                "layer" => "structural",
-                "decision" => structural_issues.empty? ? "accept" : "revise",
-                "issues" => structural_issues
-              )
-            ) { |event| yield event }
-            unless structural_issues.empty?
-              feedback = structural_issues
-              last_layer = :structural
-              next
-            end
-
-            review = semantic_review(task, plan, phase:, evidence:, planning_context:)
-            emit(:plan_reviewed, review.merge(event_context).merge("attempt" => attempt, "layer" => "semantic")) do |event|
-              yield event
-            end
-            if review.fetch("decision") == "accept"
-              emit(:plan_accepted, event_context.merge("attempt" => attempt, "plan" => plan.to_h)) do |event|
-                yield event
-              end
-              return [plan, Tamoz::Core.deep_freeze(review)]
-            end
-
-            feedback = review.fetch("issues")
-            last_layer = :semantic
-          rescue ProtocolError => e
-            feedback = [e.message]
-            last_layer = :protocol
-            emit(
-              :plan_reviewed,
-              event_context.merge(
-                "attempt" => attempt,
-                "layer" => "protocol",
-                "decision" => "revise",
-                "issues" => feedback
-              )
-            ) { |event| yield event }
+            accepted, feedback, last_layer =
+              plan_attempt(task, inputs, feedback, event_context.merge('attempt' => offset + 1), &block)
+            return accepted if accepted
           end
 
           raise PlanRejectedError, plan_rejected_message(last_layer, feedback)
+        end
+
+        def plan_attempt(task, inputs, feedback, context, &)
+          plan = Plan.parse(
+            model_generate(stage: :plan, system: PLAN_SYSTEM, prompt: planning_prompt(task, inputs, feedback))
+          )
+          emit(:plan_drafted, context.merge('plan' => plan.to_h), &)
+
+          issues = structural_issues(plan, phase: inputs.phase, allowed_tools: inputs.allowed_tools)
+          emit(:plan_reviewed,
+               context.merge('layer' => 'structural', 'decision' => issues.empty? ? 'accept' : 'revise',
+                             'issues' => issues), &)
+          return [nil, issues, :structural] unless issues.empty?
+
+          semantic_attempt(task, plan, inputs, context, &)
+        rescue ProtocolError => e
+          emit(:plan_reviewed, context.merge('layer' => 'protocol', 'decision' => 'revise', 'issues' => [e.message]), &)
+          [nil, [e.message], :protocol]
+        end
+
+        def semantic_attempt(task, plan, inputs, context, &)
+          review = semantic_review(task, plan, phase: inputs.phase, evidence: inputs.evidence,
+                                               planning_context: inputs.planning_context)
+          emit(:plan_reviewed, review.merge(context).merge('layer' => 'semantic'), &)
+          return [nil, review.fetch('issues'), :semantic] unless review.fetch('decision') == 'accept'
+
+          emit(:plan_accepted, context.merge('plan' => plan.to_h), &)
+          [[plan, Tamoz::Core.deep_freeze(review)], nil, nil]
         end
 
         # D-8 Fix C (RC-3): bounded structural-only rejection disclosure, mirroring
@@ -99,7 +69,7 @@ module Tamoz
           return "#{prefix}: the plan did not pass review; the last feedback is not discloseable" \
             unless last_layer == :structural
 
-          "#{prefix}: #{feedback.first(3).join("; ")}"
+          "#{prefix}: #{feedback.first(3).join('; ')}"
         end
 
         def structural_issues(plan, phase:, allowed_tools:)
@@ -126,15 +96,9 @@ module Tamoz
           Deliberation.parse_review(raw)
         end
 
-        def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context)
+        def planning_prompt(task, inputs, feedback)
           Deliberation.planning_prompt(
-            task,
-            phase,
-            allowed_tools,
-            evidence,
-            feedback,
-            planning_context,
-            toolbox:
+            task, inputs.phase, inputs.allowed_tools, inputs.evidence, feedback, inputs.planning_context, toolbox:
           )
         end
       end

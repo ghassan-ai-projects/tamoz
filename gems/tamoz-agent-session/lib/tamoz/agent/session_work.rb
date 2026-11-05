@@ -32,16 +32,12 @@ module Tamoz
 
       # :reek:DuplicateMethodCall
       def opened(base, context, attachment)
-        previous = @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
-                                                                      execution_id: context.execution_id) || {}
-        if attachment
-          reading = @attachment.read(attachment, window: work(base).window, context:,
-                                                 last_answer: last_answer(context))
-        end
+        previous = previous_turn(context)
+        reading = read_attachment(base, context, attachment)
         brief = @memory.brief(told(base, reading))
         entries = opening(base, context, previous, brief, reading)
-        base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries, work_turn: context.request_id,
-                   work_execution_id: context.execution_id,
+        base.merge(task: told(base, reading), phase: 'work', next_node: 'work_step', work_entries: entries,
+                   work_turn: context.request_id, work_execution_id: context.execution_id,
                    # §3.1: the disk may change between turns, so a turn's ledger starts empty.
                    work_observations: nil, work_started_ms: now_ms, work_plan: previous[:work_plan],
                    work_checkpoint: previous[:work_checkpoint],
@@ -83,6 +79,17 @@ module Tamoz
                  compaction: WorkCompaction.new(services: @services, work:), nudge: WorkNudge.new(work:))
       end
 
+      def previous_turn(context)
+        @services.configuration.previous_turn_reader&.call(thread_id: context.thread_id,
+                                                           execution_id: context.execution_id) || {}
+      end
+
+      def read_attachment(base, context, attachment)
+        return unless attachment
+
+        @attachment.read(attachment, window: work(base).window, context:, last_answer: last_answer(context))
+      end
+
       def lane(state) = @lanes.fetch(state[:research]&.fetch('mode') == 'lead' ? :lead : nil)
 
       def work(state) = lane(state).work
@@ -90,11 +97,15 @@ module Tamoz
       def research_available? = @services.configuration.subagent_apps.key?('research')
 
       def opening(base, context, previous, brief, reading)
-        transcript = @services.planning_context.conversation_transcript(context)
-        work(base).opening(task: told(base, reading), asked: base.fetch(:task), transcript:,
+        transcript = without_echo(@services.planning_context.conversation_transcript(context), base.fetch(:task))
+        work(base).opening(task: told(base, reading), transcript:,
                            previous_answer: previous_answer(previous, transcript), updates: directive_updates(previous),
                            carried: { memory: brief.text, checkpoint: previous[:work_checkpoint],
                                       material: reading&.material })
+      end
+
+      def without_echo(transcript, asked)
+        transcript.last == { 'role' => 'user', 'text' => asked } ? transcript[0...-1] : transcript
       end
 
       def told(base, reading) = reading&.task ? "#{base.fetch(:task)}\n#{reading.task}" : base.fetch(:task)

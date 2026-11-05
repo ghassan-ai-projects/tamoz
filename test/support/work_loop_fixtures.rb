@@ -125,7 +125,8 @@ module WorkLoopFixtures
   def attachment_payload(task, kind:, bytes:, media_type:, spool:)
     { 'task' => task,
       'attachment' => { 'kind' => kind, 'handoff' => 'f' * 64, 'digest' => spool.put('f' * 64, bytes),
-                        'media_type' => media_type, 'name' => nil, 'duration_s' => nil, 'size_bytes' => bytes.bytesize } }
+                        'media_type' => media_type, 'name' => nil, 'duration_s' => nil,
+                        'size_bytes' => bytes.bytesize } }
   end
 
   # effect_attempt_ttl: real seconds between preparing an effect and starting it; only a crash test wants it short.

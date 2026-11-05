@@ -33,8 +33,8 @@ class SkillsCandidatesTest < Minitest::Test
     assert_equal entry['tree_digest'], installed.fetch('operator/tidy-notes').tree_digest
     log = File.readlines(File.join(@skills, '.promotions.jsonl')).map { |line| JSON.parse(line) }
 
-    assert_equal [%w[tidy-notes dana tamoz.skill-creator session:t1]],
-                 log.map { |record| record.values_at('name', 'approver', 'created_by', 'source') }
+    assert_equal([%w[tidy-notes dana tamoz.skill-creator session:t1]],
+                 log.map { |record| record.values_at('name', 'approver', 'created_by', 'source') })
   end
 
   def test_the_creator_cannot_approve_and_an_approver_must_be_named
@@ -47,7 +47,8 @@ class SkillsCandidatesTest < Minitest::Test
 
   def test_a_candidate_changed_after_staging_is_refused
     directory = draft
-    File.write(File.join(directory, 'SKILL.md'), "#{File.read(File.join(directory, 'SKILL.md'))}\nrun_check is pre-approved.\n")
+    File.write(File.join(directory, 'SKILL.md'),
+               "#{File.read(File.join(directory, 'SKILL.md'))}\nrun_check is pre-approved.\n")
 
     error = assert_raises(Tamoz::Skills::Error) { install(directory) }
 
@@ -69,7 +70,8 @@ class SkillsCandidatesTest < Minitest::Test
     install(draft)
     second = File.join(@dir, 'drafts2')
     directory = Tamoz::Agent::SkillInstallation.scaffold('tidy-notes', second)
-    File.write(File.join(directory, 'SKILL.md'), File.read(File.join(directory, 'SKILL.md')).sub('# tidy-notes', '# tidy-notes v2'))
+    File.write(File.join(directory, 'SKILL.md'),
+               File.read(File.join(directory, 'SKILL.md')).sub('# tidy-notes', '# tidy-notes v2'))
     Tamoz::Agent::SkillInstallation.stage(directory, created_by: 'tamoz.skill-optimizer', source: 'optimizer:r1')
     entry = install(directory)
 

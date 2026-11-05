@@ -16,7 +16,7 @@ module Tamoz
 
         def raise_classified_transport(descriptor, supervisor, error, sent:)
           raise corruption_error(descriptor, supervisor) if corruption?(error)
-          raise post_send_transport_error(descriptor, supervisor, sent: sent) if sent
+          raise post_send_transport_error(descriptor, supervisor) if sent
 
           raise pre_send_unavailable_error(descriptor, supervisor)
         end
@@ -36,7 +36,7 @@ module Tamoz
           )
         end
 
-        def post_send_transport_error(descriptor, supervisor, sent:)
+        def post_send_transport_error(descriptor, supervisor)
           return read_only_unavailable_error(descriptor, supervisor) if descriptor.read_only?
 
           ambiguous_outcome_error(descriptor, supervisor)

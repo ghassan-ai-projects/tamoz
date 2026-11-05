@@ -29,17 +29,18 @@ module Tamoz
 
       attr_reader :port
 
-      def initialize(hub:, host:, port:, token_digest:, allow_hosts: [], trace: false, deadlines: {})
+      def initialize(hub:, serving:, token_digest:, allow_hosts: [])
         @hub = hub
+        deadlines = serving.deadlines
         @head_deadline_s = deadlines.fetch(:head, Http::HEAD_DEADLINE_S)
         @body_deadline_s = deadlines.fetch(:body, Http::BODY_DEADLINE_S)
         @write_deadline_s = deadlines.fetch(:write, Http::WRITE_DEADLINE_S)
-        @host = host
-        @port = port
+        @host = serving.host
+        @port = serving.port
         @token_digest = token_digest
         @assets = STATIC.transform_values { |name| File.binread(File.join(ASSETS, name)) }
         @allow_hosts = allow_hosts.map(&:downcase)
-        @trace = trace
+        @trace = serving.trace
         @open = 0
         @mutex = Mutex.new
       end
@@ -85,7 +86,7 @@ module Tamoz
         respond(socket, request, early)
       rescue Http::Refused => e
         reply(socket, e.status, e.message)
-      rescue EOFError, IOError, SystemCallError
+      rescue IOError, SystemCallError
         nil
       rescue StandardError => e
         warn "tamoz: talk server request failed (#{e.class})"
@@ -95,7 +96,9 @@ module Tamoz
         linger_close(socket)
       end
 
-      def reply(socket, status, body = '', **) = Http.write(socket, status, body, deadline_s: @write_deadline_s, **)
+      def reply(socket, status, body = '', headers: {})
+        Http.write(socket, status, body, headers:, deadline_s: @write_deadline_s)
+      end
 
       # Unread request bytes would make the close a reset that discards the response; drain them, briefly.
       def linger_close(socket)
@@ -123,15 +126,15 @@ module Tamoz
           Http.read_body(socket, request, early, max_bytes: max, deadline: Http.monotonic + @body_deadline_s)
         end
         status, payload, type = Api.new(@hub, trace: @trace).call(request, body, LIMITS)
-        reply(socket, status, payload, type:, headers: API_HEADERS)
+        reply(socket, status, payload, headers: { 'Content-Type' => type, **API_HEADERS })
       end
 
       def static(socket, request)
         name = STATIC[request.path]
-        return reply(socket, 404) unless name && request.method == 'GET'
+        return reply(socket, 404) unless name && request.verb == 'GET'
 
         reply(socket, 200, @assets.fetch(request.path),
-              type: TYPES.fetch(File.extname(name)), headers: { 'Content-Security-Policy' => CSP })
+              headers: { 'Content-Type' => TYPES.fetch(File.extname(name)), 'Content-Security-Policy' => CSP })
       end
 
       def authorized?(header)

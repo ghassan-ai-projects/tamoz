@@ -39,9 +39,9 @@ module Tamoz
       def transport = Transport.new(self)
 
       def start
-        @server = Server.new(hub: self, host: @serving.host, port: @serving.port || @descriptor.settings.fetch(:port),
-                             token_digest: @token_digest, allow_hosts: Array(@descriptor.settings[:allow_hosts]),
-                             trace: !@trace.nil?, deadlines: @serving.deadlines).start
+        serving = @serving.with(port: @serving.port || @descriptor.settings.fetch(:port))
+        @server = Server.new(hub: self, serving:, token_digest: @token_digest,
+                             allow_hosts: Array(@descriptor.settings[:allow_hosts])).start
         self
       end
 

@@ -2,7 +2,7 @@
 
 require_relative 'test_helper'
 
-# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class CommsPairingFirstContactTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -77,6 +77,7 @@ class CommsPairingFirstContactTest < Minitest::Test
                    'an unknown code refuses bounded'
 
       seed_consumed_challenge(store, code: 'CONSUMED')
+
       assert_equal NO_MATCH_REPLY, drive_command(gateway, transport, '/start CONSUMED', id: 4),
                    'a consumed code no longer matches'
 
@@ -101,7 +102,8 @@ class CommsPairingFirstContactTest < Minitest::Test
       rows = store.pairing_challenges
 
       assert_equal 2, rows.length, 'the expired row stays for the operator audit trail'
-      assert_equal 1, store.pairing_challenges(status: 'pending', now: NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60).length,
+      assert_equal 1, store.pairing_challenges(status: 'pending',
+                                               now: NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60).length,
                    'pending scans exclude the expired row'
       assert_match CODE_PATTERN, last_reply
     end
@@ -109,7 +111,7 @@ class CommsPairingFirstContactTest < Minitest::Test
 
   def test_operator_approval_admits_the_next_message_through_the_real_gateway
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
-      code = contact(gateway, transport, 1, now: NOW)
+      contact(gateway, transport, 1, now: NOW)
       digest = store.pairing_challenges(status: 'pending', now: NOW).first.fetch('challenge_digest')
 
       outcome = store.approve_pairing(
@@ -121,9 +123,11 @@ class CommsPairingFirstContactTest < Minitest::Test
                    store.binding(correspondent_id: CORRESPONDENT_ID, surface_id: SURFACE_ID).fetch('status')
 
       transport.batch([update(2, text: 'now we are paired, make it blue')])
+
       assert_equal :served, gateway.serve_once(now: NOW + 20, drain: false)
 
       thread = Comms::Admission.thread_id(SURFACE_ID, CONVERSATION_ID)
+
       assert_equal 1, checkpoints.request_history(thread_id: thread).length,
                    'the next message enqueues a real turn'
       assert_empty store.pairing_challenges(status: 'pending', now: NOW + 20),
@@ -135,6 +139,7 @@ class CommsPairingFirstContactTest < Minitest::Test
     with_gateway do |gateway, transport, store|
       contact(gateway, transport, 1, now: NOW)
       digest = store.pairing_challenges(status: 'pending', now: NOW).first.fetch('challenge_digest')
+
       assert_equal :approved,
                    store.approve_pairing(challenge_digest: digest, binding_wire: operator_binding_wire,
                                          now: NOW + 10)
@@ -148,26 +153,34 @@ class CommsPairingFirstContactTest < Minitest::Test
 
   # ===== harness =====
 
+  def record_appended_deliveries(adapter, appended)
+    adapter.singleton_class.define_method(:bind_comms_store) do |*bound|
+      super(*bound).tap do |store|
+        store.singleton_class.define_method(:append_delivery) do |delivery_wire, **arguments|
+          appended << delivery_wire
+          super(delivery_wire, **arguments)
+        end
+      end
+    end
+  end
+
+  def pairing_checkpoints(adapter)
+    definition = Tamoz.graph(name: 'pairing', version: '1') do
+      state :ready, default: true
+      node(:finish, implementation_name: 'pairing.finish', version: '1') { |_s, _c| { ready: true } }
+      edge Tamoz::START, :finish
+      edge :finish, Tamoz::END
+    end
+    definition.compile(checkpointer: adapter).checkpointer
+  end
+
   def with_gateway
     Dir.mktmpdir('tamoz-pairing') do |directory|
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
       begin
         appended = []
-        adapter.singleton_class.define_method(:bind_comms_store) do |*bound|
-          super(*bound).tap do |store|
-            store.singleton_class.define_method(:append_delivery) do |delivery_wire, **arguments|
-              appended << delivery_wire
-              super(delivery_wire, **arguments)
-            end
-          end
-        end
-        definition = Tamoz.graph(name: 'pairing', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'pairing.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
+        record_appended_deliveries(adapter, appended)
+        checkpoints = pairing_checkpoints(adapter)
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         transport = ScriptedTransport.new
@@ -216,7 +229,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   class ScriptedTransport
     def batch(updates) = (@updates = updates)
 
-    def poll(next_offset:, limit:, timeout_s:)
+    def poll(**)
       ids = @updates.map { |update| update.fetch('update_id') }
       { updates: @updates.map { |update| normalize(update) }, next_offset: ids.max && (ids.max + 1) }
     end
@@ -247,7 +260,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   # ===== helpers =====
 
   # One unbound contact through the real loop; returns the code it named.
-  def contact(gateway, transport, id, text: 'hello there', now:)
+  def contact(gateway, transport, id, now:, text: 'hello there')
     transport.batch([update(id, text:)])
     outcome = gateway.serve_once(now:, drain: false)
 
@@ -319,4 +332,4 @@ class CommsPairingFirstContactTest < Minitest::Test
     (now.utc.to_r * 1000).to_i
   end
 end
-# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize

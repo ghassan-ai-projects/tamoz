@@ -21,6 +21,7 @@ Tamoz::Stream::Gen.load!
 
 module Tamoz
   module Stream
+    # Maps an empty value to nil.
     module BlankToNil
       private
 

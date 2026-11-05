@@ -205,7 +205,7 @@ on recalled memory digests) is restored with a test; features Go encodes as `-0`
 doubles instead of refusing the draft; a condition must read at least one feature (`true` is refused); diagnosis codes
 are at most 63 characters, as Agentic Stream's decision schema allows; every draft admission guard has a test;
 duplication removed (`BudgetLimits` shared with episodes, one test helper for a drafting worker, one
-`RuleProposalScorecard.controls_discriminate?`).
+`RuleProposalScorecard.control_verdict`).
 
 **Owner decisions open (Agentic Stream side):**
 1. Agentic Stream retries a failed draft with the same `draft_id` (`drafts.go`, `NextDraft`), but Tamoz's durable

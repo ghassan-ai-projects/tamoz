@@ -111,6 +111,7 @@ class OpenclawMissionControlsTest < Minitest::Test
 
       assert(statuses(result).values.all?('ready'), "oracle must reach ready everywhere: #{statuses(result)}")
       mission_faults = readiness_reasons(directory, result).grep(/\Amission_/)
+
       assert_empty mission_faults, "the gate must find no mission fault in a clean run: #{mission_faults}"
     end
   end
@@ -137,12 +138,19 @@ class OpenclawMissionControlsTest < Minitest::Test
 
       assert(statuses(result).values.all?('failed'), "adversary must fail everywhere: #{statuses(result)}")
       reasons = readiness_reasons(directory, result)
-      records = result.manifest.fetch('missions').to_h { |mission| [mission.fetch('id'), mission] }
-      mission_ids.each do |id|
-        assert_includes reasons, "mission_failed:#{id}"
-        assert_includes records.fetch(id).fetch('hard_zero').values, 'failed',
-                        "the tripped hard-zero must be recorded as the cause for #{id}"
-      end
+      records = mission_records(result)
+
+      mission_ids.each { |id| assert_hard_zero_tripped(reasons, records.fetch(id), id) }
     end
+  end
+
+  def mission_records(result)
+    result.manifest.fetch('missions').to_h { |mission| [mission.fetch('id'), mission] }
+  end
+
+  def assert_hard_zero_tripped(reasons, record, id)
+    assert_includes reasons, "mission_failed:#{id}"
+    assert_includes record.fetch('hard_zero').values, 'failed',
+                    "the tripped hard-zero must be recorded as the cause for #{id}"
   end
 end

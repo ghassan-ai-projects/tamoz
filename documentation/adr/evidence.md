@@ -458,8 +458,8 @@ Checked 2026-10-01 (source inspection).
 
 | Claim | Enforced by | Evidence | Limit |
 |---|---|---|---|
-| Profile-named credential only; no generic fallback | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_client_factory.rb` | `test/model_client_factory_test.rb` — `test_factory_requires_the_profile_credential_without_generic_fallback` | — |
-| Native protocols and unknown providers fail closed | same | `test/model_client_factory_test.rb` — `test_native_protocols_and_unknown_providers_fail_closed` | — |
+| Profile-named credential only; no generic fallback | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_credentials.rb` | `test/model_client_factory_test.rb` — `test_factory_requires_the_profile_credential_without_generic_fallback` | — |
+| Native protocols and unknown providers fail closed | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_route_checks.rb` | `test/model_client_factory_test.rb` — `test_native_protocols_and_unknown_providers_fail_closed` | — |
 | Configuration binds without the secret | same | `test/model_client_factory_test.rb` — `test_factory_binds_profile_and_explicit_endpoint_configuration_without_secret` | — |
 | Receipt identity changes with request and provider configuration | `gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb` | `test/agent_model_receipt_test.rb` — `test_logical_key_changes_with_provider_configuration` | — |
 | No retry of a received failure | `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb` | `test/model_transport_parity_test.rb` — `test_transport_does_not_retry_a_received_failure` | — |

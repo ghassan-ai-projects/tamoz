@@ -128,18 +128,14 @@ class TalkChatEval
     sent_at = now
     status = wav ? say_audio(wav) : say_text(text)
     admitted_at = now
-    return Turn.new(sent_at:, voice: !wav.nil?, admitted: false, events: []) unless status == 200
+    voice = !wav.nil?
+    return Turn.new(sent_at:, voice:, admitted: false, events: []) unless status == 200
 
-    settled = begin
-      await(timeout:, since: sent_at) { |event| FINAL.include?(event['kind']) || event['reference'] }
-    rescue RuntimeError
-      nil
-    end
+    settled = await_settled(timeout, sent_at)
     seen = messages(since: sent_at)
-    Turn.new(sent_at:, admitted_at:, voice: !wav.nil?, admitted: true, events: seen,
-             heard: seen.find { |event| event.data['text'].to_s.start_with?('Heard:') },
-             final: settled && FINAL.include?(settled.data['kind']) ? settled : nil,
-             card: settled && settled.data['reference'] ? settled : nil).tap { |turn| @turns << turn }
+    Turn.new(sent_at:, admitted_at:, voice:, admitted: true, events: seen,
+             heard: heard_event(seen),
+             final: final_event(settled), card: card_event(settled)).tap { |turn| @turns << turn }
   end
 
   # Every earlier request has settled and nothing waits in the outbox, so the next scenario starts clean.
@@ -170,6 +166,18 @@ class TalkChatEval
   end
 
   private
+
+  def await_settled(timeout, since)
+    await(timeout:, since:) { |event| FINAL.include?(event['kind']) || event['reference'] }
+  rescue RuntimeError
+    nil
+  end
+
+  def heard_event(events) = events.find { |event| event.data['text'].to_s.start_with?('Heard:') }
+
+  def final_event(settled) = (settled if settled && FINAL.include?(settled.data['kind']))
+
+  def card_event(settled) = (settled if settled && settled.data['reference'])
 
   # The default profile lets chat tools write without asking; like the Telegram eval, a write must really ask.
   def tighten_approvals

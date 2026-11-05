@@ -28,7 +28,7 @@ class DependencyIsolationTest < Minitest::Test
       puts JSON.generate(
         "graph" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/graph") },
         "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
-        "socket" => $LOADED_FEATURES.any? { |path| path.match?(%r{/socket\.(rb|so|bundle)\z}) },
+        "socket" => $LOADED_FEATURES.any? { |path| path.match?(%r{/socket.(rb|so|bundle)\z}) },
         "openssl" => $LOADED_FEATURES.any? { |path| path.include?("openssl") },
         "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
       )

@@ -8,26 +8,16 @@ module Tamoz
         @compiled = compiled
       end
 
-      def execute_tasks(
-        tasks,
-        checkpoint,
-        writer:,
-        context:,
-        concurrency:,
-        resume_values:
-      )
+      def execute_tasks(tasks, checkpoint, execution)
         return [] if tasks.empty?
 
+        context = execution.context
+        concurrency = execution.concurrency
         pool = compiled.pool_for(concurrency)
         pool.map(tasks, cancellation: context.cancellation) do |task|
-          execute_task(
-            task,
-            checkpoint,
-            writer:,
-            context:,
-            concurrency:,
-            resume_values: resume_values.fetch(task.id, {}.freeze)
-          )
+          resumed = execution.resume_values.fetch(task.id, {}.freeze)
+          task_context = task_context_for(task, checkpoint, context, concurrency, resumed)
+          execute_task(task, checkpoint, task_context, execution.writer)
         end
       end
 
@@ -35,16 +25,9 @@ module Tamoz
 
       attr_reader :compiled
 
-      def execute_task(
-        task,
-        checkpoint,
-        writer:,
-        context:,
-        concurrency:,
-        resume_values:
-      )
+      def task_context_for(task, checkpoint, context, concurrency, resume_values)
         cursor = InterruptCursor.new(task_id: task.id, resume_values:)
-        task_context = context.with(
+        context.with(
           run_id: task.id,
           parent_run_id: context.run_id,
           namespace: [*context.namespace, *task.path],
@@ -57,6 +40,9 @@ module Tamoz
             concurrency:
           )
         )
+      end
+
+      def execute_task(task, checkpoint, task_context, writer)
         emit_task_start(task_context, task)
         outcome = invoke_node(task, checkpoint, task_context)
         emit_task_end(task_context, task)

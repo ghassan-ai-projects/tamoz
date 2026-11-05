@@ -13,33 +13,26 @@ class ModelTransportParityTest < Minitest::Test
     with_endpoint([CONTENT]) do |endpoint|
       transport = transport_for(endpoint)
       response = transport.generate(stage: :plan, system: SYSTEM, prompt: PROMPT)
-      observed = endpoint.observed.fetch(0)
       projection = Tamoz::Agent::ModelCallProjection.from_response(response)
 
-      assert_equal CONTENT, response.content
-      assert_equal [42, 21], [response.usage.input_tokens, response.usage.output_tokens]
-      assert_equal observed.fetch('request_digest'), response.request_digest
-      assert_equal observed.fetch('response_digest'), response.response_digest
-      assert_equal transport.settings_digest, response.settings_digest
-      assert_equal transport.provider_configuration_digest, response.provider_configuration_digest
+      assert_equal expected_fields(transport, endpoint.observed.fetch(0)), response_fields(response)
       assert_equal %w[
         content provider_configuration_digest provider_retries request_digest response_digest settings_digest usage
       ], projection.keys.sort
     end
   end
 
-  def test_same_request_bytes_are_stable_while_response_digests_track_envelopes
-    with_endpoint([CONTENT, SECOND_CONTENT]) do |endpoint|
-      transport = transport_for(endpoint)
-      request = transport.build_request(system: SYSTEM, prompt: PROMPT)
-      first = transport.call(request)
-      second = transport.call(request)
-      observations = endpoint.observed
-
+  def test_same_request_bytes_are_stable_across_envelopes
+    with_two_calls do |first, second, observations|
       assert_equal first.request_digest, second.request_digest
-      assert_equal observations.map { |row| row.fetch('request_digest') }.uniq.length, 1
-      assert_equal first.response_digest, observations.fetch(0).fetch('response_digest')
-      assert_equal second.response_digest, observations.fetch(1).fetch('response_digest')
+      assert_equal 1, observations.map { |row| row.fetch('request_digest') }.uniq.length
+    end
+  end
+
+  def test_response_digests_track_envelopes
+    with_two_calls do |first, second, observations|
+      assert_equal([first.response_digest, second.response_digest],
+                   observations.map { |row| row.fetch('response_digest') })
       refute_equal first.response_digest, second.response_digest
     end
   end
@@ -54,9 +47,7 @@ class ModelTransportParityTest < Minitest::Test
       transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
     end
 
-    assert_equal 'http_failure', error.code
-    assert_equal 503, error.status
-    assert_equal body.bytesize, error.body_bytes
+    assert_equal ['http_failure', 503, body.bytesize], [error.code, error.status, error.body_bytes]
     refute_includes error.message, 'provider-secret-sentinel'
   end
 
@@ -118,17 +109,12 @@ class ModelTransportParityTest < Minitest::Test
   end
 
   def test_partial_or_malformed_usage_is_unavailable
-    transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: 'http://example.test/v1', model: 'model', provider: 'openai'
-    )
+    wire = Tamoz::Agent::EpisodeModelTransport::Wire
+    partial = wire.usage_from({ 'prompt_tokens' => 42 })
+    malformed = wire.usage_from(nil)
 
-    partial = transport.send(:usage_from, {'prompt_tokens' => 42})
-    malformed = transport.send(:usage_from, nil)
-
-    refute partial.available
-    refute malformed.available
-    assert_nil partial.input_tokens
-    assert_nil malformed.output_tokens
+    assert_equal [false, false, nil, nil],
+                 [partial.available, malformed.available, partial.input_tokens, malformed.output_tokens]
   end
 
   private
@@ -140,7 +126,7 @@ class ModelTransportParityTest < Minitest::Test
   def replaying_transport(response, api_key: nil, pause: nil, &on_request)
     response.instance_variable_set(:@read, true)
     transport_class = Class.new(Tamoz::Agent::EpisodeModelTransport) do
-      define_method(:post_completion_request) do |_body, headers:|
+      define_method(:post_completion_request) do |_body, **|
         on_request&.call
         response
       end
@@ -161,6 +147,34 @@ class ModelTransportParityTest < Minitest::Test
     end
   end
 
+  def with_two_calls
+    with_endpoint([CONTENT, SECOND_CONTENT]) do |endpoint|
+      transport = transport_for(endpoint)
+      request = transport.build_request(system: SYSTEM, prompt: PROMPT)
+      first = transport.call(request)
+      second = transport.call(request)
+      yield first, second, endpoint.observed
+    end
+  end
+
+  def expected_fields(transport, observed)
+    {
+      content: CONTENT, usage: [42, 21],
+      request_digest: observed.fetch('request_digest'), response_digest: observed.fetch('response_digest'),
+      settings_digest: transport.settings_digest,
+      provider_configuration_digest: transport.provider_configuration_digest
+    }
+  end
+
+  def response_fields(response)
+    {
+      content: response.content, usage: [response.usage.input_tokens, response.usage.output_tokens],
+      request_digest: response.request_digest, response_digest: response.response_digest,
+      settings_digest: response.settings_digest,
+      provider_configuration_digest: response.provider_configuration_digest
+    }
+  end
+
   def transport_for(endpoint)
     Tamoz::Agent::EpisodeModelTransport.new(
       endpoint: endpoint.base_url, model: 'local-model', provider: 'openai', api_key: 'test-key'
@@ -168,6 +182,6 @@ class ModelTransportParityTest < Minitest::Test
   end
 
   def digest
-    "sha256:#{"a" * 64}"
+    "sha256:#{'a' * 64}"
   end
 end

@@ -8,11 +8,12 @@ require "tmpdir"
 module Tamoz
   module Evals
     module Harness
+      # The development and holdout task sets of a heuristic evaluation.
       class HeuristicCorpus
         DIRECTORY_MODE = 0o700
         FILE_MODE = 0o600
 
-        attr_reader :train_root, :protected_root, :holdout_root, :evaluator_root
+        attr_reader :train_root, :protected_root, :holdout_root, :evaluator_root, :development_tasks, :holdout_tasks
 
         def self.create(inputs:, &block)
           directory = Dir.mktmpdir("tamoz-heuristic-corpus")
@@ -72,8 +73,6 @@ module Tamoz
         def holdout_ids = @holdout_tasks.map { |entry| entry.fetch("task_id") }
         def train_digest = digest_of(@train_trajectories)
         def holdout_digest = digest_of(@holdout_tasks)
-        def development_tasks = @development_tasks
-        def holdout_tasks = @holdout_tasks
 
         def write_evaluator_output(name, content)
           path = File.join(@evaluator_root, name)

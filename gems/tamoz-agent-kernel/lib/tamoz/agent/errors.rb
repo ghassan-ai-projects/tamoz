@@ -37,6 +37,7 @@ module Tamoz
     # a malformed receipt can never enter the durable journal.
     class ModelReceiptError < Error; end
 
+    # A model call that failed, with the provider's code, HTTP status and response-body digest.
     class ModelCallError < Tamoz::Core::ToolError
       attr_reader :code, :status, :body_digest, :body_bytes
 

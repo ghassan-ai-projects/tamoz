@@ -43,7 +43,7 @@ class AgentObservabilityDurabilityTest < Minitest::Test
 
   def emit_model_call_then_kill(directory)
     journal = Tamoz::Observability::Recorder::Journal.new(
-      directory:, role: 'worker', flush_interval_ms: 60_000
+      directory:, role: 'worker', limits: Tamoz::Observability::Recorder::Journal::Limits.new(flush_interval_ms: 60_000)
     )
     recorder = durable_recorder.new(recorder: journal)
     model_call = Tamoz::Observability::ModelCall.new(

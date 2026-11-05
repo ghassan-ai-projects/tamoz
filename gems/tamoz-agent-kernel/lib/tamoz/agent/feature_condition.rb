@@ -13,6 +13,9 @@ module Tamoz
       end
       private_constant :Mismatch
 
+      BOOLEANS = [true, false].freeze
+      private_constant :BOOLEANS
+
       MAX_BYTES = 1024
       MAX_DEPTH = 32
       NUMBER = /\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/
@@ -170,19 +173,19 @@ module Tamoz
         case operator
         when '&&' then boolean(left) && boolean(right)
         when '||' then boolean(left) || boolean(right)
-        when '==', '!=' then equality(operator, left, right)
+        when '==', '!=' then equal_operands?(operator, left, right)
         else number(left).public_send(operator, number(right))
         end
       end
 
-      def equality(operator, left, right)
-        raise Mismatch unless [left, right].all?(Numeric) || [left, right].all? { |side| [true, false].include?(side) }
+      def equal_operands?(operator, left, right)
+        raise Mismatch unless [left, right].all?(Numeric) || [left, right].all? { |side| BOOLEANS.include?(side) }
 
         (left == right) == (operator == '==')
       end
 
       def boolean(value)
-        raise Mismatch unless [true, false].include?(value)
+        raise Mismatch unless BOOLEANS.include?(value)
 
         value
       end

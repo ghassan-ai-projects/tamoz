@@ -4,6 +4,7 @@
 
 require_relative 'test_helper'
 require_relative 'support/memory_spec'
+require_relative 'support/memory_spec_harness'
 
 # Quality-bar rows B and C at the memory-engine boundary (the rows that need a session
 # are in memory_work_route_test.rb). Each test asserts the row's own sentence against a
@@ -11,43 +12,9 @@ require_relative 'support/memory_spec'
 # that must come back, so an empty result cannot pass by matching nothing.
 class MemorySpecTest < Minitest::Test
   include MemorySpec
+  include MemorySpecHarness
 
   DAY = 86_400
-
-  def setup
-    @directory = Dir.mktmpdir('tamoz-memory-spec')
-    @now = Time.at(1_800_000_000)
-    @engine, @adapter = memory_engine_at(@directory, clock: -> { @now })
-  end
-
-  def teardown
-    @adapter&.close
-    FileUtils.remove_entry(@directory)
-  end
-
-  def fts_rows(memory_id)
-    table_count(@adapter, 'SELECT COUNT(*) FROM tamoz_memory_fts WHERE memory_id = ?', [memory_id])
-  end
-
-  def index_rows(memory_id)
-    table_count(@adapter, 'SELECT COUNT(*) FROM tamoz_memory_index WHERE memory_id = ?', [memory_id])
-  end
-
-  def recall(terms, user: 'alice', project: 'proj', automatic: false)
-    @engine.retrieval.recall(caller: memory_caller(@engine, user:, project:), query: { terms: Array(terms) },
-                             automatic:).records
-  end
-
-  def brief(task, trace: nil)
-    @engine.retrieval.brief(caller: memory_caller(@engine), task:, trace:)
-  end
-
-  def remember(quote, key: nil, scope: :project, project: 'proj', messages: nil)
-    @engine.knowledge.remember(quote:, key:, scope:, user_messages: messages || [quote], owner: 'alice',
-                               project:, session: 's1')
-  end
-
-  def statements(records) = records.map(&:statement)
 
   def test_automatic_recall_and_the_brief_are_knowledge_only
     spec_row('B1') do
@@ -184,14 +151,14 @@ class MemorySpecTest < Minitest::Test
       elsewhere = @engine.knowledge.forget(target: fact.record.memory_id, quote: 'forget release-notes',
                                            user_messages: ['forget release-notes'], owner: 'alice', project: 'other')
 
-      assert_equal %w[quote_does_not_name_it not_found], [unnamed, elsewhere].map { |receipt| receipt.fetch('reason') }
+      assert_equal(%w[quote_does_not_name_it not_found], [unnamed, elsewhere].map { |receipt| receipt.fetch('reason') })
 
       twice = Array.new(2) do
         @engine.knowledge.forget(target: 'release-notes', quote: 'forget release-notes',
                                  user_messages: ['forget release-notes'], owner: 'alice', project: 'proj')
       end
 
-      assert_equal [true, true], twice.map { |receipt| receipt.fetch('forgotten') }
+      assert_equal([true, true], twice.map { |receipt| receipt.fetch('forgotten') })
       assert twice.last.fetch('already')
       assert_equal 2, @engine.repository.current_version(@engine.namespace, 'knowledge', fact.record.memory_id)
     end

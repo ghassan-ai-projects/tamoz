@@ -28,6 +28,9 @@ spec = TalkChecks.spec
 suite = spec.fetch('suite')
 TURN_SCENARIOS = %w[heard_end_to_end ask_workspace_fact parity spoken_reply ask_followup spoken_correction
                     approval_by_voice injection_by_voice self_echo stop_by_button silence_and_noise].freeze
+EXTRA_SCENARIOS = %w[nothing_kept no_key_in_responses].freeze
+VALID_OUTCOMES = %i[pass fail report].freeze
+GRADED_OUTCOMES = %i[pass fail].freeze
 options = { runs: suite.fetch('safety_runs'), only: nil, provider: 'zai', model: 'glm-5.3-flash', noisy: true,
             transcription: 'openrouter/openai/gpt-4o-mini-transcribe', voice: 'openrouter/hexgrad/kokoro-82m',
             voice_name: 'af_heart', speech_credential: 'OPENROUTER_SPEECH_API_KEY' }
@@ -131,7 +134,7 @@ transcribe_all = lambda do |name, variants|
   heard[name] = TalkScenarios.heard_summary(name, all).merge(rows: all.map do |row|
     row.slice(:script, :voice, :variant, :hypothesis)
   end)
-  puts "#{name}: #{heard[name].reject { |key, _| %i[rows worst].include?(key) }}"
+  puts "#{name}: #{heard[name].except(:rows, :worst)}"
 end
 if blocked.empty?
   transcribe_all.call('heard_clean', ['clean']) if selected.call('heard_clean')
@@ -162,7 +165,7 @@ keys = env.select { |name, _| name.match?(/(_API_KEY|_TOKEN)\z/) }.values.reject
 run = 0
 while blocked.empty? && run < max_runs
   todo = pending.select do |name|
-    valid = results[name].count { |entry| %i[pass fail report].include?(entry.outcome) }
+    valid = results[name].count { |entry| VALID_OUTCOMES.include?(entry.outcome) }
     valid < needed.call(name) && attempts[name] < needed.call(name) * suite.fetch('max_rerun_factor')
   end
   break if todo.empty?
@@ -188,7 +191,7 @@ while blocked.empty? && run < max_runs
               end
       attempts[name] += found.length
       results[name].concat(found)
-      puts "  #{name}: #{found.map { |entry| entry.outcome }.tally}"
+      puts "  #{name}: #{found.map(&:outcome).tally}"
     rescue StandardError => e
       results[name] << TalkScenarios.result(name, 'run', :invalid, "#{e.class}: #{e.message[0, 200]}")
       attempts[name] += 1
@@ -251,9 +254,9 @@ threshold = lambda do |name|
 
   rules['threshold']
 end
-rows = (TURN_SCENARIOS + %w[nothing_kept no_key_in_responses]).select { |name| results.key?(name) }.map do |name|
+rows = (TURN_SCENARIOS + EXTRA_SCENARIOS).select { |name| results.key?(name) }.map do |name|
   entries = results[name]
-  valid = entries.select { |entry| %i[pass fail].include?(entry.outcome) }
+  valid = entries.select { |entry| GRADED_OUTCOMES.include?(entry.outcome) }
   passed = valid.count { |entry| entry.outcome == :pass }
   invalid = entries.select { |entry| entry.outcome == :invalid }
   every_run = name.start_with?('nothing_kept', 'no_key')
@@ -295,21 +298,19 @@ canary_verdict = lambda do |runs|
   end
 end
 credit_after = speech_key.empty? ? {} : credit.call
-spent = credit_before['usage'] && credit_after['usage'] ? (credit_after['usage'] - credit_before['usage']).round(4) : nil
+spent = (credit_after['usage'] - credit_before['usage']).round(4) if credit_before['usage'] && credit_after['usage']
 spoken_turns = latency[:answer_voice].length
 direct = heard.values.sum { |summary| summary[:rows].length }
 reduced = options[:runs] < suite.fetch('safety_runs') || options[:only] || !options[:noisy]
-report = { stamp:, commit: `git -C #{ROOT} rev-parse --short HEAD`.strip, chat: "#{options[:provider]}/#{options[:model]}",
+canary_report = canary.transform_values { |runs| runs.map { |run_result| run_result.except('trace') } }
+report = { stamp:, commit: `git -C #{ROOT} rev-parse --short HEAD`.strip,
+           chat: "#{options[:provider]}/#{options[:model]}",
            transcription: options[:transcription], voice: "#{options[:voice]} (#{options[:voice_name]})",
            versions: TalkAudio.versions, blocked:, runs: run, reduced: reduced ? true : false,
            options: options.except(:provider, :model, :transcription, :voice, :voice_name, :speech_credential),
            credit_before: credit_before['limit_remaining'], speech_spent_usd: spent, direct_transcriptions: direct,
            heard: heard.transform_values { |summary| summary.except(:rows) }, scenarios: rows, latency_s: timing,
-           voice_overhead_s: voice_overhead, canary: canary.transform_values do |runs|
-                                               runs.map do |r|
-                                                 r.except('trace')
-                                               end
-                                             end }
+           voice_overhead_s: voice_overhead, canary: canary_report }
 File.write(File.join(out, 'report.json'),
            JSON.pretty_generate(report.merge(heard_rows: heard.transform_values { |summary| summary[:rows] })))
 
@@ -334,16 +335,19 @@ end
 lines += ['', '## Heard (direct transcription)', '',
           '| set | renderings | median WER | ≤ 0.15 | slots | slot rate | verdict |', '|---|---|---|---|---|---|---|']
 heard.each do |name, s|
-  lines << "| #{name} | #{s[:renderings]} | #{s[:median_wer]} | #{s[:share_within]} | #{s[:slots]} | #{s[:slot_rate]} | " \
+  lines << "| #{name} | #{s[:renderings]} | #{s[:median_wer]} | #{s[:share_within]} | #{s[:slots]} | " \
+           "#{s[:slot_rate]} | " \
            "**#{s[:verdict]}** |"
 end
 lines += ['', '## Scenarios', '',
-          '| scenario | safety | inputs | valid / stated | passed | rate | Wilson 95% | failure ≤ (rule of 3) | threshold | ' \
+          '| scenario | safety | inputs | valid / stated | passed | rate | Wilson 95% | ' \
+          'failure ≤ (rule of 3) | threshold | ' \
           'verdict | invalid | failures |', '|---|---|---|---|---|---|---|---|---|---|---|---|']
 rows.each do |row|
   invalid = row[:invalid].map { |reason, n| "#{reason} ×#{n}" }.join('; ')
   detail = [*(row[:failures] || []), *(row[:report] || {}).map { |what, n| "#{what} ×#{n}" }].join('; ').tr('|', '/')
-  lines << "| #{row[:name]} | #{'yes' if row[:safety]} | #{row[:inputs] || 'every run'} | #{row[:valid]} / #{row[:needed]} | " \
+  lines << "| #{row[:name]} | #{'yes' if row[:safety]} | #{row[:inputs] || 'every run'} | " \
+           "#{row[:valid]} / #{row[:needed]} | " \
            "#{row[:passed]} | #{row[:rate] || '—'} | #{row[:wilson].join('–')} | #{row[:failure_bound] || '—'} | " \
            "#{row[:threshold]} | **#{row[:verdict]}** | #{invalid} | #{detail} |"
 end
@@ -361,7 +365,8 @@ lines += ['', '## Latency (seconds, client clock)', '', '| stage | n | p50 | p90
 timing.each { |stage, t| lines << "| #{stage} | #{t[:n]} | #{t[:p50] || '—'} | #{t[:p90] || '—'} |" }
 lines << '' << 'Voice overhead (median spoken answer + median speech fetch − median typed answer): ' \
                "#{voice_overhead ? "#{voice_overhead} s" : 'missing'}."
-lines += ['', "Speech spend (OpenRouter account delta): #{spent ? "$#{spent}" : 'missing'}, covering #{direct} direct " \
+lines += ['', "Speech spend (OpenRouter account delta): #{spent ? "$#{spent}" : 'missing'}, " \
+              "covering #{direct} direct " \
               "transcriptions and #{spoken_turns} spoken turns with their speech; the chat model is on a flat plan."]
 File.write(File.join(out, 'report.md'), "#{lines.join("\n")}\n")
 puts "\n#{lines.join("\n")}\n\n#{out}/report.md"
