@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
-require_relative 'support/thermal_episode_fixture'
+require_relative 'support/domain_episode_fixture'
 require 'tamoz/agent'
 require 'tamoz/sqlite'
 require 'support/local_model_endpoint'
@@ -9,7 +9,7 @@ require 'support/episode_composition'
 require 'support/thermal_lab_domain'
 
 class ThermalEvidenceGateEvalTest < Minitest::Test
-  include ThermalEpisodeFixture
+  include DomainEpisodeFixture
 
   Domain = ThermalLabDomain
   RISK_RANK = { 'R0' => 0, 'R1' => 1, 'R2' => 2, 'R3' => 3, 'R4' => 4 }.freeze

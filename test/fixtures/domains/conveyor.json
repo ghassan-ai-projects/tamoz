@@ -1,0 +1,149 @@
+{
+  "domain": "conveyor",
+  "source": "agentic-stream examples/belt-conveyor/testdata/drive-degradation.situation.yaml and line-overload.situation.yaml",
+  "catalog": [
+    {
+      "code": "unknown",
+      "description": "no confident diagnosis"
+    },
+    {
+      "code": "drive_degrading",
+      "description": "a drive degrades against its peers at equal current (winding or vibration residual); the cause is not told yet: neither the bearing rule nor the gearbox rule holds. bearing and gearbox_seizing refine it"
+    },
+    {
+      "code": "bearing",
+      "description": "a dry drive bearing: the drive's 15 minute vibration mean is at least 0.3 mm/s above the larger of its peers' (each window holding at least 14 of its 15 readings); its winding temperature rises with it at equal current"
+    },
+    {
+      "code": "gearbox_seizing",
+      "description": "a drive gearbox losing oil, which will seize and drag the belt: in the same minute its 30 minute winding slope is at least 2 K/h above the larger of its peers' (each holding at least 162 of its 180 readings) while its vibration mean is less than 0.05 mm/s above theirs; stop the empty belt rather than the drive"
+    },
+    {
+      "code": "drive_tripped",
+      "description": "a drive stopped carrying load while the feed is high"
+    },
+    {
+      "code": "transient_none",
+      "description": "a rise every drive shares, such as a feed surge, or a short dip that recovers on its own"
+    }
+  ],
+  "objective": "One conveyor drive degrades against its peers at equal current. Give the\ndiagnosis by the catalog's rules and request the one step of the\nsituation's phase. drive_degrading is the diagnosis of a drive that\ndegrades while neither the bearing rule nor the gearbox rule holds; bearing\nand gearbox_seizing refine it once their rule holds. The phase, not the\ncause, decides the step: an untold cause is no reason to wait, and a watch\nnever replaces the step of a phase that has one. Never act on a rise every\ndrive shares.\n- phase degrading: shed the feed to the plant's limp feed - intent\n  reduce_feed (preset limp), with the diagnosis drive_degrading, or the\n  cause when its rule already holds.\n- phase shedding: run the belt empty by stopping the feeder - intent\n  stop_feed (preset empty), with the diagnosis drive_degrading, or the\n  cause when its rule already holds. Do not shed the feed again.\n- phase belt_empty: no step; the evidence has not named the cause yet.\n- phase cause_bearing: stop the degraded drive by plan - intent\n  isolate_drive (preset planned_stop).\n- phase cause_gearbox: stop the empty belt before the gearbox seizes -\n  intent stop_belt (preset planned_stop).\n- phase cause_undecided: stop the empty belt, the safe default - intent\n  stop_belt (preset planned_stop).\n- phase isolated: restore the plant's limp feed - intent reduce_feed\n  (preset limp). The drive was isolated because its bearing rule held:\n  give the diagnosis bearing, although the stopped drive no longer\n  vibrates.\nDecide whether the conveyor lost a drive while the feed is high and name\nthe drive whose current fell to about 0 A. Request the one step of the\nsituation's phase; never stop the belt.\n- phase overload: cut the feed to the limp feed the two survivors carry -\n  intent reduce_feed (preset limp).\n",
+  "prompt": "Analyze the immutable snapshot (each drive's current, its vibration and winding temperature over 15 minutes, the degraded drive's winding slope, the feed, its setpoint and the belt speed) and return a typed decision with a diagnosis and at most one request for the phase's step.\n",
+  "intent_types": {
+    "install_watch_condition": "R0",
+    "reduce_feed": "R1",
+    "stop_feed": "R2",
+    "isolate_drive": "R2",
+    "stop_belt": "R2"
+  },
+  "intent_parameter_schemas": {
+    "reduce_feed": {
+      "level": {
+        "type": "string",
+        "enum": [
+          "limp",
+          "restore"
+        ]
+      }
+    },
+    "stop_feed": {
+      "level": {
+        "type": "string",
+        "enum": [
+          "empty"
+        ]
+      }
+    },
+    "isolate_drive": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "planned_stop"
+        ]
+      }
+    },
+    "stop_belt": {
+      "mode": {
+        "type": "string",
+        "enum": [
+          "planned_stop"
+        ]
+      }
+    }
+  },
+  "watch_properties": {
+    "expires_at": {
+      "type": "string"
+    },
+    "expression": {
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "max_fires": {
+      "type": "integer"
+    },
+    "metric": {
+      "type": [
+        "string",
+        "number"
+      ]
+    },
+    "target": {
+      "type": "string"
+    },
+    "threshold": {
+      "type": "number"
+    }
+  },
+  "watch_preset": {
+    "expression": "cel.bind(bearing_vibration_mm_s, 0.3, cel.bind(gearbox_slope_k_per_h, 2.0, cel.bind(gearbox_quiet_vibration_mm_s, 0.05, cel.bind(vibration_readings_15m, 14.0, cel.bind(slope_readings_30m, 162.0, cel.bind(peer_vibration, features.drive1_vibration_15m > features.drive2_vibration_15m ? features.drive1_vibration_15m : features.drive2_vibration_15m, cel.bind(peer_slope, features.drive1_winding_slope_30m > features.drive2_winding_slope_30m ? features.drive1_winding_slope_30m : features.drive2_winding_slope_30m, cel.bind(vibration_counted, features.drive1_vibration_readings_15m >= vibration_readings_15m && features.drive2_vibration_readings_15m >= vibration_readings_15m && features.drive3_vibration_readings_15m >= vibration_readings_15m, cel.bind(slope_counted, features.drive1_winding_readings_30m >= slope_readings_30m && features.drive2_winding_readings_30m >= slope_readings_30m && features.drive3_winding_readings_30m >= slope_readings_30m,\n  vibration_counted && (features.drive3_vibration_15m - peer_vibration >= bearing_vibration_mm_s ||\n    slope_counted && features.drive3_winding_slope_30m - peer_slope >= gearbox_slope_k_per_h && features.drive3_vibration_15m - peer_vibration < gearbox_quiet_vibration_mm_s))))))))))",
+    "max_fires": 3,
+    "metric": "drive3_vibration_15m",
+    "threshold": 0.3
+  },
+  "snapshot": {
+    "situation_id": "sit-conveyor-1",
+    "situation_version": 1,
+    "tenant_id": "acme",
+    "situation_type": "drive_degradation",
+    "entity_type": "conveyor",
+    "entity_id_fact": "conveyor_id",
+    "event_horizon": "2026-11-09T00:00:00Z",
+    "fact_defaults": {
+      "conveyor_id": "conveyor-1",
+      "drive1_amps": 30.1,
+      "drive2_amps": 30.0,
+      "drive3_amps": 29.9,
+      "feed_kg_s": 30.0,
+      "feed_setpoint_percent": 100.0,
+      "tail_speed_rpm": 60.0,
+      "drive1_vibration_15m": 1.2,
+      "drive1_vibration_readings_15m": 15,
+      "drive2_vibration_15m": 1.22,
+      "drive2_vibration_readings_15m": 15,
+      "drive3_vibration_15m": 1.35,
+      "drive3_vibration_readings_15m": 15,
+      "drive1_winding_15m": 62.0,
+      "drive1_winding_readings_15m": 90,
+      "drive2_winding_15m": 62.4,
+      "drive2_winding_readings_15m": 90,
+      "drive3_winding_15m": 68.5,
+      "drive3_winding_readings_15m": 90,
+      "drive1_winding_slope_30m": 0.2,
+      "drive1_winding_readings_30m": 180,
+      "drive2_winding_slope_30m": 0.25,
+      "drive2_winding_readings_30m": 180,
+      "drive3_winding_slope_30m": 1.0,
+      "drive3_winding_readings_30m": 180
+    }
+  },
+  "document_template": {
+    "evidence_refs": [
+      "fact:drive3_winding_15m",
+      "fact:drive2_winding_15m"
+    ],
+    "default_intent_type": null
+  }
+}

@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-module ThermalEpisodeFixture
+module DomainEpisodeFixture
   private
 
-  def run_episode(episode_id:, document:, allowed:, risk_ceiling:, snapshot: ThermalLabDomain.snapshot)
+  def run_episode(episode_id:, document:, allowed:, risk_ceiling:, snapshot: self.class::Domain.snapshot)
+    domain = self.class::Domain
     endpoint = LocalModelEndpoint.new(
       mode: :fixture,
       responses: [Tamoz::Core.jcs(document)],
@@ -13,11 +14,11 @@ module ThermalEpisodeFixture
     composition = EpisodeComposition.build(endpoint: endpoint.base_url)
     @compositions << composition
     request = EpisodeComposition.wire_request(
-      episode_id:, prompt: ThermalLabDomain::PROMPT, snapshot:,
-      catalog_json: Tamoz::Core.jcs(ThermalLabDomain::CATALOG),
-      intent_catalog_json: Tamoz::Core.jcs(ThermalLabDomain::INTENT_CATALOG),
-      intent_catalog_sha256: ThermalLabDomain.intent_catalog_digest,
-      objective: ThermalLabDomain::OBJECTIVE,
+      episode_id:, prompt: domain::PROMPT, snapshot:,
+      catalog_json: Tamoz::Core.jcs(domain::CATALOG),
+      intent_catalog_json: Tamoz::Core.jcs(domain::INTENT_CATALOG),
+      intent_catalog_sha256: domain.intent_catalog_digest,
+      objective: domain::OBJECTIVE,
       allowed_intent_types: allowed, risk_ceiling:
     )
     events, app = EpisodeComposition.run(composition, request)

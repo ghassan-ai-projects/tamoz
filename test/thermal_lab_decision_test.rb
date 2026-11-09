@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
-require_relative 'support/thermal_episode_fixture'
+require_relative 'support/domain_episode_fixture'
 require 'tamoz/agent'
 require 'tamoz/sqlite'
 require 'tamoz/stream/episode_worker'
@@ -19,7 +19,7 @@ require 'support/episode_composition'
 # proves the plumbing invariants, NOT intelligence (that is the shadow tournament,
 # on a real model).
 class ThermalLabDecisionTest < Minitest::Test
-  include ThermalEpisodeFixture
+  include DomainEpisodeFixture
 
   Domain = ThermalLabDomain
 
