@@ -66,6 +66,18 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     refute_includes frame(intents: []).system, 'INTENTS ('
   end
 
+  def test_the_situation_section_shows_the_snapshot_phase_as_a_citable_fact
+    built = Agent::EpisodeFrameBuilder.new(catalog: Agent::DiagnosisCatalog.from_list(CATALOG), objective: '')
+                                      .build(snapshot: { 'phase' => 'shedding',
+                                                         'facts' => { 'x' => 1 } }, prompt: 'Diagnose.')
+    situation = JSON.parse(built.user).fetch('situation')
+
+    assert_equal [{ 'id' => 'fact:situation.phase', 'value' => 'shedding' }, { 'id' => 'fact:x', 'value' => 1 }],
+                 situation
+    assert_equal %w[fact:situation.phase fact:x], built.evidence_ids
+    assert_equal [{ 'id' => 'fact:x', 'value' => 1 }], JSON.parse(frame.user).fetch('situation')
+  end
+
   def test_a_rejected_document_is_repaired_with_the_keys_and_shape_it_must_have
     update = nodes.validate(validate_state(repair_count: 0), nil)
 
