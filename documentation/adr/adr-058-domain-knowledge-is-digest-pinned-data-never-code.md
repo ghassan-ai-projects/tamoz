@@ -25,6 +25,9 @@ silently diverges.
 - No domain content — catalog entries, prompts, rules, presets — is authored in Ruby, in gems,
   `test/support/`, or tests. A test may name a domain value it asserts on (an intent type, a fixture
   key); it may not define one.
+- Tamoz carries no caller's domain. A caller (agentic-stream, a plant, a lab rig) sends its domain at runtime in
+  the episode request. The domains in `test/fixtures/domains/` are Tamoz's own evaluation sets, never a copy of a
+  caller's specs, catalogs or codes; a generic rule is tested with a generic case (2026-11-10, owner).
 - The wire digests of the pinned catalogs and prompts, and the SHA of
   `documentation/benchmark/BENCHMARK_PROTOCOL.json`, change only in a deliberate, reviewed update.
   The aquaculture intent-catalog digest is also pinned in the Go repository; a Ruby-only edit breaks
