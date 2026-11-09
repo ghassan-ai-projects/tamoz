@@ -100,6 +100,18 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     )), nil).fetch('next_node')
   end
 
+  def test_every_repair_names_the_intent_types_the_frame_lists
+    responses = { 'malformed' => nil, 'two actions' => terminal(REFUSED_BY_THE_DECISION_BUILDER.values.first) }
+    tails = %w[R1 R0].product(responses.keys).to_h do |ceiling, name|
+      state = validate_state(repair_count: 0, risk_ceiling: ceiling, raw_response: responses.fetch(name))
+      [[ceiling, name], nodes.validate(state, nil).fetch('repair_directive')[/recommended_intents may use .*\z/]]
+    end
+    listed = { 'R1' => 'install_watch_condition, schedule_maintenance', 'R0' => 'install_watch_condition' }
+    expected = tails.keys.to_h { |key| [key, "recommended_intents may use only these types: #{listed.fetch(key[0])}."] }
+
+    assert_equal expected, tails
+  end
+
   def test_a_second_rejection_names_the_node_and_code_but_never_the_model_text
     error = assert_raises(Agent::EpisodeDocumentRejectedError) { nodes.validate(validate_state(repair_count: 1), nil) }
 
@@ -123,8 +135,10 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     Agent::EpisodeNodes.new(profile: nil, frame_builder_factory: nil, model_call_factory: nil, decision_builder: nil)
   end
 
-  def validate_state(repair_count:, raw_response: JSON.generate('protocol' => Doc::PROTOCOL, 'diagnosis' => 'x'))
-    { episode: { 'kind' => 'diagnose', 'allowed_intent_types' => %w[install_watch_condition schedule_maintenance] },
+  def validate_state(repair_count:, raw_response: nil, risk_ceiling: 'R1')
+    raw_response ||= JSON.generate('protocol' => Doc::PROTOCOL, 'diagnosis' => 'x')
+    { episode: { 'kind' => 'diagnose', 'allowed_intent_types' => %w[install_watch_condition schedule_maintenance],
+                 'risk_ceiling' => risk_ceiling },
       frame: { 'catalog' => CATALOG, 'evidence_ids' => [] }, repair_count:, raw_response:,
       wire: { 'intent_catalog_json' => Tamoz::Core.jcs(INTENT_LIST),
               'intent_catalog_sha256' => Tamoz::Core.digest(:intent_catalog, INTENT_LIST) } }

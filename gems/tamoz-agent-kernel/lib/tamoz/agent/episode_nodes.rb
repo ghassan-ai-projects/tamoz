@@ -681,7 +681,7 @@ module Tamoz
       def repair_directive_for(state, error)
         return error.message if draft?(state)
 
-        ReasoningDocumentShape.repair_directive(error.message)
+        ReasoningDocumentShape.repair_directive(error.message, intent_types: recommendable_intents(state).map(&:type))
       end
 
       def verified_intent_catalog(wire)

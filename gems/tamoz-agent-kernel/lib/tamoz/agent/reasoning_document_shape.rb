@@ -42,10 +42,11 @@ module Tamoz
         ]
       end
 
-      def repair_directive(rejection)
+      def repair_directive(rejection, intent_types:)
         "#{rejection}. Rewrite the whole answer as one JSON object with only the keys " \
           "#{TERMINAL_TURN_KEYS.join(', ')}: #{terminal_example} (a tool turn, when tools are offered, " \
-          "carries only #{TOOL_TURN_KEYS.join(', ')})."
+          "carries only #{TOOL_TURN_KEYS.join(', ')}). recommended_intents may use only these types: " \
+          "#{intent_types.join(', ')}."
       end
 
       def terminal_example = object(TERMINAL_TURN_KEYS)
