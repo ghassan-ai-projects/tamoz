@@ -78,6 +78,24 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     assert_equal [{ 'id' => 'fact:x', 'value' => 1 }], JSON.parse(frame.user).fetch('situation')
   end
 
+  def test_the_parser_accepts_exactly_the_id_prefixes_the_frame_offers
+    skill = Data.define(:name, :tree_digest, :text).new(name: 'triage', tree_digest: 'sha256:0', text: 'Look first.')
+    built = frame(skills: [skill], memory: [{ 'digest' => 'm1', 'statement' => 'seen before' }],
+                  tool_results: [{ 'tool' => 'probe_log', 'result_json' => '{}' }])
+
+    assert_equal Doc::REF_PREFIXES.sort, built.evidence_ids.map { |id| id.split(':', 2).first }.uniq.sort
+  end
+
+  def test_a_reference_the_frame_never_offers_is_repaired_toward_the_citable_ids
+    response = JSON.parse(terminal([])).merge('evidence_refs' => ['evidence:row-7'])
+    directive = nodes.validate(validate_state(repair_count: 0, raw_response: JSON.generate(response)), nil)
+                     .fetch('repair_directive')
+
+    assert directive.start_with?('reasoning_document/evidence_ref_format: evidence:row-7; ')
+    assert_includes directive, 'fact:, memory:, tool:, skill:'
+    assert_includes directive, 'tool:<index>'
+  end
+
   def test_a_rejected_document_is_repaired_with_the_keys_and_shape_it_must_have
     update = nodes.validate(validate_state(repair_count: 0), nil)
 
