@@ -12,7 +12,7 @@ module Tamoz
     #   - trusted policy section: the operator-authored prompt (digest-verified
     #     against the wire's prompt_sha256), the objective, and the diagnosis
     #     catalog (wire-digest-verified by DiagnosisCatalog.verify_wire);
-    #   - untrusted situation section: the verified snapshot's facts, each with
+    #   - untrusted situation section: the verified snapshot's phase and facts, each with
     #     a stable `fact:<index>` reference the model may cite, plus any
     #     recalled memory (P5).
     #
@@ -24,6 +24,7 @@ module Tamoz
       MAX_FACT_BYTES = 4096
       MAX_FACTS = 64
       MAX_TOOL_RESULT_BYTES = 16 * 1024
+      PHASE_FACT = "situation.phase"
       TOOL_PROTOCOL = <<~TEXT.chomp
         TOOLS: when the given facts cannot settle the diagnosis, return a tool turn instead of a verdict:
         #{ReasoningDocumentShape.tool_example}
@@ -104,7 +105,7 @@ module Tamoz
         end
 
         entries = []
-        raw.each do |name, value|
+        (situation_phase(snapshot) + raw.to_a).each do |name, value|
           break if entries.length >= MAX_FACTS
 
           entry = {"id" => name.to_s, "name" => name.to_s, "value" => value}
@@ -115,6 +116,11 @@ module Tamoz
           entries << entry
         end
         entries
+      end
+
+      # An objective names its steps by the situation's phase, so the model sees it beside the facts.
+      def situation_phase(snapshot)
+        snapshot.key?("phase") ? [[PHASE_FACT, snapshot["phase"]]] : []
       end
 
       def build_system(prompt, intents, tooling)

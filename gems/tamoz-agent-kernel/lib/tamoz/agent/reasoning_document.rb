@@ -43,7 +43,7 @@ module Tamoz
       # fixtures sailed through (the R3 trap). 0.05 still rejects sums the
       # model did not intend as distributions.
       PROBABILITY_TOLERANCE = 0.05
-      REF_PREFIXES = %w[fact evidence memory tool skill].freeze
+      REF_PREFIXES = %w[fact memory tool skill].freeze
 
       TERMINAL_KEYS = %w[
         primary_hypothesis diagnosis_probabilities evidence_refs recommended_intents evidence_gaps
@@ -170,10 +170,15 @@ module Tamoz
             raise ProtocolError, "reasoning_document/evidence_ref_not_string" unless ref.is_a?(String)
             reject_oversize(ref.bytesize, "evidence_ref", MAX_REF_BYTES)
             prefix = ref.split(":", 2).first
-            raise ProtocolError, "reasoning_document/evidence_ref_format: #{ref}" unless REF_PREFIXES.include?(prefix)
+            raise ProtocolError, evidence_ref_rejection(ref) unless REF_PREFIXES.include?(prefix)
 
             ref
           end
+        end
+
+        def evidence_ref_rejection(ref)
+          "reasoning_document/evidence_ref_format: #{ref}; cite only ids the user message gives, prefixed " \
+            "#{REF_PREFIXES.map { |prefix| "#{prefix}:" }.join(", ")}; a tool result is cited as tool:<index>"
         end
 
         def parse_recommended_intents(root)

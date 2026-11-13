@@ -84,6 +84,10 @@ LANG=C LC_ALL=C bundle exec rake ci_full     # complete gate; repeat with en_US.
   `test/fixtures/domains/*.json`, loaded by `test/support/domain_loader.rb`. The pinned wire digests and the
   protocol SHA in `documentation/benchmark/BENCHMARK_PROTOCOL.json` change only as a reviewed update; the
   aquaculture catalog digest is pinned in the Go repository too.
+- **Tamoz carries no caller's domain** (ADR-058). A caller's domain (its diagnosis codes, intents, objective, facts)
+  reaches Tamoz at runtime in the episode request, and Tamoz reasons from that alone. Never copy a caller's specs,
+  catalogs or codes into Tamoz's code, fixtures or tests; test a generic rule with a generic case or one of Tamoz's
+  own benchmark domains in `test/fixtures/domains/`.
 - **Real model for real runs; fakes stay in tests** (ADR-024). Tests never call a real LLM; a stub, fixture, or
   deterministic provider is never presented as evidence that the agent reasons.
 - **A received channel file is never stored** (ADR-064). It is a temporary handoff, deleted once the turn has read it; only

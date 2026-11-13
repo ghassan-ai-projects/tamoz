@@ -154,6 +154,14 @@ The deterministic coding-agent scorecard still reports incomplete behavior
 coverage. It must be regenerated from the owning test and reviewed with its
 hard-safety counters before the P3 exit criterion can be claimed.
 
+## The pump-station evaluation domain is a copy of a caller's spec
+
+`test/fixtures/domains/pump-station.json` (the rule-proposal scorecard's domain, TZ-4) is a copy of agentic-stream's
+`examples/pump-station/pump-station.situation.yaml`; its `source` field and commit `eeb88708` say so. That breaks the
+owner rule "Tamoz carries no caller's domain" (AGENTS.md, ADR-058, 2026-11-10). Fix later: rewrite it as Tamoz's own
+evaluation domain (own name and wording, same case shapes, re-pinned digests as a reviewed update), or delete it and
+lose the only rule-drafting evaluation. The other five domain fixtures declare no outside source.
+
 ## Operator visibility is partial
 
 `tamoz status --json` reports pending work, paused approvals, blocked (`:unknown`)

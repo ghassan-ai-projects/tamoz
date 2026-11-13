@@ -66,6 +66,36 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     refute_includes frame(intents: []).system, 'INTENTS ('
   end
 
+  def test_the_situation_section_shows_the_snapshot_phase_as_a_citable_fact
+    built = Agent::EpisodeFrameBuilder.new(catalog: Agent::DiagnosisCatalog.from_list(CATALOG), objective: '')
+                                      .build(snapshot: { 'phase' => 'shedding',
+                                                         'facts' => { 'x' => 1 } }, prompt: 'Diagnose.')
+    situation = JSON.parse(built.user).fetch('situation')
+
+    assert_equal [{ 'id' => 'fact:situation.phase', 'value' => 'shedding' }, { 'id' => 'fact:x', 'value' => 1 }],
+                 situation
+    assert_equal %w[fact:situation.phase fact:x], built.evidence_ids
+    assert_equal [{ 'id' => 'fact:x', 'value' => 1 }], JSON.parse(frame.user).fetch('situation')
+  end
+
+  def test_the_parser_accepts_exactly_the_id_prefixes_the_frame_offers
+    skill = Data.define(:name, :tree_digest, :text).new(name: 'triage', tree_digest: 'sha256:0', text: 'Look first.')
+    built = frame(skills: [skill], memory: [{ 'digest' => 'm1', 'statement' => 'seen before' }],
+                  tool_results: [{ 'tool' => 'probe_log', 'result_json' => '{}' }])
+
+    assert_equal Doc::REF_PREFIXES.sort, built.evidence_ids.map { |id| id.split(':', 2).first }.uniq.sort
+  end
+
+  def test_a_reference_the_frame_never_offers_is_repaired_toward_the_citable_ids
+    response = JSON.parse(terminal([])).merge('evidence_refs' => ['evidence:row-7'])
+    directive = nodes.validate(validate_state(repair_count: 0, raw_response: JSON.generate(response)), nil)
+                     .fetch('repair_directive')
+
+    assert directive.start_with?('reasoning_document/evidence_ref_format: evidence:row-7; ')
+    assert_includes directive, 'fact:, memory:, tool:, skill:'
+    assert_includes directive, 'tool:<index>'
+  end
+
   def test_a_rejected_document_is_repaired_with_the_keys_and_shape_it_must_have
     update = nodes.validate(validate_state(repair_count: 0), nil)
 
@@ -86,6 +116,18 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     assert_equal 'decide', nodes.validate(validate_state(repair_count: 0, raw_response: terminal(
       [{ 'type' => 'schedule_maintenance', 'parameters' => { 'work_order' => 'bearing_wear' } }]
     )), nil).fetch('next_node')
+  end
+
+  def test_every_repair_names_the_intent_types_the_frame_lists
+    responses = { 'malformed' => nil, 'two actions' => terminal(REFUSED_BY_THE_DECISION_BUILDER.values.first) }
+    tails = %w[R1 R0].product(responses.keys).to_h do |ceiling, name|
+      state = validate_state(repair_count: 0, risk_ceiling: ceiling, raw_response: responses.fetch(name))
+      [[ceiling, name], nodes.validate(state, nil).fetch('repair_directive')[/recommended_intents may use .*\z/]]
+    end
+    listed = { 'R1' => 'install_watch_condition, schedule_maintenance', 'R0' => 'install_watch_condition' }
+    expected = tails.keys.to_h { |key| [key, "recommended_intents may use only these types: #{listed.fetch(key[0])}."] }
+
+    assert_equal expected, tails
   end
 
   def test_a_second_rejection_names_the_node_and_code_but_never_the_model_text
@@ -111,8 +153,10 @@ class AgentEpisodeFrameShapeTest < Minitest::Test
     Agent::EpisodeNodes.new(profile: nil, frame_builder_factory: nil, model_call_factory: nil, decision_builder: nil)
   end
 
-  def validate_state(repair_count:, raw_response: JSON.generate('protocol' => Doc::PROTOCOL, 'diagnosis' => 'x'))
-    { episode: { 'kind' => 'diagnose', 'allowed_intent_types' => %w[install_watch_condition schedule_maintenance] },
+  def validate_state(repair_count:, raw_response: nil, risk_ceiling: 'R1')
+    raw_response ||= JSON.generate('protocol' => Doc::PROTOCOL, 'diagnosis' => 'x')
+    { episode: { 'kind' => 'diagnose', 'allowed_intent_types' => %w[install_watch_condition schedule_maintenance],
+                 'risk_ceiling' => risk_ceiling },
       frame: { 'catalog' => CATALOG, 'evidence_ids' => [] }, repair_count:, raw_response:,
       wire: { 'intent_catalog_json' => Tamoz::Core.jcs(INTENT_LIST),
               'intent_catalog_sha256' => Tamoz::Core.digest(:intent_catalog, INTENT_LIST) } }
