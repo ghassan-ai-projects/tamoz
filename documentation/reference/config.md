@@ -12,6 +12,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | Variable | Meaning |
 |---|---|
 | `OPENAI_API_KEY` | Credential for the default provider |
+| `OPEN_CODE_API_KEY` | Credential for the `opencode_go` provider |
 | `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, ... | Credentials for other providers — the provider's own standard variable |
 | `TAMOZ_TELEGRAM_BOT_TOKEN` | Telegram bot token, referenced by NAME in channel config |
 | `TAMOZ_TELEGRAM_API_ORIGIN` | A loopback `http://` stand-in for the Bot API (the evals); any other origin is refused |

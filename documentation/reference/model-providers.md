@@ -13,8 +13,14 @@ single `EpisodeModelTransport` OpenAI-compatible request shape.
 | `perplexity` | direct OpenAI-compatible | `https://api.perplexity.ai/v1` | `PERPLEXITY_API_KEY` | `PERPLEXITY_API_BASE` | non-empty provider model id |
 | `mistral` | direct OpenAI-compatible | `https://api.mistral.ai/v1` | `MISTRAL_API_KEY` | `MISTRAL_API_BASE` | non-empty provider model id |
 | `zai` | direct OpenAI-compatible | `https://api.z.ai/api/paas/v4` (a GLM Coding Plan key needs `https://api.z.ai/api/coding/paas/v4`) | `ZAI_API_KEY` | `ZAI_API_BASE` | non-empty provider model id, e.g. `glm-5.3-flash` |
+| `opencode_go` | direct OpenAI-compatible | `https://opencode.ai/inference/go/openai/v1` | `OPEN_CODE_API_KEY` | `OPENCODE_GO_API_BASE` | non-empty provider model id, e.g. `deepseek-v4.1-flash` |
 | `anthropic` | native protocol rejected | none | `ANTHROPIC_API_KEY` | `ANTHROPIC_API_BASE` | fail closed; use `openrouter` explicitly |
 | `gemini` | native protocol rejected | none | `GEMINI_API_KEY` | `GEMINI_API_BASE` | fail closed; use `openrouter` explicitly |
+
+`opencode_go` sends two headers that its descriptor declares as data: a `User-Agent` naming the client
+(`tamoz/<version>`) and an `x-opencode-session` value drawn once per built client, so every turn of that client
+keeps one session. The model reasons before it answers: the reasoning text arrives in `reasoning_content` and is
+ignored, while `content` and `tool_calls` are read as for any provider. Its route allows 600 s per response.
 
 `anthropic` and `gemini` are not silently redirected. Operators using those
 model families must select `openrouter` and provide its provider-qualified
@@ -41,6 +47,7 @@ checked):
 
 | Route | Context window | Max output |
 |---|---|---|
+| `opencode_go/deepseek-v4.1-flash` | 1,000,000 | 384,000 |
 | `deepseek/deepseek-flash` | 1,048,576 | 393,216 |
 | `deepseek/deepseek-v4-pro` | 1,048,576 | 393,216 |
 | `openrouter/deepseek/deepseek-v4.1-flash` | 1,048,576 | 384,000 |
