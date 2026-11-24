@@ -66,7 +66,7 @@ module Tamoz
       # pause: receives the seconds to wait before a retried request; tests pass a recorder.
       def initialize(endpoint:, model:, provider: "episode_model_transport", api_key: nil,
                      timeout_seconds: 120, gateway: nil, safety: :unsafe,
-                     provider_configuration_digest: nil, context_window: nil, pause: nil)
+                     provider_configuration_digest: nil, context_window: nil, pause: nil, headers: {})
         @endpoint = endpoint.to_s.sub(%r{/+\z}, "")
         raise ConfigurationError, "episode model endpoint is required" if @endpoint.empty?
 
@@ -81,6 +81,7 @@ module Tamoz
         @provider_configuration_digest = provider_configuration_digest || configuration_digest
         @context_window = context_window
         @pause = pause || ->(seconds) { sleep(seconds) }
+        @headers = headers.to_h.freeze
         freeze
       end
 
@@ -285,7 +286,7 @@ module Tamoz
         http.open_timeout = @timeout_seconds
         http.use_ssl = uri.scheme == "https"
         begin
-          http.request(Net::HTTP::Post.new(uri, headers), body, &)
+          http.request(Net::HTTP::Post.new(uri, @headers.merge(headers)), body, &)
         rescue Timeout::Error, IOError, SystemCallError, SocketError, Net::ProtocolError
           raise EffectUnknownError, "model call outcome is unknown"
         end

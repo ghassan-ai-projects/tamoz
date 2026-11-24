@@ -13,6 +13,7 @@ module Tamoz
         gemini: "GEMINI_API_KEY",
         mistral: "MISTRAL_API_KEY",
         ollama: "OLLAMA_API_KEY",
+        opencode_go: "OPEN_CODE_API_KEY",
         openai: "OPENAI_API_KEY",
         openrouter: "OPENROUTER_API_KEY",
         perplexity: "PERPLEXITY_API_KEY",
