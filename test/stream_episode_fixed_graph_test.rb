@@ -202,6 +202,23 @@ class StreamEpisodeFixedGraphTest < Minitest::Test
     end
   end
 
+  def test_a_snapshot_with_too_many_facts_fails_closed_with_its_reason_before_any_model_call
+    with_fixture_endpoint do |endpoint|
+      composition = composition(endpoint: endpoint.base_url)
+      snapshot = AquacultureDomain.snapshot
+      snapshot["facts"] = 257.times.to_h { |index| [format("fact_%03d", index), index] }
+      request = wire_request("many", snapshot:, catalog_json: Tamoz::Core.jcs(AquacultureDomain::CATALOG),
+                                     prompt: AquacultureDomain::PROMPT,
+                                     prompt_sha256: prompt_sha256(AquacultureDomain::PROMPT))
+      events = collect_events(composition, request)
+      diagnostic = events.map(&:diagnostic).compact.last
+
+      assert_equal 0, endpoint.observed.length
+      assert_equal :TERMINAL_STATUS_FAILED, terminal_of(events)
+      assert_equal "episode_frame/too_many_facts: 257 facts, limit 256", diagnostic.message
+    end
+  end
+
   def test_reconsider_episode_without_a_prior_decision_fails_closed
     with_fixture_endpoint do |endpoint|
       composition = composition(endpoint: endpoint.base_url)

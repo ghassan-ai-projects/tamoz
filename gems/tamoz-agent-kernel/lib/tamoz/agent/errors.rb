@@ -115,10 +115,13 @@ module Tamoz
     class ProfilePolicyError < Error; end
 
     # P1/§3.1: the episode frame failed a deterministic gate — a prompt digest
-    # mismatch, malformed facts, or an unverifiable catalog. Terminal: the
-    # episode fails typed before any model call. Distinct from ProtocolError,
-    # which is untrusted-model-document territory.
-    class EpisodeFrameError < Error; end
+    # mismatch, malformed or too many facts, or an unverifiable catalog. Terminal:
+    # the episode fails typed before any model call. The raise sites author the
+    # message (no model text), so it crosses the wire as the failure diagnostic.
+    # Distinct from ProtocolError, which is untrusted-model-document territory.
+    class EpisodeFrameError < Error
+      include Tamoz::DisclosableMessage
+    end
 
     # The validate node refused the model's document after its one repair. The raise
     # site writes only the node and the stable rejection code, never the model-quoted
