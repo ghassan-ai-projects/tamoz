@@ -26,6 +26,7 @@ module Tamoz
     # request and envelope handling stay together so the digests bind exactly what was sent.
     class EpisodeModelTransport
       require_relative "episode_model_transport/settings"
+      require_relative "episode_model_transport/response"
 
       OPENAI_COMPLETIONS_PATH = "/chat/completions"
       TRANSCRIPTION_PATH = "/audio/transcriptions"
@@ -33,11 +34,6 @@ module Tamoz
       MAX_TRANSCRIPT_CHARACTERS = 100_000
       MAX_SPEECH_BYTES = 2_000_000
       SETTINGS = Settings::REQUEST
-
-      Response = Data.define(
-        :content, :request_digest, :response_digest, :usage, :settings_digest,
-        :provider_configuration_digest, :provider_retries
-      )
 
       # A rate-limited or briefly unavailable provider answers before it acts, so the same request may be sent again.
       RETRYABLE_STATUSES = %w[429 503].freeze
@@ -97,8 +93,9 @@ module Tamoz
 
       # The frozen request model: system + user messages, temperature 0,
       # non-streaming. Canonicalized with JCS so the digest binds the exact
-      # wire bytes. Returns the canonical JSON String (the HTTP body).
-      def build_request(system:, prompt:)
+      # wire bytes. Returns the canonical JSON String (the HTTP body). max_tokens
+      # (the call's remaining output budget) is sent only when given.
+      def build_request(system:, prompt:, max_tokens: nil)
         request = {
           "model" => @model,
           "messages" => [
@@ -107,7 +104,7 @@ module Tamoz
           ],
           **Settings.request(@reasoning_effort)
         }
-        Tamoz::Core.jcs(request)
+        Tamoz::Core.jcs(Settings.with_max_tokens(request, max_tokens))
       end
 
       # A tool-calling conversation: the whole message history plus the tool
@@ -323,7 +320,8 @@ module Tamoz
           usage: Wire.usage_from(Wire.extract_usage_hash(envelope_bytes)),
           settings_digest: settings_digest,
           provider_configuration_digest:,
-          provider_retries: retries
+          provider_retries: retries,
+          finish_reason: Wire.extract_finish_reason(envelope_bytes)
         )
       end
 

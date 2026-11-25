@@ -33,6 +33,8 @@ module Tamoz
     # parses the document (reason=call, validate=parse+ground).
     class EpisodeModelCall
       OPERATION = "episode.model.reason"
+      # The provider stopped at the output limit: the answer is cut off and is never used.
+      OUTPUT_LIMIT_CODE = "output_limit_reached"
 
       Result = Data.define(:status, :raw_response, :receipt, :outcome) do
         def succeeded? = status == :succeeded
@@ -47,8 +49,10 @@ module Tamoz
         @transport = transport
       end
 
-      def call(context:, episode_id:, invocation:, slot:, system:, prompt:, frame_digest: nil, provider_retries: 0)
-        request_bytes = @transport.build_request(system:, prompt:)
+      # max_output_tokens: the episode's remaining output budget, sent so the provider stops there.
+      def call(context:, episode_id:, invocation:, slot:, system:, prompt:, frame_digest: nil, provider_retries: 0,
+               max_output_tokens: nil)
+        request_bytes = @transport.build_request(system:, prompt:, max_tokens: max_output_tokens)
         request_digest = @transport.request_digest(request_bytes)
         logical = ModelCall::LogicalCallKey.new(
           episode_id:, stage: invocation.stage, slot:, request_digest:,
@@ -117,6 +121,8 @@ module Tamoz
         response = @transport.call(
           request_bytes, logical_call_id: logical.to_key, frame_digest:, max_retries: provider_retries
         )
+        raise ModelCallError.new(code: OUTPUT_LIMIT_CODE) if response.finish_reason == 'length'
+
         ModelCallProjection.from_response(
           response,
           request_digest: @transport.request_digest(request_bytes),

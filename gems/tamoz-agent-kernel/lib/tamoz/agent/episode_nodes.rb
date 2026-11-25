@@ -354,7 +354,8 @@ module Tamoz
           system: frame.fetch("system"),
           prompt: frame.fetch("user"),
           frame_digest: frame["digest"],
-          provider_retries: budget.provider_retries_left(state.fetch(:budget_state, nil))
+          provider_retries: budget.provider_retries_left(state.fetch(:budget_state, nil)),
+          max_output_tokens: budget.output_tokens_left(state.fetch(:budget_state, nil))
         )
         enforce_successful_outcome!(result, subject: "model")
 
@@ -644,7 +645,14 @@ module Tamoz
         if result.unknown?
           raise EffectUnknownError, "episode #{subject} call outcome is unknown"
         end
-        raise EpisodeCallFailedError, failed_call_message(result, subject) if result.failed?
+        return unless result.failed?
+        raise StreamBudgetExceededError, "output token budget reached" if output_limit_reached?(result)
+
+        raise EpisodeCallFailedError, failed_call_message(result, subject)
+      end
+
+      def output_limit_reached?(result)
+        (result.outcome.error || {})["code"] == EpisodeModelCall::OUTPUT_LIMIT_CODE
       end
 
       def failed_call_message(result, subject)

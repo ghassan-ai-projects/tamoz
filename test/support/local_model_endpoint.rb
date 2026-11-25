@@ -29,6 +29,7 @@ class LocalModelEndpoint
     @server = TCPServer.new("127.0.0.1", 0)
     @port = @server.addr[1]
     @index = 0
+    @request_bodies = []
     File.write(log_path, "")
     @log_path = log_path
   end
@@ -64,12 +65,16 @@ class LocalModelEndpoint
     File.readlines(@log_path).map { |line| JSON.parse(line) }
   end
 
+  # The exact request bodies received, oldest first.
+  attr_reader :request_bodies
+
   private
 
   def handle(client)
     headers, request_bytes = Tamoz::Core::RawHttp.read_full_request(client)
     return if request_bytes.nil?
 
+    @request_bodies << request_bytes
     if @mode == :fixture
       status, envelope = next_fixture_reply
       append_log(request_bytes:, response_bytes: envelope, authorization: headers["authorization"])

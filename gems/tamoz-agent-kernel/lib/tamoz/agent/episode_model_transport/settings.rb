@@ -24,6 +24,17 @@ module Tamoz
 
         def with_effort(settings, effort) = effort ? settings.merge('reasoning_effort' => effort) : settings
 
+        # The per-call output limit is not a frozen setting: it varies with the episode's remaining budget, so
+        # it joins the request body only and is bound by the request digest, never by the settings digest.
+        def with_max_tokens(request, tokens)
+          return request if tokens.nil?
+          raise ConfigurationError, 'max_tokens must be a positive integer' unless positive_integer?(tokens)
+
+          request.merge('max_tokens' => tokens)
+        end
+
+        def positive_integer?(value) = value.is_a?(Integer) && value.positive?
+
         def effort(value)
           return nil if value.nil?
           return value.to_s if Providers::REASONING_EFFORTS.include?(value.to_s)
