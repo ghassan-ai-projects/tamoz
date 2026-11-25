@@ -211,6 +211,14 @@ module Tamoz
                     "#{@path}: normalized_settings for #{named} must be a bounded string mapping"
             end
           end
+          validate_reasoning_effort!(settings['reasoning_effort'], named)
+        end
+
+        def validate_reasoning_effort!(effort, named)
+          return if effort.nil? || Providers::REASONING_EFFORTS.include?(effort)
+
+          raise ValidationError,
+                "#{@path}: reasoning_effort for #{named} must be one of #{Providers::REASONING_EFFORTS.join(', ')}"
         end
 
         # A NAME of an environment variable, never a value. The same pattern the

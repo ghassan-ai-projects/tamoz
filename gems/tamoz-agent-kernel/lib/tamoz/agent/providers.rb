@@ -20,6 +20,9 @@ module Tamoz
         xai: "XAI_API_KEY",
         zai: "ZAI_API_KEY"
       }.freeze
+
+      # The accepted values of a route's optional `reasoning_effort` request setting.
+      REASONING_EFFORTS = %w[low high xhigh max].freeze
     end
   end
 end

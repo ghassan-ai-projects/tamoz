@@ -58,6 +58,7 @@ module Tamoz
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:, gateway:,
             pause:, headers: client_headers(descriptor),
+            reasoning_effort: profile_setting(profile_role, 'reasoning_effort'),
             timeout_seconds: timeout_seconds || ModelWindows.request_timeout(provider: name, model:),
             context_window: context_window || configured_context_window(profile_role, environment, name, model),
             provider_configuration_digest: Tamoz::Core.digest(
@@ -105,13 +106,15 @@ module Tamoz
           settings['base_url'] || settings['api_base']
         end
 
+        def profile_setting(profile_role, key) = (profile_role&.normalized_settings || {})[key]
+
         def configuration_document(provider, model, endpoint, role, safety)
           {
             'provider' => provider,
             'model' => model,
             'endpoint' => endpoint,
             'protocol' => descriptor_for(provider).fetch(:protocol),
-            'settings' => EpisodeModelTransport::SETTINGS,
+            'settings' => EpisodeModelTransport::Settings.request(profile_setting(role, 'reasoning_effort')),
             'profile_role' => role_document(role),
             'profile_digest' => role&.profile_digest,
             'safety' => safety.to_s
