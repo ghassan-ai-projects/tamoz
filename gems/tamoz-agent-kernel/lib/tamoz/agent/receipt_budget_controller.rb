@@ -39,14 +39,14 @@ module Tamoz
       # The CHECK before a model call. Exhaustion raises typed, BEFORE any
       # provider call.
       def check_model_call!(state)
-        max = @budget["max_model_calls"]
-        return if max.nil? || max.to_i <= 0
+        check_model_call_count!(state)
+        raise StreamBudgetExceededError, "output token budget exhausted" if output_tokens_left(state)&.<=(0)
+      end
 
-        used = (state || ZERO).fetch("model_calls_used", 0).to_i
-        if used + 1 > max.to_i
-          raise StreamBudgetExceededError,
-                "model call budget exhausted at #{used} calls (max #{max})"
-        end
+      # Output tokens the next model call may still produce, or nil when the wire sets no limit.
+      def output_tokens_left(state)
+        max = @budget["max_output_tokens"].to_i
+        max.positive? ? max - used(state, "output_tokens") : nil
       end
 
       # Provider retries the wire budget still allows; an unset limit allows none.
@@ -108,6 +108,16 @@ module Tamoz
 
       def used(state, key) = state.to_h.fetch(key, 0).to_i
 
+      def check_model_call_count!(state)
+        max = @budget["max_model_calls"]
+        return if max.nil? || max.to_i <= 0
+
+        used = used(state, "model_calls_used")
+        return unless used + 1 > max.to_i
+
+        raise StreamBudgetExceededError, "model call budget exhausted at #{used} calls (max #{max})"
+      end
+
       def add_available_usage(base, usage)
         return unless usage && usage.available
 
@@ -155,8 +165,11 @@ module Tamoz
 
     # The typed budget error the graph nodes raise; the runner maps its
     # category (the shared wire category name) to
-    # TERMINAL_STATUS_BUDGET_EXHAUSTED.
+    # TERMINAL_STATUS_BUDGET_EXHAUSTED. Every raise site authors the message from
+    # budget names and counts only, never model text, so it may cross the wire.
     class StreamBudgetExceededError < Error
+      include Tamoz::DisclosableMessage
+
       CATEGORY = "stream_budget_exceeded"
     end
   end

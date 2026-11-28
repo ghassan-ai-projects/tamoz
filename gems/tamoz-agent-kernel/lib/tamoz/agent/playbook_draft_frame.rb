@@ -10,6 +10,7 @@ module Tamoz
     # The frame for drafting one playbook rule; a case that does not fit is refused, never truncated.
     module PlaybookDraftFrame
       FRAME_DOMAIN = "tamoz.agent.playbook_draft_frame.v1\n"
+      MAX_ENTRIES = 64
       Frame = Data.define(:system, :user, :digest)
       INSTRUCTIONS = <<~TEXT.chomp
         You draft one deterministic playbook rule from verified cases that share one key. A human reviews every rule before it runs; you only propose it.
@@ -38,7 +39,7 @@ module Tamoz
 
       def refuse_too_many!(cases, rules)
         refuse "too_many_cases: #{cases.length}" if cases.length > PlaybookDraft::MAX_CASES
-        return unless cases.length + rules.length > EpisodeFrameBuilder::MAX_FACTS
+        return unless cases.length + rules.length > MAX_ENTRIES
 
         refuse "too_many_entries: #{cases.length + rules.length}"
       end

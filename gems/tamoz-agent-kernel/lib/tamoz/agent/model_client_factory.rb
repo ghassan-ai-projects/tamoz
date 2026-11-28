@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'securerandom'
 require 'tamoz/agent/episode_model_transport'
 require 'tamoz/agent/model_credentials'
 require 'tamoz/agent/model_receipt'
 require 'tamoz/agent/model_route_checks'
 require 'tamoz/agent/model_windows'
+require 'tamoz/agent/kernel/version'
 require 'tamoz/agent/providers'
 
 module Tamoz
@@ -22,6 +24,10 @@ module Tamoz
         'perplexity' => { default_base: 'https://api.perplexity.ai/v1', protocol: 'openai-compatible', kind: 'direct' },
         'mistral' => { default_base: 'https://api.mistral.ai/v1', protocol: 'openai-compatible', kind: 'direct' },
         'zai' => { default_base: 'https://api.z.ai/api/paas/v4', protocol: 'openai-compatible', kind: 'direct' },
+        'opencode_go' => { default_base: 'https://opencode.ai/inference/go/openai/v1', protocol: 'openai-compatible',
+                           kind: 'direct',
+                           headers: { 'User-Agent' => 'tamoz/%<version>s',
+                                      'x-opencode-session' => '%<session>s' }.freeze },
         'anthropic' => { default_base: nil, protocol: 'native-rejected', kind: 'rejected' },
         'gemini' => { default_base: nil, protocol: 'native-rejected', kind: 'rejected' }
       }.transform_values(&:freeze).freeze
@@ -51,7 +57,8 @@ module Tamoz
           configuration = configuration_document(name, model, endpoint, profile_role, safety)
           EpisodeModelTransport.new(
             endpoint:, model:, provider: name, api_key:, safety:, gateway:,
-            pause:,
+            pause:, headers: client_headers(descriptor),
+            reasoning_effort: profile_setting(profile_role, 'reasoning_effort'),
             timeout_seconds: timeout_seconds || ModelWindows.request_timeout(provider: name, model:),
             context_window: context_window || configured_context_window(profile_role, environment, name, model),
             provider_configuration_digest: Tamoz::Core.digest(
@@ -62,6 +69,11 @@ module Tamoz
         # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
 
         private
+
+        def client_headers(descriptor)
+          values = { version: Tamoz::Agent::Kernel::VERSION, session: SecureRandom.hex(16) }
+          descriptor.fetch(:headers, {}).transform_values { |template| format(template, **values) }
+        end
 
         # The routed model's window, explicit before implicit: a profile role setting, else the
         # operator's TAMOZ_CONTEXT_WINDOW, else the documented window for the route. There is no
@@ -94,13 +106,15 @@ module Tamoz
           settings['base_url'] || settings['api_base']
         end
 
+        def profile_setting(profile_role, key) = (profile_role&.normalized_settings || {})[key]
+
         def configuration_document(provider, model, endpoint, role, safety)
           {
             'provider' => provider,
             'model' => model,
             'endpoint' => endpoint,
             'protocol' => descriptor_for(provider).fetch(:protocol),
-            'settings' => EpisodeModelTransport::SETTINGS,
+            'settings' => EpisodeModelTransport::Settings.request(profile_setting(role, 'reasoning_effort')),
             'profile_role' => role_document(role),
             'profile_digest' => role&.profile_digest,
             'safety' => safety.to_s

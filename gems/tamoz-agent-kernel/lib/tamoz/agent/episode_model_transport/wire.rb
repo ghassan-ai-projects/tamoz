@@ -44,6 +44,10 @@ module Tamoz
           content
         end
 
+        def extract_finish_reason(bytes)
+          String(Tamoz::Core.parse_json_strict(bytes).dig('choices', 0, 'finish_reason'))
+        end
+
         def extract_usage_hash(bytes)
           parsed = Tamoz::Core.parse_json_strict(bytes)
           parsed.is_a?(Hash) ? parsed.fetch('usage', {}) : {}

@@ -13,12 +13,16 @@ module Tamoz
         gemini: "GEMINI_API_KEY",
         mistral: "MISTRAL_API_KEY",
         ollama: "OLLAMA_API_KEY",
+        opencode_go: "OPEN_CODE_API_KEY",
         openai: "OPENAI_API_KEY",
         openrouter: "OPENROUTER_API_KEY",
         perplexity: "PERPLEXITY_API_KEY",
         xai: "XAI_API_KEY",
         zai: "ZAI_API_KEY"
       }.freeze
+
+      # The accepted values of a route's optional `reasoning_effort` request setting.
+      REASONING_EFFORTS = %w[low high xhigh max].freeze
     end
   end
 end

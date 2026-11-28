@@ -5,6 +5,7 @@ require "digest"
 require "net/http"
 require "uri"
 require "tamoz/agent/errors"
+require "tamoz/agent/providers"
 
 module Tamoz
   module Agent
@@ -24,23 +25,15 @@ module Tamoz
     # :reek:TooManyStatements :reek:UncommunicativeVariableName :reek:UtilityFunction -- one wire boundary;
     # request and envelope handling stay together so the digests bind exactly what was sent.
     class EpisodeModelTransport
+      require_relative "episode_model_transport/settings"
+      require_relative "episode_model_transport/response"
+
       OPENAI_COMPLETIONS_PATH = "/chat/completions"
       TRANSCRIPTION_PATH = "/audio/transcriptions"
       SPEECH_PATH = "/audio/speech"
       MAX_TRANSCRIPT_CHARACTERS = 100_000
       MAX_SPEECH_BYTES = 2_000_000
-      # The frozen request settings (P1 contract). The settings digest the
-      # gateway signs and the receipt carries is computed over THIS document.
-      SETTINGS = {
-        "temperature" => 0,
-        "stream" => false,
-        "response_format" => {"type" => "json_object"}
-      }.freeze
-
-      Response = Data.define(
-        :content, :request_digest, :response_digest, :usage, :settings_digest,
-        :provider_configuration_digest, :provider_retries
-      )
+      SETTINGS = Settings::REQUEST
 
       # A rate-limited or briefly unavailable provider answers before it acts, so the same request may be sent again.
       RETRYABLE_STATUSES = %w[429 503].freeze
@@ -49,7 +42,7 @@ module Tamoz
 
       # The tool-calling request settings. A conversation carries native tool
       # calls, so it never asks for JSON mode.
-      CONVERSATION_SETTINGS = {"temperature" => 0, "stream" => false}.freeze
+      CONVERSATION_SETTINGS = Settings::CONVERSATION
       CONTEXT_WINDOW_PATTERN = /context[ _-]?(length|window)|maximum context|too many tokens|prompt is too long/i
 
       # One tool-calling turn as received: content, tool calls, raw provider usage and the digests binding them.
@@ -61,18 +54,21 @@ module Tamoz
       Transcript = Data.define(:text, :request_digest, :response_digest, :provider_configuration_digest)
       Speech = Data.define(:audio, :media_type, :request_digest)
 
-      attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window, :timeout_seconds
+      attr_reader :provider, :model, :provider_configuration_digest, :safety, :context_window,
+                  :timeout_seconds, :reasoning_effort
 
       # pause: receives the seconds to wait before a retried request; tests pass a recorder.
       def initialize(endpoint:, model:, provider: "episode_model_transport", api_key: nil,
                      timeout_seconds: 120, gateway: nil, safety: :unsafe,
-                     provider_configuration_digest: nil, context_window: nil, pause: nil)
+                     provider_configuration_digest: nil, context_window: nil, pause: nil, headers: {},
+                     reasoning_effort: nil)
         @endpoint = endpoint.to_s.sub(%r{/+\z}, "")
         raise ConfigurationError, "episode model endpoint is required" if @endpoint.empty?
 
         @model = model.to_s
         raise ConfigurationError, "episode model id is required" if @model.empty?
 
+        @reasoning_effort = Settings.effort(reasoning_effort)
         @provider = provider.to_s
         @api_key = api_key
         @timeout_seconds = timeout_seconds
@@ -81,6 +77,7 @@ module Tamoz
         @provider_configuration_digest = provider_configuration_digest || configuration_digest
         @context_window = context_window
         @pause = pause || ->(seconds) { sleep(seconds) }
+        @headers = headers.to_h.freeze
         freeze
       end
 
@@ -96,17 +93,18 @@ module Tamoz
 
       # The frozen request model: system + user messages, temperature 0,
       # non-streaming. Canonicalized with JCS so the digest binds the exact
-      # wire bytes. Returns the canonical JSON String (the HTTP body).
-      def build_request(system:, prompt:)
+      # wire bytes. Returns the canonical JSON String (the HTTP body). max_tokens
+      # (the call's remaining output budget) is sent only when given.
+      def build_request(system:, prompt:, max_tokens: nil)
         request = {
           "model" => @model,
           "messages" => [
             {"role" => "system", "content" => String(system)},
             {"role" => "user", "content" => String(prompt)}
           ],
-          **SETTINGS
+          **Settings.request(@reasoning_effort)
         }
-        Tamoz::Core.jcs(request)
+        Tamoz::Core.jcs(Settings.with_max_tokens(request, max_tokens))
       end
 
       # A tool-calling conversation: the whole message history plus the tool
@@ -120,7 +118,7 @@ module Tamoz
       end
 
       def build_conversation(messages:, tools: [], tool_choice: "auto")
-        request = {"model" => @model, "messages" => messages, **CONVERSATION_SETTINGS}
+        request = {"model" => @model, "messages" => messages, **Settings.conversation(@reasoning_effort)}
         unless tools.empty?
           request["tools"] = tools
           request["tool_choice"] = tool_choice
@@ -173,14 +171,14 @@ module Tamoz
                            {"model" => @model, "voice" => String(voice), "text" => String(text)})
       end
 
-      def conversation_settings_digest = Wire.sha256(Tamoz::Core.jcs(CONVERSATION_SETTINGS))
+      def conversation_settings_digest = Wire.sha256(Tamoz::Core.jcs(Settings.conversation(@reasoning_effort)))
 
       def request_digest(request_bytes) = Wire.sha256(request_bytes)
 
       # The digest of the frozen settings the request was made under — the
       # gateway signs it into the record and the receipt carries it, so the
       # verifier can cross-check the binding (never an always-nil knob).
-      def settings_digest = Wire.sha256(Tamoz::Core.jcs(SETTINGS))
+      def settings_digest = Wire.sha256(Tamoz::Core.jcs(Settings.request(@reasoning_effort)))
 
       # Sends the canonical request bytes verbatim; returns the content string
       # and the exact response envelope bytes (digest-bound). The response
@@ -285,7 +283,7 @@ module Tamoz
         http.open_timeout = @timeout_seconds
         http.use_ssl = uri.scheme == "https"
         begin
-          http.request(Net::HTTP::Post.new(uri, headers), body, &)
+          http.request(Net::HTTP::Post.new(uri, @headers.merge(headers)), body, &)
         rescue Timeout::Error, IOError, SystemCallError, SocketError, Net::ProtocolError
           raise EffectUnknownError, "model call outcome is unknown"
         end
@@ -322,7 +320,8 @@ module Tamoz
           usage: Wire.usage_from(Wire.extract_usage_hash(envelope_bytes)),
           settings_digest: settings_digest,
           provider_configuration_digest:,
-          provider_retries: retries
+          provider_retries: retries,
+          finish_reason: Wire.extract_finish_reason(envelope_bytes)
         )
       end
 
@@ -334,7 +333,7 @@ module Tamoz
             "model" => @model,
             "endpoint" => @endpoint,
             "protocol" => "openai-compatible",
-            "settings" => SETTINGS,
+            "settings" => Settings.request(@reasoning_effort),
             "safety" => @safety.to_s
           }
         )

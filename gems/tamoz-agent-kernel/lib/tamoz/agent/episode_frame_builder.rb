@@ -22,7 +22,7 @@ module Tamoz
     class EpisodeFrameBuilder
       FRAME_DOMAIN = "tamoz.agent.episode_frame.v1\n"
       MAX_FACT_BYTES = 4096
-      MAX_FACTS = 64
+      MAX_FACTS = 256
       MAX_TOOL_RESULT_BYTES = 16 * 1024
       PHASE_FACT = "situation.phase"
       TOOL_PROTOCOL = <<~TEXT.chomp
@@ -104,10 +104,13 @@ module Tamoz
           raise EpisodeFrameError, "episode_frame/facts_not_object"
         end
 
-        entries = []
-        (situation_phase(snapshot) + raw.to_a).each do |name, value|
-          break if entries.length >= MAX_FACTS
+        named = situation_phase(snapshot) + raw.to_a
+        if named.length > MAX_FACTS
+          raise EpisodeFrameError, "episode_frame/too_many_facts: #{named.length} facts, limit #{MAX_FACTS}"
+        end
 
+        entries = []
+        named.each do |name, value|
           entry = {"id" => name.to_s, "name" => name.to_s, "value" => value}
           unless Tamoz::Core.jcs(entry).bytesize <= MAX_FACT_BYTES
             raise EpisodeFrameError, "episode_frame/fact_too_large: #{name}"

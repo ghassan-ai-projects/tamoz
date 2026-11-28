@@ -17,7 +17,7 @@ class ModelWindowsTest < Minitest::Test
   def test_every_route_entry_carries_a_window_an_output_cap_a_source_and_a_date
     refute_empty MW.routes
     MW.routes.each do |key, entry|
-      assert_match(%r{\A[a-z0-9-]+/[A-Za-z0-9._/-]+\z}, key, "route key #{key.inspect} is not provider/model")
+      assert_match(%r{\A[a-z0-9_-]+/[A-Za-z0-9._/-]+\z}, key, "route key #{key.inspect} is not provider/model")
       assert_kind_of Integer, entry.fetch('context_window')
       assert_operator entry.fetch('context_window'), :>, 0
       assert_operator entry.fetch('max_output_tokens'), :>, 0
@@ -30,7 +30,8 @@ class ModelWindowsTest < Minitest::Test
     {
       %w[deepseek deepseek-flash] => ['DEEPSEEK_API_KEY', 1_048_576],
       %w[openrouter deepseek/deepseek-v4.1-flash] => ['OPENROUTER_API_KEY', 1_048_576],
-      %w[zai glm-5.3-flash] => ['ZAI_API_KEY', 1_000_000]
+      %w[zai glm-5.3-flash] => ['ZAI_API_KEY', 1_000_000],
+      %w[opencode_go deepseek-v4.1-flash] => ['OPEN_CODE_API_KEY', 1_000_000]
     }.each do |(provider, model), (credential, window)|
       assert_equal window, MW.window(provider:, model:), "recorded window for #{provider}/#{model}"
 
@@ -41,15 +42,17 @@ class ModelWindowsTest < Minitest::Test
   end
 
   def test_a_reasoning_route_waits_longer_than_the_default
-    env = { 'ZAI_API_KEY' => 'sk-test', 'DEEPSEEK_API_KEY' => 'sk-test' }
+    env = { 'ZAI_API_KEY' => 'sk-test', 'DEEPSEEK_API_KEY' => 'sk-test', 'OPEN_CODE_API_KEY' => 'sk-test' }
     zai = Tamoz::Agent::ModelClientFactory.build(provider: 'zai', model: 'glm-5.3-flash', profile_role: nil,
                                                  environment: env)
     deepseek = Tamoz::Agent::ModelClientFactory.build(provider: 'deepseek', model: 'deepseek-flash', profile_role: nil,
                                                       environment: env)
 
-    timeouts = [zai, deepseek].map { |transport| transport.instance_variable_get(:@timeout_seconds) }
+    opencode = Tamoz::Agent::ModelClientFactory.build(provider: 'opencode_go', model: 'deepseek-v4.1-flash',
+                                                      profile_role: nil, environment: env)
+    timeouts = [zai, deepseek, opencode].map { |transport| transport.instance_variable_get(:@timeout_seconds) }
 
-    assert_equal [600, 120], timeouts
+    assert_equal [600, 120, 600], timeouts
   end
 
   def test_a_route_carries_its_pinned_concurrency_and_an_unpinned_one_runs_one_at_a_time

@@ -12,6 +12,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | Variable | Meaning |
 |---|---|
 | `OPENAI_API_KEY` | Credential for the default provider |
+| `OPEN_CODE_API_KEY` | Credential for the `opencode_go` provider |
 | `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, ... | Credentials for other providers — the provider's own standard variable |
 | `TAMOZ_TELEGRAM_BOT_TOKEN` | Telegram bot token, referenced by NAME in channel config |
 | `TAMOZ_TELEGRAM_API_ORIGIN` | A loopback `http://` stand-in for the Bot API (the evals); any other origin is refused |
@@ -23,6 +24,11 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | `TAMOZ_LEASE_TTL` | Writer lease TTL in seconds, within `(0, 30]` |
 | `TAMOZ_CONTEXT_WINDOW` | Context window in tokens for the work loop, overriding the route's recorded window (a profile role's `normalized_settings.context_window` wins over it) |
 | `TAMOZ_WEBSEARCH_GRANT` / `TAMOZ_WEBSEARCH_EGRESS` / `TAMOZ_WEBSEARCH_PROVIDER` | Governed websearch gates |
+
+A profile role may ask the provider for a reasoning level with `normalized_settings.reasoning_effort`
+(`low`, `high`, `xhigh` or `max`; any other value is refused when the profile loads). It is sent as a
+top-level `reasoning_effort` request field and is part of the settings digest the receipts carry; unset, the
+request and the digest are unchanged.
 
 Model precedence is `--provider`/`--model` (one run) > the runtime's `models.chat`
 > the profile's `primary` role. Models are never read from the environment; `.env`
